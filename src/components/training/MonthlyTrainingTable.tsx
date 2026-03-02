@@ -8,11 +8,12 @@ interface MonthlyTrainingTableProps {
     year: number;
     initialCalendarMonth?: number;
     initialCalendarDay?: number;
+    onExerciseClick?: (exercise: ExerciseEntry) => void;
 }
 
 type TabType = 'all' | 'running' | 'strength' | 'cycling' | 'swimming' | 'other';
 
-export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, initialCalendarDay }: MonthlyTrainingTableProps) {
+export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, initialCalendarDay, onExerciseClick }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('all');
     const [selectedMonth, setSelectedMonth] = useState<number | null>(initialCalendarMonth !== undefined ? initialCalendarMonth : null);
     const navigate = useNavigate();
@@ -67,7 +68,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
 
             if (isCardio) {
                 buckets[month].categories.cardio.count++;
-                buckets[month].categories.cardio.distance += e.distance || 0;
+                if (type.includes('run') || type.includes('löp')) {
+                    buckets[month].categories.cardio.distance += e.distance || 0;
+                }
                 buckets[month].categories.cardio.duration += e.durationMinutes;
             } else if (isStrength) {
                 buckets[month].categories.strength.count++;
@@ -431,6 +434,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                         setSelectedMonth(null);
                         navigate(`/träning/${year}`, { replace: true });
                     }}
+                    onExerciseClick={onExerciseClick}
                 />
             )}
         </div>

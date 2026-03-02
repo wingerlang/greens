@@ -136,23 +136,24 @@ export function StrengthPage() {
     }, [selectedWorkout, workouts]);
 
 
-    const { token } = useAuth();
+    const { token, user } = useAuth();
 
     // Fetch data on mount
     const fetchData = useCallback(async () => {
-        console.log('[StrengthPage] fetchData called, token:', token ? 'exists' : 'missing');
-        if (!token) {
-            console.log('[StrengthPage] No token, skipping fetch');
+        if (!token && !user) {
+            console.log('[StrengthPage] No token or user, skipping fetch');
             setLoading(false);
             return;
         }
         setLoading(true);
         try {
-            console.log('[StrengthPage] Starting fetch calls...');
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const [workoutsRes, pbsRes, statsRes] = await Promise.all([
-                fetch('/api/strength/workouts', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/strength/pbs', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/strength/stats', { headers: { Authorization: `Bearer ${token}` } })
+                fetch('/api/strength/workouts', { headers }),
+                fetch('/api/strength/pbs', { headers }),
+                fetch('/api/strength/stats', { headers })
             ]);
 
             console.log('[StrengthPage] Responses:', workoutsRes.status, pbsRes.status, statsRes.status);
@@ -176,7 +177,7 @@ export function StrengthPage() {
             console.log('[StrengthPage] Setting loading to false');
             setLoading(false);
         }
-    }, [token]);
+    }, [token, user]);
 
     useEffect(() => {
         fetchData();
@@ -187,26 +188,38 @@ export function StrengthPage() {
 
     // Handle file import
     const handleImport = async (file: File, source: 'strengthlog' | 'hevy') => {
-        if (!file || !token) return;
+        console.log('[StrengthPage] handleImport started', { fileName: file.name, fileSize: file.size, source, hasToken: !!token, hasUser: !!user });
+        if (!file || (!token && !user)) {
+            console.error('[StrengthPage] Missing file or authentication', { file: !!file, token: !!token, user: !!user });
+            return;
+        }
 
         setImporting(true);
         setImportResult(null);
 
         try {
             const text = await file.text();
+            console.log('[StrengthPage] File read, content length:', text.length);
+
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch('/api/strength/import', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({ csv: text, source })
             });
 
+            console.log('[StrengthPage] Fetch response received:', res.status);
+
             const result = await res.json();
+            console.log('[StrengthPage] Result data:', result);
 
             // Normalize generic API error response
             if (!res.ok && result.error) {
+                console.error('[StrengthPage] Server error:', result.error);
                 setImportResult({
                     success: false,
                     errors: [result.error],
@@ -222,11 +235,11 @@ export function StrengthPage() {
             setImportResult(result);
 
             if (result.success) {
+                console.log('[StrengthPage] Import success, fetching new data');
                 await fetchData();
-                // setShowImportModal(false); // Keep open to show success result
             }
         } catch (e) {
-            console.error('Import failed:', e);
+            console.error('[StrengthPage] Import exception:', e);
             setImportResult({ success: false, errors: ['Import failed: ' + (e instanceof Error ? e.message : String(e))], workoutsImported: 0, workoutsUpdated: 0, workoutsSkipped: 0, exercisesDiscovered: 0, personalBestsFound: 0 });
         } finally {
             setImporting(false);
@@ -1347,11 +1360,14 @@ export function StrengthPage() {
                         }}
                         isMerged={selectedWorkout.mergeInfo?.isMerged}
                         onSeparate={selectedWorkout.mergeInfo?.isMerged ? async () => {
-                            if (!token) return;
+                            if (!token && !user) return;
                             try {
+                                const headers: HeadersInit = {};
+                                if (token) headers['Authorization'] = `Bearer ${token}`;
+
                                 const res = await fetch(`/api/strength/workout/${selectedWorkout.id}/merge`, {
                                     method: 'DELETE',
-                                    headers: { 'Authorization': `Bearer ${token}` }
+                                    headers
                                 });
                                 if (res.ok) {
                                     handleCloseWorkout();

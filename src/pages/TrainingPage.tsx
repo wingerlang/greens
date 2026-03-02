@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ExerciseEntry } from '../models/types.ts';
-import { useNavigate, useParams } from 'react-router-dom';
+import { ExerciseEntry, UniversalActivity } from '../models/types.ts';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
+import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import {
     WEEKDAY_LABELS
 } from '../models/types.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
-import { UniversalActivity } from '../models/types.ts';
 import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
@@ -53,11 +53,25 @@ export function TrainingPage() {
         updateGoal,
         deleteGoal,
         universalActivities = [],
-        strengthSessions = []
+        strengthSessions = [],
+        unifiedActivities = []
     } = useData();
 
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { tab, subTab, id } = useParams<{ tab?: string; subTab?: string; id?: string }>();
+
+    const selectedActivityId = searchParams.get('activityId');
+    const setSelectedActivityId = (id: string | null) => {
+        setSearchParams(prev => {
+            if (id) {
+                prev.set('activityId', id);
+            } else {
+                prev.delete('activityId');
+            }
+            return prev;
+        }, { replace: true });
+    };
 
     // URL State Management
     const currentTab = useMemo(() => {
@@ -217,29 +231,8 @@ export function TrainingPage() {
 
     // Merge Data - combine server and local entries
     const exerciseEntries = useMemo(() => {
-        const serverEntries = (universalActivities || [])
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
-
-        const strength = (strengthSessions || []).map((w): ExerciseEntry => ({
-            id: w.id,
-            date: w.date,
-            type: 'strength',
-            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
-            intensity: 'high',
-            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
-            tonnage: w.totalVolume,
-            notes: w.name,
-            source: 'strength',
-            createdAt: w.createdAt
-        }));
-
-        // Combine: prefer server entries, add unique legacy entries
-        const serverIds = new Set(serverEntries.map(e => e.id));
-        const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
-
-        return [...serverEntries, ...strength, ...uniqueLegacy];
-    }, [universalActivities, legacyExerciseEntries, strengthSessions]);
+        return unifiedActivities;
+    }, [unifiedActivities]);
 
     // Apply Period Filter to data
     const filteredExerciseEntries = useMemo(() => {
@@ -300,7 +293,7 @@ export function TrainingPage() {
     const tdee = dailyTdee + goalAdjustment;
 
     const handleEditExercise = (ex: any) => {
-        navigate(`/logg?activityId=${ex.id}`);
+        setSelectedActivityId(ex.id);
     };
     return (
         <div className="training-page">
@@ -941,6 +934,49 @@ export function TrainingPage() {
                 cycles={trainingCycles}
                 editingGoal={editingGoal}
             />
+
+            {/* Activity Detail Modal overlay */}
+            {(() => {
+                if (!selectedActivityId) return null;
+                // Find activity robustly: check id, externalId, and merged sub-IDs
+                const activity = exerciseEntries.find(e => {
+                    // 1. Direct match (id or externalId)
+                    if (e.id === selectedActivityId || e.externalId === selectedActivityId) return true;
+
+                    // 2. Check source-specific IDs
+                    if ((e as any).stravaId === selectedActivityId || (e as any).strengthId === selectedActivityId) return true;
+
+                    // 3. Check merged data
+                    if (e._mergeData) {
+                        const m = e._mergeData;
+                        const stravaId = m.strava?.id;
+                        const stravaExtId = m.strava?.externalId;
+                        const strengthId = m.strength?.id;
+                        const strengthExtId = m.strength?.externalId;
+                        const universalId = m.universalActivity?.id;
+                        const universalExtId = m.universalActivity?.performance?.source?.externalId;
+                        const originalIds = m.universalActivity?.mergeInfo?.originalActivityIds || [];
+
+                        return stravaId === selectedActivityId ||
+                            stravaExtId === selectedActivityId ||
+                            strengthId === selectedActivityId ||
+                            strengthExtId === selectedActivityId ||
+                            universalId === selectedActivityId ||
+                            universalExtId === selectedActivityId ||
+                            originalIds.includes(selectedActivityId);
+                    }
+                    return false;
+                });
+
+                if (!activity) return null;
+
+                return (
+                    <ActivityDetailModal
+                        activity={activity}
+                        onClose={() => setSelectedActivityId(null)}
+                    />
+                );
+            })()}
 
 
         </div >

@@ -669,6 +669,9 @@ export type ExerciseType =
     | 'swimming'
     | 'yoga'
     | 'hyrox'
+    | 'hybrid'
+    | 'recovery'
+    | 'cardio'
     | 'other';
 
 /** Intensity levels for exercise */

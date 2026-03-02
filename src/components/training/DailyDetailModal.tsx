@@ -8,9 +8,10 @@ interface DailyDetailModalProps {
     allExercises: ExerciseEntry[];
     onClose: () => void;
     onDateChange?: (newDate: string) => void;
+    onExerciseClick?: (ex: ExerciseEntry) => void;
 }
 
-export function DailyDetailModal({ date, allExercises, onClose, onDateChange }: DailyDetailModalProps) {
+export function DailyDetailModal({ date, allExercises, onClose, onDateChange, onExerciseClick }: DailyDetailModalProps) {
     // Current day's exercises
     const exercises = useMemo(() => {
         return allExercises.filter(e => e.date === date);
@@ -217,7 +218,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange }: 
                                     }
 
                                     return (
-                                        <div key={ex.id || i} className={`p-5 rounded-2xl border ${borderColor} ${bgColor} flex flex-col md:flex-row gap-6 md:items-center`}>
+                                        <div
+                                            key={ex.id || i}
+                                            onClick={() => onExerciseClick?.(ex)}
+                                            className={`p-5 rounded-2xl border ${borderColor} ${bgColor} flex flex-col md:flex-row gap-6 md:items-center cursor-pointer hover:brightness-110 transition-all`}
+                                        >
                                             <div className="flex items-center gap-4 min-w-[200px]">
                                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-slate-900 border border-white/5 ${iconColor}`}>
                                                     <Icon className="w-6 h-6" />

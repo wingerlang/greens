@@ -36,6 +36,7 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting, imp
 
     const handleSubmit = async () => {
         let fileToUpload = selectedFile;
+        console.log('[ImportWorkoutModal] handleSubmit', { hasFile: !!selectedFile, hasText: !!pastedText, source });
 
         if (!fileToUpload && pastedText) {
             // Create a file from the pasted text
@@ -43,7 +44,10 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting, imp
             fileToUpload = new File([blob], `pasted-${source}.csv`, { type: 'text/csv' });
         }
 
-        if (!fileToUpload) return;
+        if (!fileToUpload) {
+            console.warn('[ImportWorkoutModal] No file or text to upload');
+            return;
+        }
         await onImport(fileToUpload, source);
     };
 

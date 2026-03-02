@@ -25,6 +25,7 @@ import { storageService } from '../../services/storage.ts';
 import type { FeedEventType } from '../../models/feedTypes.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { generateTrainingPlan } from '../../services/coach/planGenerator.ts';
+import { isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 
 interface UseActivityContextProps {
     currentUser: User | null;
@@ -432,6 +433,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
             yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
             hyrox: { low: 6, moderate: 8, high: 10, ultra: 12 },
+            hybrid: { low: 4, moderate: 6, high: 8, ultra: 10 },
+            recovery: { low: 2, moderate: 3, high: 4, ultra: 5 },
+            cardio: { low: 5, moderate: 7, high: 9, ultra: 11 },
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
 
@@ -465,27 +469,66 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
 
         // Convert strength workouts to ExerciseEntry format
-        const rawStrengthEntries = (strengthSessions as any[]).map(w => ({
-            id: w.id,
-            date: w.date,
-            type: 'strength' as const,
-            durationMinutes: w.duration || w.durationMinutes || 60,
-            intensity: 'moderate' as const,
-            caloriesBurned: 0,
-            distance: undefined,
-            tonnage: w.totalVolume || 0,
-            totalSets: w.totalSets || 0,
-            totalReps: w.totalReps || 0,
-            title: w.name || w.title || 'Styrkepass',
-            notes: w.notes,
-            source: 'strength',
-            createdAt: w.createdAt || new Date().toISOString(),
-            subType: w.subType,
-            hyroxStats: (w as any).hyroxStats,
-            externalId: undefined,
-            movingTime: (w.duration || w.durationMinutes || 60) * 60,
-            excludeFromStats: w.excludeFromStats
-        }));
+        const rawStrengthEntries = (strengthSessions as any[]).map(w => {
+            const workoutName = (w.name || w.title || '').toLowerCase();
+
+            // 1. Identify cardio exercises within the workout
+            const cardioExercises = w.exercises.filter((ex: any) => isDistanceBasedExercise(ex.exerciseName));
+
+            // 2. Calculate Cardio Time vs Total Time
+            // Most sets are reps, but cardio sets have duration in seconds or minutes.
+            const cardioTimeSeconds = cardioExercises.reduce((sum: number, ex: any) =>
+                sum + ex.sets.reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
+
+            const totalDurationMinutes = w.duration || w.durationMinutes || 60;
+            const cardioDurationMinutes = cardioTimeSeconds / 60;
+
+            const isExplicitCardioWorkout = workoutName.startsWith('cardio:');
+            const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (cardioDurationMinutes / totalDurationMinutes) > 0.25;
+
+            // 3. Helper to determine the best EXERCISE_TYPE
+            const getPrimaryCardioType = (exercises: any[]): ExerciseType => {
+                if (exercises.length === 0) return 'cardio';
+                const exName = exercises[0].exerciseName.toLowerCase();
+                if (exName.includes('cycl') || exName.includes('cyk') || exName.includes('bike')) return 'cycling';
+                if (exName.includes('run') || exName.includes('löp')) return 'running';
+                if (exName.includes('walk') || exName.includes('gång')) return 'walking';
+                return 'cardio';
+            };
+
+            let finalType: ExerciseType = 'strength';
+            if (isExplicitCardioWorkout) {
+                finalType = getPrimaryCardioType([{ exerciseName: workoutName.replace('cardio:', '').trim() }, ...cardioExercises]);
+            } else if (isHybrid) {
+                finalType = 'hybrid';
+            }
+
+            // Sum distance for the whole session
+            const totalDistance = w.exercises.reduce((sum: number, ex: any) =>
+                sum + ex.sets.reduce((s: number, set: any) => s + (set.distance || 0), 0), 0);
+
+            return {
+                id: w.id,
+                date: w.date,
+                type: finalType,
+                durationMinutes: totalDurationMinutes,
+                intensity: 'moderate' as const,
+                caloriesBurned: 0,
+                distance: totalDistance > 0 ? totalDistance / 1000 : undefined, // Convert to km
+                tonnage: w.totalVolume || 0,
+                totalSets: w.totalSets || 0,
+                totalReps: w.totalReps || 0,
+                title: w.name || w.title || (finalType === 'hybrid' ? 'Hybridpass' : 'Styrkepass'),
+                notes: w.notes,
+                source: 'strength',
+                createdAt: w.createdAt || new Date().toISOString(),
+                subType: w.subType,
+                hyroxStats: (w as any).hyroxStats,
+                externalId: undefined,
+                movingTime: totalDurationMinutes * 60,
+                excludeFromStats: w.excludeFromStats
+            };
+        });
 
         // Content-based deduplication (Defense in Depth against near-identical duplicates with different IDs)
         const strengthEntries: typeof rawStrengthEntries = [];
@@ -516,19 +559,34 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             strengthByDate.get(d)!.push(se);
         });
 
-        // Group strava strength by date
-        const stravaStrengthByDate = new Map<string, typeof normalizedServer[0][]>();
+        // Group ALL strava activities by date for smarter matching
+        const stravaActivitiesByDate = new Map<string, typeof normalizedServer[0][]>();
         normalizedServer.forEach(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength') ||
-                e.type?.toLowerCase() === 'other'; // Be aggressive, let the merge logic decide
-            if (isWeightTraining) {
-                const d = e.date.split('T')[0];
-                if (!stravaStrengthByDate.has(d)) stravaStrengthByDate.set(d, []);
-                stravaStrengthByDate.get(d)!.push(e);
-            }
+            const d = e.date.split('T')[0];
+            if (!stravaActivitiesByDate.has(d)) stravaActivitiesByDate.set(d, []);
+            stravaActivitiesByDate.get(d)!.push(e);
         });
+
+        // Helper to check if a StrengthLog type is compatible with a Strava type
+        const isTypeCompatible = (slType: ExerciseType, stravaType: string): boolean => {
+            const sType = stravaType.toLowerCase();
+            if (slType === 'strength') {
+                return sType.includes('weight') || sType.includes('styrka') || sType.includes('strength') || sType === 'other';
+            }
+            if (slType === 'cycling') {
+                return sType.includes('ride') || sType.includes('bike') || sType.includes('cycl') || sType.includes('cykel') || sType === 'other';
+            }
+            if (slType === 'running') {
+                return sType.includes('run') || sType.includes('löp') || sType === 'other';
+            }
+            if (slType === 'walking') {
+                return sType.includes('walk') || sType.includes('gång') || sType === 'other';
+            }
+            if (slType === 'hybrid') {
+                return true; // Hybrid could be anything
+            }
+            return sType === 'other'; // Fallback
+        };
 
         const mergedStrengthEntries: any[] = [];
 
@@ -536,7 +594,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         strengthEntries.forEach(se => {
             const sw = (strengthSessions as any[]).find(s => s.id === se.id);
             const dateKey = se.date.split('T')[0];
-            const candidates = stravaStrengthByDate.get(dateKey) || [];
+            const candidates = stravaActivitiesByDate.get(dateKey) || [];
 
             // 0. Respect explicit separation
             if (sw?.mergeInfo?.isMerged === false) {
@@ -544,22 +602,30 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 return;
             }
 
-            // 1. Check for explicit persistence (already merged in DB)
+            // 1. Filter candidates by type compatibility
+            const compatibleCandidates = candidates.filter(c => isTypeCompatible(se.type, c.type || 'other'));
+
+            // 2. Check for explicit persistence (already merged in DB)
             let match: any = null;
             if (sw?.mergeInfo?.isMerged && sw.mergeInfo.stravaActivityId) {
-                match = candidates.find(c => c.id === sw.mergeInfo?.stravaActivityId);
+                match = compatibleCandidates.find(c => c.id === sw.mergeInfo?.stravaActivityId);
             }
 
-            // 2. Otherwise try auto-matching
+            // 3. Otherwise try auto-matching
             if (!match) {
                 // Filter out already merged ones
-                const availableCandidates = candidates.filter(c => !mergedStravaIds.has(c.id));
+                const availableCandidates = compatibleCandidates.filter(c => !mergedStravaIds.has(c.id));
 
-                // Find best match among available candidates
+                // Find best match among available compatible candidates
                 // 1. By approximate duration (within 10 mins)
                 match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
 
-                // 2. If no match, just take the first available one if there's only one candidate left for this day
+                // 2. By approximate duration (within 20 mins) - a bit looser
+                if (!match) {
+                    match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 20);
+                }
+
+                // 3. If no match, just take the first available one IF there's only one compatible candidate left for this day
                 if (!match && availableCandidates.length === 1) {
                     match = availableCandidates[0];
                 }
@@ -594,20 +660,31 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
         });
 
-        // Any Strava weight activities NOT merged should still be included as 'strava' source
-        const deduplicatedServer = normalizedServer.filter(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength') ||
-                e.type?.toLowerCase() === 'other'; // Be aggressive, let the merge logic decide
+        // Any Strava activities NOT merged should still be included as 'strava' source
+        const deduplicatedServer = normalizedServer.filter(e => !mergedStravaIds.has(e.id));
 
-            if (isWeightTraining) {
-                return !mergedStravaIds.has(e.id);
+        let initialResult = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
+
+        // 🚀 SMART MERGE FILTERING: 
+        // If an activity (local or strava) was merged into a virtual parent in the backend,
+        // it must be completely hidden from the unified list.
+        const allMergedChildIds = new Set<string>();
+        universalActivities.forEach(u => {
+            if (u.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
+                u.mergeInfo.originalActivityIds.forEach(id => {
+                    allMergedChildIds.add(id);
+                    // Also strip the source prefix if it exists (e.g. strava-123 -> 123)
+                    if (id.includes('-')) {
+                        allMergedChildIds.add(id.split('-').slice(1).join('-'));
+                    }
+                });
             }
-            return true;
+            if (u.mergedIntoId) {
+                allMergedChildIds.add(u.id);
+            }
         });
 
-        const initialResult = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
+        initialResult = initialResult.filter(e => !allMergedChildIds.has(e.id) && !(e.externalId && allMergedChildIds.has(e.externalId)));
 
         // Final De-duplication: Ensure only one entry per unique ID (Defense in Depth)
         const finalMap = new Map<string, typeof initialResult[0]>();

@@ -43,18 +43,23 @@ interface ParserContext {
  * Parse a StrengthLog CSV file content
  */
 export function parseStrengthLogCSV(csvContent: string, userId: string, source: 'strengthlog' | 'hevy' = 'strengthlog'): ParsedCSV {
-    const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // Clean input: remove BOM and carriage returns
+    const cleanContent = csvContent.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+    const lines = cleanContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    if (lines.length === 0) {
+        throw new Error('CSV content is empty');
+    }
 
     // Detect format
-    // Legacy format has a specific header or "Workouts" keyword typically
-    // New (flat) format starts with "workout,start,end,exercise..."
-    const firstLine = lines[0].toLowerCase();
+    const firstLine = lines[0].toLowerCase().replace(/"/g, ''); // Strip quotes for detection
     const isNewFormat = firstLine.startsWith('workout,start,end');
-    const isHevyFormat = source === 'hevy' || (firstLine.includes('"title"') && firstLine.includes('"start_time"')) || (firstLine.includes('title,') && firstLine.includes('start_time,'));
+    const isHevyFormat = source === 'hevy' || (lines[0].includes('"title"') && lines[0].includes('"start_time"')) || (lines[0].includes('title,') && lines[0].includes('start_time,'));
 
     // Detect text format: "MM-DD-YYYY HH:mm - HH:mm"
-    // Regex: \d{2}-\d{2}-\d{4} \d{2}:\d{2} - \d{2}:\d{2}
     const isTextFormat = /^\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s+-\s+\d{2}:\d{2}/.test(lines[0]);
+
+    console.log('[Parser] Format detection:', { isNewFormat, isHevyFormat, isTextFormat, lines: lines.length, firstLine: lines[0].substring(0, 100) });
 
     if (isNewFormat) {
         return parseNewStrengthLogFormat(lines, userId);
@@ -159,8 +164,10 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
             let cleanS = s;
             const noteMatch = s.match(/"([^"]+)"$/);
             if (noteMatch) {
-                cleanS = s.substring(0, s.lastIndexOf('"')).trim();
-                // We could potentially store noteMatch[1] somewhere, but StrengthSet doesn't support per-set notes efficiently yet
+                const quoteIdx = s.indexOf('"');
+                if (quoteIdx !== -1) {
+                    cleanS = s.substring(0, quoteIdx).trim();
+                }
             }
 
             const parts = cleanS.split(/\s*x\s*/i);
@@ -251,6 +258,11 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
         finalizeWorkout(ctx);
     }
 
+    console.log('[Parser] parseStrengthLogTextExport result:', {
+        workouts: ctx.workouts.length,
+        exercises: ctx.exercises.size
+    });
+
     return {
         userInfo: { name: 'User', email: '' },
         workouts: ctx.workouts,
@@ -301,6 +313,12 @@ function parseLegacyStrengthLogCSV(lines: string[], userId: string): ParsedCSV {
         finalizeWorkout(context);
     }
 
+    console.log('[Parser] parseLegacyStrengthLogCSV results:', {
+        workouts: context.workouts.length,
+        exercises: context.exercises.size,
+        errors: context.errors.length
+    });
+
     return {
         userInfo,
         workouts: context.workouts, // Legacy parser populates this array
@@ -314,29 +332,42 @@ function parseLegacyStrengthLogCSV(lines: string[], userId: string): ParsedCSV {
 // ----------------------------------------------------------------------
 
 function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
-    // Header: workout,start,end,exercise,weight,bodyweight,extraWeight,assistingWeight,distanceKM,distanceM,reps,rpm,time-per-500,calories,time,warmup,max,fail,checked,setComment,workoutComment,form,sleep,calories,stress
-    // We'll map header names to indices
-    const header = parseCSVLine(lines[0]).map(h => h.trim());
+    // Header detection with quote cleaning
+    const rawHeader = parseCSVLine(lines[0]);
+    const header = rawHeader.map(h => h.trim().toLowerCase().replace(/"/g, ''));
     const getIdx = (col: string) => header.indexOf(col);
 
     const idx = {
         workout: getIdx('workout'),
         start: getIdx('start'),
-        end: getIdx('end'),
         exercise: getIdx('exercise'),
         weight: getIdx('weight'),
-        bodyweight: getIdx('bodyweight'),
-        extraWeight: getIdx('extraWeight'),
-        distanceKM: getIdx('distanceKM'),
-        distanceM: getIdx('distanceM'),
         reps: getIdx('reps'),
+        // Optional/Variable columns
+        end: getIdx('end'),
+        bodyweight: getIdx('bodyweight'),
+        extraWeight: getIdx('extraweight'),
+        distanceKM: getIdx('distancekm'),
+        distanceM: getIdx('distancem'),
         time: getIdx('time'),
         warmup: getIdx('warmup'),
-        workoutComment: getIdx('workoutComment'),
+        workoutComment: getIdx('workoutcomment'),
         sleep: getIdx('sleep'),
         stress: getIdx('stress'),
         calories: header.lastIndexOf('calories')
     };
+
+    // Stricter check for required columns
+    if (idx.workout === -1 || idx.start === -1 || idx.exercise === -1) {
+        console.warn('[Parser] Missing required columns:', {
+            workout: idx.workout,
+            start: idx.start,
+            exercise: idx.exercise,
+            header
+        });
+        // If we can't find core columns, fallback to legacy or throw
+        throw new Error(`Invalid StrengthLog CSV format. Required columns (workout, start, exercise) not found.`);
+    }
 
     const ctx: ParserContext = {
         userId,
@@ -1072,6 +1103,17 @@ function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
         finalizeWorkout(ctx);
     }
 
+    console.log('[Parser] parseHevyLogFormat result:', {
+        workouts: ctx.workouts.length,
+        exercises: ctx.exercises.size
+    });
+
+    console.log('[Parser] parseNewStrengthLogFormat results:', {
+        workouts: ctx.workouts.length,
+        exercises: ctx.exercises.size,
+        errors: ctx.errors.length
+    });
+
     return {
         userInfo: { name: 'User', email: '' },
         workouts: ctx.workouts,
@@ -1128,7 +1170,13 @@ function guessExerciseCategory(name: string): ExerciseCategory {
         lower.includes('burpee') || lower.includes('lunge')) {
         return 'bodyweight';
     }
-    if (lower.includes('rowing') || lower.includes('bike') || lower.includes('run')) return 'cardio';
+    if (lower.includes('rowing') || lower.includes('rodd') ||
+        lower.includes('bike') || lower.includes('cyk') || lower.includes('cycl') ||
+        lower.includes('run') || lower.includes('löp') ||
+        lower.includes('ski') || lower.includes('stair') || lower.includes('trapp') ||
+        lower.includes('cross trainer') || lower.includes('crosstrainer') || lower.includes('elliptical')) {
+        return 'cardio';
+    }
 
     return 'other';
 }

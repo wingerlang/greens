@@ -381,106 +381,103 @@ export function DataProvider({ children }: DataProviderProps) {
         // User
         let loadedUsers = data.users || [];
 
-        // Online Sync
+        // Online Sync - Proceed if we have a token OR to check for session cookies
         const token = localStorage.getItem('auth_token');
-        if (token) {
-            // Create AbortController for this refresh cycle
-            const abortController = new AbortController();
-            const signal = abortController.signal;
+        const abortController = new AbortController();
+        const signal = abortController.signal;
 
-            try {
-                console.log('[DataContext] Starting parallel sync...');
+        try {
+            console.log('[DataContext] Starting parallel sync...');
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
-                // execute all independent fetches in parallel
-                const [userPayload, mePayload, planData, strengthData, quickMealsData, exerciseData, permissionData] = await Promise.all([
-                    safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
-                    safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
-                    safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<ExerciseDefinition[]>('/api/exercises', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<{ config: PermissionConfig }>('/api/admin/permissions', { headers: { 'Authorization': `Bearer ${token}` } })
-                ]);
+            // execute all independent fetches in parallel
+            const [userPayload, mePayload, planData, strengthData, quickMealsData, exerciseData, permissionData] = await Promise.all([
+                safeFetch<{ users: User[] }>('/api/users', { headers, signal }),
+                safeFetch<{ user: User }>('/api/auth/me', { headers, signal }),
+                safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers }),
+                safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers }),
+                safeFetch<QuickMeal[]>('/api/quick-meals', { headers }),
+                safeFetch<ExerciseDefinition[]>('/api/exercises', { headers }),
+                safeFetch<{ config: PermissionConfig }>('/api/admin/permissions', { headers })
+            ]);
 
-                // 1. Handle Users
-                if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
-                    console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
-                    loadedUsers = userPayload.users;
-                    data.users = loadedUsers;
-                }
+            // 1. Handle Users
+            if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
+                console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
+                loadedUsers = userPayload.users;
+                data.users = loadedUsers;
+            }
 
-                // 2. Handle Me (Current User)
-                if (mePayload && mePayload.user) {
-                    console.log('[DataContext] Resolved current user:', mePayload.user.username);
-                    data.currentUserId = mePayload.user.id;
-                    if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
-                        loadedUsers.push(mePayload.user);
-                    }
-                }
-
-                // 3. Handle Planned Activities
-                if (planData && planData.activities && Array.isArray(planData.activities)) {
-                    console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
-                    const newActivities = planData.activities;
-                    const existing = data.plannedActivities || [];
-                    const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
-                    const merged = [
-                        ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
-                        ...newActivities
-                    ];
-                    data.plannedActivities = merged;
-                }
-
-                // 4. Handle Strength Workouts
-                if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
-                    console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
-                    data.strengthSessions = strengthData.workouts;
-
-                    // Update local mirror so next load has it
-                    const stored = localStorage.getItem('greens-app-data');
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        parsed.strengthSessions = strengthData.workouts;
-                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                    }
-                }
-
-                // 5. Handle Quick Meals
-                if (quickMealsData && Array.isArray(quickMealsData)) {
-                    console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
-                    data.quickMeals = quickMealsData;
-                    setQuickMeals(quickMealsData);
-
-                    // Update local mirror
-                    const stored = localStorage.getItem('greens-app-data');
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        parsed.quickMeals = quickMealsData;
-                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                    }
-                }
-
-                // 6. Handle Exercises
-                if (exerciseData && Array.isArray(exerciseData)) {
-                    console.log('[DataContext] Loaded exercises:', exerciseData.length);
-                    data.exercises = exerciseData;
-                    setExercises(exerciseData);
-                }
-
-                // 7. Handle Permissions
-                if (permissionData && permissionData.config) {
-                    setPermissionConfig(permissionData.config);
-                }
-
-            } catch (e: unknown) {
-                if (e instanceof Error && e.name === 'AbortError') {
-                    console.log('[DataContext] Request aborted (expected during re-renders)');
-                } else {
-                    console.error('[DataContext] Exception during parallel sync:', e);
+            // 2. Handle Me (Current User)
+            if (mePayload && mePayload.user) {
+                console.log('[DataContext] Resolved current user:', mePayload.user.username);
+                data.currentUserId = mePayload.user.id;
+                if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
+                    loadedUsers.push(mePayload.user);
                 }
             }
-        } else {
-            console.log('[DataContext] No token found, skipping online sync.');
+
+            // 3. Handle Planned Activities
+            if (planData && planData.activities && Array.isArray(planData.activities)) {
+                console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
+                const newActivities = planData.activities;
+                const existing = data.plannedActivities || [];
+                const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
+                const merged = [
+                    ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
+                    ...newActivities
+                ];
+                data.plannedActivities = merged;
+            }
+
+            // 4. Handle Strength Workouts
+            if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
+                console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
+                data.strengthSessions = strengthData.workouts;
+
+                // Update local mirror so next load has it
+                const stored = localStorage.getItem('greens-app-data');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    parsed.strengthSessions = strengthData.workouts;
+                    localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                }
+            }
+
+            // 5. Handle Quick Meals
+            if (quickMealsData && Array.isArray(quickMealsData)) {
+                console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
+                data.quickMeals = quickMealsData;
+                setQuickMeals(quickMealsData);
+
+                // Update local mirror
+                const stored = localStorage.getItem('greens-app-data');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    parsed.quickMeals = quickMealsData;
+                    localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                }
+            }
+
+            // 6. Handle Exercises
+            if (exerciseData && Array.isArray(exerciseData)) {
+                console.log('[DataContext] Loaded exercises:', exerciseData.length);
+                data.exercises = exerciseData;
+                setExercises(exerciseData);
+            }
+
+            // 7. Handle Permissions
+            if (permissionData && permissionData.config) {
+                setPermissionConfig(permissionData.config);
+            }
+
+        } catch (e: unknown) {
+            if (e instanceof Error && e.name === 'AbortError') {
+                console.log('[DataContext] Request aborted (expected during re-renders)');
+            } else {
+                console.error('[DataContext] Exception during parallel sync:', e);
+            }
         }
 
         setUsers(loadedUsers);

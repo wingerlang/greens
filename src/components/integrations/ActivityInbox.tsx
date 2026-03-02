@@ -3,14 +3,14 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { UniversalActivity } from '../../models/types.ts';
 
 export function ActivityInbox() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [activities, setActivities] = useState<UniversalActivity[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!token) return;
+        if (!token && !user) return;
         fetchInbox();
-    }, [token]);
+    }, [token, user]);
 
     const fetchInbox = async () => {
         try {
@@ -18,8 +18,11 @@ export function ActivityInbox() {
             const end = new Date().toISOString().split('T')[0];
             const start = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch(`/api/activities?start=${start}&end=${end}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers
             });
             const data = await res.json();
 

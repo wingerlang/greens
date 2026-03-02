@@ -52,15 +52,22 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         const lastMonthExercises = exercises.filter(e => {
             const d = new Date(e.date);
             // Apply Type Filter to Last Month too
+            const isHybrid = e.type === 'hybrid';
             const matchesType = statFilter === 'all' ||
-                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp'))) ||
-                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk'))) ||
-                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk')));
+                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp') || (isHybrid && (e.distance || 0) > 0))) ||
+                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk') || (isHybrid && (e.distance || 0) > 0))) ||
+                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk') || isHybrid));
 
             return matchesType && d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
         });
 
-        const sumDistance = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + (e.distance || 0), 0);
+        const sumDistance = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => {
+            if (statFilter === 'all') {
+                const isRun = e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp');
+                return sum + (isRun ? (e.distance || 0) : 0);
+            }
+            return sum + (e.distance || 0);
+        }, 0);
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
         const count = (exs: ExerciseEntry[]) => exs.length;
 
@@ -339,7 +346,13 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
             {/* Monthly Training Table (Detailed Breakdown) */}
             <div className="mb-0">
-                <MonthlyTrainingTable exercises={exercises} year={year} initialCalendarMonth={initialCalendarMonth} initialCalendarDay={initialCalendarDay} />
+                <MonthlyTrainingTable
+                    exercises={exercises}
+                    year={year}
+                    initialCalendarMonth={initialCalendarMonth}
+                    initialCalendarDay={initialCalendarDay}
+                    onExerciseClick={onExerciseClick}
+                />
             </div>
         </>
     );

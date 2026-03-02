@@ -3,7 +3,7 @@ import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { isCompetition, formatTime } from '../../utils/activityUtils.ts';
 import { ActivityDetailModal } from '../../components/activities/ActivityDetailModal.tsx';
-import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal } from 'lucide-react';
+import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, ArrowRight } from 'lucide-react';
 
 interface RunningStatsViewProps {
     exerciseEntries: ExerciseEntry[];
@@ -25,7 +25,7 @@ const RUNNING_BUCKETS: DistanceBucket[] = [
     { key: 'marathon', label: 'Maraton', min: 41.5, max: 43.5, color: 'purple' },
     { key: 'ultra50k', label: '50 KM', min: 48.0, max: 55.0, color: 'rose' },
     { key: 'ultra50m', label: '50 Miles', min: 78.0, max: 85.0, color: 'orange' },
-    { key: 'ultra100k', label: '100 KM', min: 98.0, max: 105.0, color: 'yellow' }
+    { key: 'ultra100k', label: '100 KM', min: 98.0, max: 115.0, color: 'yellow' }
 ];
 
 const ULTRA_KEYS = ['ultra50k', 'ultra50m', 'ultra100k'];
@@ -66,25 +66,12 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
 
     // 1. Prepare and filter all running activities
     const runningActivities = useMemo(() => {
-        const stravaEntries = universalActivities
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
-
-        // Combine and dedupe
-        const combined = [...exerciseEntries, ...stravaEntries];
-        const seen = new Set<string>();
-
-        const deduplicated = combined.filter(e => {
-            // Looser distance check for deduplication (rounding to nearest km) to avoid removing valid re-runs of the same course
-            const key = `${e.date.substring(0, 10)}-${e.type}-${Math.round(e.distance || 0)}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
+        // We use exerciseEntries directly (which is unifiedActivities from TrainingPage)
+        // to respect manual merges and deduplication correctly.
 
         const runningTypes = ['running', 'run', 'löpning'];
 
-        return deduplicated
+        return exerciseEntries
             .filter(e => !e.excludeFromStats && runningTypes.some(t => e.type.toLowerCase().includes(t)) && e.distance && e.distance > 0 && e.durationMinutes > 0)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Chronological order
     }, [exerciseEntries, universalActivities]);
@@ -169,12 +156,33 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                             activity: run
                         };
 
-                        if (currentPBs[bucket.key] !== Infinity) {
-                            pbEvent.previousDurationSeconds = currentPBs[bucket.key];
-                            pbEvent.improvementSeconds = currentPBs[bucket.key] - durationSec;
+                        // Check for same-day PB replacement (e.g. duplicate synced activities or overlapping segments of same race)
+                        let lastPBIndex = -1;
+                        for (let i = timeline.length - 1; i >= 0; i--) {
+                            if (timeline[i].bucketLabel === bucket.label) {
+                                lastPBIndex = i;
+                                break;
+                            }
                         }
 
-                        timeline.push(pbEvent);
+                        const runDateStr = run.date.split('T')[0];
+                        if (lastPBIndex !== -1 && timeline[lastPBIndex].date.split('T')[0] === runDateStr) {
+                            // Update existing node instead of adding a new one
+                            const prevPB = timeline[lastPBIndex];
+                            if (prevPB.previousDurationSeconds) {
+                                pbEvent.previousDurationSeconds = prevPB.previousDurationSeconds;
+                                pbEvent.improvementSeconds = prevPB.previousDurationSeconds - durationSec;
+                            }
+                            timeline[lastPBIndex] = pbEvent;
+                        } else {
+                            // Normal new node
+                            if (currentPBs[bucket.key] !== Infinity) {
+                                pbEvent.previousDurationSeconds = currentPBs[bucket.key];
+                                pbEvent.improvementSeconds = currentPBs[bucket.key] - durationSec;
+                            }
+                            timeline.push(pbEvent);
+                        }
+
                         currentPBs[bucket.key] = durationSec;
                     }
                 }
@@ -214,6 +222,13 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
     const selectedUniversal = selectedActivity
         ? universalActivities.find(u => u.id === selectedActivity.id)
         : undefined;
+
+    const filteredTimeline = useMemo(() => {
+        return pbTimeline.filter(pb => {
+            const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
+            return bucket && selectedBuckets.includes(bucket.key);
+        });
+    }, [pbTimeline, selectedBuckets]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -507,82 +522,83 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                             })}
                         </div>
 
-                        <div className="flex gap-6 overflow-x-auto pb-6 relative pt-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory">
-                            {pbTimeline.filter(pb => {
-                                const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
-                                return bucket && selectedBuckets.includes(bucket.key);
-                            }).length === 0 ? (
-                                <div className="text-center text-slate-500 text-sm italic py-10">
+                        <div className="flex gap-6 overflow-x-auto py-32 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[420px]">
+                            {filteredTimeline.length === 0 ? (
+                                <div className="text-center text-slate-500 text-sm italic py-10 w-full">
                                     Inga personbästan registrerade för valda distanser och filter.
                                 </div>
                             ) : (
-                                pbTimeline
-                                    .filter(pb => {
-                                        const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
-                                        return bucket && selectedBuckets.includes(bucket.key);
-                                    })
-                                    .map((pb, idx) => {
-                                        const bucketDef = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
-                                        return (
-                                            <div
-                                                key={`${pb.id}-${idx}`}
-                                                className={`relative w-64 flex-none group cursor-pointer`}
-                                                onClick={() => setSelectedActivity(pb.activity)}
-                                            >
-                                                {/* Connecting line */}
-                                                {idx < pbTimeline.filter(pb => {
-                                                    const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
-                                                    return bucket && selectedBuckets.includes(bucket.key);
-                                                }).length - 1 && (
-                                                        <div className="absolute top-10 left-32 flex w-full h-[2px] bg-slate-800">
-                                                            <div className={`h-full bg-${bucketDef?.color}-500/20 w-full rounded-full transition-all`} />
-                                                        </div>
-                                                    )}
+                                filteredTimeline.map((pb, idx) => {
+                                    const bucketDef = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
+                                    const isUp = idx % 2 === 0;
 
-                                                <div className="flex flex-col items-center">
-                                                    {/* Node dot */}
-                                                    <div className={`w-5 h-5 rounded-full border-4 border-slate-900 bg-${bucketDef?.color}-500 relative z-10 shadow-lg shadow-${bucketDef?.color}-500/50 mb-3 transition-transform group-hover:scale-125`} />
+                                    return (
+                                        <div
+                                            key={`${pb.id}-${idx}`}
+                                            className={`relative w-64 flex-none flex justify-center items-center group cursor-pointer h-full`}
+                                            onClick={() => setSelectedActivity(pb.activity)}
+                                        >
+                                            {/* Connecting horizontal line to NEXT dot */}
+                                            {idx < filteredTimeline.length - 1 && (
+                                                <div className="absolute top-1/2 left-1/2 w-[calc(100%+1.5rem)] h-[2px] bg-slate-800 -translate-y-1/2 z-0">
+                                                    <div className={`h-full bg-${bucketDef?.color}-500/20 w-full rounded-full transition-all`} />
+                                                </div>
+                                            )}
 
-                                                    {/* Content card */}
-                                                    <div className={`bg-slate-900/80 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-4 text-center transition-all w-full relative`}>
-                                                        <div className={`text-[10px] font-black uppercase text-${bucketDef?.color}-400 mb-1 tracking-wider`}>
-                                                            {pb.bucketLabel} {pb.isRace && <span className="inline-flex"><Medal size={10} className="ml-0.5" /></span>}
-                                                        </div>
+                                            {/* Node dot */}
+                                            <div className={`w-4 h-4 rounded-full border-4 border-slate-900 bg-${bucketDef?.color}-500 relative z-10 shadow-lg shadow-${bucketDef?.color}-500/50 transition-transform group-hover:scale-150`} />
 
-                                                        {pb.previousDurationSeconds ? (
-                                                            <div className="flex flex-col items-center gap-0.5 mb-1.5">
-                                                                <span className="text-xs text-slate-500 line-through font-mono opacity-80">{formatTime(pb.previousDurationSeconds)}</span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <div className={`text-xl font-black text-white font-mono leading-none`}>
-                                                                        {pb.durationFormatted}
-                                                                    </div>
-                                                                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1 py-0.5 rounded flex items-center gap-0.5" title="Förbättring från föregående PB">
-                                                                        <TrendingUp size={10} /> -{pb.improvementSeconds ? formatTime(pb.improvementSeconds) : ''}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className={`text-xl font-black text-white mb-2 font-mono`}>
+                                            {/* Content card - Alternating Up/Down */}
+                                            <div className={`absolute w-full ${isUp ? 'bottom-[calc(50%+1.5rem)]' : 'top-[calc(50%+1.5rem)]'} bg-slate-900/90 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-4 text-center transition-all z-20 shadow-xl shadow-black/40 backdrop-blur-sm group-hover:-translate-y-1`}>
+
+                                                {/* Connecting vertical tick */}
+                                                <div className={`absolute left-1/2 -ml-[1px] w-[2px] h-[1.5rem] bg-slate-800/50 ${isUp ? 'top-full' : 'bottom-full'}`}></div>
+
+                                                <div className={`text-[10px] font-black uppercase text-${bucketDef?.color}-400 mb-1 tracking-wider`}>
+                                                    {pb.bucketLabel} {pb.isRace && <span className="inline-flex"><Medal size={10} className="ml-0.5" /></span>}
+                                                </div>
+
+                                                {pb.previousDurationSeconds ? (
+                                                    <div className="flex flex-col items-center gap-0.5 mb-1.5 mt-1">
+                                                        <span className="text-xs text-slate-500 line-through font-mono opacity-80">{formatTime(pb.previousDurationSeconds)}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className={`text-xl font-black text-white font-mono leading-none`}>
                                                                 {pb.durationFormatted}
                                                             </div>
-                                                        )}
-
-                                                        <p className="text-xs text-slate-400 font-medium truncate" title={pb.activity.title || pb.activity.notes}>
-                                                            {pb.activity.title && pb.activity.title !== '-' ? pb.activity.title : pb.activity.notes || 'Löprunda'}
-                                                        </p>
-                                                        <div className="flex items-center justify-center gap-3 mt-2.5">
-                                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-slate-400 uppercase">
-                                                                {getDaysAgoText(pb.date)}
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-500 font-medium">
-                                                                {formatPace(pb.durationSeconds / pb.distance)}
+                                                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex items-center gap-1 relative group/arrow" title="Förbättring från föregående PB">
+                                                                <TrendingUp size={10} /> -{pb.improvementSeconds ? formatTime(pb.improvementSeconds) : ''}
+                                                                {idx < filteredTimeline.length - 1 && (
+                                                                    <>
+                                                                        <ArrowRight size={10} className="ml-0.5 opacity-60 group-hover/arrow:translate-x-1 transition-transform" />
+                                                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover/arrow:block w-max bg-slate-800 text-white text-[9px] px-2 py-1 rounded shadow-xl border border-white/10 z-50">
+                                                                            Föregående rekord hittar du till höger
+                                                                        </div>
+                                                                    </>
+                                                                )}
                                                             </span>
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <div className={`text-xl font-black text-white mb-2 font-mono`}>
+                                                        {pb.durationFormatted}
+                                                    </div>
+                                                )}
+
+                                                <p className="text-xs text-slate-400 font-medium truncate px-2" title={pb.activity.title || pb.activity.notes}>
+                                                    {pb.activity.title && pb.activity.title !== '-' ? pb.activity.title : pb.activity.notes || 'Löprunda'}
+                                                </p>
+                                                <div className="flex items-center justify-center gap-3 mt-2.5">
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-slate-400 uppercase">
+                                                        {getDaysAgoText(pb.date)}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-medium">
+                                                        {formatPace(pb.durationSeconds / pb.distance)}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        );
-                                    })
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </div>

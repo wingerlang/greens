@@ -55,10 +55,12 @@ export function RaceList({
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
     const [editingRace, setEditingRace] = useState<PlannedActivity | null>(null);
 
     // Initialize view mode based on subTab
     const [viewMode, setViewMode] = useState<'timeline' | 'series'>('timeline');
+    const [upcomingViewMode, setUpcomingViewMode] = useState<'cozy' | 'compact' | 'list'>('cozy');
     const [selectedSeries, setSelectedSeries] = useState<{ name: string, races: ExerciseEntry[] } | null>(null);
     const [seriesSort, setSeriesSort] = useState<'count' | 'name' | 'latest'>('count');
 
@@ -95,6 +97,13 @@ export function RaceList({
     const handleEditClick = (race: PlannedActivity) => {
         setEditingRace(race);
         setIsAddModalOpen(true);
+    };
+
+    const handleBulkSaveRaces = (newRaces: PlannedActivity[]) => {
+        // Only add races that don't already exist (or overwrite if we implement ID matching later)
+        const newList = [...plannedActivities, ...newRaces];
+        savePlannedActivities(newList);
+        setIsBulkAddModalOpen(false);
     };
 
     // --- History Races ---
@@ -301,29 +310,112 @@ export function RaceList({
                         </h2>
                         <p className="text-slate-400 mt-1">Förbered dig, planera dina mål och krossa motståndet.</p>
                     </div>
-                    <button
-                        onClick={() => {
-                            setEditingRace(null);
-                            setIsAddModalOpen(true);
-                        }}
-                        className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20 hover:scale-105"
-                    >
-                        <Plus size={20} /> Planera Tävling
-                    </button>
+                    <div className="flex gap-3 mt-4 md:mt-0">
+                        <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 mr-4">
+                            <button
+                                onClick={() => setUpcomingViewMode('cozy')}
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${upcomingViewMode === 'cozy' ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Cozy
+                            </button>
+                            <button
+                                onClick={() => setUpcomingViewMode('compact')}
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${upcomingViewMode === 'compact' ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Kompakt
+                            </button>
+                            <button
+                                onClick={() => setUpcomingViewMode('list')}
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${upcomingViewMode === 'list' ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Lista
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => setIsBulkAddModalOpen(true)}
+                            className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all border border-white/5 flex items-center gap-2"
+                        >
+                            Bulk-skapa
+                        </button>
+                        <button
+                            onClick={() => {
+                                setEditingRace(null);
+                                setIsAddModalOpen(true);
+                            }}
+                            className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20 hover:scale-105"
+                        >
+                            <Plus size={20} /> Planera Tävling
+                        </button>
+                    </div>
                 </div>
 
                 {upcomingRaces.length > 0 ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {upcomingRaces.map(race => (
-                            <UpcomingRaceCard
-                                key={race.id}
-                                race={race}
-                                onUpdate={handleSaveRace}
-                                onDelete={deletePlannedActivity}
-                                onEdit={handleEditClick}
-                            />
-                        ))}
-                    </div>
+                    upcomingViewMode === 'cozy' ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {upcomingRaces.map(race => (
+                                <UpcomingRaceCard
+                                    key={race.id}
+                                    race={race}
+                                    onUpdate={handleSaveRace}
+                                    onDelete={deletePlannedActivity}
+                                    onEdit={handleEditClick}
+                                />
+                            ))}
+                        </div>
+                    ) : upcomingViewMode === 'compact' ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            {upcomingRaces.map(race => (
+                                <UpcomingRaceCardCompact
+                                    key={race.id}
+                                    race={race}
+                                    onEdit={handleEditClick}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="overflow-hidden rounded-xl border border-white/5 shadow-2xl shadow-black/20">
+                            <table className="w-full text-sm">
+                                <thead className="bg-slate-950 text-xs uppercase font-bold text-slate-500 border-b border-white/5">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left">Datum</th>
+                                        <th className="px-6 py-4 text-left">Tävling</th>
+                                        <th className="px-6 py-4 text-left">Plats</th>
+                                        <th className="px-6 py-4 text-right">Distans</th>
+                                        <th className="px-6 py-4 text-right">Dagar kvar</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5 bg-slate-900/50">
+                                    {upcomingRaces.map(race => {
+                                        const diff = new Date(race.date).getTime() - new Date().getTime();
+                                        const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                                        return (
+                                            <tr
+                                                key={race.id}
+                                                className="hover:bg-amber-500/5 transition-colors cursor-pointer group border-l-4 border-l-emerald-500/50 hover:border-l-emerald-400"
+                                                onClick={() => handleEditClick(race)}
+                                            >
+                                                <td className="px-6 py-4 font-mono text-emerald-400/80">
+                                                    {race.date}
+                                                </td>
+                                                <td className="px-6 py-4 font-bold text-white group-hover:text-emerald-400 transition-colors">
+                                                    {race.title}
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-400 text-xs">
+                                                    {race.raceDetails?.logistics?.location || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                                    {race.estimatedDistance > 0 ? `${race.estimatedDistance.toFixed(1)} km` : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-mono text-emerald-300 font-bold">
+                                                    {daysLeft}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
                 ) : (
                     <div className="text-center py-16 bg-slate-900/30 rounded-3xl border-2 border-dashed border-white/5 relative overflow-hidden group">
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-50" />
@@ -435,9 +527,9 @@ export function RaceList({
                 </div>
 
                 {viewMode === 'timeline' ? (
-                    races.length === 0 ? (
+                    (races.length === 0 && upcomingRaces.length === 0) ? (
                         <div className="text-center py-12 text-slate-500 italic bg-slate-950/30 rounded-xl border border-white/5">
-                            <p>Inga genomförda tävlingar hittades för vald period.</p>
+                            <p>Inga genomförda eller kommande tävlingar hittades för vald period.</p>
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-xl border border-white/5 shadow-2xl shadow-black/20">
@@ -453,6 +545,35 @@ export function RaceList({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5 bg-slate-900/50">
+                                    {/* MAPPED UPCOMING RACES IN HISTORY (GREEN DASHED) */}
+                                    {upcomingRaces.map(race => (
+                                        <tr
+                                            key={`planned-${race.id}`}
+                                            className="hover:bg-emerald-500/5 transition-colors cursor-pointer group bg-emerald-950/20"
+                                            onClick={() => handleEditClick(race)}
+                                        >
+                                            <td className="px-6 py-4 font-mono text-emerald-400/80 border-l-4 border-l-emerald-500/50 group-hover:border-l-emerald-400">
+                                                {race.date.split('T')[0]}
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-2">
+                                                <Target size={14} className="text-emerald-500" />
+                                                <span>{race.title} (Planerad)</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-400 text-xs">
+                                                {race.raceDetails?.logistics?.location || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                                {race.estimatedDistance > 0 ? `${race.estimatedDistance.toFixed(1)} km` : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono text-emerald-500">
+                                                -
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono text-emerald-500">
+                                                -
+                                            </td>
+                                        </tr>
+                                    ))}
+
                                     {races.map(race => {
                                         // Helper to resolve the best display title
                                         const getRaceTitle = (r: ExerciseEntry) => {
@@ -599,6 +720,13 @@ export function RaceList({
                         setEditingRace(null);
                     }}
                     onSave={handleSaveRace}
+                />
+            )}
+
+            {isBulkAddModalOpen && (
+                <BulkAddRaceModal
+                    onClose={() => setIsBulkAddModalOpen(false)}
+                    onSaveAll={handleBulkSaveRaces}
                 />
             )}
         </div>
@@ -818,6 +946,44 @@ END:VCALENDAR`;
                         <X size={16} />
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function UpcomingRaceCardCompact({
+    race,
+    onEdit
+}: {
+    race: PlannedActivity,
+    onEdit: (r: PlannedActivity) => void
+}) {
+    const daysLeft = useMemo(() => {
+        const diff = new Date(race.date).getTime() - new Date().getTime();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }, [race.date]);
+
+    return (
+        <div
+            onClick={() => onEdit(race)}
+            className="bg-slate-900 border-l-4 border-l-emerald-500 border-y border-r border-white/5 rounded-xl p-4 hover:bg-slate-800 transition-all cursor-pointer group shadow-lg flex flex-col justify-between"
+        >
+            <div>
+                <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-white font-bold leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2 text-sm">{race.title}</h4>
+                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">{daysLeft} d</span>
+                </div>
+                <div className="text-slate-500 text-xs font-mono mb-2">{race.date.split('-').slice(1).join('/')}</div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
+                <span className="flex items-center gap-1 truncate">
+                    <MapPin size={12} className="text-slate-500" />
+                    {race.raceDetails?.logistics?.location || 'Mål'}
+                </span>
+                <span className="font-mono text-slate-300">
+                    {race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '-'}
+                </span>
             </div>
         </div>
     );
@@ -1083,4 +1249,248 @@ function calcPace(distValues: number | undefined, minutes: number) {
     const pSec = Math.round((paceDec - pMin) * 60);
     if (pSec === 60) return `${pMin + 1}:00/km`;
     return `${pMin}:${pSec.toString().padStart(2, '0')}/km`;
+}
+
+const MONTH_MAP: Record<string, string> = {
+    'jan': '01', 'januari': '01',
+    'feb': '02', 'februari': '02',
+    'mar': '03', 'mars': '03',
+    'apr': '04', 'april': '04',
+    'maj': '05',
+    'jun': '06', 'juni': '06',
+    'jul': '07', 'juli': '07',
+    'aug': '08', 'augusti': '08',
+    'sep': '09', 'sept': '09', 'september': '09',
+    'okt': '10', 'oktober': '10',
+    'nov': '11', 'november': '11',
+    'dec': '12', 'december': '12'
+};
+
+function BulkAddRaceModal({
+    onClose,
+    onSaveAll
+}: {
+    onClose: () => void,
+    onSaveAll: (activities: PlannedActivity[]) => void
+}) {
+    const [step, setStep] = useState<'input' | 'edit'>('input');
+    const [rawText, setRawText] = useState('');
+    const [parsedRaces, setParsedRaces] = useState<any[]>([]);
+
+    // Close on ESC
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    const handleParse = () => {
+        const lines = rawText.split('\n').filter(l => l.trim() !== '');
+        const currentYear = new Date().getFullYear();
+        const races = lines.map(line => {
+            const match = line.trim().match(/^(\d{1,2})\s+([a-zA-ZåäöÅÄÖ]+)\s+(.+)$/);
+            if (match) {
+                const dayStr = match[1].padStart(2, '0');
+                const monthStr = MONTH_MAP[match[2].toLowerCase()] || '01';
+                return {
+                    id: generateId(),
+                    date: `${currentYear}-${monthStr}-${dayStr}`,
+                    title: match[3],
+                    distance: '',
+                    location: '',
+                    url: '',
+                    isRegistered: false
+                };
+            }
+            // Fallback for lines that don't match the standard format
+            return {
+                id: generateId(),
+                date: `${currentYear}-01-01`,
+                title: line.trim(),
+                distance: '',
+                location: '',
+                url: '',
+                isRegistered: false
+            };
+        });
+        setParsedRaces(races);
+        setStep('edit');
+    };
+
+    const updateRace = (id: string, field: string, value: any) => {
+        setParsedRaces(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    };
+
+    const handleSave = () => {
+        const finalRaces: PlannedActivity[] = parsedRaces.map(pr => {
+            return {
+                id: pr.id,
+                title: pr.title,
+                date: pr.date,
+                startTime: '10:00',
+                type: 'RUN',
+                category: 'RACE',
+                isRace: true,
+                raceUrl: pr.url,
+                description: '',
+                estimatedDistance: parseFloat(pr.distance) || 0,
+                status: 'PLANNED',
+                structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
+                targetPace: '',
+                targetHrZone: 0,
+                raceDetails: {
+                    goals: {},
+                    logistics: {
+                        location: pr.location
+                    },
+                    checklist: [
+                        { id: '1', item: 'Anmäld & Betald', checked: pr.isRegistered, category: 'logistics' },
+                        { id: '2', item: 'Boende bokat', checked: false, category: 'logistics' },
+                        { id: '3', item: 'Transport planerad', checked: false, category: 'logistics' },
+                        { id: '4', item: 'Energiplan spikad', checked: false, category: 'nutrition' },
+                    ]
+                }
+            };
+        });
+        onSaveAll(finalRaces);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh]">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-950 rounded-t-3xl">
+                    <h3 className="text-xl font-black text-white flex items-center gap-2">
+                        <Trophy className="text-amber-500" />
+                        Bulk-skapa Tävlingar
+                    </h3>
+                    <button onClick={onClose} className="rounded-full p-1 hover:bg-white/10 transition-colors">
+                        <X size={20} className="text-slate-400" />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                    {step === 'input' ? (
+                        <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
+                            <p className="text-slate-400 text-sm">
+                                Klistra in din lista med tävlingar. Använd formatet <code className="text-amber-400 bg-amber-500/10 px-1 rounded">29 mars Genarps Trail</code> (ett lopp per rad).
+                                Året sätts automatiskt till {new Date().getFullYear()}.
+                            </p>
+                            <textarea
+                                value={rawText}
+                                onChange={e => setRawText(e.target.value)}
+                                className="w-full bg-slate-800 border border-white/10 rounded-xl p-4 text-white focus:border-amber-500 outline-none h-64 font-mono text-sm resize-none"
+                                placeholder={"29 mars Genarps Trail\n12 april Hässleholmsloppet\n14 maj Bokskogstrailen"}
+                                autoFocus
+                            />
+                        </div>
+                    ) : (
+                        <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                            <p className="text-slate-400 text-sm">
+                                Granska och fyll i detaljer. Klicka sen på Spara Alla längst ner.
+                            </p>
+                            <div className="bg-slate-950/50 rounded-xl border border-white/5 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
+                                        <thead className="bg-slate-950 text-xs uppercase text-slate-500 border-b border-white/5">
+                                            <tr>
+                                                <th className="px-4 py-3 font-bold">Datum</th>
+                                                <th className="px-4 py-3 font-bold">Namn</th>
+                                                <th className="px-4 py-3 font-bold">Distans (km)</th>
+                                                <th className="px-4 py-3 font-bold">Plats</th>
+                                                <th className="px-4 py-3 font-bold">Hemsida</th>
+                                                <th className="px-4 py-3 font-bold text-center">Anmäld</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5 bg-slate-900/50">
+                                            {parsedRaces.map(race => (
+                                                <tr key={race.id} className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="date"
+                                                            value={race.date}
+                                                            onChange={e => updateRace(race.id, 'date', e.target.value)}
+                                                            className="bg-transparent border-b border-transparent focus:border-amber-500 text-white outline-none w-32 font-mono text-xs focus:bg-slate-800 rounded px-1 transition-colors"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={race.title}
+                                                            onChange={e => updateRace(race.id, 'title', e.target.value)}
+                                                            className="bg-transparent border-b border-transparent focus:border-amber-500 text-white font-bold outline-none w-full min-w-[200px] focus:bg-slate-800 rounded px-1 transition-colors"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="number"
+                                                            value={race.distance}
+                                                            onChange={e => updateRace(race.id, 'distance', e.target.value)}
+                                                            className="bg-transparent border-b border-transparent focus:border-amber-500 text-white outline-none w-20 text-right font-mono focus:bg-slate-800 rounded px-1 transition-colors"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={race.location}
+                                                            onChange={e => updateRace(race.id, 'location', e.target.value)}
+                                                            className="bg-transparent border-b border-transparent focus:border-amber-500 text-white outline-none w-full min-w-[120px] focus:bg-slate-800 rounded px-1 transition-colors"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="url"
+                                                            value={race.url}
+                                                            onChange={e => updateRace(race.id, 'url', e.target.value)}
+                                                            className="bg-transparent border-b border-transparent focus:border-amber-500 text-blue-400 outline-none w-full min-w-[150px] text-xs focus:bg-slate-800 rounded px-1 transition-colors"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={race.isRegistered}
+                                                            onChange={e => updateRace(race.id, 'isRegistered', e.target.checked)}
+                                                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500/50 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-6 border-t border-white/10 bg-slate-950 rounded-b-3xl flex gap-3">
+                    {step === 'edit' && (
+                        <button
+                            onClick={() => setStep('input')}
+                            className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition-colors"
+                        >
+                            ← Tillbaka
+                        </button>
+                    )}
+                    {step === 'input' ? (
+                        <button
+                            onClick={handleParse}
+                            disabled={!rawText.trim()}
+                            className="flex-1 px-6 py-3 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors disabled:opacity-50 border border-white/10"
+                        >
+                            Tolka {rawText ? rawText.split('\n').filter(l => l.trim() !== '').length : 0} Lopp →
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSave}
+                            className="flex-1 px-6 py-3 rounded-xl bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+                        >
+                            Spara {parsedRaces.length} Tävlingar
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }

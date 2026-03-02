@@ -1,0 +1,28 @@
+[0m[38;5;245mrunning 1 test from ./src/utils/strengthLogParser_repro.test.ts[0m
+Parses StrengthLog Cardio formats correctly ... [0m[31mFAILED[0m [0m[38;5;245m(18ms)[0m
+
+[0m[1m[37m[41m ERRORS [0m
+
+Parses StrengthLog Cardio formats correctly [0m[38;5;245m=> ./src/utils/strengthLogParser_repro.test.ts:12:6[0m
+[0m[1m[31merror[0m: AssertionError: Values are not equal.
+
+
+    [90m[1m[Diff][22m[39m [31m[1mActual[22m[39m / [32m[1mExpected[22m[39m
+
+
+[31m[1m-   00:04:00[41m[37m [31m[49m[41m[37m"[31m[49m[41m[37m25[31m[49m[41m[37m [31m[49m[41m[37mv[31m[49m[41m[37må[31m[49m[41m[37mningar[31m[49m
+[22m[39m[32m[1m+   00:04:00
+[22m[39m
+
+  throw new AssertionError(message);
+[0m[31m        ^[0m
+    at [0m[1m[3massertEquals[0m ([0m[36mhttps://jsr.io/@std/assert/1.0.16/equals.ts[0m:[0m[33m65[0m:[0m[33m9[0m)
+    at [0m[2m[38;5;245mfile:///C:/repos/greens/[0m[0m[36msrc/utils/strengthLogParser_repro.test.ts[0m:[0m[33m52[0m:[0m[33m5[0m
+
+[0m[1m[37m[41m FAILURES [0m
+
+Parses StrengthLog Cardio formats correctly [0m[38;5;245m=> ./src/utils/strengthLogParser_repro.test.ts:12:6[0m
+
+[0m[31mFAILED[0m | 0 passed | 1 failed [0m[38;5;245m(24ms)[0m
+
+[0m[1m[31merror[0m: Test failed

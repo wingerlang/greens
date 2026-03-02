@@ -29,12 +29,21 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
             }
 
             const parsed = parseStrengthLogCSV(csvContent, userId, source);
+            console.log(`[POST /api/strength/import] Parsed: ${parsed.workouts.length} workouts, ${parsed.exercises.size} exercises, ${parsed.personalBests.length} PBs`);
+
             const result = await strengthRepo.importWorkouts(
                 userId,
                 parsed.workouts,
                 parsed.exercises,
                 parsed.personalBests
             );
+
+            console.log('[POST /api/strength/import] Result:', {
+                workoutsImported: result.workoutsImported,
+                workoutsUpdated: result.workoutsUpdated,
+                errors: result.errors.length,
+                success: result.success
+            });
 
             return new Response(JSON.stringify(result), { headers });
         } catch (e) {

@@ -310,8 +310,10 @@ export const DISTANCE_BASED_EXERCISES = [
     'ski erg', 'skierg', 'skiing',
     'assault bike', 'echo bike', 'air bike',
     'treadmill', 'löpband',
-    'stationary bike', 'cycle', 'cykel',
+    'stationary bike', 'cycle', 'cykel', 'cykling',
     'running', 'löpning',
+    'cross trainer', 'crosstrainer', 'elliptical',
+    'stair climber', 'stairclimber', 'trappmaskin',
     'burpee broad jump', 'burpee broad jumps'
 ];
 
