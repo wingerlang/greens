@@ -21,6 +21,11 @@ export function calculateCalories(type: ExerciseType, duration: number, intensit
         swimming: { low: 6, moderate: 8, high: 10, ultra: 12 },
         yoga: { low: 2, moderate: 3, high: 4, ultra: 5 },
         hyrox: { low: 8, moderate: 10, high: 13, ultra: 17 },
+        climbing: { low: 5, moderate: 7, high: 9, ultra: 11 },
+        football: { low: 6, moderate: 8, high: 10, ultra: 12 },
+        hybrid: { low: 6, moderate: 8, high: 11, ultra: 14 },
+        recovery: { low: 2, moderate: 3, high: 4, ultra: 5 },
+        cardio: { low: 5, moderate: 7, high: 10, ultra: 14 },
         other: { low: 4, moderate: 6, high: 8, ultra: 10 }
     };
     const met = METS[type]?.[intensity] || METS.other.moderate;
@@ -317,7 +322,9 @@ function parseExercise(input: string): OmniboxIntent | null {
         'styrka': 'strength', 'styrk': 'strength', 'gym': 'strength', 'lyft': 'strength', 'strength': 'strength', 'weights': 'strength',
         'promenad': 'walking', 'prom': 'walking', 'walk': 'walking', 'gång': 'walking', 'gå': 'walking',
         'simning': 'swimming', 'simn': 'swimming', 'sim': 'swimming', 'swim': 'swimming', 'bad': 'swimming',
-        'yoga': 'yoga', 'pilates': 'yoga', 'stretch': 'yoga'
+        'yoga': 'yoga', 'pilates': 'yoga', 'stretch': 'yoga',
+        'klättring': 'climbing', 'klättr': 'climbing', 'climbing': 'climbing', 'bouldering': 'climbing',
+        'fotboll': 'football', 'football': 'football', 'soccer': 'football'
     };
 
     let type: ExerciseType | null = null;

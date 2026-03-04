@@ -13,6 +13,8 @@ const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
     { type: 'hybrid', icon: '⚡', label: 'Hybrid' },
     { type: 'recovery', icon: '🛁', label: 'Recovery' },
     { type: 'cardio', icon: '🫀', label: 'Cardio' },
+    { type: 'climbing', icon: '🧗‍♂️', label: 'Klättring' },
+    { type: 'football', icon: '⚽', label: 'Fotboll' },
     { type: 'other', icon: '✨', label: 'Annat' },
 ];
 

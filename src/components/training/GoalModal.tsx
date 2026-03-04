@@ -17,6 +17,8 @@ const EXERCISE_TYPES: { type: ExerciseType | undefined; icon: string; label: str
     { type: 'walking', icon: '🚶', label: 'Promenad' },
     { type: 'swimming', icon: '🏊', label: 'Simning' },
     { type: 'yoga', icon: '🧘', label: 'Yoga' },
+    { type: 'climbing', icon: '🧗‍♂️', label: 'Klättring' },
+    { type: 'football', icon: '⚽', label: 'Fotboll' },
     { type: 'other', icon: '✨', label: 'Annat' },
 ];
 

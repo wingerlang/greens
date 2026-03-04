@@ -294,7 +294,7 @@ export async function getStravaActivityDetail(activityId: number, accessToken: s
 // Data Mapping
 // ==========================================
 
-type ExerciseType = 'running' | 'cycling' | 'swimming' | 'strength' | 'yoga' | 'walking' | 'other';
+type ExerciseType = 'running' | 'cycling' | 'swimming' | 'strength' | 'yoga' | 'walking' | 'climbing' | 'football' | 'other';
 type ExerciseIntensity = 'low' | 'moderate' | 'high';
 
 /**
@@ -318,6 +318,9 @@ export function mapStravaType(stravaType: string): ExerciseType {
         'CrossFit': 'strength',
         'Yoga': 'yoga',
         'Pilates': 'yoga',
+        'RockClimbing': 'climbing',
+        'Bouldering': 'climbing',
+        'Soccer': 'football',
     };
     return mapping[stravaType] || 'other';
 }
@@ -388,6 +391,8 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
         strength: { min: 3, max: 8 },      // Weight training
         walking: { min: 2, max: 5 },
         yoga: { min: 1.5, max: 4 },
+        climbing: { min: 4, max: 10 },
+        football: { min: 5, max: 12 },
         other: { min: 3, max: 10 }
     };
 
@@ -444,6 +449,8 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
     else if (type === 'cycling') { kcalPerMin = 6; reason = "Schablon för cykling (utan pulsdata)"; }
     else if (type === 'swimming') { kcalPerMin = 7; reason = "Schablon för simning"; }
     else if (type === 'yoga') { kcalPerMin = 2.5; reason = "Schablon för yoga"; }
+    else if (type === 'climbing') { kcalPerMin = 6; reason = "Schablon för klättring"; }
+    else if (type === 'football') { kcalPerMin = 7.5; reason = "Schablon för fotboll"; }
 
     const total = Math.round(durationMin * kcalPerMin);
     return {

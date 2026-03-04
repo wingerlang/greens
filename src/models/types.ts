@@ -672,6 +672,8 @@ export type ExerciseType =
     | 'hybrid'
     | 'recovery'
     | 'cardio'
+    | 'climbing'
+    | 'football'
     | 'other';
 
 /** Intensity levels for exercise */
