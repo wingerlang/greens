@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight } from 'lucide-react';
 import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatSpeed } from '../../utils/dateUtils.ts';
 
 interface DailyDetailModalProps {
     date: string;
@@ -59,10 +60,10 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         year: 'numeric'
     });
 
-    // Compute Daily Stats
     const stats = useMemo(() => {
         let calories = 0;
         let distance = 0;
+        let distanceBreakdown = { run: 0, cycle: 0, strength: 0, walk: 0, climb: 0, other: 0 };
         let duration = 0;
         let tonnage = 0;
         let runCount = 0;
@@ -71,18 +72,32 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         let totalElevation = 0;
 
         exercises.forEach(e => {
+            const isRun = e.type.includes('run') || e.type.includes('löp') || (e.title && /run|löp/i.test(e.title));
+            const isCycle = e.type.includes('cycle') || e.type.includes('cykel') || (e.title && /cycle|cykl/i.test(e.title));
+            const isClimb = e.type.includes('climb') || e.type.includes('klätt') || (e.title && /climb|klätt/i.test(e.title));
+            const isStrength = e.type.includes('strength') || e.type.includes('styrka') || (e.title && /strength|styrk|pull|push|legs|core/i.test(e.title));
+            const isWalk = e.type.includes('walk') || e.type.includes('promenad') || (e.title && /walk|promenad/i.test(e.title));
+
             calories += e.caloriesBurned || 0;
             duration += e.durationMinutes || 0;
-            if (e.distance) distance += e.distance;
+            if (e.distance) {
+                distance += e.distance;
+                if (isRun) distanceBreakdown.run += e.distance;
+                else if (isCycle) distanceBreakdown.cycle += e.distance;
+                else if (isClimb) distanceBreakdown.climb += e.distance;
+                else if (isStrength) distanceBreakdown.strength += e.distance;
+                else if (isWalk) distanceBreakdown.walk += e.distance;
+                else distanceBreakdown.other += e.distance;
+            }
             if (e.tonnage) tonnage += e.tonnage;
             if (e.elevationGain) totalElevation += e.elevationGain;
 
-            if (e.type.includes('run') || e.type.includes('löp')) runCount++;
-            else if (e.type.includes('strength') || e.type.includes('styrka')) strengthCount++;
+            if (isRun) runCount++;
+            else if (isStrength) strengthCount++;
             else otherCount++;
         });
 
-        return { calories, distance, duration, tonnage, runCount, strengthCount, otherCount, count: exercises.length, totalElevation };
+        return { calories, distance, distanceBreakdown, duration, tonnage, runCount, strengthCount, otherCount, count: exercises.length, totalElevation };
     }, [exercises]);
 
     const fmtPace = (dist: number, min: number) => {
@@ -145,9 +160,19 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-slate-800/50 p-4 rounded-2xl border border-white/5 flex flex-col items-start gap-2">
                                 <span className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl"><Activity className="w-5 h-5" /></span>
-                                <div>
+                                <div className="w-full">
                                     <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">Total Distans</p>
                                     <p className="text-2xl font-black text-white">{stats.distance.toFixed(1)} <span className="text-xs text-slate-400">km</span></p>
+                                    {stats.distance > 0 && (
+                                        <div className="mt-2 flex flex-col gap-1 w-full text-[10px] uppercase font-bold text-slate-400 border-t border-white/10 pt-2">
+                                            {stats.distanceBreakdown.run > 0 && <div className="flex justify-between w-full"><span>🏃 Löpning</span><span className="text-slate-300">{stats.distanceBreakdown.run.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.cycle > 0 && <div className="flex justify-between w-full"><span>🚴 Cykling</span><span className="text-slate-300">{stats.distanceBreakdown.cycle.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.strength > 0 && <div className="flex justify-between w-full"><span>🪜 Trapp/Cardio</span><span className="text-slate-300">{stats.distanceBreakdown.strength.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.walk > 0 && <div className="flex justify-between w-full"><span>🚶 Promenad</span><span className="text-slate-300">{stats.distanceBreakdown.walk.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.climb > 0 && <div className="flex justify-between w-full"><span>🧗‍♂️ Klättring</span><span className="text-slate-300">{stats.distanceBreakdown.climb.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.other > 0 && <div className="flex justify-between w-full"><span>✨ Annat</span><span className="text-slate-300">{stats.distanceBreakdown.other.toFixed(1)} km</span></div>}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="bg-slate-800/50 p-4 rounded-2xl border border-white/5 flex flex-col items-start gap-2">
@@ -186,9 +211,9 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                             </h3>
                             <div className="grid gap-4">
                                 {exercises.map((ex, i) => {
-                                    const isRun = ex.type.includes('run') || ex.type.includes('löp');
-                                    const isStrength = ex.type.includes('strength') || ex.type.includes('styrka');
-                                    const isCycle = ex.type.includes('cycle') || ex.type.includes('cykling');
+                                    const isRun = ex.type.includes('run') || ex.type.includes('löp') || (ex.title && /run|löp/i.test(ex.title));
+                                    const isStrength = ex.type.includes('strength') || ex.type.includes('styrka') || (ex.title && /strength|styrk|pull|push|legs|core/i.test(ex.title));
+                                    const isCycle = ex.type.includes('cycle') || ex.type.includes('cykel') || (ex.type.includes('cykling')) || (ex.title && /cycle|cykl/i.test(ex.title));
 
                                     let Icon = Zap;
                                     let iconColor = 'text-slate-400';
@@ -243,14 +268,18 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                             <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-slate-900/50 p-4 rounded-xl border border-white/5">
                                                 {(ex.distance ?? 0) > 0 && (
                                                     <div>
-                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Distans</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black flex items-center gap-1">
+                                                            {isStrength ? <span title="Trappmaskin / Cardiomaskin">🪜 Distans</span> : 'Distans'}
+                                                        </p>
                                                         <p className="text-white font-mono font-bold">{ex.distance!.toFixed(2)} km</p>
                                                     </div>
                                                 )}
                                                 {(ex.distance ?? 0) > 0 && (ex.durationMinutes ?? 0) > 0 && (
                                                     <div>
-                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Tempo</p>
-                                                        <p className="text-white font-mono font-bold">{fmtPace(ex.distance!, ex.durationMinutes!)}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">{isCycle ? 'Hastighet' : 'Tempo'}</p>
+                                                        <p className="text-white font-mono font-bold">
+                                                            {isCycle ? formatSpeed((ex.durationMinutes! * 60) / ex.distance!) : fmtPace(ex.distance!, ex.durationMinutes!)}
+                                                        </p>
                                                     </div>
                                                 )}
                                                 {ex.tonnage && ex.tonnage > 0 ? (
