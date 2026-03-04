@@ -2,10 +2,27 @@ import { UniversalActivity, ExerciseEntry, PlannedActivity } from '../models/typ
 
 export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry | null {
     if (!a || !a.performance) return null;
+    let finalType = (a.performance?.activityType || a.plan?.activityType || (a.performance?.source?.source === 'strava' ? 'running' : 'other')) as any;
+    const titleObj = a.plan?.title || a.performance?.notes || '';
+
+    // Retroactive fix for existing "Cardio: xxx" workouts AND Strava activities incorrectly saved as strength
+    if (finalType === 'strength') {
+        const lowerTitle = titleObj.toLowerCase();
+        const isFromStrava = a.performance?.source?.source === 'strava';
+        const hasCardioPrefix = /^cardio\b/i.test(titleObj);
+
+        if (hasCardioPrefix || isFromStrava) {
+            if (lowerTitle.includes('cycl') || lowerTitle.includes('cyk') || lowerTitle.includes('bike') || lowerTitle.includes('ride')) finalType = 'cycling';
+            else if (lowerTitle.includes('run') || lowerTitle.includes('löp')) finalType = 'running';
+            else if (lowerTitle.includes('walk') || lowerTitle.includes('gång')) finalType = 'walking';
+            else if (hasCardioPrefix) finalType = 'cardio';
+        }
+    }
+
     return {
         id: a.id,
         date: a.date,
-        type: (a.performance?.activityType || a.plan?.activityType || (a.performance?.source?.source === 'strava' ? 'running' : 'other')) as any,
+        type: finalType,
         durationMinutes: a.performance.durationMinutes,
         intensity: 'moderate', // default
         caloriesBurned: a.performance.calories,

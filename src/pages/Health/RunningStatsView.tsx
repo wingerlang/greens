@@ -47,6 +47,8 @@ interface PBEvent {
 
 export function RunningStatsView({ exerciseEntries, universalActivities }: RunningStatsViewProps) {
     const [filter, setFilter] = useState<FilterType>('all');
+    const [showMatrix, setShowMatrix] = useState(false);
+    const [highlightedPBId, setHighlightedPBId] = useState<string | null>(null);
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
     const [selectedBuckets, setSelectedBuckets] = useState<string[]>(RUNNING_BUCKETS.map(b => b.key));
     const [activeUltraTab, setActiveUltraTab] = useState<string>('ultra50k');
@@ -57,7 +59,9 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
         if (days === 1) return 'Igår';
         if (days < 30) return `${days} dagar sedan`;
         if (days < 365) return `${Math.floor(days / 30)} mån sedan`;
-        return `${Math.floor(days / 365)} år sedan`;
+        const years = Math.floor(days / 365);
+        const months = Math.floor((days % 365) / 30);
+        return months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
     };
 
     const isCurrentYear = (dateStr: string) => {
@@ -522,7 +526,7 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                             })}
                         </div>
 
-                        <div className="flex gap-6 overflow-x-auto py-32 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[420px]">
+                        <div className="flex gap-4 overflow-x-auto overflow-y-auto py-20 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[340px]">
                             {filteredTimeline.length === 0 ? (
                                 <div className="text-center text-slate-500 text-sm italic py-10 w-full">
                                     Inga personbästan registrerade för valda distanser och filter.
@@ -535,7 +539,7 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                                     return (
                                         <div
                                             key={`${pb.id}-${idx}`}
-                                            className={`relative w-64 flex-none flex justify-center items-center group cursor-pointer h-full`}
+                                            className={`relative w-56 flex-none flex justify-center items-center group cursor-pointer h-full transition-all duration-300 ${highlightedPBId && highlightedPBId !== pb.id ? 'opacity-30 grayscale' : 'opacity-100'} ${highlightedPBId === pb.id ? 'scale-110 z-50' : 'z-10'}`}
                                             onClick={() => setSelectedActivity(pb.activity)}
                                         >
                                             {/* Connecting horizontal line to NEXT dot */}
@@ -549,7 +553,7 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                                             <div className={`w-4 h-4 rounded-full border-4 border-slate-900 bg-${bucketDef?.color}-500 relative z-10 shadow-lg shadow-${bucketDef?.color}-500/50 transition-transform group-hover:scale-150`} />
 
                                             {/* Content card - Alternating Up/Down */}
-                                            <div className={`absolute w-full ${isUp ? 'bottom-[calc(50%+1.5rem)]' : 'top-[calc(50%+1.5rem)]'} bg-slate-900/90 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-4 text-center transition-all z-20 shadow-xl shadow-black/40 backdrop-blur-sm group-hover:-translate-y-1`}>
+                                            <div className={`absolute w-full ${isUp ? 'bottom-[calc(50%+1.25rem)]' : 'top-[calc(50%+1.25rem)]'} bg-slate-900/90 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-3 text-center transition-all z-20 shadow-xl shadow-black/40 backdrop-blur-sm group-hover:-translate-y-1`}>
 
                                                 {/* Connecting vertical tick */}
                                                 <div className={`absolute left-1/2 -ml-[1px] w-[2px] h-[1.5rem] bg-slate-800/50 ${isUp ? 'top-full' : 'bottom-full'}`}></div>
@@ -565,12 +569,25 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                                                             <div className={`text-xl font-black text-white font-mono leading-none`}>
                                                                 {pb.durationFormatted}
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex items-center gap-1 relative group/arrow" title="Förbättring från föregående PB">
+                                                            <span
+                                                                className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded flex items-center gap-1 relative group/arrow cursor-help"
+                                                                title="Förbättring från föregående PB"
+                                                                onMouseEnter={() => {
+                                                                    // Find previous PB node of the same bucket
+                                                                    for (let i = idx + 1; i < filteredTimeline.length; i++) {
+                                                                        if (filteredTimeline[i].bucketLabel === pb.bucketLabel) {
+                                                                            setHighlightedPBId(filteredTimeline[i].id);
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                onMouseLeave={() => setHighlightedPBId(null)}
+                                                            >
                                                                 <TrendingUp size={10} /> -{pb.improvementSeconds ? formatTime(pb.improvementSeconds) : ''}
                                                                 {idx < filteredTimeline.length - 1 && (
                                                                     <>
                                                                         <ArrowRight size={10} className="ml-0.5 opacity-60 group-hover/arrow:translate-x-1 transition-transform" />
-                                                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover/arrow:block w-max bg-slate-800 text-white text-[9px] px-2 py-1 rounded shadow-xl border border-white/10 z-50">
+                                                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover/arrow:block w-max bg-slate-800 text-white text-[9px] px-2 py-1 rounded shadow-xl border border-white/10 z-[100] whitespace-nowrap">
                                                                             Föregående rekord hittar du till höger
                                                                         </div>
                                                                     </>
@@ -595,6 +612,11 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                                                         {formatPace(pb.durationSeconds / pb.distance)}
                                                     </span>
                                                 </div>
+
+                                                {/* Highlight Glow Effect */}
+                                                {highlightedPBId === pb.id && (
+                                                    <div className={`absolute inset-0 rounded-2xl border-2 border-${bucketDef?.color}-400 shadow-[0_0_30px_rgba(255,255,255,0.2)] pointer-events-none animate-pulse`} />
+                                                )}
                                             </div>
                                         </div>
                                     );

@@ -482,7 +482,11 @@ export function ExerciseDetailModal({
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             if (diffDays < 30) timeAgo = `${diffDays} dagar sedan`;
             else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)} mån sedan`;
-            else timeAgo = '> 1 år sedan';
+            else {
+                const years = Math.floor(diffDays / 365);
+                const months = Math.floor((diffDays % 365) / 30);
+                timeAgo = months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
+            }
         }
 
         // Is Current Session the Annual Best?

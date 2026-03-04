@@ -26,6 +26,7 @@ import { MeasurementsModule } from '../components/profile/sections/MeasurementsM
 import { ProfileFeedSection } from '../components/profile/sections/ProfileFeedSection.tsx';
 import { ProfilePreviewMode } from '../components/profile/ProfilePreviewMode.tsx';
 import { SubscriptionManager } from '../components/profile/SubscriptionManager.tsx';
+import { PBLadder } from '../components/profile/PBLadder.tsx';
 
 import './ProfilePage.css';
 
@@ -489,8 +490,14 @@ export function ProfilePage() {
                             </div>
                         </section>
 
-                        {/* Activity Feed */}
-                        <ProfileFeedSection userId={currentUser?.id} compact={true} />
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                            <div className="lg:col-span-2">
+                                <ProfileFeedSection userId={currentUser?.id} compact={true} />
+                            </div>
+                            <div className="lg:col-span-1">
+                                <PBLadder />
+                            </div>
+                        </div>
                     </div>
                 )}
 

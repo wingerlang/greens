@@ -33,6 +33,29 @@ import {
 } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 
+const isTrailRace = (title: string) => {
+    const t = title.toLowerCase();
+    return t.includes('trail') || t.includes('fjäll') || t.includes('skog') || t.includes('mountain') || t.includes('eco') || t.includes('kullamannen');
+};
+
+const isUltraRace = (title: string, distance: number = 0) => {
+    return distance >= 42.5 || title.toLowerCase().includes('ultra') || title.toLowerCase().includes('100 miles');
+};
+
+const getDistanceStyle = (distance: number = 0) => {
+    if (distance >= 42.5) return 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20'; // Ultra
+    if (distance >= 42) return 'bg-rose-500/10 text-rose-400 border-rose-500/20'; // Marathon
+    if (distance >= 21) return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'; // Half
+    if (distance >= 10) return 'bg-blue-500/10 text-blue-400 border-blue-500/20'; // 10k
+    if (distance >= 5) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'; // 5k
+    return 'bg-slate-800 text-slate-300 border-white/5'; // Other
+};
+
+const formatRaceDateCompact = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }).replace('.', '');
+};
+
 interface RaceListProps {
     exerciseEntries: ExerciseEntry[];
     universalActivities: UniversalActivity[];
@@ -269,18 +292,28 @@ export function RaceList({
         const totalDistance = races.reduce((sum, r) => sum + (r.distance || 0), 0);
         const totalMinutes = races.reduce((sum, r) => sum + r.durationMinutes, 0);
 
-        const grouped: Record<string, number> = {};
+        const grouped: Record<string, { count: number, projected: number }> = {};
+
         races.forEach(r => {
             const year = r.date.substring(0, 4);
-            grouped[year] = (grouped[year] || 0) + 1;
+            if (!grouped[year]) grouped[year] = { count: 0, projected: 0 };
+            grouped[year].count += 1;
+        });
+
+        upcomingRaces.forEach(r => {
+            if (r.raceDetails?.isRegistered !== false) {
+                const year = r.date.substring(0, 4);
+                if (!grouped[year]) grouped[year] = { count: 0, projected: 0 };
+                grouped[year].projected += 1;
+            }
         });
 
         const chartData = Object.entries(grouped)
-            .map(([date, count]) => ({ date, count }))
+            .map(([date, data]) => ({ date, count: data.count, projected: data.projected }))
             .sort((a, b) => a.date.localeCompare(b.date));
 
         return { totalDistance, totalMinutes, count: races.length, chartData };
-    }, [races]);
+    }, [races, upcomingRaces]);
 
     const handleSort = (key: string) => {
         setSortConfig(prev => ({
@@ -388,23 +421,38 @@ export function RaceList({
                                     {upcomingRaces.map(race => {
                                         const diff = new Date(race.date).getTime() - new Date().getTime();
                                         const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                                        const isTrail = isTrailRace(race.title);
+                                        const isUltra = isUltraRace(race.title, race.estimatedDistance);
+                                        const distStyle = getDistanceStyle(race.estimatedDistance);
+
                                         return (
                                             <tr
                                                 key={race.id}
                                                 className="hover:bg-amber-500/5 transition-colors cursor-pointer group border-l-4 border-l-emerald-500/50 hover:border-l-emerald-400"
                                                 onClick={() => handleEditClick(race)}
                                             >
-                                                <td className="px-6 py-4 font-mono text-emerald-400/80">
-                                                    {race.date}
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-mono font-bold text-emerald-400">{formatRaceDateCompact(race.date)}</span>
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black">{race.date.substring(0, 4)}</span>
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 font-bold text-white group-hover:text-emerald-400 transition-colors">
-                                                    {race.title}
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-2">
+                                                        {race.title}
+                                                        {isUltra && <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-400 px-1.5 py-0.5 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                                        {isTrail && !isUltra && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-400 text-xs">
+                                                <td className="px-6 py-4 text-slate-400 text-xs truncate max-w-[150px]">
                                                     {race.raceDetails?.logistics?.location || '-'}
                                                 </td>
-                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                    {race.estimatedDistance > 0 ? `${race.estimatedDistance.toFixed(1)} km` : '-'}
+                                                <td className="px-6 py-4 text-right">
+                                                    {race.estimatedDistance > 0 ? (
+                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
+                                                            {race.estimatedDistance.toFixed(1)} km
+                                                        </span>
+                                                    ) : '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono text-emerald-300 font-bold">
                                                     {daysLeft}
@@ -473,9 +521,10 @@ export function RaceList({
                                     <Tooltip
                                         cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                         contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
-                                        itemStyle={{ color: '#fbbf24' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
-                                    <Bar dataKey="count" fill="#fbbf24" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="count" name="Genomförda" stackId="a" fill="#fbbf24" radius={[0, 0, 0, 0]} barSize={20} />
+                                    <Bar dataKey="projected" name="Planerade" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -546,41 +595,55 @@ export function RaceList({
                                 </thead>
                                 <tbody className="divide-y divide-white/5 bg-slate-900/50">
                                     {/* MAPPED UPCOMING RACES IN HISTORY (GREEN DASHED) */}
-                                    {upcomingRaces.map(race => (
-                                        <tr
-                                            key={`planned-${race.id}`}
-                                            className="hover:bg-emerald-500/5 transition-colors cursor-pointer group bg-emerald-950/20"
-                                            onClick={() => handleEditClick(race)}
-                                        >
-                                            <td className="px-6 py-4 font-mono text-emerald-400/80 border-l-4 border-l-emerald-500/50 group-hover:border-l-emerald-400">
-                                                {race.date.split('T')[0]}
-                                            </td>
-                                            <td className="px-6 py-4 font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-2">
-                                                <Target size={14} className="text-emerald-500" />
-                                                <span>{race.title} (Planerad)</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-400 text-xs">
-                                                {race.raceDetails?.logistics?.location || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                {race.estimatedDistance > 0 ? `${race.estimatedDistance.toFixed(1)} km` : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-mono text-emerald-500">
-                                                -
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-mono text-emerald-500">
-                                                -
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {upcomingRaces.map(race => {
+                                        const diff = new Date(race.date).getTime() - new Date().getTime();
+                                        const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                                        const isTrail = isTrailRace(race.title);
+                                        const isUltra = isUltraRace(race.title, race.estimatedDistance);
+                                        const distStyle = getDistanceStyle(race.estimatedDistance);
+
+                                        return (
+                                            <tr
+                                                key={`planned-${race.id}`}
+                                                className="hover:bg-emerald-500/5 transition-colors cursor-pointer group bg-emerald-950/20"
+                                                onClick={() => handleEditClick(race)}
+                                            >
+                                                <td className="px-6 py-4 border-l-4 border-l-emerald-500/50 group-hover:border-l-emerald-400">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-mono font-bold text-emerald-400">{formatRaceDateCompact(race.date)}</span>
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black">{race.date.substring(0, 4)}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-2 flex-wrap">
+                                                        <Target size={14} className="text-emerald-500 shrink-0" />
+                                                        <span>{race.title} <span className="text-slate-500 font-normal text-xs">(Planerad)</span></span>
+                                                        {isUltra && <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-400 px-1.5 py-0.5 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                                        {isTrail && !isUltra && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
+                                                        <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-black text-[9px]">{daysLeft} dagar till start</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-400 text-xs">
+                                                    {race.raceDetails?.logistics?.location || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    {race.estimatedDistance > 0 ? (
+                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
+                                                            {race.estimatedDistance.toFixed(1)} km
+                                                        </span>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-mono text-emerald-500">-</td>
+                                                <td className="px-6 py-4 text-right font-mono text-emerald-500">-</td>
+                                            </tr>
+                                        );
+                                    })}
 
                                     {races.map(race => {
                                         // Helper to resolve the best display title
                                         const getRaceTitle = (r: ExerciseEntry) => {
-                                            // 1. Prefer explicit title if it's not generic
                                             if (r.title && !r.title.startsWith('Merged')) return r.title;
 
-                                            // 2. Resolve via UniversalActivity
                                             const ua = universalActivities.find(u => u.id === r.id);
                                             if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
                                                 const components = universalActivities.filter(u => ua.mergeInfo!.originalActivityIds!.includes(u.id));
@@ -593,9 +656,13 @@ export function RaceList({
                                                 if (bestComp) return bestComp.plan?.title;
                                             }
 
-                                            // 3. Fallback
                                             return r.notes || r.type || 'Okänd Aktivitet';
                                         };
+
+                                        const resolvedTitle = getRaceTitle(race) || '';
+                                        const isTrail = isTrailRace(resolvedTitle);
+                                        const isUltra = isUltraRace(resolvedTitle, race.distance);
+                                        const distStyle = getDistanceStyle(race.distance);
 
                                         return (
                                             <tr
@@ -603,17 +670,28 @@ export function RaceList({
                                                 className="hover:bg-amber-500/5 transition-colors cursor-pointer group"
                                                 onClick={() => setSelectedActivity(race)}
                                             >
-                                                <td className="px-6 py-4 font-mono text-slate-300">
-                                                    {race.date.split('T')[0]}
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-mono font-bold text-slate-300">{formatRaceDateCompact(race.date)}</span>
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black">{race.date.substring(0, 4)}</span>
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 font-bold text-white group-hover:text-amber-400 transition-colors">
-                                                    {getRaceTitle(race)}
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-2 flex-wrap">
+                                                        {resolvedTitle}
+                                                        {isUltra && <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-400 px-1.5 py-0.5 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                                        {isTrail && !isUltra && <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase font-black tracking-widest">Trail</span>}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-400 text-xs">
                                                     {race.location || '-'}
                                                 </td>
-                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                    {race.distance ? `${race.distance.toFixed(1)} km` : '-'}
+                                                <td className="px-6 py-4 text-right">
+                                                    {race.distance ? (
+                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity`}>
+                                                            {race.distance.toFixed(1)} km
+                                                        </span>
+                                                    ) : '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono text-amber-300">
                                                     {formatActivityDuration(race.durationMinutes)}
@@ -796,6 +874,10 @@ END:VCALENDAR`;
         });
     };
 
+    const isTrail = isTrailRace(race.title);
+    const isUltra = isUltraRace(race.title, race.estimatedDistance);
+    const distStyle = getDistanceStyle(race.estimatedDistance);
+
     return (
         <div className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden relative group hover:border-amber-500/50 transition-all duration-300 shadow-xl shadow-black/40 flex flex-col">
             {/* Top Banner / Bib Header */}
@@ -803,16 +885,20 @@ END:VCALENDAR`;
                 <div className="bg-slate-900 rounded-t-[20px] p-5 relative overflow-hidden">
                     <div className="flex justify-between items-start relative z-10">
                         <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">RACE DAY</div>
-                            <h3 className="text-2xl font-black text-white leading-tight mb-2">{race.title}</h3>
-                            <div className="flex items-center gap-4 text-sm text-slate-400">
-                                <span className="flex items-center gap-1"><Calendar size={14} className="text-amber-500" /> {race.date}</span>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">RACE DAY</span>
+                                {isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                {isTrail && !isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">Trail</span>}
+                            </div>
+                            <h3 className="text-2xl font-black text-white leading-tight mb-3">{race.title}</h3>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-400">
+                                <span className="flex items-center gap-1"><Calendar size={14} className="text-amber-500" /> {formatRaceDateCompact(race.date)}</span>
                                 {race.raceDetails?.logistics?.location && (
-                                    <span className="flex items-center gap-1"><MapPin size={14} className="text-amber-500" /> {race.raceDetails.logistics.location}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={14} className="text-amber-500" /> <span className="truncate max-w-[150px]">{race.raceDetails.logistics.location}</span></span>
                                 )}
                             </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0 ml-4">
                             <div className="text-3xl font-black text-white tabular-nums tracking-tighter">{daysLeft}</div>
                             <div className="text-[10px] uppercase font-bold text-slate-500">Dagar kvar</div>
                         </div>
@@ -824,13 +910,13 @@ END:VCALENDAR`;
             <div className="p-5 space-y-5 flex-1 bg-slate-900/50">
                 {/* Distance & Info Grid */}
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Distans</div>
-                        <div className="text-lg font-bold text-white">{race.estimatedDistance > 0 ? `${race.estimatedDistance} km` : '?'}</div>
+                    <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center ${distStyle}`}>
+                        <div className="text-xs uppercase font-bold mb-1 opacity-70">Distans</div>
+                        <div className="text-xl font-black">{race.estimatedDistance > 0 ? `${race.estimatedDistance} km` : '?'}</div>
                     </div>
-                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
+                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center">
                         <div className="text-xs text-slate-500 uppercase font-bold mb-1">Starttid</div>
-                        <div className="text-lg font-bold text-white">{race.startTime || 'TBD'}</div>
+                        <div className="text-xl font-black text-white">{race.startTime || 'TBD'}</div>
                     </div>
                 </div>
 
@@ -963,25 +1049,31 @@ function UpcomingRaceCardCompact({
         return Math.ceil(diff / (1000 * 60 * 60 * 24));
     }, [race.date]);
 
+    const isTrail = isTrailRace(race.title);
+    const isUltra = isUltraRace(race.title, race.estimatedDistance);
+    const distStyle = getDistanceStyle(race.estimatedDistance);
+
     return (
         <div
             onClick={() => onEdit(race)}
             className="bg-slate-900 border-l-4 border-l-emerald-500 border-y border-r border-white/5 rounded-xl p-4 hover:bg-slate-800 transition-all cursor-pointer group shadow-lg flex flex-col justify-between"
         >
             <div>
-                <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-white font-bold leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2 text-sm">{race.title}</h4>
-                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">{daysLeft} d</span>
+                <div className="flex gap-1.5 mb-2 items-center flex-wrap">
+                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase shadow-sm">{daysLeft} dagar</span>
+                    {isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-1.5 py-0.5 rounded shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                    {isTrail && !isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">Trail</span>}
                 </div>
-                <div className="text-slate-500 text-xs font-mono mb-2">{race.date.split('-').slice(1).join('/')}</div>
+                <h4 className="text-white font-bold leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2 text-sm mb-1">{race.title}</h4>
+                <div className="text-emerald-400/80 text-[10px] font-bold uppercase tracking-wide">{formatRaceDateCompact(race.date)}</div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
-                <span className="flex items-center gap-1 truncate">
-                    <MapPin size={12} className="text-slate-500" />
-                    {race.raceDetails?.logistics?.location || 'Mål'}
+            <div className="flex items-center justify-between mt-4 text-xs">
+                <span className="flex items-center gap-1 text-slate-400 max-w-[60%]">
+                    <MapPin size={10} className="text-slate-500 shrink-0" />
+                    <span className="truncate">{race.raceDetails?.logistics?.location || 'Mål'}</span>
                 </span>
-                <span className="font-mono text-slate-300">
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${distStyle}`}>
                     {race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '-'}
                 </span>
             </div>
@@ -1006,6 +1098,7 @@ function AddRaceModal({
         startTime: '10:00',
         location: '',
         url: '',
+        isRegistered: true,
         goalA: '',
         goalB: '',
         goalC: '',
@@ -1022,6 +1115,7 @@ function AddRaceModal({
                 startTime: activityToEdit.startTime || '10:00',
                 location: activityToEdit.raceDetails?.logistics?.location || '',
                 url: activityToEdit.raceUrl || '',
+                isRegistered: activityToEdit.raceDetails?.isRegistered ?? true,
                 goalA: activityToEdit.raceDetails?.goals?.a || '',
                 goalB: activityToEdit.raceDetails?.goals?.b || '',
                 goalC: activityToEdit.raceDetails?.goals?.c || '',
@@ -1058,6 +1152,7 @@ function AddRaceModal({
             targetPace: '',
             targetHrZone: 0,
             raceDetails: {
+                isRegistered: form.isRegistered,
                 goals: {
                     a: form.goalA,
                     b: form.goalB,
@@ -1160,6 +1255,22 @@ function AddRaceModal({
                         </div>
                     ) : (
                         <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                                <div>
+                                    <h4 className="text-sm font-bold text-white">Anmäld till loppet</h4>
+                                    <p className="text-xs text-slate-400">Markera om du är formellt anmäld och har en startplats.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.isRegistered}
+                                        onChange={e => setForm({ ...form, isRegistered: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+
                             <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
                                 <label className="block text-xs font-bold text-emerald-400 uppercase mb-1">Mål A (Drömmålet)</label>
                                 <input

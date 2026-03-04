@@ -113,7 +113,8 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
         "/api/auth/register",
         "/api/stats/community",
         "/api/strava/callback",
-        "/api/strava/auth"
+        "/api/strava/auth",
+        "/api/debug-activities"
     ];
     const isPublicPath = publicPaths.some(path => url.pathname.startsWith(path));
 
@@ -148,7 +149,21 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
 
     try {
         // Dispatch to handlers
-        if (url.pathname.startsWith("/api/auth")) {
+        if (url.pathname === "/api/debug-activities") {
+            const { kv } = await import("./kv.ts");
+            const dateIso = "2026-01-20";
+            const actList = [];
+            for await (const entry of kv.list({ prefix: ["activities"] })) {
+                const item = entry.value as any;
+                if (item.date && item.date.startsWith(dateIso)) actList.push(item);
+            }
+            const strList = [];
+            for await (const entry of kv.list({ prefix: ["strength_workouts"] })) {
+                const item = entry.value as any;
+                if (item.date && item.date.startsWith(dateIso)) strList.push(item);
+            }
+            return new Response(JSON.stringify({ universal: actList, strength: strList }), { headers });
+        } else if (url.pathname.startsWith("/api/auth")) {
             response = await handleAuthRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/user")) {
             response = await handleUserRoutes(req, url, headers, ctx);

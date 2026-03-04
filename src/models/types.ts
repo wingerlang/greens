@@ -1364,6 +1364,7 @@ export interface PlannedActivity {
 }
 
 export interface RaceDetails {
+    isRegistered?: boolean;
     goals?: {
         a?: string; // Dream goal (e.g., "Sub 3:00")
         b?: string; // Realistic goal (e.g., "Sub 3:15")

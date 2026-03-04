@@ -97,7 +97,11 @@ export const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({
                         dayActivities.forEach(a => {
                             totalMinutes += a.durationMinutes || 0;
                             totalTonnage += (a.tonnage || 0) / 1000;
-                            totalDistance += a.distance || 0;
+
+                            if (a.type === 'running' || a.type === 'walking') {
+                                totalDistance += a.distance || 0;
+                            }
+
                             if (a.type === 'strength') strengthCount++;
                             else cardioCount++;
                         });

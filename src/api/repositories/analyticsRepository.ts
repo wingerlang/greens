@@ -77,7 +77,7 @@ export const analyticsRepository = {
             path,
             count: data.count,
             avgTime: data.count > 0 ? Math.round(data.totalTime / data.count) : 0
-        })).sort((a, b) => b.count - a.count).slice(0, 20);
+        })).sort((a, b) => b.count - a.count).slice(0, 100);
 
         // 2. Popular Interactions
         const eventMap = new Map<string, number>();
@@ -468,7 +468,7 @@ export const analyticsRepository = {
         const topNavigations = Array.from(navCounts.entries())
             .map(([path, count]) => ({ path, count }))
             .sort((a, b) => b.count - a.count)
-            .slice(0, 20);
+            .slice(0, 100);
 
         // Format contextual navigations
         const contextualNavigations: Record<string, Array<{ path: string; count: number }>> = {};
@@ -476,7 +476,7 @@ export const analyticsRepository = {
             contextualNavigations[fromPath] = Array.from(toMap.entries())
                 .map(([path, count]) => ({ path, count }))
                 .sort((a, b) => b.count - a.count)
-                .slice(0, 20); // keep top 20 transitions from this path
+                .slice(0, 100); // keep top 100 transitions from this path
         });
 
         return {

@@ -455,18 +455,36 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
         const normalizedServer = serverEntries.map(e => {
             const u = universalActivities.find(item => item.id === e.id);
+
+            let source = 'strava';
+            let sw = undefined;
+
+            if (u?.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
+                source = 'merged';
+                // Try to find the original strength workout if this is a merged activity
+                for (const orgId of u.mergeInfo.originalActivityIds) {
+                    const cleanId = orgId.replace('strength-', '');
+                    const match = strengthSessions.find(s => s.id === cleanId || s.id === orgId || orgId === `strength-${s.id}`);
+                    if (match) {
+                        sw = match;
+                        break;
+                    }
+                }
+            }
+
             return {
                 ...e,
-                source: 'strava' as const,
+                source: source as any,
                 avgHeartRate: u?.performance?.avgHeartRate,
                 maxHeartRate: u?.performance?.maxHeartRate,
                 _mergeData: {
                     strava: e,
-                    universalActivity: u
+                    universalActivity: u,
+                    strengthWorkout: sw
                 }
             };
         });
-        const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
+        const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' as const }));
 
         // Convert strength workouts to ExerciseEntry format
         const rawStrengthEntries = (strengthSessions as any[]).map(w => {
@@ -480,27 +498,61 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             const cardioTimeSeconds = cardioExercises.reduce((sum: number, ex: any) =>
                 sum + ex.sets.reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
 
-            const totalDurationMinutes = w.duration || w.durationMinutes || 60;
+            let totalDurationMinutes = w.duration || w.durationMinutes;
+            if (!totalDurationMinutes || totalDurationMinutes === 0) {
+                const totalTimeSeconds = w.exercises.reduce((sum: number, ex: any) =>
+                    sum + ex.sets.reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
+                totalDurationMinutes = totalTimeSeconds > 0 ? Math.round(totalTimeSeconds / 60) : 0;
+            }
+
             const cardioDurationMinutes = cardioTimeSeconds / 60;
 
-            const isExplicitCardioWorkout = workoutName.startsWith('cardio:');
+            const isExplicitCardioWorkout = /^cardio\b/i.test(workoutName) ||
+                workoutName.includes('cycl') || workoutName.includes('cyk') || workoutName.includes('bike') ||
+                workoutName.includes('run') || workoutName.includes('löp') ||
+                workoutName.includes('walk') || workoutName.includes('gång');
+
             const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (cardioDurationMinutes / totalDurationMinutes) > 0.25;
 
             // 3. Helper to determine the best EXERCISE_TYPE
             const getPrimaryCardioType = (exercises: any[]): ExerciseType => {
                 if (exercises.length === 0) return 'cardio';
-                const exName = exercises[0].exerciseName.toLowerCase();
-                if (exName.includes('cycl') || exName.includes('cyk') || exName.includes('bike')) return 'cycling';
-                if (exName.includes('run') || exName.includes('löp')) return 'running';
-                if (exName.includes('walk') || exName.includes('gång')) return 'walking';
+
+                let hasCycling = false;
+                let hasRunning = false;
+                let hasWalking = false;
+                let hasOther = false;
+
+                exercises.forEach(ex => {
+                    const exName = ex.exerciseName.toLowerCase();
+                    if (exName.includes('cycl') || exName.includes('cyk') || exName.includes('bike')) hasCycling = true;
+                    else if (exName.includes('run') || exName.includes('löp')) hasRunning = true;
+                    else if (exName.includes('walk') || exName.includes('gång')) hasWalking = true;
+                    else hasOther = true;
+                });
+
+                const typesCount = [hasCycling, hasRunning, hasWalking, hasOther].filter(Boolean).length;
+                if (typesCount > 1) return 'cardio';
+
+                if (hasCycling) return 'cycling';
+                if (hasRunning) return 'running';
+                if (hasWalking) return 'walking';
                 return 'cardio';
             };
 
             let finalType: ExerciseType = 'strength';
             if (isExplicitCardioWorkout) {
-                finalType = getPrimaryCardioType([{ exerciseName: workoutName.replace('cardio:', '').trim() }, ...cardioExercises]);
+                const strippedBase = workoutName
+                    .replace(/^cardio\s*[:\-]?\s*/i, '')
+                    .replace(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(morning|lunch|afternoon|evening|night)\s*[:\-]?\s*/i, '')
+                    .trim();
+                finalType = getPrimaryCardioType([{ exerciseName: strippedBase || workoutName }, ...cardioExercises]);
             } else if (isHybrid) {
                 finalType = 'hybrid';
+            }
+
+            if (totalDurationMinutes === 0) {
+                totalDurationMinutes = finalType === 'strength' || finalType === 'hybrid' ? 60 : 0;
             }
 
             // Sum distance for the whole session
@@ -567,9 +619,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             stravaActivitiesByDate.get(d)!.push(e);
         });
 
-        // Helper to check if a StrengthLog type is compatible with a Strava type
         const isTypeCompatible = (slType: ExerciseType, stravaType: string): boolean => {
             const sType = stravaType.toLowerCase();
+            if (sType === 'cardio' || sType.includes('cardio')) return true;
+
             if (slType === 'strength') {
                 return sType.includes('weight') || sType.includes('styrka') || sType.includes('strength') || sType === 'other';
             }
@@ -582,16 +635,22 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             if (slType === 'walking') {
                 return sType.includes('walk') || sType.includes('gång') || sType === 'other';
             }
+            if (slType === 'cardio') {
+                return sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other';
+            }
             if (slType === 'hybrid') {
                 return true; // Hybrid could be anything
             }
-            return sType === 'other'; // Fallback
+            return sType === 'other' || sType === slType; // Fallback
         };
 
         const mergedStrengthEntries: any[] = [];
 
+        // Sort strength entries by duration DESC so substantial workouts get priority during greedy merge
+        const sortedStrengthEntries = [...strengthEntries].sort((a, b) => b.durationMinutes - a.durationMinutes);
+
         // Iterate through all local strength entries and try to find a match
-        strengthEntries.forEach(se => {
+        sortedStrengthEntries.forEach(se => {
             const sw = (strengthSessions as any[]).find(s => s.id === se.id);
             const dateKey = se.date.split('T')[0];
             const candidates = stravaActivitiesByDate.get(dateKey) || [];

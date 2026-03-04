@@ -24,8 +24,10 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
     // Aggregate data for this calendar week
     const weekActivities = activities.filter(a => a.date >= monday && a.date <= sunday);
     const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
-    const weekDistance = weekActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
-    // const weekDuration = weekActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+
+    // We only want running distance for the Running summary
+    const runningActivities = weekActivities.filter(a => a.type === 'running');
+    const weekDistance = runningActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
     // const weekWorkouts = weekActivities.length;
 
     // Calculate context label
@@ -43,7 +45,6 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
         mainTitle = 'NUVARANDE VECKA SUMMARY';
     }
 
-    const runningActivities = weekActivities.filter(a => a.type === 'running' || a.type === 'cycling' || a.type === 'walking');
     const strengthActivities = weekActivities.filter(a => a.type === 'strength');
 
     const rangeText = `${new Date(monday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(sunday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`;

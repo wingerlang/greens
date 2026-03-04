@@ -43,6 +43,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
     // Key listeners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (document.getElementById('activity-detail-modal')) return;
             if (e.key === 'Escape') onClose();
             if (e.key === 'ArrowLeft' && prevDay && onDateChange) onDateChange(prevDay);
             if (e.key === 'ArrowRight' && nextDay && onDateChange) onDateChange(nextDay);

@@ -564,7 +564,7 @@ export function ActivityDetailModal({
     }, [onClose]);
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200" onClick={onClose}>
+        <div id="activity-detail-modal" className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200" onClick={onClose}>
             <div
                 className="bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
@@ -1515,11 +1515,17 @@ export function ActivityDetailModal({
 
                                                 {/* Time */}
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 ? '(Rörelse / Total)' : ''}</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
-                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 && (
-                                                            <span className="text-xs text-slate-500 font-bold">/ {formatDuration(perf.elapsedTimeSeconds)}</span>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">
+                                                        Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
+                                                    </span>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                        </div>
+                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
+                                                            <div className="flex items-center gap-1 mt-0.5" title="Inklusive pauser">
+                                                                <span className="text-[10px] text-rose-400 font-bold tracking-tight">Totaltid: {formatDuration(perf.elapsedTimeSeconds)}</span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1634,9 +1640,16 @@ export function ActivityDetailModal({
                                 ) : (
                                     /* Generic Stats Grid (Non-Strava) */
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                        <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col justify-center items-center">
                                             <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
-                                            <p className="text-xs text-slate-500 uppercase">Tid</p>
+                                            <p className="text-xs text-slate-500 uppercase">
+                                                Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
+                                            </p>
+                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
+                                                <p className="text-[10px] text-rose-400 font-bold mt-1 bg-rose-500/10 px-2 py-0.5 rounded">
+                                                    Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Distance (Only if running/has value) */}
@@ -2222,6 +2235,19 @@ export function ActivityDetailModal({
                                 className={`flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors shadow-lg shadow-indigo-500/20`}
                             >
                                 ⚡ Spara som Pass
+                            </button>
+
+                            {/* Added delete functionality for all activities including Strengthlog leftovers */}
+                            <button
+                                onClick={() => {
+                                    if (confirm('Är du säker på att du vill ta bort den här aktiviteten?')) {
+                                        deleteExercise(activity.id);
+                                        onClose();
+                                    }
+                                }}
+                                className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold py-3 rounded-xl transition-colors"
+                            >
+                                Radera
                             </button>
 
                             {/* Raw Data Button - Moved to bottom per user request */}
