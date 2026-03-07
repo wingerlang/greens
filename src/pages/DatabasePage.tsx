@@ -1222,7 +1222,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 onClose={handleCloseForm}
                 editingItem={editingItem}
             />
-            }
 
             {
                 detailItem && (
@@ -1236,7 +1235,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     />
                 )
             }
-        </div >
+        </div>
     );
 }
 

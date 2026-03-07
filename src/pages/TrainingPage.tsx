@@ -1,3 +1,4 @@
+import { TrainingTabs } from '../components/training/TrainingTabs.tsx';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../models/types.ts';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -298,50 +299,8 @@ export function TrainingPage() {
     return (
         <div className="training-page">
             {/* Tab Navigation */}
-            <div className="flex p-1 bg-slate-900 border border-white/5 rounded-xl self-start mb-6 overflow-x-auto">
-                <button
-                    onClick={() => handleTabChange('overview')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'overview'
-                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    📊 Översikt
-                </button>
-                <button
-                    onClick={() => navigate('/styrka')}
-                    className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap text-slate-500 hover:text-slate-300"
-                >
-                    🏋️ Styrka
-                </button>
-                <button
-                    onClick={() => handleTabChange('kondition')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'kondition'
-                        ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/25'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    🏃 Kondition
-                </button>
-                <button
-                    onClick={() => handleTabChange('races')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'races'
-                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    🏆 Tävlingar
-                </button>
-                <button
-                    onClick={() => handleTabChange('lopstatistik')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'lopstatistik'
-                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    ⏱️ Löpstatistik
-                </button>
-            </div>
+            <TrainingTabs currentTab={currentTab} />
+
 
             {/* Period Selector - Sticky Header */}
             <div className="sticky top-[64px] z-40 -mx-4 px-4 py-4 mb-8 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl">

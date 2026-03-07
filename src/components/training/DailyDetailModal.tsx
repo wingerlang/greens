@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight } from 'lucide-react';
+import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle } from 'lucide-react';
 import { formatActivityDuration } from '../../utils/formatters.ts';
 import { formatSpeed } from '../../utils/dateUtils.ts';
+import { useData } from '../../context/DataShared.ts';
 
 interface DailyDetailModalProps {
     date: string;
@@ -60,10 +62,26 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         year: 'numeric'
     });
 
+    const { getVitalsForDate, updateVitals } = useData();
+    const vitals = getVitalsForDate(date);
+    const [localNote, setLocalNote] = useState(vitals.notes || '');
+    const [isEditingNote, setIsEditingNote] = useState(false);
+
+    // Sync note when date changes
+    useEffect(() => {
+        setLocalNote(vitals.notes || '');
+        setIsEditingNote(false);
+    }, [date, vitals.notes]);
+
+    const handleSaveNote = () => {
+        updateVitals(date, { notes: localNote });
+        setIsEditingNote(false);
+    };
+
     const stats = useMemo(() => {
         let calories = 0;
         let distance = 0;
-        let distanceBreakdown = { run: 0, cycle: 0, strength: 0, walk: 0, climb: 0, other: 0 };
+        let distanceBreakdown = { run: 0, cycle: 0, row: 0, gymCardio: 0, walk: 0, climb: 0, other: 0 };
         let duration = 0;
         let tonnage = 0;
         let runCount = 0;
@@ -74,20 +92,60 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         exercises.forEach(e => {
             const isRun = e.type.includes('run') || e.type.includes('löp') || (e.title && /run|löp/i.test(e.title));
             const isCycle = e.type.includes('cycle') || e.type.includes('cykel') || (e.title && /cycle|cykl/i.test(e.title));
-            const isClimb = e.type.includes('climb') || e.type.includes('klätt') || (e.title && /climb|klätt/i.test(e.title));
+            const isClimb = e.type === 'climbing' || e.type.includes('klätt') || (e.title && /klätt/i.test(e.title)) || (e.title && /climb/i.test(e.title) && !/stair/i.test(e.title));
             const isStrength = e.type.includes('strength') || e.type.includes('styrka') || (e.title && /strength|styrk|pull|push|legs|core/i.test(e.title));
             const isWalk = e.type.includes('walk') || e.type.includes('promenad') || (e.title && /walk|promenad/i.test(e.title));
 
             calories += e.caloriesBurned || 0;
             duration += e.durationMinutes || 0;
-            if (e.distance) {
+            if (e.distance && e.distance > 0) {
                 distance += e.distance;
-                if (isRun) distanceBreakdown.run += e.distance;
-                else if (isCycle) distanceBreakdown.cycle += e.distance;
-                else if (isClimb) distanceBreakdown.climb += e.distance;
-                else if (isStrength) distanceBreakdown.strength += e.distance;
-                else if (isWalk) distanceBreakdown.walk += e.distance;
-                else distanceBreakdown.other += e.distance;
+                const sw = (e as any)._mergeData?.strengthWorkout;
+                let distributed = false;
+
+                if (sw?.exercises && sw.exercises.length > 0) {
+                    const internalBreakdown = { run: 0, cycle: 0, row: 0, gymCardio: 0, walk: 0, climb: 0, other: 0 };
+                    let internalDist = 0;
+                    sw.exercises.forEach((ex: any) => {
+                        const exDist = ex.sets.reduce((s: number, set: any) => s + (set.distance || 0), 0) / 1000;
+                        if (exDist > 0) {
+                            internalDist += exDist;
+                            const name = ex.exerciseName.toLowerCase();
+                            if (name.includes('run') || name.includes('löp')) internalBreakdown.run += exDist;
+                            else if (name.includes('cycl') || name.includes('cykel') || name.includes('cykling')) internalBreakdown.cycle += exDist;
+                            else if (name.includes('row') || name.includes('rodd')) internalBreakdown.row += exDist;
+                            else if (name.includes('klätt') || (name.includes('climb') && !name.includes('stair'))) internalBreakdown.climb += exDist;
+                            else if (name.includes('walk') || name.includes('promenad')) internalBreakdown.walk += exDist;
+                            else internalBreakdown.gymCardio += exDist; // Fallback for stair climber, elliptical, cross trainer, etc.
+                        }
+                    });
+
+                    // If we found internal distances that roughly match the total distance (or it's the only one we have)
+                    if (internalDist > 0 && Math.abs(internalDist - e.distance) < 2.0) {
+                        distanceBreakdown.run += internalBreakdown.run;
+                        distanceBreakdown.cycle += internalBreakdown.cycle;
+                        distanceBreakdown.row += internalBreakdown.row;
+                        distanceBreakdown.gymCardio += internalBreakdown.gymCardio;
+                        distanceBreakdown.walk += internalBreakdown.walk;
+                        distanceBreakdown.climb += internalBreakdown.climb;
+                        distanceBreakdown.other += internalBreakdown.other;
+
+                        const diff = e.distance - internalDist;
+                        if (Math.abs(diff) > 0.1) distanceBreakdown.other += diff;
+
+                        distributed = true;
+                    }
+                }
+
+                if (!distributed) {
+                    if (isRun) distanceBreakdown.run += e.distance;
+                    else if (isCycle) distanceBreakdown.cycle += e.distance;
+                    else if (isClimb) distanceBreakdown.climb += e.distance;
+                    else if (e.type.includes('row') || /row|rodd/i.test(e.title || '')) distanceBreakdown.row += e.distance;
+                    else if (isStrength || e.type.includes('cardio') || /cardio|cross\s*trainer/i.test(e.title || '')) distanceBreakdown.gymCardio += e.distance;
+                    else if (isWalk) distanceBreakdown.walk += e.distance;
+                    else distanceBreakdown.other += e.distance;
+                }
             }
             if (e.tonnage) tonnage += e.tonnage;
             if (e.elevationGain) totalElevation += e.elevationGain;
@@ -108,11 +166,17 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         return `${pMin}:${pSec.toString().padStart(2, '0')} min/km`;
     };
 
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose}>
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-slate-950/95 [backdrop-filter:blur(12px)] transition-opacity duration-300"
+            onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+            }}
+            style={{ transform: 'translateZ(0)' }}>
             <div
-                className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300"
-                onClick={e => e.stopPropagation()}
+                className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                style={{ transform: 'translateZ(0)' }}
             >
                 {/* Header */}
                 <header className="p-6 border-b border-white/5 relative shrink-0">
@@ -155,6 +219,73 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                 </header>
 
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+                    {/* Action Bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button
+                            onClick={() => {
+                                const params = new URLSearchParams(window.location.search);
+                                params.set('registerDate', date);
+                                window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+                                // We don't need navigate here since Layout.tsx listens to registerDate
+                                // but we might need to trigger a re-render or pushState if not using URL change.
+                                // Actually navigate is cleaner if we have it.
+                            }}
+                            className="bg-sky-500 hover:bg-sky-400 text-black font-bold py-3 px-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-500/10 active:scale-95"
+                        >
+                            <Plus size={18} strokeWidth={3} />
+                            Skapa pass
+                        </button>
+                        <button
+                            onClick={() => {
+                                const params = new URLSearchParams(window.location.search);
+                                params.set('createPost', 'true');
+                                window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+                            }}
+                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-2xl transition-all border border-white/5 flex items-center justify-center gap-2 active:scale-95"
+                        >
+                            <MessageSquare size={18} />
+                            Skapa inlägg
+                        </button>
+                        <button
+                            onClick={() => setIsEditingNote(true)}
+                            className={`font-bold py-3 px-4 rounded-2xl transition-all border flex items-center justify-center gap-2 active:scale-95 ${vitals.notes ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/5'}`}
+                        >
+                            <StickyNote size={18} />
+                            {vitals.notes ? 'Ändra notering' : 'Skapa notering'}
+                        </button>
+                    </div>
+
+                    {/* Daily Note (If exists or editing) */}
+                    {(vitals.notes || isEditingNote) && (
+                        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-300">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+                                    <PenSquare className="w-3 h-3" /> Daglig Notering
+                                </h3>
+                                {isEditingNote && (
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setIsEditingNote(false)} className="text-[10px] font-bold text-slate-500 hover:text-white transition-colors">Avbryt</button>
+                                        <button onClick={handleSaveNote} className="text-[10px] font-black bg-amber-500 hover:bg-amber-400 text-black px-2 py-1 rounded-md transition-colors">Spara</button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {isEditingNote ? (
+                                <textarea
+                                    autoFocus
+                                    value={localNote}
+                                    onChange={(e) => setLocalNote(e.target.value)}
+                                    placeholder="Skriv något om dagen... (t.ex. 'Sjukdom', 'Vilodag', 'Känns bra')"
+                                    className="w-full bg-slate-950/50 border border-amber-500/30 rounded-xl p-3 text-slate-200 placeholder:text-slate-600 outline-none focus:border-amber-500/50 transition-colors min-h-[100px] text-sm"
+                                />
+                            ) : (
+                                <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap flex gap-3">
+                                    <div className="w-1 h-auto bg-amber-500/30 rounded-full shrink-0" />
+                                    <p>{vitals.notes}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {/* Top Level Summary Cards */}
                     {stats.count > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -167,7 +298,8 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                         <div className="mt-2 flex flex-col gap-1 w-full text-[10px] uppercase font-bold text-slate-400 border-t border-white/10 pt-2">
                                             {stats.distanceBreakdown.run > 0 && <div className="flex justify-between w-full"><span>🏃 Löpning</span><span className="text-slate-300">{stats.distanceBreakdown.run.toFixed(1)} km</span></div>}
                                             {stats.distanceBreakdown.cycle > 0 && <div className="flex justify-between w-full"><span>🚴 Cykling</span><span className="text-slate-300">{stats.distanceBreakdown.cycle.toFixed(1)} km</span></div>}
-                                            {stats.distanceBreakdown.strength > 0 && <div className="flex justify-between w-full"><span>🪜 Trapp/Cardio</span><span className="text-slate-300">{stats.distanceBreakdown.strength.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.row > 0 && <div className="flex justify-between w-full"><span>🛶 Rodd</span><span className="text-slate-300">{stats.distanceBreakdown.row.toFixed(1)} km</span></div>}
+                                            {stats.distanceBreakdown.gymCardio > 0 && <div className="flex justify-between w-full"><span>🪜 Inomhus Cardio</span><span className="text-slate-300">{stats.distanceBreakdown.gymCardio.toFixed(1)} km</span></div>}
                                             {stats.distanceBreakdown.walk > 0 && <div className="flex justify-between w-full"><span>🚶 Promenad</span><span className="text-slate-300">{stats.distanceBreakdown.walk.toFixed(1)} km</span></div>}
                                             {stats.distanceBreakdown.climb > 0 && <div className="flex justify-between w-full"><span>🧗‍♂️ Klättring</span><span className="text-slate-300">{stats.distanceBreakdown.climb.toFixed(1)} km</span></div>}
                                             {stats.distanceBreakdown.other > 0 && <div className="flex justify-between w-full"><span>✨ Annat</span><span className="text-slate-300">{stats.distanceBreakdown.other.toFixed(1)} km</span></div>}
@@ -210,7 +342,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                 <ChevronRight className="w-4 h-4" /> Passdetaljer
                             </h3>
                             <div className="grid gap-4">
-                                {exercises.map((ex, i) => {
+                                {exercises.map((ex: ExerciseEntry, i: number) => {
                                     const isRun = ex.type.includes('run') || ex.type.includes('löp') || (ex.title && /run|löp/i.test(ex.title));
                                     const isStrength = ex.type.includes('strength') || ex.type.includes('styrka') || (ex.title && /strength|styrk|pull|push|legs|core/i.test(ex.title));
                                     const isCycle = ex.type.includes('cycle') || ex.type.includes('cykel') || (ex.type.includes('cykling')) || (ex.title && /cycle|cykl/i.test(ex.title));
@@ -259,6 +391,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                         {ex.title ? ex.title : ex.type.replace('strength', 'Styrketräning').replace('running', 'Löpning')}
                                                     </h4>
                                                     <p className="text-slate-400 text-sm">
+                                                        {ex.startTime && <span className="text-slate-500 mr-1">{ex.startTime}</span>}
                                                         {formatActivityDuration(ex.durationMinutes)}
                                                         {ex.intensity && ` • ${ex.intensity}`}
                                                     </p>
@@ -269,7 +402,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                 {(ex.distance ?? 0) > 0 && (
                                                     <div>
                                                         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black flex items-center gap-1">
-                                                            {isStrength ? <span title="Trappmaskin / Cardiomaskin">🪜 Distans</span> : 'Distans'}
+                                                            {(isStrength || ex.type === 'cardio') ? <span title="Gym / Cardiomaskin">🪜 Distans</span> : 'Distans'}
                                                         </p>
                                                         <p className="text-white font-mono font-bold">{ex.distance!.toFixed(2)} km</p>
                                                     </div>
@@ -323,6 +456,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

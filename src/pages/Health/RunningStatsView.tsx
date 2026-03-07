@@ -3,7 +3,8 @@ import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { isCompetition, formatTime } from '../../utils/activityUtils.ts';
 import { ActivityDetailModal } from '../../components/activities/ActivityDetailModal.tsx';
-import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, ArrowRight } from 'lucide-react';
+import { PBAnalysisModal } from '../../components/training/PBAnalysisModal.tsx';
+import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, ArrowRight, BarChart3 } from 'lucide-react';
 
 interface RunningStatsViewProps {
     exerciseEntries: ExerciseEntry[];
@@ -50,6 +51,7 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
     const [showMatrix, setShowMatrix] = useState(false);
     const [highlightedPBId, setHighlightedPBId] = useState<string | null>(null);
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
+    const [selectedPBForAnalysis, setSelectedPBForAnalysis] = useState<PBEvent | null>(null);
     const [selectedBuckets, setSelectedBuckets] = useState<string[]>(RUNNING_BUCKETS.map(b => b.key));
     const [activeUltraTab, setActiveUltraTab] = useState<string>('ultra50k');
 
@@ -604,13 +606,25 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                                                 <p className="text-xs text-slate-400 font-medium truncate px-2" title={pb.activity.title || pb.activity.notes}>
                                                     {pb.activity.title && pb.activity.title !== '-' ? pb.activity.title : pb.activity.notes || 'Löprunda'}
                                                 </p>
-                                                <div className="flex items-center justify-center gap-3 mt-2.5">
-                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-slate-400 uppercase">
-                                                        {getDaysAgoText(pb.date)}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-500 font-medium">
-                                                        {formatPace(pb.durationSeconds / pb.distance)}
-                                                    </span>
+                                                <div className="flex justify-between items-center mt-2.5">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-slate-400 uppercase">
+                                                            {getDaysAgoText(pb.date)}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500 font-medium">
+                                                            {formatPace(pb.durationSeconds / pb.distance)}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedPBForAnalysis(pb);
+                                                        }}
+                                                        className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded transition-colors group/stats"
+                                                        title="Visa detaljerad analys"
+                                                    >
+                                                        <BarChart3 size={12} className="group-hover/stats:scale-110 transition-transform" /> Statistik
+                                                    </button>
                                                 </div>
 
                                                 {/* Highlight Glow Effect */}
@@ -632,6 +646,14 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                     activity={{ ...selectedActivity, source: 'strava' }} // Assumes they might be strava or manual. DetailModal handles it well.
                     universalActivity={selectedUniversal}
                     onClose={() => setSelectedActivity(null)}
+                />
+            )}
+
+            {selectedPBForAnalysis && (
+                <PBAnalysisModal
+                    pbEvent={selectedPBForAnalysis}
+                    allActivities={exerciseEntries}
+                    onClose={() => setSelectedPBForAnalysis(null)}
                 />
             )}
         </div>

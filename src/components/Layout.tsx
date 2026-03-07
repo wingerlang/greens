@@ -84,6 +84,10 @@ export function Layout({ children }: LayoutProps) {
                 setSelectedActivityId(activityId);
             }
 
+            if (params.get('createPost')) {
+                setIsCreatePostModalOpen(true);
+            }
+
             if (breakdownId || registerDate) {
                 // Clean up URL without reload (activityId is kept in URL to allow sharing/back button)
                 const newUrl = window.location.pathname + window.location.hash;
@@ -122,6 +126,12 @@ export function Layout({ children }: LayoutProps) {
                 input: registerInput || undefined
             });
             // Cleanup URL immediately for actions
+            const newUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, '', newUrl);
+        }
+
+        if (params.get('createPost')) {
+            setIsCreatePostModalOpen(true);
             const newUrl = window.location.pathname + window.location.hash;
             window.history.replaceState({}, '', newUrl);
         }

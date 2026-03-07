@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ExerciseEntry } from '../../models/types.ts';
 import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -169,26 +170,27 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
         const today = new Date();
         const isCurrentMonth = today.getMonth() === monthIndex && today.getFullYear() === year;
 
-        // Pass per week (dynamic calculation for more intuitive stats at start of month)
-        const weeksForFreq = isCurrentMonth
-            ? Math.max(1, calendarDays.weeks.filter(w => w.some(d => d.isCurrentMonth && d.day <= today.getDate())).length)
-            : (calendarDays.daysInMonth / 7);
-
-        const perWeek = count > 0 ? (count / weeksForFreq).toFixed(1) : '0';
-
         // Days passed calculation for frequency/averages
         const isPastMonth = new Date(year, monthIndex, 1) < today;
         let daysPassedForStats = calendarDays.daysInMonth;
         if (isCurrentMonth) {
-            daysPassedForStats = today.getDate();
+            daysPassedForStats = Math.max(1, today.getDate());
         } else if (!isPastMonth) {
             daysPassedForStats = 1; // Future month, avoid divide by zero
         }
 
+        // Pass per week (dynamic calculation based on exact days passed, not calendar rows)
+        const weeksForFreq = daysPassedForStats / 7;
+        const perWeek = count > 0 ? (count / weeksForFreq).toFixed(1) : '0';
+
         // Math.min to cap at 100% just in case of multiple workouts a day, but user might want >100%. User asked for "x / 30 dagar 72%".
-        const freqPercent = Math.round((monthData.filter((v, i, a) => a.findIndex(t => (t.date === v.date)) === i).length / daysPassedForStats) * 100);
+        const uniqueActiveDays = monthData.filter((v, i, a) => a.findIndex(t => (t.date === v.date)) === i).length;
+        const freqPercent = Math.round((uniqueActiveDays / daysPassedForStats) * 100);
         const timePerDay = Math.round(duration / daysPassedForStats);
         const distancePerWeek = daysPassedForStats > 0 ? (distance / daysPassedForStats) * 7 : 0;
+
+        // Sessions per active day
+        const sessionsPerActiveDay = uniqueActiveDays > 0 ? (count / uniqueActiveDays).toFixed(1) : '0';
 
         // Distribution by Time (Request: "fördelning av tiden")
         const timeDist = monthData.reduce((acc, e) => {
@@ -196,16 +198,17 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
             return acc;
         }, {} as Record<string, number>);
 
-        return { distance, duration, count, tonnage, timeDist, perWeek, freqPercent, timePerDay, distancePerWeek };
+        return { distance, duration, count, tonnage, timeDist, perWeek, freqPercent, timePerDay, distancePerWeek, sessionsPerActiveDay };
     }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
 
     if (monthIndex < 0) return null;
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-2 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-2 bg-slate-950/90 [backdrop-filter:blur(8px)] transition-opacity duration-300" onClick={onClose} style={{ transform: 'translateZ(0)' }}>
             <div
-                className="bg-slate-900 border-0 sm:border border-white/10 rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[95vh] sm:max-w-[98vw] lg:w-[98vw] lg:max-w-[1600px] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300"
+                className="bg-slate-900 border-0 sm:border border-white/10 rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[95vh] sm:max-w-[98vw] lg:w-[98vw] lg:max-w-[1600px] overflow-hidden flex flex-col md:flex-row transition-all duration-300"
                 onClick={e => e.stopPropagation()}
+                style={{ transform: 'translateZ(0)' }}
             >
                 {/* Side Panel: Summary */}
                 <div className="md:w-56 lg:w-64 bg-slate-950/50 border-b md:border-b-0 md:border-r border-white/5 p-3 sm:p-4 flex flex-col gap-3 overflow-y-auto shrink-0 max-h-[35vh] md:max-h-full">
@@ -243,8 +246,16 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                 </p>
                             </div>
                             <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Pass / Vecka</p>
-                                <p className="text-2xl font-black text-sky-400">{stats.perWeek}</p>
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5" title="Baserat på exact antal dagar in i månaden">Pass / Vecka</p>
+                                <div className="flex items-baseline gap-2">
+                                    <p className="text-2xl font-black text-sky-400 leading-none">{stats.perWeek}</p>
+                                </div>
+                                {parseFloat(stats.sessionsPerActiveDay) > 1.0 && (
+                                    <div className="text-[9px] text-sky-500/80 font-bold mt-1 flex items-center gap-1.5" title="Eftersom du tränat flera pass samma dag">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-sky-500/50"></div>
+                                        {stats.sessionsPerActiveDay} pass / träningsdag
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -370,7 +381,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                         navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
                                                     }}
                                                     className={`
-                                                relative p-1 flex flex-col gap-0.5 rounded-lg sm:rounded-xl border transition-all duration-300 group cursor-pointer
+                                                relative p-1 flex flex-col gap-0.5 rounded-lg sm:rounded-xl border group cursor-pointer
                                                 ${!date.isCurrentMonth ? 'opacity-40 grayscale-[0.5] hover:opacity-80' : ''}
                                                 ${isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50' :
                                                             isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/20' :
@@ -399,7 +410,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
 
                                                             {/* Day Total Tooltip - Only visible when hovering the summary pill */}
                                                             {hasExercise && (
-                                                                <div className={`absolute top-full right-0 mt-2 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 group-hover/dayinfo:pointer-events-auto transition-opacity z-[60] hidden md:block pointer-events-none`}>
+                                                                <div className={`absolute top-full right-0 mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 group-hover/dayinfo:pointer-events-auto transition-all duration-300 translate-y-2 group-hover/dayinfo:translate-y-0 z-[60] hidden md:block pointer-events-none scale-95 group-hover/dayinfo:scale-100`}>
                                                                     <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
                                                                         <span>{date.day} {monthName}</span>
                                                                         <span>{date.exercises.length} pass</span>
@@ -486,7 +497,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                                     </span>
 
                                                                     {/* Rich Tooltip per Activity */}
-                                                                    <div className={`absolute ${getTooltipPositionClasses(weekIdx, dayIdx)} w-48 sm:w-56 bg-slate-900 border border-white/10 rounded-xl p-2.5 sm:p-3 shadow-2xl opacity-0 group-hover/ex:opacity-100 group-hover/ex:pointer-events-auto transition-opacity z-[70] hidden md:block pointer-events-none`}>
+                                                                    <div className={`absolute ${getTooltipPositionClasses(weekIdx, dayIdx)} w-48 sm:w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2.5 sm:p-3 shadow-2xl opacity-0 group-hover/ex:opacity-100 group-hover/ex:pointer-events-auto transition-all duration-300 translate-y-2 group-hover/ex:translate-y-0 z-[70] hidden md:block pointer-events-none scale-95 group-hover/ex:scale-100`}>
                                                                         <div className="flex flex-col gap-1.5 whitespace-normal">
                                                                             <div className="flex items-start gap-2 mb-1 pb-1.5 border-b border-white/10">
                                                                                 <div className="p-1 rounded-lg bg-slate-800/50 text-white shrink-0 mt-0.5">
@@ -567,7 +578,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                             <Activity className="w-3 h-3 stroke-[3]" />
                                                             <span>{Math.round(weekRunDist)}k</span>
                                                             {/* Rich Tooltip */}
-                                                            <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekrun:opacity-100 xl:group-hover/weekrun:pointer-events-auto transition-opacity z-[70] hidden xl:block pointer-events-none cursor-default" onClick={e => e.stopPropagation()}>
+                                                            <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekrun:opacity-100 xl:group-hover/weekrun:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weekrun:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekrun:scale-100 shadow-emerald-500/10" onClick={e => e.stopPropagation()}>
                                                                 <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Löpning</div>
                                                                 <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                                     {runExercises.map((e, idx) => (
@@ -599,7 +610,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                                 {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
                                                             </span>
                                                             {/* Rich Tooltip */}
-                                                            <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekstr:opacity-100 xl:group-hover/weekstr:pointer-events-auto transition-opacity z-[70] hidden xl:block pointer-events-none cursor-default" onClick={e => e.stopPropagation()}>
+                                                            <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekstr:opacity-100 xl:group-hover/weekstr:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weekstr:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekstr:scale-100 shadow-indigo-500/10" onClick={e => e.stopPropagation()}>
                                                                 <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Styrka</div>
                                                                 <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                                     {strengthExercises.map((e, idx) => (
@@ -641,7 +652,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                             </span>
                                                         </span>
                                                         {/* Rich Tooltip */}
-                                                        <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 bottom-0 sm:bottom-auto sm:top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weektot:opacity-100 xl:group-hover/weektot:pointer-events-auto transition-opacity z-[70] hidden xl:block pointer-events-none cursor-default" onClick={e => e.stopPropagation()}>
+                                                        <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 bottom-0 sm:bottom-auto sm:top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weektot:opacity-100 xl:group-hover/weektot:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weektot:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weektot:scale-100 shadow-sky-500/10" onClick={e => e.stopPropagation()}>
                                                             <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Alla Pass</div>
                                                             <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                                 {weekExercises.map((e, idx) => (
@@ -708,6 +719,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                     onExerciseClick={onExerciseClick}
                 />
             )}
-        </div>
+        </div>,
+        document.body
     );
 }

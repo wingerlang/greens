@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { TrainingTabs } from '../../components/training/TrainingTabs.tsx';
+import { Layout } from '../../components/Layout';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -338,6 +340,7 @@ export const LoadAnalysisPage: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-20">
+            <TrainingTabs currentTab="load" />
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

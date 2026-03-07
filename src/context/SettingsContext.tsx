@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { type Theme, type UserSettings, type MealType, DEFAULT_USER_SETTINGS } from '../models/types.ts';
-import { useData } from './DataContext.tsx';
+import { useData } from './DataShared.ts';
 
 // ============================================
 // Settings Context

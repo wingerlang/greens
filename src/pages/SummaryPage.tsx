@@ -4,6 +4,7 @@ import { SummaryCard } from '../components/summary/SummaryCard.tsx';
 import { SummaryVsCard } from '../components/summary/SummaryVsCard.tsx';
 import { SummaryControls } from '../components/summary/SummaryControls.tsx';
 import html2canvas from 'html2canvas';
+import { getYearBefore } from '../utils/dateUtils.ts';
 
 export function SummaryPage() {
     // Default to "Year to Date"
@@ -21,15 +22,11 @@ export function SummaryPage() {
 
     // Calculate same period last year
     const prevStartDate = useMemo(() => {
-        const d = new Date(startDate);
-        d.setFullYear(d.getFullYear() - 1);
-        return d.toISOString().split('T')[0];
+        return getYearBefore(startDate);
     }, [startDate]);
 
     const prevEndDate = useMemo(() => {
-        const d = new Date(endDate);
-        d.setFullYear(d.getFullYear() - 1);
-        return d.toISOString().split('T')[0];
+        return getYearBefore(endDate);
     }, [endDate]);
 
     const { stats: prevStats } = useTrainingSummary(prevStartDate, prevEndDate);

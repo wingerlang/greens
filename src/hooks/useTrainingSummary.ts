@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
+import { isValidDate } from '../utils/dateUtils.ts';
 import { UniversalActivity } from '../models/types.ts';
 import { PersonalBest } from '../models/strengthTypes.ts';
 
@@ -56,6 +57,9 @@ export function useTrainingSummary(startDate: string, endDate: string) {
     const filteredActivities = useMemo(() => {
         const start = new Date(startDate);
         const end = new Date(endDate);
+
+        if (!isValidDate(start) || !isValidDate(end)) return [];
+
         // Set end to end of day
         end.setHours(23, 59, 59, 999);
 
@@ -80,6 +84,9 @@ export function useTrainingSummary(startDate: string, endDate: string) {
     const filteredStrengthSessions = useMemo(() => {
         const start = new Date(startDate);
         const end = new Date(endDate);
+
+        if (!isValidDate(start) || !isValidDate(end)) return [];
+
         end.setHours(23, 59, 59, 999);
 
         return strengthSessions.filter(s => {
@@ -92,6 +99,18 @@ export function useTrainingSummary(startDate: string, endDate: string) {
     const stats = useMemo((): SummaryStats => {
         const start = new Date(startDate);
         const end = new Date(endDate);
+
+        if (!isValidDate(start) || !isValidDate(end)) {
+            // Return empty stats to avoid crashes in calculations
+            return {
+                totalDist: 0, totalTime: 0, totalCals: 0, totalSessions: 0, totalPRs: 0,
+                runningPRs: 0, strengthPRs: 0, raceCount: 0, avgScore: 0, activeDays: 0,
+                longestGap: 0, totalTonnage: 0, uniqueExercises: 0, totalSets: 0,
+                totalReps: 0, mostTrainedExercise: '', types: [], longestRuns: [],
+                fastestRuns: [], maxScores: [], topVolumeSessions: [], topLifts: [], totalDays: 0
+            };
+        }
+
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
 

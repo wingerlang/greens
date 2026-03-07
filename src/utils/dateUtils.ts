@@ -81,3 +81,19 @@ export function formatSpeed(secondsPerKm: number): string {
     const speed = 3600 / secondsPerKm;
     return `${speed.toFixed(1)} km/h`;
 }
+/**
+ * Check if a Date object is valid
+ */
+export function isValidDate(date: Date): boolean {
+    return date instanceof Date && !isNaN(date.getTime());
+}
+
+/**
+ * Get the same date one year before. Returns ISO string (YYYY-MM-DD) or original if invalid.
+ */
+export function getYearBefore(dateStr: string): string {
+    const d = new Date(dateStr);
+    if (!isValidDate(d)) return dateStr;
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().split('T')[0];
+}

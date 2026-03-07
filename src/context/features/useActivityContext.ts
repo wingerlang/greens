@@ -436,6 +436,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             hybrid: { low: 4, moderate: 6, high: 8, ultra: 10 },
             recovery: { low: 2, moderate: 3, high: 4, ultra: 5 },
             cardio: { low: 5, moderate: 7, high: 9, ultra: 11 },
+            climbing: { low: 5, moderate: 7.5, high: 10, ultra: 12 },
+            football: { low: 6, moderate: 8, high: 10, ultra: 12 },
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
 
@@ -578,7 +580,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 hyroxStats: (w as any).hyroxStats,
                 externalId: undefined,
                 movingTime: totalDurationMinutes * 60,
-                excludeFromStats: w.excludeFromStats
+                excludeFromStats: w.excludeFromStats,
+                _mergeData: {
+                    strengthWorkout: w
+                }
             };
         });
 
@@ -636,7 +641,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 return sType.includes('walk') || sType.includes('gång') || sType === 'other';
             }
             if (slType === 'cardio') {
-                return sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other';
+                return sType.includes('strength') || sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other';
             }
             if (slType === 'hybrid') {
                 return true; // Hybrid could be anything
@@ -676,7 +681,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 const availableCandidates = compatibleCandidates.filter(c => !mergedStravaIds.has(c.id));
 
                 // Find best match among available compatible candidates
-                // 1. By approximate duration (within 10 mins)
+                // 1. By approximate duration (within 10 mins) - moving time
                 match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
 
                 // 2. By approximate duration (within 20 mins) - a bit looser
@@ -684,7 +689,18 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 20);
                 }
 
-                // 3. If no match, just take the first available one IF there's only one compatible candidate left for this day
+                // 3. Also compare against elapsed time (Strava rest periods can inflate the gap)
+                //    e.g. Strava moving time=68min but elapsed=96min, StrengthLog duration=96min
+                if (!match) {
+                    match = availableCandidates.find(c => {
+                        const elapsedSec = (c as any)._mergeData?.universalActivity?.performance?.elapsedTimeSeconds;
+                        if (!elapsedSec) return false;
+                        const elapsedMin = elapsedSec / 60;
+                        return Math.abs(elapsedMin - se.durationMinutes) <= 10;
+                    });
+                }
+
+                // 4. If no match, just take the first available one IF there's only one compatible candidate left for this day
                 if (!match && availableCandidates.length === 1) {
                     match = availableCandidates[0];
                 }
