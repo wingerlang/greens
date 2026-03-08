@@ -26,7 +26,9 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         // Base Filter (Period)
         // If filtered, 'yearExercises' represents the entire active period (passed from parent)
         // If NO filter from parent, default to current year
-        const baseExercises = isFiltered ? exercises : exercises.filter(e => new Date(e.date).getFullYear() === currentYear);
+        // ALWAYS exclude extracted sub-performances from session counts (they are measurements, not sessions)
+        const baseExercises = (isFiltered ? exercises : exercises.filter(e => new Date(e.date).getFullYear() === currentYear))
+            .filter(e => !e.extractedFromId);
 
         // Apply Local Type Filter
         const yearExercises = baseExercises.filter(e => {
@@ -39,6 +41,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         });
 
         const monthExercises = exercises.filter(e => {
+            if (e.extractedFromId) return false; // Exclude extracts
             const d = new Date(e.date);
             // Apply Type Filter to Month too
             const matchesType = statFilter === 'all' ||
@@ -50,6 +53,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         });
 
         const lastMonthExercises = exercises.filter(e => {
+            if (e.extractedFromId) return false; // Exclude extracts
             const d = new Date(e.date);
             // Apply Type Filter to Last Month too
             const isHybrid = e.type === 'hybrid';

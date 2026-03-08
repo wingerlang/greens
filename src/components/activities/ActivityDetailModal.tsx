@@ -2611,16 +2611,8 @@ export function ActivityDetailModal({
                                     🔀 Separera
                                 </button>
                             )}
-                            <button
-                                onClick={() => {
-                                    window.location.href = `/workouts/builder?fromActivity=${activity.id}`;
-                                }}
-                                className={`flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors shadow-lg shadow-indigo-500/20`}
-                            >
-                                ⚡ Spara som Pass
-                            </button>
 
-                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'walking' || activity.type === 'swimming') && (
+                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'walking' || activity.type === 'swimming') && !activity.extractedFromId && (
                                 <button
                                     onClick={() => setShowExtractForm(!showExtractForm)}
                                     className={`flex-1 ${showExtractForm ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-amber-500'} hover:opacity-90 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}

@@ -698,9 +698,10 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const method = entry.createdAt === entry.updatedAt ? 'POST' : 'PUT'; // Similar heuristic as recipes, or check if we have ID
-                const url = entry.createdAt === entry.updatedAt ? '/api/exercise-entries' : `/api/exercise-entries/${entry.id}`;
-                const fetchMethod = entry.createdAt === entry.updatedAt ? 'POST' : 'PUT';
+                // New entries won't have updatedAt. Use POST for new, PUT for existing.
+                const isNew = !entry.updatedAt || entry.createdAt === entry.updatedAt;
+                const url = isNew ? '/api/exercise-entries' : `/api/exercise-entries/${entry.id}`;
+                const fetchMethod = isNew ? 'POST' : 'PUT';
 
                 const res = await fetch(url, {
                     method: fetchMethod,
