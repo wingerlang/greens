@@ -37,7 +37,13 @@ const getTooltipPositionClasses = (weekIdx: number, dayIdx: number): string => {
     return classes;
 };
 
-export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, initialDay, onExerciseClick }: MonthlyCalendarModalProps) {
+export function MonthlyCalendarModal({ monthIndex, year, exercises: allExercises, onClose, initialDay, onExerciseClick }: MonthlyCalendarModalProps) {
+    const exercises = useMemo(() => {
+        return allExercises.filter(e => {
+            const perf = (e as any)._mergeData?.universalActivity?.performance;
+            return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar);
+        });
+    }, [allExercises]);
     const navigate = useNavigate();
     const [selectedDate, setSelectedDate] = React.useState<string | null>(() => {
         if (initialDay) {
@@ -53,13 +59,22 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
         const newMonthIndex = direction === 'next' ? monthIndex + 1 : monthIndex - 1;
         if (newMonthIndex >= 0 && newMonthIndex <= 11) {
             const newMonthName = new Date(year, newMonthIndex).toLocaleString('sv-SE', { month: 'long' });
-            navigate(`/träning/${year}/${newMonthName.toLowerCase()}`, { replace: true });
+            navigate({
+                pathname: `/träning/${year}/${newMonthName.toLowerCase()}`,
+                search: window.location.search
+            }, { replace: true });
         } else if (newMonthIndex < 0) {
             // Go to prev year december
-            navigate(`/träning/${year - 1}/december`, { replace: true });
+            navigate({
+                pathname: `/träning/${year - 1}/december`,
+                search: window.location.search
+            }, { replace: true });
         } else if (newMonthIndex > 11) {
             // Go to next year januari
-            navigate(`/träning/${year + 1}/januari`, { replace: true });
+            navigate({
+                pathname: `/träning/${year + 1}/januari`,
+                search: window.location.search
+            }, { replace: true });
         }
     }, [monthIndex, year, navigate]);
 
@@ -374,11 +389,11 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                             return (
                                                 <div key={date.dateStr}
                                                     onClick={() => {
-                                                        const [dYear, dMonth, dDay] = date.dateStr.split('-');
-                                                        const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-                                                        const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
                                                         setSelectedDate(date.dateStr);
-                                                        navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
+                                                        navigate({
+                                                            pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                                                            search: window.location.search
+                                                        }, { replace: true });
                                                     }}
                                                     className={`
                                                 relative p-1 flex flex-col gap-0.5 rounded-lg sm:rounded-xl border group cursor-pointer
@@ -581,19 +596,24 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                             <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekrun:opacity-100 xl:group-hover/weekrun:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weekrun:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekrun:scale-100 shadow-emerald-500/10" onClick={e => e.stopPropagation()}>
                                                                 <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Löpning</div>
                                                                 <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                                                                    {runExercises.map((e, idx) => (
-                                                                        <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
-                                                                            onClick={() => {
-                                                                                const [dYear, dMonth, dDay] = e.date.split('-');
-                                                                                const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-                                                                                const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
-                                                                                setSelectedDate(e.date);
-                                                                                navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
-                                                                            }}>
-                                                                            <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Löpning'}</span>
-                                                                            <span className="text-white font-mono font-bold shrink-0 text-[10px]">{e.distance?.toFixed(1)}km</span>
-                                                                        </div>
-                                                                    ))}
+                                                                    {runExercises.map((e, idx) => {
+                                                                        const [dYear, dMonth, dDay] = e.date.split('-');
+                                                                        const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
+                                                                        const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
+                                                                        return (
+                                                                            <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                                onClick={() => {
+                                                                                    setSelectedDate(e.date);
+                                                                                    navigate({
+                                                                                        pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                                                                                        search: window.location.search
+                                                                                    }, { replace: true });
+                                                                                }}>
+                                                                                <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Löpning'}</span>
+                                                                                <span className="text-white font-mono font-bold shrink-0 text-[10px]">{e.distance?.toFixed(1)}km</span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                                 <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
                                                                     <span className="text-slate-500">Totalt</span>
@@ -613,19 +633,24 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                             <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekstr:opacity-100 xl:group-hover/weekstr:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weekstr:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekstr:scale-100 shadow-indigo-500/10" onClick={e => e.stopPropagation()}>
                                                                 <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Styrka</div>
                                                                 <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                                                                    {strengthExercises.map((e, idx) => (
-                                                                        <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
-                                                                            onClick={() => {
-                                                                                const [dYear, dMonth, dDay] = e.date.split('-');
-                                                                                const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-                                                                                const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
-                                                                                setSelectedDate(e.date);
-                                                                                navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
-                                                                            }}>
-                                                                            <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Styrka'}</span>
-                                                                            <span className="text-white font-mono font-bold shrink-0 text-[10px]">{Math.round(e.durationMinutes)}m</span>
-                                                                        </div>
-                                                                    ))}
+                                                                    {strengthExercises.map((e, idx) => {
+                                                                        const [dYear, dMonth, dDay] = e.date.split('-');
+                                                                        const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
+                                                                        const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
+                                                                        return (
+                                                                            <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                                onClick={() => {
+                                                                                    setSelectedDate(e.date);
+                                                                                    navigate({
+                                                                                        pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                                                                                        search: window.location.search
+                                                                                    }, { replace: true });
+                                                                                }}>
+                                                                                <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Styrka'}</span>
+                                                                                <span className="text-white font-mono font-bold shrink-0 text-[10px]">{Math.round(e.durationMinutes)}m</span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                                 <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
                                                                     <span className="text-slate-500">Totalt</span>
@@ -655,23 +680,28 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                                                         <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 bottom-0 sm:bottom-auto sm:top-0 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weektot:opacity-100 xl:group-hover/weektot:pointer-events-auto transition-all duration-300 translate-x-2 xl:group-hover/weektot:translate-x-0 z-[70] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weektot:scale-100 shadow-sky-500/10" onClick={e => e.stopPropagation()}>
                                                             <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Alla Pass</div>
                                                             <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                                                                {weekExercises.map((e, idx) => (
-                                                                    <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
-                                                                        onClick={() => {
-                                                                            const [dYear, dMonth, dDay] = e.date.split('-');
-                                                                            const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-                                                                            const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
-                                                                            setSelectedDate(e.date);
-                                                                            navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
-                                                                        }}>
-                                                                        <span className="capitalize truncate text-slate-200" title={e.title || e.type}>
-                                                                            {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
-                                                                        </span>
-                                                                        <span className="text-white font-mono font-bold shrink-0 text-[10px]">
-                                                                            {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
+                                                                {weekExercises.map((e, idx) => {
+                                                                    const [dYear, dMonth, dDay] = e.date.split('-');
+                                                                    const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
+                                                                    const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
+                                                                    return (
+                                                                        <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                            onClick={() => {
+                                                                                setSelectedDate(e.date);
+                                                                                navigate({
+                                                                                    pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                                                                                    search: window.location.search
+                                                                                }, { replace: true });
+                                                                            }}>
+                                                                            <span className="capitalize truncate text-slate-200" title={e.title || e.type}>
+                                                                                {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                            </span>
+                                                                            <span className="text-white font-mono font-bold shrink-0 text-[10px]">
+                                                                                {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                             <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
                                                                 <span className="text-slate-500">Totalt</span>
@@ -707,19 +737,22 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, ini
                     allExercises={exercises}
                     onClose={() => {
                         setSelectedDate(null);
-                        navigate(`/träning/${year}/${monthName.toLowerCase()}`, { replace: true });
+                        navigate({
+                            pathname: `/träning/${year}/${monthName.toLowerCase()}`,
+                            search: window.location.search
+                        }, { replace: true });
                     }}
                     onDateChange={(newDate) => {
-                        const [dYear, dMonth, dDay] = newDate.split('-');
-                        const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-                        const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
                         setSelectedDate(newDate);
-                        navigate(`/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`, { replace: true });
+                        navigate({
+                            pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                            search: window.location.search
+                        }, { replace: true });
                     }}
                     onExerciseClick={onExerciseClick}
                 />
             )}
-        </div>,
+        </div >,
         document.body
     );
 }

@@ -15,9 +15,13 @@ interface DailyDetailModalProps {
 }
 
 export function DailyDetailModal({ date, allExercises, onClose, onDateChange, onExerciseClick }: DailyDetailModalProps) {
-    // Current day's exercises
+    // Current day's exercises - filtering out hidden ones (e.g. sub-performances)
     const exercises = useMemo(() => {
-        return allExercises.filter(e => e.date === date);
+        return allExercises.filter(e => {
+            if (e.date !== date) return false;
+            const perf = (e as any)._mergeData?.universalActivity?.performance;
+            return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar);
+        });
     }, [allExercises, date]);
 
     // Find previous and next days with exercises
@@ -388,6 +392,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                 <div>
                                                     <h4 className="text-white font-bold text-lg capitalize flex items-center gap-2">
                                                         {ex.subType === 'race' && '🏆 '}
+                                                        {ex.extractedFromId && <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/30 uppercase font-black mr-1">Utdrag</span>}
                                                         {ex.title ? ex.title : ex.type.replace('strength', 'Styrketräning').replace('running', 'Löpning')}
                                                     </h4>
                                                     <p className="text-slate-400 text-sm">

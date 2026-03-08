@@ -71,6 +71,7 @@ export const ActivitySchema = z.object({
         distanceKm: z.number().optional(),
         description: z.string().max(1000).optional(),
     }).optional(),
+    extractedFromId: z.string().optional(),
 });
 
 export const MealItemSchema = z.object({

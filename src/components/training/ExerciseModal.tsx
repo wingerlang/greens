@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType } from '../../models/types.ts';
 import { useNavigate } from 'react-router-dom';
+import { Activity } from 'lucide-react';
 
 const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
-    { type: 'running', icon: '🏃', label: 'Löpning' },
+    { type: 'running', icon: 'Activity', label: 'Löpning' },
     { type: 'cycling', icon: '🚴', label: 'Cykling' },
     { type: 'strength', icon: '🏋️', label: 'Styrka' },
     { type: 'walking', icon: '🚶', label: 'Promenad' },
@@ -126,7 +127,11 @@ export function ExerciseModal({
                                     <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 flex items-center justify-between shadow-sm">
                                         <div className="flex items-center gap-4">
                                             <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-3xl shadow-sm border border-slate-100 dark:border-slate-700">
-                                                {EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.icon}
+                                                {(() => {
+                                                    const iconStr = EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.icon;
+                                                    if (iconStr === 'Activity') return <Activity className="text-emerald-500" size={32} />;
+                                                    return iconStr;
+                                                })()}
                                             </div>
                                             <div>
                                                 <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -177,7 +182,9 @@ export function ExerciseModal({
                                         setSmartInput('');
                                     }}
                                 >
-                                    <span className="text-2xl">{t.icon}</span>
+                                    <span className="text-2xl">
+                                        {t.icon === 'Activity' ? <Activity size={24} /> : t.icon}
+                                    </span>
                                     {effectiveExerciseType === t.type && (
                                         <span className="text-[9px] font-bold animate-in fade-in zoom-in">{t.label}</span>
                                     )}

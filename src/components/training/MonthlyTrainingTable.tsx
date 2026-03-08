@@ -68,6 +68,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 const isRace = ex.subType === 'race' || ex.subType === 'competition' || ex.subType === 'simulation' || ex.subType === 'simulering';
 
                 if (isRace) parts.push('[TÄVLING]');
+                if (ex.extractedFromId) parts.push('[UTDRAG]');
                 parts.push(`[${ex.type}]`);
 
                 if (ex.distance) parts.push(`${ex.distance}km`);
@@ -453,7 +454,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         } else {
                                             setSelectedMonth(row.monthIdx);
                                             // Optional: update URL to include year if cross-year? For now keep existing behavior relative to year prop
-                                            navigate(`/träning/${row.year}/${months[row.monthIdx].toLowerCase()}`, { replace: true });
+                                            navigate({
+                                                pathname: `/träning/${row.year}/${months[row.monthIdx].toLowerCase()}`,
+                                                search: window.location.search
+                                            }, { replace: true });
                                         }
                                     }}
                                     className={`grid grid-cols-[150px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
@@ -797,7 +801,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     initialDay={selectedMonth === initialCalendarMonth ? initialCalendarDay : undefined}
                     onClose={() => {
                         setSelectedMonth(null);
-                        navigate(`/träning/${year}`, { replace: true });
+                        navigate({
+                            pathname: `/träning/${year}`,
+                            search: window.location.search
+                        }, { replace: true });
                     }}
                     onExerciseClick={onExerciseClick}
                 />

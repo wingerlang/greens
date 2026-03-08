@@ -32,6 +32,6 @@ export interface WorkoutSegment {
 export interface ParsedWorkout {
     segments: WorkoutSegment[];
     totalDistance: number;
-    classification: 'INTERVALS' | 'DISTANCE';
+    classification: 'INTERVALS' | 'DISTANCE' | 'TEMPO';
     suggestedSubType?: 'interval' | 'long-run' | 'default' | 'tempo';
 }

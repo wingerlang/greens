@@ -9,6 +9,8 @@ import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, A
 interface RunningStatsViewProps {
     exerciseEntries: ExerciseEntry[];
     universalActivities: UniversalActivity[];
+    filterStartDate?: string | null;
+    filterEndDate?: string | null;
 }
 
 interface DistanceBucket {
@@ -46,7 +48,12 @@ interface PBEvent {
     activity: ExerciseEntry;
 }
 
-export function RunningStatsView({ exerciseEntries, universalActivities }: RunningStatsViewProps) {
+export function RunningStatsView({
+    exerciseEntries,
+    universalActivities,
+    filterStartDate,
+    filterEndDate
+}: RunningStatsViewProps) {
     const [filter, setFilter] = useState<FilterType>('all');
     const [showMatrix, setShowMatrix] = useState(false);
     const [highlightedPBId, setHighlightedPBId] = useState<string | null>(null);
@@ -82,19 +89,28 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Chronological order
     }, [exerciseEntries, universalActivities]);
 
-    // Apply Filter (All, Training, Race)
+    // Apply Filter (All, Training, Race) AND Period
     const filteredActivities = useMemo(() => {
         return runningActivities.filter(a => {
-            if (filter === 'all') return true;
-            const isComp = isCompetition(a);
-            if (filter === 'race') return isComp;
-            if (filter === 'training') return !isComp;
+            // 1. Type Filter
+            if (filter !== 'all') {
+                const isComp = isCompetition(a);
+                if (filter === 'race' && !isComp) return false;
+                if (filter === 'training' && isComp) return false;
+            }
+
+            // 2. Period Filter
+            if (filterStartDate && a.date < filterStartDate) return false;
+            if (filterEndDate && a.date > filterEndDate) return false;
+
             return true;
         });
-    }, [runningActivities, filter]);
+    }, [runningActivities, filter, filterStartDate, filterEndDate]);
 
     // 2. Compute Chronological PBs and Top 10s
-    const { pbTimeline, topLists, smartStats } = useMemo(() => {
+    // NOTE: We calculate PBs from ALL running activities (to cross period boundaries)
+    // but we might want to filter the lists/timeline later.
+    const pbTimelineData = useMemo(() => {
         const timeline: PBEvent[] = [];
         const currentPBs: Record<string, number> = {
             '5k': Infinity,
@@ -124,7 +140,8 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
         let fastestPaceRun: ExerciseEntry | null = null;
 
         // Process in chronological order to find PB breakers
-        filteredActivities.forEach(run => {
+        // We use runningActivities (all time) for PB tracking
+        runningActivities.forEach(run => {
             const dist = run.distance || 0;
             const durationSec = run.durationMinutes * 60;
             const paceSec = durationSec / dist;
@@ -195,20 +212,80 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
             });
         });
 
-        // Compute Top 10s (Sort lists by duration Ascending)
-        Object.keys(lists).forEach(key => {
-            lists[key].sort((a, b) => (a.durationMinutes * 60) - (b.durationMinutes * 60));
-            // De-duplicate same runs if they somehow slipped through, or very close runs? 
-            // Stick to simple top 10 mapping
-            lists[key] = lists[key].slice(0, 10);
+        return {
+            timeline,
+            lists,
+            allRunningActivities: runningActivities
+        };
+    }, [runningActivities]);
+
+    // 3. Derived Filtered Stats & Lists
+    const { pbTimeline, topLists, smartStats } = useMemo(() => {
+        const { timeline, lists } = pbTimelineData;
+
+        // Filter Timeline to selection period
+        const filteredTimeline = timeline.filter(pb => {
+            if (filterStartDate && pb.date < filterStartDate) return false;
+            if (filterEndDate && pb.date > filterEndDate) return false;
+            return true;
         });
 
         // Reverse Timeline to show newest first
-        timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        filteredTimeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Filter Top Lists to selection period
+        const filteredTopLists: Record<string, ExerciseEntry[]> = {};
+        Object.keys(lists).forEach(key => {
+            const periodList = (lists[key] as ExerciseEntry[] || []).filter(run => {
+                const runDate = (run as any).date;
+                // Apply type filter
+                if (filter !== 'all') {
+                    const isComp = isCompetition(run);
+                    if (filter === 'race' && !isComp) return false;
+                    if (filter === 'training' && isComp) return false;
+                }
+                // Apply period filter
+                if (filterStartDate && runDate < filterStartDate) return false;
+                if (filterEndDate && runDate > filterEndDate) return false;
+                return true;
+            });
+
+            // Sort and slice
+            periodList.sort((a, b) => (a.durationMinutes * 60) - (b.durationMinutes * 60));
+            filteredTopLists[key] = periodList.slice(0, 10);
+        });
+
+        // Calculate Smart Stats for the period
+        let maxDistance = 0;
+        let longestRun: ExerciseEntry | null = null;
+        let totalPaceSum = 0;
+        let paceCount = 0;
+        let fastestPaceSecPerKm = Infinity;
+        let fastestPaceRun: ExerciseEntry | null = null;
+
+        filteredActivities.forEach(run => {
+            const dist = run.distance || 0;
+            const durationSec = run.durationMinutes * 60;
+            const paceSec = durationSec / dist;
+
+            if (dist > maxDistance) {
+                maxDistance = dist;
+                longestRun = run;
+            }
+
+            if (run.durationMinutes > 5) {
+                totalPaceSum += paceSec;
+                paceCount++;
+                if (paceSec < fastestPaceSecPerKm) {
+                    fastestPaceSecPerKm = paceSec;
+                    fastestPaceRun = run;
+                }
+            }
+        });
 
         return {
-            pbTimeline: timeline,
-            topLists: lists,
+            pbTimeline: filteredTimeline,
+            topLists: filteredTopLists,
             smartStats: {
                 longestRun: longestRun as ExerciseEntry | null,
                 fastestPaceRun: fastestPaceRun as ExerciseEntry | null,
@@ -216,7 +293,7 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                 avgPaceSecPerKm: paceCount > 0 ? totalPaceSum / paceCount : 0
             }
         };
-    }, [filteredActivities]);
+    }, [pbTimelineData, filteredActivities, filterStartDate, filterEndDate, filter]);
 
     const formatPace = (secPerKm: number) => {
         if (!isFinite(secPerKm) || secPerKm <= 0) return '-';
@@ -245,7 +322,14 @@ export function RunningStatsView({ exerciseEntries, universalActivities }: Runni
                         <TrendingUp className="text-amber-500" size={32} />
                         Löpstatistik & Rekord
                     </h2>
-                    <p className="text-slate-400 mt-1">Djupgående analys, top 10-listor och din utvecklingsresa.</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
+                        <p className="text-slate-400">Djupgående analys, top 10-listor och din utvecklingsresa.</p>
+                        {(filterStartDate || filterEndDate) && (
+                            <span className="flex-none inline-flex items-center gap-1.5 text-[10px] font-black bg-blue-500/20 text-blue-400 px-2.5 py-1 rounded-full border border-blue-500/30 uppercase tracking-widest animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.1)] w-fit">
+                                📅 {filterStartDate || '...'} — {filterEndDate || 'IDAG'}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex bg-slate-900/80 rounded-xl border border-white/5 p-1">

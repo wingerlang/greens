@@ -163,6 +163,9 @@ const ActivityRow = ({
                         {activity.subType === 'race' && (
                             <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1 rounded" title="Tävling">🏆</span>
                         )}
+                        {activity.extractedFromId && (
+                            <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-500 px-1 rounded" title="Utdrag från annat pass">✂️</span>
+                        )}
                     </div>
                 </td>
                 <td className="px-3 py-2">

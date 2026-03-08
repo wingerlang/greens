@@ -16,7 +16,7 @@ import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxAc
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2 } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse } from 'lucide-react';
 
 // Expandable Exercise Component - click to show sets
 function ExpandableExercise({ exercise }: { exercise: any }) {
@@ -75,6 +75,7 @@ export interface ActivityDetailModalProps {
     onClose: () => void;
     onSeparate?: () => void;
     initiallyEditing?: boolean;
+    setSelectedActivityId?: (id: string | null) => void;
 }
 
 // Activity Detail Modal Component
@@ -83,9 +84,11 @@ export function ActivityDetailModal({
     universalActivity,
     onClose,
     onSeparate,
-    initiallyEditing = false
+    initiallyEditing = false,
+    setSelectedActivityId
 }: ActivityDetailModalProps) {
     const navigate = useNavigate();
+    const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
     const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
@@ -96,6 +99,15 @@ export function ActivityDetailModal({
     // Hyrox Parser State
     const [showParser, setShowParser] = useState(false);
     const [parseText, setParseText] = useState('');
+
+    // Extraction State
+    const [showExtractForm, setShowExtractForm] = useState(false);
+    const [extractForm, setExtractForm] = useState({
+        distance: '',
+        duration: '', // hh:mm:ss
+        title: '',
+        isHiddenInCalendar: true // Default to true for extracts to avoid double-counting
+    });
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
@@ -109,6 +121,7 @@ export function ActivityDetailModal({
         distance: activity.distance ? activity.distance.toString() : '',
         location: activity.location || '',
         excludeFromStats: activity.excludeFromStats || false,
+        isHiddenInCalendar: perf?.isHiddenInCalendar || false,
         hyroxStats: activity.hyroxStats || { runSplits: [], stations: {} }
     });
 
@@ -135,6 +148,74 @@ export function ActivityDetailModal({
         const t = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || activity.type;
         if (t) setDisplayTitle(t);
     }, [universalActivity?.plan?.title, activity._mergeData?.universalActivity?.plan?.title, activity.title, activity.notes, activity.type]);
+
+    // Handle Extract Submit
+    const handleExtractSubmit = async () => {
+        if (!extractForm.distance || !extractForm.duration || !extractForm.title) {
+            alert('Vänligen fyll i alla fält för utdraget.');
+            return;
+        }
+
+        // Parse duration hh:mm:ss to minutes
+        const parts = extractForm.duration.split(':').map(Number);
+        let durationMin = 0;
+        if (parts.length === 3) {
+            durationMin = (parts[0] * 60) + parts[1] + (parts[2] / 60);
+        } else if (parts.length === 2) {
+            durationMin = parts[0] + (parts[1] / 60);
+        } else {
+            durationMin = Number(extractForm.duration);
+        }
+
+        const distance = parseFloat(extractForm.distance);
+        if (isNaN(distance) || isNaN(durationMin)) {
+            alert('Ogiltig distans eller tid.');
+            return;
+        }
+
+        const newExtract: Omit<ExerciseEntry, 'id' | 'createdAt'> = {
+            date: activity.date,
+            type: activity.type,
+            title: extractForm.title,
+            distance: distance,
+            durationMinutes: durationMin,
+            intensity: activity.intensity,
+            notes: `Utdrag från: ${displayTitle}`,
+            extractedFromId: activity.id,
+            source: 'manual',
+            subType: 'default',
+            isHiddenInCalendar: extractForm.isHiddenInCalendar
+        };
+
+        try {
+            // 1. Create the extract
+            addExercise(newExtract);
+
+            // 2. Automatically mark parent as "Quality" (Tempo) if it was default
+            if (activity.subType === 'default') {
+                updateExercise(activity.id, { subType: 'tempo' });
+                // We should also persist this to the backend if token exists (handled by our standard persistence logic)
+                if (token) {
+                    const dateParam = activity.date.split('T')[0];
+                    fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ subType: 'tempo' })
+                    }).catch(err => console.error('Failed to auto-update parent subtype:', err));
+                }
+            }
+
+            setShowExtractForm(false);
+            setExtractForm({ distance: '', duration: '', title: '', isHiddenInCalendar: true });
+            alert('Prestationsmätningen har sparats!');
+        } catch (e) {
+            console.error('Failed to create extract:', e);
+            alert('Kunde inte spara prestationsmätningen.');
+        }
+    };
 
     // Check if this is a manually merged activity (using our new merge system)
     const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
@@ -183,11 +264,57 @@ export function ActivityDetailModal({
     const hasSplits = splits.length > 0;
 
     // Analysis visibility criteria - Strict check for meaningful content
-    const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.heartRateAvg && activity.heartRateAvg > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
     // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
+
+    // Detect if child of another activity
+    const parentActivity = React.useMemo(() => {
+        if (!activity.extractedFromId) return null;
+        return exerciseEntries.find(e => e.id === activity.extractedFromId);
+    }, [activity.extractedFromId, exerciseEntries]);
+
+    // Sub-performances (Internal measurements like 5k tests extracted from this session)
+    const subPerformances = React.useMemo(() => {
+        return exerciseEntries.filter(e => e.extractedFromId === activity.id);
+    }, [exerciseEntries, activity.id]);
+
+    // Smart Extraction Detection (Performance Markers)
+    const smartExtractInfo = React.useMemo(() => {
+        if (activity.extractedFromId) return null; // Don't suggest extracts from extracts
+        const text = ((activity.title || '') + ' ' + (activity.notes || '')).toLowerCase();
+
+        // 5k patterns
+        if (text.includes('5k max') || text.includes('5km max') || text.includes('5 k max') || text.includes('snabb 5k')) {
+            return { distance: 5.0, title: '5k Max', label: '⚡ Spara 5k-tid' };
+        }
+        // 10k patterns
+        if (text.includes('10k max') || text.includes('10km max') || text.includes('10 k max') || text.includes('snabb 10k')) {
+            return { distance: 10.0, title: '10k Max', label: '⚡ Spara 10k-tid' };
+        }
+        // General patterns
+        if (text.includes('max') || text.includes('test') || text.includes('pb') || text.includes('pers')) {
+            const distMatch = text.match(/(\d+(?:[.,]\d+)?)\s*km/);
+            if (distMatch) {
+                const d = parseFloat(distMatch[1].replace(',', '.'));
+                return { distance: d, title: `${d}km Max`, label: `⚡ Spara ${d}km-tid` };
+            }
+        }
+        return null;
+    }, [activity.id, activity.title, activity.notes]);
+
+    const handleApplySmartExtract = () => {
+        if (!smartExtractInfo) return;
+        setExtractForm({
+            ...extractForm,
+            distance: smartExtractInfo.distance.toString(),
+            title: smartExtractInfo.title,
+            duration: '', // User still needs to input duration for accurate PR tracking
+            isHiddenInCalendar: true
+        });
+        setShowExtractForm(true);
+    };
 
     // Auto-populate subtype in edit form if detected
     const handleRecategorize = async (newType: ExerciseType) => {
@@ -406,6 +533,7 @@ export function ActivityDetailModal({
             caloriesBurned: calories,
             location: editForm.location,
             excludeFromStats: editForm.excludeFromStats,
+            isHiddenInCalendar: editForm.isHiddenInCalendar,
             hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined
         };
 
@@ -564,7 +692,7 @@ export function ActivityDetailModal({
     }, [onClose]);
 
     return (
-        <div id="activity-detail-modal" className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200" onClick={onClose}>
+        <div id="activity-detail-modal" className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[300] p-4 animate-in fade-in duration-200" onClick={onClose}>
             <div
                 className="bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
@@ -716,7 +844,7 @@ export function ActivityDetailModal({
                             )}
 
                             {/* Location Input */}
-                            <div className="space-y-1 col-span-2">
+                            <div className="space-y-1 col-span-1">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Plats / Ort</label>
                                 <input
                                     type="text"
@@ -725,6 +853,23 @@ export function ActivityDetailModal({
                                     onChange={e => setEditForm({ ...editForm, location: e.target.value })}
                                     className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
                                 />
+                            </div>
+
+                            {/* HIDE TOGGLE */}
+                            <div className="space-y-1 col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Visa i kalender</label>
+                                <div
+                                    onClick={() => setEditForm({ ...editForm, isHiddenInCalendar: !editForm.isHiddenInCalendar })}
+                                    className="flex items-center gap-3 cursor-pointer group p-3 bg-slate-800 hover:bg-slate-750 border border-white/5 rounded-xl transition-colors h-[46px]"
+                                >
+                                    <div className="relative">
+                                        <div className={`w-8 h-4 rounded-full transition-colors border border-white/5 ${!editForm.isHiddenInCalendar ? 'bg-emerald-500/50' : 'bg-rose-500/50'}`}></div>
+                                        <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-transform ${!editForm.isHiddenInCalendar ? 'translate-x-5 left-1' : 'translate-x-1 left-0'}`}></div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-200 group-hover:text-white transition-colors">
+                                        {!editForm.isHiddenInCalendar ? 'Synlig' : 'Dold'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -927,6 +1072,13 @@ export function ActivityDetailModal({
                                         {/* Type Label Badge */}
                                         {(() => {
                                             const typeInfo = EXERCISE_TYPES.find(t => t.type === activity.type) || EXERCISE_TYPES.find(t => t.type === 'other');
+                                            if (typeInfo?.icon === 'Activity') {
+                                                return (
+                                                    <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-500/15 rounded-lg border border-emerald-500/25 shrink-0">
+                                                        <Activity size={18} className="text-emerald-400" />
+                                                    </div>
+                                                );
+                                            }
                                             return (
                                                 <div className="inline-flex items-center gap-1 bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-white/5 text-[9px] font-black uppercase tracking-tight leading-none h-5 shrink-0">
                                                     <span>{typeInfo?.icon}</span>
@@ -939,68 +1091,45 @@ export function ActivityDetailModal({
                                         {!isMerged && (
                                             <button
                                                 onClick={() => setIsEditing(true)}
-                                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm"
                                                 title="Redigera aktivitet"
                                             >
                                                 ✎
                                             </button>
                                         )}
                                     </h2>
-                                    {/* Prominent Strava Link in Header */}
-                                    {(() => {
-                                        let stravaLink = null;
-                                        let stravaTitle = null;
-                                        if (activity.source === 'strava' && activity.externalId) {
-                                            stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                        } else if (isTrulyMerged) {
-                                            const stravaOriginals = originalActivities
-                                                .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
-                                                .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
-                                            if (stravaOriginals.length > 0) {
-                                                const longest = stravaOriginals[0];
-                                                const extId = longest.performance?.source?.externalId?.replace('strava_', '');
-                                                stravaLink = `https://www.strava.com/activities/${extId}`;
-                                                stravaTitle = longest.plan?.title || longest.performance?.notes;
-                                            }
-                                        }
 
-                                        // Merged Badge (Priority)
-                                        if (isTrulyMerged) {
-                                            if (stravaLink) {
-                                                return (
-                                                    <a
-                                                        href={stravaLink}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 shadow-sm"
-                                                        title={`Sammanslagen (Strava: ${stravaTitle || 'Activity'})`}
-                                                    >
-                                                        <span>⚡</span> Sammanslagen ↗
-                                                    </a>
-                                                );
-                                            }
-                                            return (
-                                                <button
-                                                    onClick={() => setActiveTab('merge')}
-                                                    className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                                                >
-                                                    <span>⚡</span> Sammanslagen
-                                                </button>
-                                            );
-                                        }
-
-                                        // Standalone Strava Link
-                                        return stravaLink ? (
-                                            <a
-                                                href={stravaLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="bg-[#FC4C02]/10 border border-[#FC4C02]/20 text-[#FC4C02] hover:bg-[#FC4C02] hover:text-white px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 shadow-lg shadow-[#FC4C02]/5"
+                                    {/* Parent Activity Link */}
+                                    {parentActivity && (
+                                        <div className="flex items-center gap-2 bg-slate-800/50 px-2 py-1 rounded-lg border border-white/5">
+                                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Utdrag från:</span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedActivityId?.(parentActivity.id);
+                                                }}
+                                                className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 group/link"
                                             >
-                                                <span>🔗</span> Strava
-                                            </a>
-                                        ) : null;
-                                    })()}
+                                                {parentActivity.title || 'Huvudpasset'}
+                                                <ArrowRight size={10} className="group-hover/link:translate-x-0.5 transition-transform" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Badges */}
+                                    <div className="flex items-center gap-2 ml-2">
+                                        {activity.extractedFromId && (
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm">
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Utdrag</span>
+                                            </div>
+                                        )}
+                                        {isTrulyMerged && (
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm">
+                                                <Zap size={10} className="fill-amber-500" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Sammanslagen</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Hyrox Specific Header Data */}
@@ -1139,6 +1268,25 @@ export function ActivityDetailModal({
                         */}
 
 
+                        {/* SMART EXTRACTION HINT */}
+                        {smartExtractInfo && !showExtractForm && !activity.extractedFromId && subPerformances.length === 0 && (
+                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl shadow-amber-500/5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg shadow-inner">💡</div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-white italic">Rekord-potential identifierad! 🚀</h4>
+                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong> som du kan spara som eget rekord.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleApplySmartExtract}
+                                    className="w-full sm:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[10px] uppercase rounded-xl transition-all shadow-lg shadow-amber-500/20 active:scale-95"
+                                >
+                                    {smartExtractInfo.label}
+                                </button>
+                            </div>
+                        )}
+
                         {/* Warning Banner: This activity is a component of a merge */}
                         {isMergedInto && parentMergedActivity && (
                             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center gap-4">
@@ -1226,71 +1374,6 @@ export function ActivityDetailModal({
                                 </div>
                             )}
 
-                            {/* Race Toggle Button - Quick access to mark as race */}
-                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'swimming') && (
-                                <button
-                                    onClick={async () => {
-                                        const newSubType = activity.subType === 'race' ? 'default' : 'race';
-                                        // Update local state immediately
-                                        updateExercise(activity.id, { subType: newSubType });
-
-                                        // Persist to backend
-                                        if (token && universalActivity) {
-                                            try {
-                                                const dateParam = activity.date.split('T')[0];
-                                                console.log(`🔄 Sparar subType=${newSubType} för aktivitet ${activity.id}...`);
-                                                const res = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
-                                                    method: 'PATCH',
-                                                    headers: {
-                                                        'Content-Type': 'application/json',
-                                                        'Authorization': `Bearer ${token}`
-                                                    },
-                                                    body: JSON.stringify({ subType: newSubType })
-                                                });
-
-                                                if (res.ok) {
-                                                    console.log(`✅ Aktivitet markerad som ${newSubType === 'race' ? 'tävling' : 'träning'} - sparad i KV`);
-                                                } else if (res.status === 404) {
-                                                    // Fallback to upsert
-                                                    console.log('⚠️ PATCH 404, försöker POST...');
-                                                    const { userId: _u, ...activityData } = universalActivity;
-                                                    const updatedActivity = {
-                                                        ...activityData,
-                                                        performance: {
-                                                            ...universalActivity.performance,
-                                                            subType: newSubType
-                                                        }
-                                                    };
-                                                    const postRes = await fetch('/api/activities', {
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Content-Type': 'application/json',
-                                                            'Authorization': `Bearer ${token}`
-                                                        },
-                                                        body: JSON.stringify(updatedActivity)
-                                                    });
-                                                    if (postRes.ok) {
-                                                        console.log(`✅ Aktivitet markerad som ${newSubType === 'race' ? 'tävling' : 'träning'} - sparad via POST`);
-                                                    } else {
-                                                        console.error('❌ POST misslyckades:', postRes.status);
-                                                    }
-                                                } else {
-                                                    console.error('❌ PATCH misslyckades:', res.status);
-                                                }
-                                            } catch (e) {
-                                                console.error('❌ Failed to persist race toggle:', e);
-                                            }
-                                        }
-                                    }}
-                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${activity.subType === 'race'
-                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
-                                        }`}
-                                    title={activity.subType === 'race' ? 'Avmarkera som tävling' : 'Markera som tävling'}
-                                >
-                                    <span>🏅</span> {activity.subType === 'race' ? 'Tävling ✓' : 'Markera tävling'}
-                                </button>
-                            )}
                         </div>
 
                         {/* Recategorization Section - Only visible in EDIT mode */}
@@ -1696,6 +1779,42 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
 
+                                {/* Sub-performances (extracted metrics) */}
+                                {subPerformances.length > 0 && activeTab === 'stats' && (
+                                    <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 space-y-3">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                                <span>📊</span> Ingående prestationer
+                                            </h4>
+                                            <span className="text-[10px] font-mono text-slate-600 bg-white/5 px-2 py-0.5 rounded-full">
+                                                {subPerformances.length}st identifierade
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {subPerformances.map((sub, idx) => (
+                                                <div
+                                                    key={sub.id}
+                                                    className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
+                                                    onClick={() => setSelectedActivityId(sub.id)}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">{sub.title}</span>
+                                                        <span className="text-[10px] text-slate-500">
+                                                            Tid: {formatDuration(sub.durationMinutes * 60)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-xs font-black text-white">{sub.distance?.toFixed(1)}km</div>
+                                                        <div className="text-[10px] font-mono text-slate-400">
+                                                            {formatPace((sub.durationMinutes * 60) / (sub.distance || 1)).replace('/km', '')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Greens Score Visual Breakdown */}
                                 {showScoreInfo && activity.type?.toLowerCase() !== 'strength' && perfBreakdown.totalScore > 0 && (
                                     <div className="bg-slate-900/50 rounded-3xl p-6 border border-white/5 space-y-6">
@@ -1863,7 +1982,7 @@ export function ActivityDetailModal({
                                 {/* Suggestion Banner */}
                                 {parsedWorkout?.suggestedSubType &&
                                     parsedWorkout.suggestedSubType !== 'default' &&
-                                    (activity.subType === 'default' || !activity.subType) && (
+                                    (activity.subType === 'default' || !activity.subType) && subPerformances.length === 0 && (
                                         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between animate-in slide-in-from-top-2">
                                             <div>
                                                 <p className="text-xs font-bold text-amber-400 uppercase flex items-center gap-2">
@@ -1885,8 +2004,9 @@ export function ActivityDetailModal({
                                     )}
 
                                 <WorkoutStructureCard
-                                    title={universalActivity?.plan?.title || activity.type || 'Workout'}
+                                    title={universalActivity?.plan?.title || activity.title || activity.type || 'Workout'}
                                     description={universalActivity?.plan?.description || activity.notes || ''}
+                                    subPerformances={subPerformances}
                                 />
                             </div>
                         )}
@@ -2104,6 +2224,25 @@ export function ActivityDetailModal({
                             </div>
                         )}
 
+                        {/* SMART EXTRACTION HINT (PERFORMANCE MARKERS) */}
+                        {smartExtractInfo && !showExtractForm && !activity.extractedFromId && subPerformances.length === 0 && (
+                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg">⚡</div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-white italic">Nyckelinsats identifierad! ⚡</h4>
+                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong> som du kan spara som en separat prestationsmätning.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleApplySmartExtract}
+                                    className="w-full sm:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[10px] uppercase rounded-xl transition-all shadow-lg shadow-amber-500/20"
+                                >
+                                    {smartExtractInfo.label}
+                                </button>
+                            </div>
+                        )}
+
                         {/* MERGE TAB - Shows original activities for manually merged activities */}
                         {activeTab === 'merge' && isMergedActivity && (
                             <div className="space-y-6">
@@ -2209,6 +2348,75 @@ export function ActivityDetailModal({
                             </div>
                         )}
 
+                        {/* EXTRACTION FORM */}
+                        {showExtractForm && (
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 space-y-4 animate-in slide-in-from-bottom-2">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span>✂️</span> Extrahera distans-insats
+                                    </h3>
+                                    <button onClick={() => setShowExtractForm(false)} className="text-slate-500 hover:text-white">✕</button>
+                                </div>
+                                <p className="text-[10px] text-slate-400 italic">
+                                    Skapa en separat logg för t.ex. ett snabbt 5k inom ett längre pass. Denna logg räknas för PR men dubbelräknar inte din totala träningsmängd.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Titel (t.ex. "Snabbt 5k")</label>
+                                        <input
+                                            type="text"
+                                            value={extractForm.title}
+                                            onChange={e => setExtractForm({ ...extractForm, title: e.target.value })}
+                                            placeholder="Titel..."
+                                            className="w-full bg-slate-900 border border-white/5 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-amber-500/50"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Distans (km)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={extractForm.distance}
+                                            onChange={e => setExtractForm({ ...extractForm, distance: e.target.value })}
+                                            placeholder="5.0"
+                                            className="w-full bg-slate-900 border border-white/5 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-amber-500/50"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Tid (hh:mm:ss)</label>
+                                        <input
+                                            type="text"
+                                            value={extractForm.duration}
+                                            onChange={e => setExtractForm({ ...extractForm, duration: e.target.value })}
+                                            placeholder="00:19:45"
+                                            className="w-full bg-slate-900 border border-white/5 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-amber-500/50"
+                                        />
+                                    </div>
+                                </div>
+
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            checked={extractForm.isHiddenInCalendar}
+                                            onChange={e => setExtractForm({ ...extractForm, isHiddenInCalendar: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-8 h-4 bg-slate-800 rounded-full peer peer-checked:bg-amber-500/50 transition-colors border border-white/5"></div>
+                                        <div className="absolute left-1 top-1 w-2 h-2 bg-slate-400 rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-amber-400"></div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-amber-400/80 transition-colors">Dölj mätning från kalendern (rekommenderas)</span>
+                                </label>
+
+                                <button
+                                    onClick={handleExtractSubmit}
+                                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-2 rounded-xl text-xs transition-colors"
+                                >
+                                    Spara prestationsmätning
+                                </button>
+                            </div>
+                        )}
+
                         {/* Action Buttons */}
                         <div className="flex gap-3 flex-wrap">
                             {isMergedActivity && (
@@ -2236,6 +2444,15 @@ export function ActivityDetailModal({
                             >
                                 ⚡ Spara som Pass
                             </button>
+
+                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'walking' || activity.type === 'swimming') && (
+                                <button
+                                    onClick={() => setShowExtractForm(!showExtractForm)}
+                                    className={`flex-1 ${showExtractForm ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-amber-500'} hover:opacity-90 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
+                                >
+                                    ✂️ Mätning...
+                                </button>
+                            )}
 
                             {/* Added delete functionality for all activities including Strengthlog leftovers */}
                             <button

@@ -681,7 +681,7 @@ export type ExerciseType =
 export type ExerciseIntensity = 'low' | 'moderate' | 'high' | 'ultra';
 
 /** Available sub-types for deep exercise analysis */
-export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage' | 'ultra' | 'competition' | 'simulation' | 'simulering';
+export type ExerciseSubType = 'default' | 'interval' | 'tempo' | 'fartlek' | 'snabbdistans' | 'long-run' | 'race' | 'tonnage' | 'ultra' | 'competition' | 'simulation' | 'simulering';
 
 /** Exercise tracking entry */
 export interface ExerciseEntry {
@@ -694,6 +694,7 @@ export interface ExerciseEntry {
     calorieBreakdown?: string;
     notes?: string;
     excludeFromStats?: boolean;
+    isHiddenInCalendar?: boolean;
     elapsedTimeSeconds?: number;
     subType?: ExerciseSubType;
     title?: string; // e.g. "Morning Run" or "Strava Activity Title"
@@ -724,6 +725,7 @@ export interface ExerciseEntry {
 
     // Hyrox Specifics
     hyroxStats?: HyroxActivityStats;
+    extractedFromId?: string;
 }
 
 export type HyroxStation =
@@ -1225,6 +1227,7 @@ export interface ActivityPerformanceSection {
         averageHeartrate?: number;
     }>;
     prCount?: number;
+    isHiddenInCalendar?: boolean;
 }
 
 /**
@@ -1269,6 +1272,9 @@ export interface UniversalActivity {
     // If this activity was merged INTO another, hide it from views
     // This ID points to the merged activity that replaced this one
     mergedIntoId?: string;
+
+    // If this activity is an extract (e.g. fastest 5k during a 15k run), it points to the parent
+    extractedFromId?: string;
 
     createdAt: string;
     updatedAt: string;

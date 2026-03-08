@@ -313,8 +313,17 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
 
     // Determine Category
     let suggestedSubType: 'interval' | 'long-run' | 'default' | 'tempo' = 'default';
-    if (expandedSegments.some(s => s.type === 'INTERVAL')) {
-        suggestedSubType = 'interval';
+    const intervalSegments = expandedSegments.filter(s => s.type === 'INTERVAL');
+    if (intervalSegments.length > 0) {
+        // Multiple intervals or reps > 1 → actual interval workout
+        const hasMultipleIntervals = intervalSegments.length > 1;
+        const hasReps = intervalSegments.some(s => s.reps > 1);
+        if (hasMultipleIntervals || hasReps) {
+            suggestedSubType = 'interval';
+        } else {
+            // Single interval segment with reps=1 → tempo/time-trial (e.g. "5k @ 20min")
+            suggestedSubType = 'tempo';
+        }
     }
 
     // Keyword overrides
@@ -332,7 +341,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
     return {
         segments: expandedSegments,
         totalDistance: expandedSegments.reduce((sum, s) => sum + (s.work.dist || 0) * s.reps, 0),
-        classification: expandedSegments.some(s => s.type === 'INTERVAL') ? 'INTERVALS' : 'DISTANCE',
+        classification: suggestedSubType === 'interval' ? 'INTERVALS' : (suggestedSubType === 'tempo' ? 'TEMPO' : 'DISTANCE'),
         suggestedSubType
     };
 }

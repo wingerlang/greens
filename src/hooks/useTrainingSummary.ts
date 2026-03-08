@@ -70,6 +70,8 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             if (u.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
                 u.mergeInfo.originalActivityIds.forEach(id => hiddenIds.add(id));
             }
+            // Do NOT hide extracted items here, because we need them for PRs and highlight display.
+            // We will filter them out in the aggregation loop, ONLY for volume totals.
         });
 
         return universalActivities
@@ -117,7 +119,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         let totalDist = 0;
         let totalTime = 0;
         let totalCals = 0;
-        let totalSessions = filteredActivities.length;
+        let totalSessions = filteredActivities.filter((a: UniversalActivity) => !a.extractedFromId).length;
         let totalScore = 0;
         let scoreCount = 0;
         let runningPRs = 0;
@@ -141,6 +143,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         strengthPRs = filteredStrengthPBs.length;
 
         filteredActivities.forEach((a: UniversalActivity) => {
+            const isExtract = !!a.extractedFromId;
             const dist = a.performance?.distanceKm || 0;
             const time = a.performance?.durationMinutes || 0;
             const cals = a.performance?.calories || 0;
@@ -158,9 +161,11 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             const score = calculatePerformanceScore(mappedActivity as any);
             const prs = a.performance?.prCount || 0;
 
-            totalDist += dist;
-            totalTime += time;
-            totalCals += cals;
+            if (!isExtract) {
+                totalDist += dist;
+                totalTime += time;
+                totalCals += cals;
+            }
 
             if (a.performance?.activityType === 'running') {
                 runningPRs += prs;
@@ -173,31 +178,35 @@ export function useTrainingSummary(startDate: string, endDate: string) {
                 raceCount++;
             }
 
-            activeDays.add(a.date.split('T')[0]);
+            if (!isExtract) {
+                activeDays.add(a.date.split('T')[0]);
+            }
 
             const type = a.performance?.activityType || 'other';
 
-            if (score > 0) {
-                totalScore += score;
-                scoreCount++;
-            }
-
-            const curr = typeMap.get(type) || { count: 0, time: 0, dist: 0 };
-            typeMap.set(type, {
-                count: curr.count + 1,
-                time: curr.time + time,
-                dist: curr.dist + dist
-            });
-
-            const currentDate = new Date(a.date);
-            if (lastDate) {
-                const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > longestGap) {
-                    longestGap = diffDays;
+            if (!isExtract) {
+                if (score > 0) {
+                    totalScore += score;
+                    scoreCount++;
                 }
+
+                const curr = typeMap.get(type) || { count: 0, time: 0, dist: 0 };
+                typeMap.set(type, {
+                    count: curr.count + 1,
+                    time: curr.time + time,
+                    dist: curr.dist + dist
+                });
+
+                const currentDate = new Date(a.date);
+                if (lastDate) {
+                    const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays > longestGap) {
+                        longestGap = diffDays;
+                    }
+                }
+                lastDate = currentDate;
             }
-            lastDate = currentDate;
         });
 
         // Strength Stats

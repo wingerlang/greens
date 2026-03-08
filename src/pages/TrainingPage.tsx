@@ -31,6 +31,7 @@ import { HealthScoreCard } from '../components/dashboard/HealthScoreCard.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
 import { RunningStatsView } from './Health/RunningStatsView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
+import { DataAnalysisView } from './training/DataAnalysisView.tsx';
 
 export function TrainingPage() {
     const {
@@ -74,11 +75,47 @@ export function TrainingPage() {
         }, { replace: true });
     };
 
+    // Robust activity finding logic (used in the modal overlay)
+    const foundActivity = useMemo(() => {
+        if (!selectedActivityId || unifiedActivities.length === 0) return null;
+
+        // Try to find activity robustly: check id, externalId, and merged sub-IDs
+        return unifiedActivities.find(e => {
+            // 1. Direct match (id or externalId)
+            if (e.id === selectedActivityId || e.externalId === selectedActivityId) return true;
+
+            // 2. Check source-specific IDs
+            if ((e as any).stravaId === selectedActivityId || (e as any).strengthId === selectedActivityId) return true;
+
+            // 3. Check merged data
+            if (e._mergeData) {
+                const m = e._mergeData;
+                const stravaId = m.strava?.id;
+                const stravaExtId = m.strava?.externalId;
+                const strengthId = m.strength?.id;
+                const strengthExtId = m.strength?.externalId;
+                const universalId = m.universalActivity?.id;
+                const universalExtId = m.universalActivity?.performance?.source?.externalId;
+                const originalIds = m.universalActivity?.mergeInfo?.originalActivityIds || [];
+
+                return stravaId === selectedActivityId ||
+                    stravaExtId === selectedActivityId ||
+                    strengthId === selectedActivityId ||
+                    strengthExtId === selectedActivityId ||
+                    universalId === selectedActivityId ||
+                    universalExtId === selectedActivityId ||
+                    originalIds.includes(selectedActivityId) ||
+                    originalIds.some((id: string) => id.includes(selectedActivityId)); // Support partial matches for prefixed IDs
+            }
+            return false;
+        });
+    }, [selectedActivityId, unifiedActivities]);
+
     // URL State Management
     const currentTab = useMemo(() => {
         if (!tab) return 'overview';
         if (/^\d{4}$/.test(tab)) return 'overview';
-        return (['overview', 'styrka', 'kondition', 'races', 'lopstatistik'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races' | 'lopstatistik';
+        return (['overview', 'styrka', 'kondition', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races' | 'lopstatistik' | 'dataanalys';
     }, [tab]);
 
     const initialCalendarMonth = useMemo(() => {
@@ -874,6 +911,19 @@ export function TrainingPage() {
                         <RunningStatsView
                             exerciseEntries={exerciseEntries}
                             universalActivities={universalActivities}
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
+                        />
+                    </div>
+                )
+            }
+
+            {
+                currentTab === 'dataanalys' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <DataAnalysisView
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
                         />
                     </div>
                 )
@@ -895,47 +945,33 @@ export function TrainingPage() {
             />
 
             {/* Activity Detail Modal overlay */}
-            {(() => {
-                if (!selectedActivityId) return null;
-                // Find activity robustly: check id, externalId, and merged sub-IDs
-                const activity = exerciseEntries.find(e => {
-                    // 1. Direct match (id or externalId)
-                    if (e.id === selectedActivityId || e.externalId === selectedActivityId) return true;
-
-                    // 2. Check source-specific IDs
-                    if ((e as any).stravaId === selectedActivityId || (e as any).strengthId === selectedActivityId) return true;
-
-                    // 3. Check merged data
-                    if (e._mergeData) {
-                        const m = e._mergeData;
-                        const stravaId = m.strava?.id;
-                        const stravaExtId = m.strava?.externalId;
-                        const strengthId = m.strength?.id;
-                        const strengthExtId = m.strength?.externalId;
-                        const universalId = m.universalActivity?.id;
-                        const universalExtId = m.universalActivity?.performance?.source?.externalId;
-                        const originalIds = m.universalActivity?.mergeInfo?.originalActivityIds || [];
-
-                        return stravaId === selectedActivityId ||
-                            stravaExtId === selectedActivityId ||
-                            strengthId === selectedActivityId ||
-                            strengthExtId === selectedActivityId ||
-                            universalId === selectedActivityId ||
-                            universalExtId === selectedActivityId ||
-                            originalIds.includes(selectedActivityId);
-                    }
-                    return false;
-                });
-
-                if (!activity) return null;
-
-                return (
-                    <ActivityDetailModal
-                        activity={activity}
-                        onClose={() => setSelectedActivityId(null)}
-                    />
-                );
-            })()}
+            {selectedActivityId && (
+                <>
+                    {foundActivity ? (
+                        <ActivityDetailModal
+                            activity={foundActivity}
+                            onClose={() => setSelectedActivityId(null)}
+                            setSelectedActivityId={setSelectedActivityId}
+                        />
+                    ) : (
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center animate-in fade-in duration-300">
+                            <div className="bg-slate-900 border border-white/5 p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4 max-w-sm text-center">
+                                <div className="w-12 h-12 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                                <div>
+                                    <h3 className="text-white font-bold">Söker efter aktivitet...</h3>
+                                    <p className="text-xs text-slate-500 mt-1">Vi synkroniserar din träningslogg ({selectedActivityId.substring(0, 8)}...)</p>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedActivityId(null)}
+                                    className="mt-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                                >
+                                    Avbryt
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
 
 
         </div >
