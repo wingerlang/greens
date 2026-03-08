@@ -102,6 +102,43 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
     }
 
 
+
+    // Fetch individual activity splits
+    if (url.pathname.match(/^\/api\/strava\/activities\/[^\/]+\/splits$/) && method === "GET") {
+        try {
+            const parts = url.pathname.split('/');
+            const activityIdStr = parts[4];
+            const activityId = parseInt(activityIdStr, 10);
+
+            if (isNaN(activityId)) {
+                return new Response(JSON.stringify({ error: "Invalid activity ID" }), { status: 400, headers });
+            }
+
+            const stravaTokens = await getStravaTokens(user.id);
+            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                accessToken = refreshed.accessToken;
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
+            }
+
+            const detailedActivity = await strava.getStravaActivityDetail(activityId, accessToken);
+
+            if (!detailedActivity) {
+                return new Response(JSON.stringify({ error: "Activity not found on Strava" }), { status: 404, headers });
+            }
+
+            return new Response(JSON.stringify({ splits: detailedActivity.splits_metric || [], laps: detailedActivity.laps || [] }), { headers });
+
+        } catch (e) {
+            console.error("Fetch splits failed", e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
+        }
+    }
+
     // Scan (Sync 2.0)
     if (url.pathname === "/api/strava/scan" && method === "POST") {
         try {
