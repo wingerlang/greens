@@ -267,7 +267,15 @@ export function ActivityDetailModal({
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.heartRateAvg && activity.heartRateAvg > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
     // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
-    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
+
+
+
+
+
+    // Compute existingSplits here so it's available for both the useEffect and the UI
+    const existingSplits = perf?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
+    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure || (existingSplits && existingSplits.length > 0);
+
 
     // Detect if child of another activity
     const parentActivity = React.useMemo(() => {
@@ -481,6 +489,87 @@ export function ActivityDetailModal({
             .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 5);
     }, [activity, allActivities]);
+
+
+    const [isFetchingSplits, setIsFetchingSplits] = useState(false);
+    const [fetchSplitsResult, setFetchSplitsResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+    // Auto-fetch splits if Strava activity is missing them
+    useEffect(() => {
+        const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
+        const source = perf?.source?.source || activity.source;
+        const externalId = perf?.source?.externalId || activity.externalId;
+// existingSplits computed at component scope
+
+        if (source === 'strava' && externalId && (!existingSplits || existingSplits.length === 0) && fetchSplitsResult === 'idle' && token) {
+            const fetchSplits = async () => {
+                setIsFetchingSplits(true);
+                try {
+                    console.log("Fetching splits from Strava API for external ID:", externalId);
+                    const res = await fetch(`/api/strava/activities/${externalId}/splits`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.splits && data.splits.length > 0) {
+
+                            // Transform strava splits to our format
+                            const mappedSplits = data.splits.map((s: any) => ({
+                                split: s.split,
+                                distance: s.distance,
+                                elapsedTime: s.elapsed_time,
+                                movingTime: s.moving_time,
+                                elevationDiff: s.elevation_difference,
+                                averageSpeed: s.average_speed,
+                                averageHeartrate: s.average_heartrate,
+                                paceZone: s.pace_zone
+                            }));
+
+                            console.log("Fetched strava splits, saving to activity:", mappedSplits);
+
+                            const dateParam = activity.date.split('T')[0];
+                            const patchRes = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                    performance: {
+                                        ...(perf || {}),
+                                        splits: mappedSplits
+                                    }
+                                })
+                            });
+
+                            if (patchRes.ok) {
+                                // We also patch the universalActivity via updateExercise so UI updates
+                                updateExercise(activity.id, { splits: mappedSplits } as any);
+                                setFetchSplitsResult('success');
+                            } else {
+                                setFetchSplitsResult('error');
+                            }
+                        } else {
+                            // No splits on strava
+                            setFetchSplitsResult('error');
+                        }
+                    } else {
+                        setFetchSplitsResult('error');
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch splits", err);
+                    setFetchSplitsResult('error');
+                } finally {
+                    setIsFetchingSplits(false);
+                }
+            };
+
+            fetchSplits();
+        }
+    }, [activity, universalActivity, token, fetchSplitsResult, updateExercise]);
 
     // Apply Category Helper - Updates the EXISTING activity's subType
     const handleApplyCategory = (category: ExerciseSubType) => {
@@ -1354,6 +1443,27 @@ export function ActivityDetailModal({
                             )}
                         </div>
 
+
+                        {/* Auto-fetch Strava Splits Indicator */}
+                        {isFetchingSplits && (
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4">
+                                <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                                <p className="text-xs font-bold text-amber-400">Hämtar kilometertider från Strava...</p>
+                            </div>
+                        )}
+                        {fetchSplitsResult === 'error' && (
+                            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4">
+                                <span>⚠️</span>
+                                <p className="text-xs font-bold text-rose-400">Kunde inte hämta detaljer från Strava.</p>
+                            </div>
+                        )}
+                        {fetchSplitsResult === 'success' && (
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4 transition-all duration-1000 delay-3000 opacity-100" style={{ animation: 'fadeOut 1s forwards 3s' }}>
+                                <span>✅</span>
+                                <p className="text-xs font-bold text-emerald-400">Kilometertider hämtades från Strava!</p>
+                            </div>
+                        )}
+
                         {/* Source Badge + View Toggle for Merged */}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                             {(() => {
@@ -2002,6 +2112,71 @@ export function ActivityDetailModal({
                                             </button>
                                         </div>
                                     )}
+
+
+                                {/* Splits / Laps Table */}
+                                {(existingSplits && existingSplits.length > 0) && (
+                                    <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden mt-6">
+                                        <div className="p-4 bg-slate-800/50 border-b border-white/5 flex items-center justify-between">
+                                            <h3 className="text-sm font-black text-white flex items-center gap-2">
+                                                <span className="text-amber-400">⏱️</span> Kilometertider
+                                            </h3>
+                                            <span className="text-xs text-slate-500 font-mono">{existingSplits.length} varv</span>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-slate-950/50 text-xs uppercase font-black text-slate-500">
+                                                    <tr>
+                                                        <th className="px-4 py-3 rounded-tl-xl text-center">KM</th>
+                                                        <th className="px-4 py-3">Tempo</th>
+                                                        <th className="px-4 py-3">Puls</th>
+                                                        <th className="px-4 py-3 hidden sm:table-cell">Höjd</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5">
+                                                    {existingSplits.map((split: any) => {
+                                                        const isFastest = existingSplits.reduce((min: any, s: any) => s.movingTime < min.movingTime ? s : min, existingSplits[0]).split === split.split;
+                                                        const paceStr = formatPace(split.movingTime / (split.distance / 1000));
+
+                                                        return (
+                                                            <tr key={split.split} className="hover:bg-slate-800/30 transition-colors group">
+                                                                <td className="px-4 py-3 font-mono font-bold text-slate-400 text-center">
+                                                                    {split.split}
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`font-mono font-bold ${isFastest ? 'text-amber-400' : 'text-white'}`}>
+                                                                            {paceStr}
+                                                                        </span>
+                                                                        {isFastest && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded uppercase tracking-wider hidden sm:inline-block">Snabbast</span>}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    {split.averageHeartrate ? (
+                                                                        <span className="text-rose-400 font-mono text-xs flex items-center gap-1">
+                                                                            ❤️ {Math.round(split.averageHeartrate)}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-slate-600">-</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-4 py-3 hidden sm:table-cell">
+                                                                    {split.elevationDiff !== undefined ? (
+                                                                        <span className={`font-mono text-xs ${split.elevationDiff > 0 ? 'text-emerald-400' : split.elevationDiff < 0 ? 'text-blue-400' : 'text-slate-500'}`}>
+                                                                            {split.elevationDiff > 0 ? '+' : ''}{Math.round(split.elevationDiff)}m
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-slate-600">-</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <WorkoutStructureCard
                                     title={universalActivity?.plan?.title || activity.title || activity.type || 'Workout'}
