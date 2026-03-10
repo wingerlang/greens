@@ -10,6 +10,7 @@ import { Star, MoreHorizontal, Edit2, X, ChevronDown, ChevronRight, Pin } from '
 
 interface NavigationProps {
     onOpenOmnibox?: () => void;
+    onStravaSync?: () => void;
 }
 
 type NavSection = 'health' | 'food' | 'training' | 'community' | 'tools' | 'admin';
@@ -75,7 +76,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/developer', label: 'Dev Tools', icon: '🛠️', section: 'admin', devOnly: true },
 ];
 
-export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
+export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaSync }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { settings, updateSettings } = useSettings();
@@ -316,6 +317,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                     <span className="w-5 text-center">🔄</span>
                                     <span>Synkningar</span>
                                 </NavLink>
+                                {onStravaSync && (
+                                    <button onClick={onStravaSync} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-all w-full text-left">
+                                        <span className="w-5 text-center">⚡</span>
+                                        <span>Strava Smart Sync</span>
+                                    </button>
+                                )}
                                 <div className="h-px bg-white/5 my-1" />
                                 <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left">
                                     <span className="w-5 text-center">🚪</span>
@@ -471,6 +478,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                 <span className="text-xl">🚪</span>
                                 <span className="font-bold">Logga ut</span>
                             </button>
+                            {onStravaSync && (
+                                <button onClick={() => { onStravaSync(); setIsMenuOpen(false); }} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-colors">
+                                    <span className="text-xl">⚡</span>
+                                    <span className="font-bold">Strava Smart Sync</span>
+                                </button>
+                            )}
                         </div>
 
                         <div className="h-20" /> {/* Spacer for bottom scroll */}

@@ -14,7 +14,9 @@ import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 
 import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
+import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
+import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
 import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse } from 'lucide-react';
 
@@ -69,6 +71,125 @@ function ExpandableExercise({ exercise }: { exercise: any }) {
     );
 }
 
+// Helper Component: Sparkline for Splits (Pace & HR)
+function SplitsSparkline({ splits }: { splits: any[] }) {
+    if (!splits || splits.length < 2) return null;
+
+    const data = splits.map((s, i) => ({
+        index: i + 1,
+        pace: s.movingTime / (Math.max(s.distance, 1) / 1000),
+        hr: s.averageHeartrate || 0,
+    }));
+
+    // Find min/max for better scaling
+    const validHrs = data.filter(d => d.hr > 0).map(d => d.hr);
+    const minHr = validHrs.length > 0 ? Math.min(...validHrs) - 5 : 40;
+    const maxHr = validHrs.length > 0 ? Math.max(...validHrs) + 5 : 200;
+
+    return (
+        <div className="h-24 w-full mt-4 bg-black/20 rounded-xl p-2 border border-white/5">
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                    <Tooltip
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px' }}
+                        labelStyle={{ color: '#94a3b8' }}
+                        formatter={(value: any, name: string) => [
+                            name === 'pace' ? `${Math.floor(value / 60)}:${(Math.round(value % 60)).toString().padStart(2, '0')} /km` : `${Math.round(value)} bpm`,
+                            name === 'pace' ? 'Tempo' : 'Puls'
+                        ]}
+                    />
+                    <Line
+                        type="monotone"
+                        dataKey="pace"
+                        name="pace"
+                        stroke="#fb7185"
+                        strokeWidth={2}
+                        dot={false}
+                        yAxisId="pace"
+                        connectNulls
+                    />
+                    <Line
+                        type="monotone"
+                        dataKey="hr"
+                        name="hr"
+                        stroke="#6366f1"
+                        strokeWidth={2}
+                        dot={false}
+                        yAxisId="hr"
+                        connectNulls
+                    />
+                    <YAxis yAxisId="pace" hide domain={['auto', 'auto']} reversed />
+                    <YAxis yAxisId="hr" hide domain={[minHr, maxHr]} />
+                </LineChart>
+            </ResponsiveContainer>
+            <div className="flex justify-between px-2 text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1">
+                <span>Start</span>
+                <div className="flex gap-4">
+                    <span className="text-rose-400">Tempo</span>
+                    <span className="text-indigo-400">Puls</span>
+                </div>
+                <span>Mål</span>
+            </div>
+        </div>
+    );
+}
+
+// Helper Component: Mini Interval Summary
+function IntervalMiniSummary({ segmentedSplits }: { segmentedSplits: any }) {
+    if (!segmentedSplits) return null;
+    const { classified, summary } = segmentedSplits;
+
+    const colors: Record<string, string> = {
+        warmup: 'bg-emerald-500',
+        interval: 'bg-amber-400',
+        recovery: 'bg-slate-600',
+        cooldown: 'bg-blue-400',
+    };
+
+    return (
+        <div className="bg-violet-500/5 border border-violet-500/10 rounded-2xl p-4 mt-2 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Intervallsammanfattning</h4>
+                <div className="text-[10px] font-bold text-slate-400">
+                    {summary.totalIntervalKm.toFixed(1)}km @ {formatPace(summary.avgIntervalPace)}
+                </div>
+            </div>
+
+            {/* Colored Ribbon */}
+            <div className="flex gap-0.5 h-3 rounded-full overflow-hidden bg-slate-800 mb-4 shadow-inner">
+                {classified.map((s: any, i: number) => (
+                    <div
+                        key={i}
+                        className={`${colors[s.role] || 'bg-slate-700'} hover:brightness-125 transition-all cursor-help`}
+                        style={{ flex: s.distance }}
+                        title={`${s.role}: ${s.distance.toFixed(0)}m`}
+                    />
+                ))}
+            </div>
+
+            {/* Phase stats */}
+            <div className="grid grid-cols-4 gap-2">
+                <div className="text-center group">
+                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-emerald-500 transition-colors">Uppjogg</div>
+                    <div className="text-[11px] font-black text-emerald-400">{summary.warmupKm.toFixed(1)}k</div>
+                </div>
+                <div className="text-center group">
+                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-amber-400 transition-colors">Intervaller</div>
+                    <div className="text-[11px] font-black text-amber-300">{summary.totalIntervalKm.toFixed(1)}k</div>
+                </div>
+                <div className="text-center group">
+                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-white transition-colors">Vila</div>
+                    <div className="text-[11px] font-black text-slate-300">{summary.totalRecoveryKm.toFixed(1)}k</div>
+                </div>
+                <div className="text-center group">
+                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-blue-400 transition-colors">Nerjogg</div>
+                    <div className="text-[11px] font-black text-blue-300">{summary.cooldownKm.toFixed(1)}k</div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export interface ActivityDetailModalProps {
     activity: ExerciseEntry & { source: string; _mergeData?: any };
     universalActivity?: UniversalActivity;
@@ -92,7 +213,6 @@ export function ActivityDetailModal({
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
     const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
-    const [showScoreInfo, setShowScoreInfo] = useState(false);
 
     const [isUnmerging, setIsUnmerging] = useState(false);
 
@@ -275,6 +395,12 @@ export function ActivityDetailModal({
     // Compute existingSplits here so it's available for both the useEffect and the UI
     const existingSplits = perf?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure || (existingSplits && existingSplits.length > 0);
+
+    const segmentedSplits = React.useMemo(() => {
+        const splitsData = existingSplits || splits;
+        if (!splitsData || splitsData.length < 3) return null;
+        return segmentSplits(splitsData, parsedWorkout);
+    }, [existingSplits, splits, parsedWorkout]);
 
 
     // Detect if child of another activity
@@ -499,7 +625,7 @@ export function ActivityDetailModal({
         const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
         const source = perf?.source?.source || activity.source;
         const externalId = perf?.source?.externalId || activity.externalId;
-// existingSplits computed at component scope
+        // existingSplits computed at component scope
 
         if (source === 'strava' && externalId && (!existingSplits || existingSplits.length === 0) && fetchSplitsResult === 'idle' && token) {
             const fetchSplits = async () => {
@@ -1176,7 +1302,15 @@ export function ActivityDetailModal({
                                             );
                                         })()}
                                         {displayTitle}
+                                        {/* Subtype Label for Intervals */}
+                                        {activity.subType === 'interval' && (
+                                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-widest">
+                                                <span>📈</span> Intervaller
+                                                {parsedWorkout.summary && <span className="text-[8px] opacity-70 ml-1">({parsedWorkout.summary})</span>}
+                                            </div>
+                                        )}
                                         {/* Edit Button */}
+
                                         {!isMerged && (
                                             <button
                                                 onClick={() => setIsEditing(true)}
@@ -1678,66 +1812,48 @@ export function ActivityDetailModal({
                                                 })()}
                                             </div>
 
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
-                                                {/* Distance */}
+                                            {/* Hero Stats */}
+                                            <div className="grid grid-cols-3 gap-4 border-b border-[#FC4C02]/10 pb-5">
                                                 {(activity.distance || 0) > 0 && (
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Distans</span>
+                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Distans</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
-                                                            <span className="text-[10px] uppercase text-slate-500">km</span>
+                                                            <span className="text-3xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
+                                                            <span className="text-xs uppercase text-slate-500 font-bold">km</span>
                                                         </div>
                                                     </div>
                                                 )}
 
-                                                {/* Pace */}
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Tid</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-3xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                    </div>
+                                                </div>
+
                                                 {(activity.distance || 0) > 0 && (
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">{activity.type === 'cycling' ? 'Snittfart' : 'Snittempo'}</span>
+                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">{activity.type === 'cycling' ? 'Snittfart' : 'Snittempo'}</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">
+                                                            <span className="text-3xl font-black text-white">
                                                                 {activity.type === 'cycling'
                                                                     ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
                                                                     : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
                                                                 }
                                                             </span>
-                                                            <span className="text-[10px] uppercase text-slate-500">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
+                                                            <span className="text-xs uppercase text-slate-500 font-bold">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
                                                         </div>
                                                     </div>
                                                 )}
+                                            </div>
 
-                                                {/* Time */}
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">
-                                                        Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
-                                                    </span>
-                                                    <div className="flex flex-col">
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
-                                                        </div>
-                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
-                                                            <div className="flex items-center gap-1 mt-0.5" title="Inklusive pauser">
-                                                                <span className="text-[10px] text-rose-400 font-bold tracking-tight">Totaltid: {formatDuration(perf.elapsedTimeSeconds)}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                            {/* Minigraph */}
+                                            {existingSplits && existingSplits.length > 2 && (
+                                                <SplitsSparkline splits={existingSplits} />
+                                            )}
 
-                                                {/* Energy */}
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span
-                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20 md:border-b-0' : ''}`}
-                                                            title={activity.calorieBreakdown}
-                                                        >
-                                                            {activity.caloriesBurned || perf?.calories || '-'}
-                                                        </span>
-                                                        <span className="text-[10px] uppercase text-slate-500">kcal</span>
-                                                        {perf?.kilojoules && <span className="text-[9px] text-[#FC4C02] font-black ml-2">{perf.kilojoules} KJ</span>}
-                                                    </div>
-                                                </div>
-
+                                            {/* Secondary Stats Grid */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4 pt-2">
                                                 {/* Heart Rate */}
                                                 {(!!perf?.avgHeartRate || !!activity.heartRateAvg) && (
                                                     <div className="flex flex-col">
@@ -1745,10 +1861,48 @@ export function ActivityDetailModal({
                                                         <div className="flex items-baseline gap-1">
                                                             <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}</span>
                                                             <span className="text-[10px] uppercase text-slate-500">bpm</span>
-                                                            {perf?.maxHeartRate && <span className="text-[9px] text-red-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
+                                                            {perf?.maxHeartRate && <span className="text-[9px] text-rose-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Elevation Gain */}
+                                                {!!perf?.elevationGain && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Höjdmeter</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{Math.round(perf.elevationGain)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500">m</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* GAP */}
+                                                {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effektivt Tempo (GAP)</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">
+                                                                {formatPace(calculateGAP((activity.durationMinutes * 60) / (activity.distance || 1), perf.elevationGain!, activity.distance || 0)).replace('/km', '')}
+                                                            </span>
+                                                            <span className="text-[10px] uppercase text-slate-500">/km</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Energy */}
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span
+                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''}`}
+                                                            title={activity.calorieBreakdown}
+                                                        >
+                                                            {activity.caloriesBurned || perf?.calories || '-'}
+                                                        </span>
+                                                        <span className="text-[10px] uppercase text-slate-500">kcal</span>
+                                                    </div>
+                                                </div>
 
                                                 {/* Watts */}
                                                 {!!perf?.averageWatts && (
@@ -1757,18 +1911,6 @@ export function ActivityDetailModal({
                                                         <div className="flex items-baseline gap-1">
                                                             <span className="text-xl font-black text-white">{Math.round(perf.averageWatts)}</span>
                                                             <span className="text-[10px] uppercase text-slate-500">w</span>
-                                                            {perf?.maxWatts && <span className="text-[9px] text-indigo-400 font-black ml-1">MAX {Math.round(perf.maxWatts)}</span>}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Max Speed */}
-                                                {!!perf?.maxSpeed && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Maxfart</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{perf.maxSpeed.toFixed(1)}</span>
-                                                            <span className="text-[10px] uppercase text-slate-500">km/h</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -1776,7 +1918,7 @@ export function ActivityDetailModal({
                                                 {/* Achievements */}
                                                 {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) ? (
                                                     <div className="flex flex-col col-span-2">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Prestationer</span>
                                                         <div className="flex items-center gap-4">
                                                             {(perf?.prCount || 0) > 0 && (
                                                                 <div className="flex items-center gap-1.5 sh-tooltip" title={`${perf.prCount} Personbästa`}>
@@ -1805,86 +1947,60 @@ export function ActivityDetailModal({
                                             </div>
                                         </div>
 
-                                        {/* Additional non-Strava Metrics (Greens Score, Tonnage) */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {/* Greens Score Tile */}
-                                            {perfBreakdown.totalScore > 0 && (
-                                                <div
-                                                    className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
-                                                    onClick={() => setShowScoreInfo(!showScoreInfo)}
-                                                >
-                                                    <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore}</p>
-                                                    <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
-                                                        Greens Score
-                                                        <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
+                                        {/* Interval Summary Block (Strava) */}
+                                        {activity.subType === 'interval' && segmentedSplits && (
+                                            <IntervalMiniSummary segmentedSplits={segmentedSplits} />
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* Generic Stats Grid (Non-Strava) */
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col justify-center items-center">
+                                                <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
+                                                <p className="text-xs text-slate-500 uppercase">
+                                                    Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
+                                                </p>
+                                                {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
+                                                    <p className="text-[10px] text-rose-400 font-bold mt-1 bg-rose-500/10 px-2 py-0.5 rounded">
+                                                        Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
                                                     </p>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
 
-                                            {/* Tonnage (if existing) */}
-                                            {(activity.tonnage && activity.tonnage > 0) && (
+                                            {/* Distance (Only if running/has value) */}
+                                            {(activity.distance || 0) > 0 ? (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                    <p className="text-2xl font-black text-emerald-400">{(activity.distance || 0).toFixed(1)}</p>
+                                                    <p className="text-xs text-slate-500 uppercase">Km</p>
+                                                </div>
+                                            ) : null}
+
+                                            {/* Tonnage (Only if strength/has value) */}
+                                            {(activity.tonnage && activity.tonnage > 0) ? (
                                                 <div className="bg-slate-800/50 rounded-xl p-4 text-center">
                                                     <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
                                                     <p className="text-xs text-slate-500 uppercase">Ton</p>
                                                 </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    /* Generic Stats Grid (Non-Strava) */
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col justify-center items-center">
-                                            <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
-                                            <p className="text-xs text-slate-500 uppercase">
-                                                Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
-                                            </p>
-                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
-                                                <p className="text-[10px] text-rose-400 font-bold mt-1 bg-rose-500/10 px-2 py-0.5 rounded">
-                                                    Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
-                                                </p>
-                                            )}
+                                            ) : null}
+
+                                            {/* Pace Card (Only if distance exists) */}
+                                            {(activity.distance || 0) > 0 ? (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                    <p className="text-2xl font-black text-emerald-400">
+                                                        {activity.type === 'cycling'
+                                                            ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
+                                                            : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
+                                                        }
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
+                                                </div>
+                                            ) : null}
                                         </div>
 
-                                        {/* Distance (Only if running/has value) */}
-                                        {(activity.distance || 0) > 0 ? (
-                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                <p className="text-2xl font-black text-emerald-400">{(activity.distance || 0).toFixed(1)}</p>
-                                                <p className="text-xs text-slate-500 uppercase">Km</p>
-                                            </div>
-                                        ) : null}
-
-                                        {/* Tonnage (Only if strength/has value) */}
-                                        {(activity.tonnage && activity.tonnage > 0) ? (
-                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
-                                                <p className="text-xs text-slate-500 uppercase">Ton</p>
-                                            </div>
-                                        ) : null}
-
-                                        {/* Pace Card (Only if distance exists) */}
-                                        {(activity.distance || 0) > 0 ? (
-                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                <p className="text-2xl font-black text-emerald-400">
-                                                    {activity.type === 'cycling'
-                                                        ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
-                                                        : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
-                                                    }
-                                                </p>
-                                                <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
-                                            </div>
-                                        ) : null}
-
-                                        {perfBreakdown.totalScore > 0 && (
-                                            <div
-                                                className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
-                                                onClick={() => setShowScoreInfo(!showScoreInfo)}
-                                            >
-                                                <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore}</p>
-                                                <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
-                                                    Greens Score
-                                                    <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
-                                                </p>
-                                            </div>
+                                        {/* Interval Summary (Generic) */}
+                                        {activity.subType === 'interval' && segmentedSplits && (
+                                            <IntervalMiniSummary segmentedSplits={segmentedSplits} />
                                         )}
                                     </div>
                                 )}
@@ -1905,7 +2021,7 @@ export function ActivityDetailModal({
                                                 <div
                                                     key={sub.id}
                                                     className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                                                    onClick={() => setSelectedActivityId(sub.id)}
+                                                    onClick={() => setSelectedActivityId?.(sub.id)}
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">{sub.title}</span>
@@ -1925,81 +2041,7 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
 
-                                {/* Greens Score Visual Breakdown */}
-                                {showScoreInfo && activity.type?.toLowerCase() !== 'strength' && perfBreakdown.totalScore > 0 && (
-                                    <div className="bg-slate-900/50 rounded-3xl p-6 border border-white/5 space-y-6">
-                                        <div>
-                                            <div className="flex justify-between items-baseline mb-2">
-                                                <h4 className="text-xl font-black text-indigo-400 italic uppercase">
-                                                    Resultatanalys
-                                                </h4>
-                                                <span className="text-[10px] font-mono text-slate-500 uppercase">{perfBreakdown.summary}</span>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {/* Big Score Gauge (CSS Simple) */}
-                                                <div className="flex flex-col items-center justify-center py-2">
-                                                    <div className="relative w-28 h-28 flex items-center justify-center">
-                                                        {perfBreakdown.isPersonalBest && (
-                                                            <div className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg animate-bounce z-10 border-2 border-slate-900">
-                                                                🏆
-                                                            </div>
-                                                        )}
-                                                        <svg className="w-full h-full -rotate-90">
-                                                            <circle cx="56" cy="56" r="50" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                                                            <circle
-                                                                cx="56" cy="56" r="50" fill="transparent"
-                                                                stroke="currentColor" strokeWidth="8"
-                                                                strokeDasharray={314}
-                                                                strokeDashoffset={314 - (314 * perfBreakdown.totalScore) / 100}
-                                                                strokeLinecap="round"
-                                                                className="text-indigo-500 transition-all duration-1000 ease-out"
-                                                            />
-                                                        </svg>
-                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                            <span className="text-3xl font-black text-white">{perfBreakdown.totalScore || '-'}</span>
-                                                            <span className="text-[8px] text-slate-500 uppercase font-bold">Poäng</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Component Bars */}
-                                                <div className="flex flex-col justify-center space-y-4">
-                                                    {perfBreakdown.components.map((comp, idx) => (
-                                                        <div key={idx} className="space-y-1.5">
-                                                            <div className="flex justify-between items-end">
-                                                                <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
-                                                                    <span>{comp.icon}</span> {comp.label}
-                                                                    {comp.isPersonalBest && <span className="text-[8px] bg-yellow-500/10 text-yellow-500 px-1 rounded border border-yellow-500/20">PB</span>}
-                                                                </span>
-                                                                <span className={`text-xs font-mono font-bold ${comp.color}`}>{comp.value}</span>
-                                                            </div>
-                                                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                                                <div
-                                                                    className={`h-full rounded-full transition-all duration-1000 delay-300 ${comp.color.replace('text-', 'bg-')}`}
-                                                                    style={{ width: `${Math.max(5, (comp.score / comp.max) * 100)}%` }}
-                                                                />
-                                                            </div>
-                                                            <p className={`text-[9px] italic leading-tight ${comp.isPersonalBest ? 'text-yellow-500/70' : 'text-slate-500'}`}>
-                                                                {comp.description}
-                                                            </p>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <div className="pt-2 border-t border-white/5">
-                                                <div className="bg-indigo-500/5 rounded-lg p-3 border border-indigo-500/10 text-[10px] text-slate-400 leading-relaxed">
-                                                    <strong className="text-indigo-400 block mb-1">💡 Tips för detta pass:</strong>
-                                                    {perfBreakdown.type === 'cardio' ?
-                                                        "För att höja din Greens Score, försök sänka din ansträngning (puls) vid bibehållen hastighet, eller öka hastigheten vid samma puls genom förbättrad löpekonomi." :
-                                                        "Din score speglar arbetstakten (kg/min). Kör du färre och längre vilar sänks poängen, medan ett högre tempo med bibehållen vikt höjer den."
-                                                    }
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}    {/* Heart Rate Zone Visualization (for cardio with HR data) */}
+                                {/* Heart Rate Zone Visualization (for cardio with HR data) */}
                                 {(perf?.avgHeartRate || activity.heartRateAvg) && activity.type?.toLowerCase() !== 'strength' && (
                                     <HeartRateZones
                                         avgHeartRate={Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
@@ -2043,25 +2085,7 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
 
-                                {/* Elevation & Performance (GAP) */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    {(perf ? perf.elevationGain > 0 : false) && (
-                                        <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-4">
-                                            <h3 className="text-xs font-bold text-emerald-400 uppercase mb-2">⛰️ Höjdmeter</h3>
-                                            <span className="text-2xl font-black text-white">{Math.round(perf.elevationGain)}</span>
-                                            <span className="text-xs text-slate-400 ml-1">m</span>
-                                        </div>
-                                    )}
-                                    {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) ? (
-                                        <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4">
-                                            <h3 className="text-xs font-bold text-indigo-400 uppercase mb-2">📈 Effektivt Tempo (GAP)</h3>
-                                            <span className="text-2xl font-black text-white">
-                                                {formatPace(calculateGAP((activity.durationMinutes * 60) / (activity.distance || 1), perf.elevationGain, activity.distance || 0))}
-                                            </span>
-                                            <span className="text-xs text-slate-400 ml-1">/km</span>
-                                        </div>
-                                    ) : null}
-                                </div>
+                                {/* Elevation & Performance (GAP) - HIDDEN HERE, now in Strava box */}
 
 
 
@@ -2083,6 +2107,8 @@ export function ActivityDetailModal({
                                     }
                                     return null;
                                 })()}
+
+                                {/* Greens Score Tile HIDDEN */}
                             </>
                         )}
 
@@ -2114,8 +2140,12 @@ export function ActivityDetailModal({
                                     )}
 
 
-                                {/* Splits / Laps Table */}
-                                {(existingSplits && existingSplits.length > 0) && (
+                                {segmentedSplits && (
+                                    <IntervalSplitsCard segmented={segmentedSplits} />
+                                )}
+
+                                {/* Splits / Laps Table (fallback when segmentation is unavailable) */}
+                                {(!segmentedSplits && existingSplits && existingSplits.length > 0) && (
                                     <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden mt-6">
                                         <div className="p-4 bg-slate-800/50 border-b border-white/5 flex items-center justify-between">
                                             <h3 className="text-sm font-black text-white flex items-center gap-2">
@@ -2139,7 +2169,8 @@ export function ActivityDetailModal({
                                                         const paceStr = formatPace(split.movingTime / (split.distance / 1000));
 
                                                         return (
-                                                            <tr key={split.split} className="hover:bg-slate-800/30 transition-colors group">
+                                                            <tr key={split.split} className="hover:bg-indigo-500/10 transition-colors group">
+
                                                                 <td className="px-4 py-3 font-mono font-bold text-slate-400 text-center">
                                                                     {split.split}
                                                                 </td>
@@ -2283,7 +2314,7 @@ export function ActivityDetailModal({
                                                             {activity.elevationGain !== undefined && (
                                                                 <td className="px-4 py-4 text-right text-slate-400">{Math.round(a.elevationGain || 0)}m</td>
                                                             )}
-                                                            <td className="px-4 py-4 text-right text-slate-400">{a.heartRateAvg || '-'}</td>
+                                                            <td className="px-4 py-4 text-right text-slate-400">{a.heartRateAvg ? Math.round(a.heartRateAvg) : '-'}</td>
                                                             <td className="px-4 py-4 text-right">
                                                                 <span className={`text-[10px] font-black px-2 py-1 rounded ${aScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
                                                                     aScore >= 60 ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-500/20 text-slate-400'
@@ -2379,7 +2410,7 @@ export function ActivityDetailModal({
                                             {splits.map((s: any, i: number) => {
                                                 const splitPace = s.movingTime / (s.distance / 1000);
                                                 return (
-                                                    <tr key={i}>
+                                                    <tr key={i} className="hover:bg-indigo-500/10 transition-colors group">
                                                         <td className="px-4 py-3 text-white font-bold">{i + 1} km</td>
                                                         <td className="px-4 py-3 text-right text-slate-300">
                                                             {Math.floor(s.movingTime / 60)}:{(s.movingTime % 60).toString().padStart(2, '0')}
@@ -2388,7 +2419,7 @@ export function ActivityDetailModal({
                                                             {Math.floor(splitPace / 60)}:{(Math.round(splitPace % 60)).toString().padStart(2, '0')} /km
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-rose-400">
-                                                            {s.averageHeartrate || '-'}
+                                                            {s.averageHeartrate ? Math.round(s.averageHeartrate) : '-'}
                                                         </td>
                                                     </tr>
                                                 );
@@ -2650,9 +2681,8 @@ export function ActivityDetailModal({
                             </button>
                         </div>
                     </>
-                )
-                }
-            </div >
-        </div >
+                )}
+            </div>
+        </div>
     );
 }

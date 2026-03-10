@@ -25,12 +25,14 @@ export function getRelativeTime(dateStr: string): string {
 }
 
 /**
- * Format duration in seconds to human-readable string (e.g., "2h 15m")
+ * Format duration in seconds to human-readable string (e.g., "2h 15m" or "19m 47s")
  */
 export function formatDuration(seconds: number): string {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.round(seconds % 60);
     if (h > 0) return `${h}h ${m}m`;
+    if (s > 0) return `${m}m ${s}s`;
     return `${m}m`;
 }
 

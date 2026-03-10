@@ -24,6 +24,8 @@ interface StravaActivityImportModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialRange?: ScanRange;
+    /** If true, auto-start scan immediately using smart range */
+    autoStart?: boolean;
 }
 
 const EXERCISE_ICONS: Record<string, string> = {
@@ -35,15 +37,15 @@ const EXERCISE_ICONS: Record<string, string> = {
     Yoga: '🧘',
 };
 
-type ScanRange = '7days' | '30days' | 'year' | 'all';
+type ScanRange = 'smart' | '7days' | '30days' | 'year' | 'all';
 
-export function StravaActivityImportModal({ isOpen, onClose, initialRange }: StravaActivityImportModalProps) {
+export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoStart = false }: StravaActivityImportModalProps) {
     const { token } = useAuth();
-    const { refreshData } = useData();
+    const { refreshData, exerciseEntries } = useData();
 
     // State
     const [step, setStep] = useState<'setup' | 'scanning' | 'review' | 'importing' | 'success'>('setup');
-    const [scanRange, setScanRange] = useState<ScanRange>(initialRange || '30days');
+    const [scanRange, setScanRange] = useState<ScanRange>(initialRange || 'smart');
     const [report, setReport] = useState<SyncDiffReport | null>(null);
     const [activeTab, setActiveTab] = useState<'new' | 'changed'>('new');
 
@@ -53,17 +55,54 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
     const [importStats, setImportStats] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
 
     const [elapsedTime, setElapsedTime] = useState(0);
+    const [autoStartTriggered, setAutoStartTriggered] = useState(false);
+
+    // Compute smart fromDate based on the latest activity's date
+    const getSmartFromDate = (): string => {
+        if (!exerciseEntries || exerciseEntries.length === 0) {
+            // No activities at all — scan last 30 days
+            return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+        // Find the most recent activity date
+        let latestDate = new Date(0);
+        for (const entry of exerciseEntries) {
+            const d = new Date(entry.date);
+            if (d > latestDate) latestDate = d;
+        }
+        // Go 1 day before the latest activity to catch any same-day activities
+        const fromDate = new Date(latestDate.getTime() - 24 * 60 * 60 * 1000);
+        return fromDate.toISOString();
+    };
+
+    const getFromDateForRange = (range: ScanRange): string | undefined => {
+        switch (range) {
+            case 'smart': return getSmartFromDate();
+            case '7days': return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            case '30days': return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+            case 'year': return new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+            case 'all': return undefined;
+        }
+    };
 
     // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
             setStep('setup');
-            setScanRange(initialRange || '30days');
+            setScanRange(initialRange || 'smart');
             setReport(null);
             setSelectedNew(new Set());
             setSelectedChanged(new Set());
+            setAutoStartTriggered(false);
         }
     }, [isOpen, initialRange]);
+
+    // Auto-start scan if autoStart is true
+    useEffect(() => {
+        if (isOpen && autoStart && !autoStartTriggered && step === 'setup') {
+            setAutoStartTriggered(true);
+            handleScan();
+        }
+    }, [isOpen, autoStart, autoStartTriggered, step]);
 
     const handleScan = async () => {
         setStep('scanning');
@@ -71,22 +110,14 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
         const timer = setInterval(() => setElapsedTime(t => t + 1), 1000);
 
         try {
-            let fromDate: string | undefined;
-            if (scanRange === '7days') {
-                fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            } else if (scanRange === '30days') {
-                fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-            } else if (scanRange === 'year') {
-                fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-            }
-            // 'all' sends undefined -> backend scans everything
+            const fromDate = getFromDateForRange(scanRange);
 
             const res = await fetch('/api/strava/scan', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({ fromDate })
             });
             const data = await res.json();
@@ -99,9 +130,23 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
             setSelectedNew(new Set(data.newActivities.map((a: any) => a.id)));
             setSelectedChanged(new Set()); // User must explicitly opt-in for changes
 
-            setStep('review');
-            if (data.newActivities.length === 0 && data.changedActivities.length > 0) {
-                setActiveTab('changed');
+            // If there are ONLY new activities (no changed), auto-import them immediately
+            if (data.newActivities.length > 0 && data.changedActivities.length === 0) {
+                // Auto-import new activities directly
+                await autoImport(data);
+            } else if (data.newActivities.length === 0 && data.changedActivities.length === 0) {
+                // Nothing to sync — show success immediately
+                setImportStats({ created: 0, updated: 0 });
+                setStep('success');
+                setTimeout(() => {
+                    onClose();
+                    setStep('setup');
+                }, 2000);
+            } else {
+                setStep('review');
+                if (data.newActivities.length === 0 && data.changedActivities.length > 0) {
+                    setActiveTab('changed');
+                }
             }
 
         } catch (err) {
@@ -110,6 +155,33 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
             setStep('setup');
         } finally {
             clearInterval(timer);
+        }
+    };
+
+    const autoImport = async (data: SyncDiffReport) => {
+        setStep('importing');
+        try {
+            if (data.newActivities.length > 0) {
+                await fetch('/api/strava/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ activities: data.newActivities, forceUpdate: false })
+                });
+            }
+
+            setImportStats({ created: data.newActivities.length, updated: 0 });
+            await refreshData();
+            setStep('success');
+
+            setTimeout(() => {
+                onClose();
+                setStep('setup');
+            }, 2500);
+        } catch (err) {
+            console.error(err);
+            // Fall back to review step so user can see what happened
+            setStep('review');
         }
     };
 
@@ -125,7 +197,8 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
             if (newToImport.length > 0) {
                 await fetch('/api/strava/import', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ activities: newToImport, forceUpdate: false })
                 });
             }
@@ -134,7 +207,8 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
             if (changedToImport.length > 0) {
                 await fetch('/api/strava/import', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ activities: changedToImport, forceUpdate: true })
                 });
             }
@@ -172,6 +246,19 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
 
     if (!isOpen) return null;
 
+    // Compute smart date label for display
+    const smartDateLabel = (() => {
+        if (!exerciseEntries || exerciseEntries.length === 0) return 'senaste 30 dagarna';
+        let latestDate = new Date(0);
+        for (const entry of exerciseEntries) {
+            const d = new Date(entry.date);
+            if (d > latestDate) latestDate = d;
+        }
+        const daysAgo = Math.ceil((Date.now() - latestDate.getTime()) / (24 * 60 * 60 * 1000));
+        if (daysAgo <= 1) return 'sedan igår';
+        return `senaste ${daysAgo} dagarna`;
+    })();
+
     return (
         <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
             <div
@@ -183,9 +270,15 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                 <div className="p-6 border-b border-white/5 bg-slate-950 flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-black text-white flex items-center gap-2">
-                            <span className="text-[#FC4C02]">Strava</span> Sync 2.0
+                            <span className="text-[#FC4C02]">Strava</span> Sync
                         </h2>
-                        <p className="text-slate-400 text-xs">Total History Control</p>
+                        <p className="text-slate-400 text-xs">
+                            {step === 'setup' && `Smart sync — ${smartDateLabel}`}
+                            {step === 'scanning' && 'Söker nya aktiviteter...'}
+                            {step === 'review' && 'Granska innan import'}
+                            {step === 'importing' && 'Importerar...'}
+                            {step === 'success' && 'Synk klar!'}
+                        </p>
                     </div>
                     {step !== 'importing' && step !== 'scanning' && (
                         <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
@@ -199,51 +292,67 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
                                 <div className="text-4xl mb-2">📡</div>
-                                <h3 className="text-lg font-bold text-white">Redo att scanna?</h3>
-                                <p className="text-slate-400 max-w-md mx-auto">
-                                    Vi hämtar din historik från Strava och jämför med din databas. Inget sparas förrän du godkänner.
+                                <h3 className="text-lg font-bold text-white">Synka med Strava</h3>
+                                <p className="text-slate-400 max-w-md mx-auto text-sm">
+                                    Klicka för att hämta nya aktiviteter. Synk startar automatiskt från senaste passets datum.
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {/* Smart Sync — Primary Action */}
+                            <div className="flex justify-center pt-2">
                                 <button
-                                    onClick={() => setScanRange('7days')}
-                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === '7days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                    onClick={handleScan}
+                                    className="px-10 py-4 bg-[#FC4C02] hover:bg-[#E34402] text-white font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-500/20 transition-all transform hover:scale-105 flex items-center gap-3 text-lg"
                                 >
-                                    <div className="font-bold text-white">7 Dagar</div>
-                                    <div className="text-xs text-slate-500 mt-1">För veckochecken.</div>
-                                </button>
-                                <button
-                                    onClick={() => setScanRange('30days')}
-                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === '30days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
-                                >
-                                    <div className="font-bold text-white">30 Dagar</div>
-                                    <div className="text-xs text-slate-500 mt-1">Månadens pass.</div>
-                                </button>
-                                <button
-                                    onClick={() => setScanRange('year')}
-                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === 'year' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
-                                >
-                                    <div className="font-bold text-white">12 Månader</div>
-                                    <div className="text-xs text-slate-500 mt-1">Årsstatistik.</div>
-                                </button>
-                                <button
-                                    onClick={() => setScanRange('all')}
-                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === 'all' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
-                                >
-                                    <div className="font-bold text-white">Allt</div>
-                                    <div className="text-xs text-slate-500 mt-1">Totalhistorik.</div>
+                                    <span className="text-2xl">⚡</span>
+                                    Smart Sync
                                 </button>
                             </div>
 
-                            <div className="flex justify-center pt-4">
-                                <button
-                                    onClick={handleScan}
-                                    className="px-8 py-3 bg-[#FC4C02] hover:bg-[#E34402] text-white font-black uppercase tracking-wider rounded-full shadow-lg shadow-orange-500/20 transition-all transform hover:scale-105"
-                                >
-                                    Starta Scan
-                                </button>
-                            </div>
+                            <p className="text-center text-slate-500 text-[10px] uppercase tracking-wider">
+                                Synkar {smartDateLabel}
+                            </p>
+
+                            {/* Advanced: Range Selection (collapsed) */}
+                            <details className="mt-6">
+                                <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-300 text-center uppercase tracking-wider">
+                                    Avancerat — Välj tidsperiod manuellt
+                                </summary>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                                    <button
+                                        onClick={() => setScanRange('7days')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all text-sm ${scanRange === '7days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                    >
+                                        <div className="font-bold text-white">7 Dagar</div>
+                                    </button>
+                                    <button
+                                        onClick={() => setScanRange('30days')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all text-sm ${scanRange === '30days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                    >
+                                        <div className="font-bold text-white">30 Dagar</div>
+                                    </button>
+                                    <button
+                                        onClick={() => setScanRange('year')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all text-sm ${scanRange === 'year' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                    >
+                                        <div className="font-bold text-white">12 Månader</div>
+                                    </button>
+                                    <button
+                                        onClick={() => setScanRange('all')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all text-sm ${scanRange === 'all' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                    >
+                                        <div className="font-bold text-white">Allt</div>
+                                    </button>
+                                </div>
+                                <div className="flex justify-center pt-4">
+                                    <button
+                                        onClick={handleScan}
+                                        className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-sm"
+                                    >
+                                        Starta Scan
+                                    </button>
+                                </div>
+                            </details>
                         </div>
                     )}
 
@@ -254,7 +363,7 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                                 <div className="absolute inset-0 border-4 border-[#FC4C02] border-t-transparent rounded-full animate-spin"></div>
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-bold text-white animate-pulse">Analyserar Strava...</h3>
+                                <h3 className="text-lg font-bold text-white animate-pulse">Söker på Strava...</h3>
                                 <p className="text-slate-400 text-sm mt-2">Hämtar aktiviteter och jämför data.</p>
                                 <p className="text-slate-500 font-mono text-xs mt-4">{elapsedTime}s</p>
                             </div>
@@ -378,8 +487,9 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                             <div className="text-6xl mb-4">✅</div>
                             <h3 className="text-2xl font-bold text-white mb-2">Klart!</h3>
                             <p className="text-slate-400">
-                                {importStats.created} nya importerade.<br />
-                                {importStats.updated} uppdaterade/korrigerade.
+                                {importStats.created > 0 && <>{importStats.created} nya importerade.<br /></>}
+                                {importStats.updated > 0 && <>{importStats.updated} uppdaterade.<br /></>}
+                                {importStats.created === 0 && importStats.updated === 0 && 'Allt är redan synkat! 👌'}
                             </p>
                         </div>
                     )}

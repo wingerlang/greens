@@ -13,6 +13,7 @@ import { Footer } from './Footer.tsx';
 import { ActivityDetailModal } from './activities/ActivityDetailModal.tsx';
 import { CreatePostModal } from './feed/CreatePostModal.tsx';
 import { EstimateLunchModal } from './calories/EstimateLunchModal.tsx';
+import { StravaActivityImportModal } from './integrations/StravaActivityImportModal.tsx';
 
 interface LayoutProps {
     children: ReactNode;
@@ -24,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
     const [trainingModalDefaults, setTrainingModalDefaults] = useState<{ type?: ExerciseType; input?: string; date?: string }>({});
     const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
     const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
+    const [isStravaSyncOpen, setIsStravaSyncOpen] = useState(false);
 
     const handleOpenTraining = (defaults: { type?: ExerciseType; input?: string; date?: string }) => {
         setTrainingModalDefaults(defaults);
@@ -216,11 +218,17 @@ export function Layout({ children }: LayoutProps) {
                 />
             )}
 
-            <Navigation onOpenOmnibox={() => setIsOmniboxOpen(true)} />
+            <Navigation onOpenOmnibox={() => setIsOmniboxOpen(true)} onStravaSync={() => setIsStravaSyncOpen(true)} />
             <main className="flex-1 w-full max-w-[1536px] mx-auto p-3 md:p-6">
                 {children}
             </main>
             <Footer />
+
+            <StravaActivityImportModal
+                isOpen={isStravaSyncOpen}
+                onClose={() => setIsStravaSyncOpen(false)}
+                autoStart={true}
+            />
         </div>
     );
 }

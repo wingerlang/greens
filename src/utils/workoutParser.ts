@@ -185,6 +185,44 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
     // State machine basic
     let currentReps = 1;
 
+    // --- Pre-check: Parenthesized interval format: "5x (2000m / 1000m)" ---
+    // Matches: 5x(2000m/1000m), 5 x (2000m / 1000m jogg), 3x(1k/500m), etc.
+    for (let i = 0; i < cleanLines.length; i++) {
+        const line = cleanLines[i];
+        // Match: <reps>x (<work_dist> / <recovery_dist>)
+        // Also match variants: "5x (2000m / 1000m jogg)", "5x(2k/1k)", "5 x (2000 / 1000)"
+        const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*[\/\|]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*(?:jogg|vila|rest)?\s*\)/);
+        if (parenMatch) {
+            const reps = parseInt(parenMatch[1], 10);
+            let workDist = parseFloat(parenMatch[2].replace(',', '.'));
+            const workUnit = parenMatch[3] || 'm';
+            let recoveryDist = parseFloat(parenMatch[4].replace(',', '.'));
+            const recoveryUnit = parenMatch[5] || 'm';
+
+            // Convert to meters
+            if (workUnit.startsWith('k')) workDist *= 1000;
+            else if (workDist < 20) workDist *= 1000; // Heuristic: "5x (2 / 1)" → km
+            if (recoveryUnit.startsWith('k')) recoveryDist *= 1000;
+            else if (recoveryDist < 20) recoveryDist *= 1000; // Heuristic
+
+            segments.push({
+                type: 'INTERVAL',
+                reps,
+                work: { dist: workDist },
+                recovery: {
+                    type: 'distance',
+                    value: recoveryDist,
+                    unit: 'm'
+                },
+                originalString: line
+            });
+
+            // Remove this line so the normal parser doesn't re-parse it
+            cleanLines.splice(i, 1);
+            i--;
+        }
+    }
+
     for (let i = 0; i < cleanLines.length; i++) {
         const line = cleanLines[i];
 
@@ -311,9 +349,20 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         }
     });
 
+    // Deduplicate: Remove segments with identical type, distance, and time (e.g. title and description both mention "5k")
+    const deduplicatedSegments: WorkoutSegment[] = [];
+    const seenKeys = new Set<string>();
+    for (const seg of expandedSegments) {
+        const key = `${seg.type}-${seg.work.dist || 0}-${seg.work.time || 0}-${seg.reps}`;
+        if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            deduplicatedSegments.push(seg);
+        }
+    }
+
     // Determine Category
     let suggestedSubType: 'interval' | 'long-run' | 'default' | 'tempo' = 'default';
-    const intervalSegments = expandedSegments.filter(s => s.type === 'INTERVAL');
+    const intervalSegments = deduplicatedSegments.filter(s => s.type === 'INTERVAL');
     if (intervalSegments.length > 0) {
         // Multiple intervals or reps > 1 → actual interval workout
         const hasMultipleIntervals = intervalSegments.length > 1;
@@ -339,8 +388,8 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
     }
 
     return {
-        segments: expandedSegments,
-        totalDistance: expandedSegments.reduce((sum, s) => sum + (s.work.dist || 0) * s.reps, 0),
+        segments: deduplicatedSegments,
+        totalDistance: deduplicatedSegments.reduce((sum, s) => sum + (s.work.dist || 0) * s.reps, 0),
         classification: suggestedSubType === 'interval' ? 'INTERVALS' : (suggestedSubType === 'tempo' ? 'TEMPO' : 'DISTANCE'),
         suggestedSubType
     };

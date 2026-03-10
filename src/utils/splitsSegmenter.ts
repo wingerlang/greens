@@ -1,0 +1,163 @@
+import { WorkoutSegment, ParsedWorkout } from '../models/analysisTypes.ts';
+
+export interface KmSplit {
+    split: number;
+    distance: number;
+    movingTime: number;
+    elapsedTime?: number;
+    averageHeartrate?: number;
+    elevationDiff?: number;
+    averageSpeed?: number;
+    paceZone?: number;
+}
+
+export interface ClassifiedSplit extends KmSplit {
+    role: 'warmup' | 'interval' | 'recovery' | 'cooldown' | 'unknown';
+    intervalNumber?: number;
+    groupLabel?: string;
+}
+
+export interface SegmentedSplits {
+    classified: ClassifiedSplit[];
+    warmupSplits: ClassifiedSplit[];
+    intervalGroups: {
+        number: number;
+        intervalSplits: ClassifiedSplit[];
+        recoverySplits: ClassifiedSplit[];
+        avgPace: number;
+        avgHR?: number;
+    }[];
+    cooldownSplits: ClassifiedSplit[];
+    summary: {
+        warmupKm: number;
+        cooldownKm: number;
+        totalIntervalKm: number;
+        totalRecoveryKm: number;
+        avgIntervalPace: number;
+        avgRecoveryPace: number;
+        fastestIntervalPace: number;
+        slowestIntervalPace: number;
+    };
+}
+
+export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout): SegmentedSplits | null {
+    if (!splits || splits.length < 3) return null;
+
+    // 1. Beräkna tempo (sekunder per km)
+    const paces = splits.map(s => s.movingTime / (Math.max(s.distance, 1) / 1000));
+
+    // 2. K-Means Klustring (k=3) för att dynamiskt hitta tempogränser
+    let c1 = Math.min(...paces); // Snabbast (Intervall)
+    let c3 = Math.max(...paces); // Långsammast (Uppjogg/Nerjogg)
+    let c2 = (c1 + c3) / 2;      // Vila (Mellan)
+
+    for (let iter = 0; iter < 5; iter++) {
+        const g1: number[] = [], g2: number[] = [], g3: number[] = [];
+        for (const p of paces) {
+            const d1 = Math.abs(p - c1);
+            const d2 = Math.abs(p - c2);
+            const d3 = Math.abs(p - c3);
+            if (d1 <= d2 && d1 <= d3) g1.push(p);
+            else if (d2 <= d1 && d2 <= d3) g2.push(p);
+            else g3.push(p);
+        }
+        if (g1.length) c1 = g1.reduce((a, b) => a + b, 0) / g1.length;
+        if (g2.length) c2 = g2.reduce((a, b) => a + b, 0) / g2.length;
+        if (g3.length) c3 = g3.reduce((a, b) => a + b, 0) / g3.length;
+    }
+
+    // Tröskeln läggs rakt mellan intervall-snittet och vilo-snittet
+    const threshold = (c1 + c2) / 2;
+    const isFast = paces.map(p => p < threshold);
+
+    const firstFastIdx = isFast.indexOf(true);
+    const lastFastIdx = isFast.lastIndexOf(true);
+
+    if (firstFastIdx === -1) return null;
+
+    const classified: ClassifiedSplit[] = splits.map(s => ({ ...s, role: 'unknown' as const }));
+
+    // 3. Applicera roller enbart baserat på faktisk data
+    for (let i = 0; i < firstFastIdx; i++) classified[i].role = 'warmup';
+    for (let i = lastFastIdx + 1; i < classified.length; i++) classified[i].role = 'cooldown';
+
+    let intervalNumber = 0;
+    let inInterval = false;
+
+    // Grupperar snabba laps till pågående block, och första efterföljande långsamma till vilan
+    for (let i = firstFastIdx; i <= lastFastIdx; i++) {
+        if (isFast[i]) {
+            if (!inInterval) {
+                intervalNumber++;
+                inInterval = true;
+            }
+            classified[i].role = 'interval';
+            classified[i].intervalNumber = intervalNumber;
+        } else {
+            inInterval = false;
+            classified[i].role = 'recovery';
+            classified[i].intervalNumber = intervalNumber;
+        }
+    }
+
+    // 4. Bygg IntervalGroups för UI:t
+    const intervalGroups: SegmentedSplits['intervalGroups'] = [];
+    let currentGroup: { number: number; intervalSplits: ClassifiedSplit[]; recoverySplits: ClassifiedSplit[] } | null = null;
+
+    for (const split of classified) {
+        if (split.role === 'interval') {
+            if (!currentGroup || currentGroup.number !== split.intervalNumber!) {
+                if (currentGroup) {
+                    intervalGroups.push({
+                        ...currentGroup,
+                        avgPace: currentGroup.intervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / currentGroup.intervalSplits.length,
+                        avgHR: currentGroup.intervalSplits.some(sp => sp.averageHeartrate) ?
+                            currentGroup.intervalSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / currentGroup.intervalSplits.filter(sp => sp.averageHeartrate).length : undefined
+                    });
+                }
+                currentGroup = { number: split.intervalNumber!, intervalSplits: [], recoverySplits: [] };
+            }
+            currentGroup.intervalSplits.push(split);
+        } else if (split.role === 'recovery' && currentGroup) {
+            currentGroup.recoverySplits.push(split);
+        }
+    }
+
+    if (currentGroup) {
+        intervalGroups.push({
+            ...currentGroup,
+            avgPace: currentGroup.intervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / currentGroup.intervalSplits.length,
+            avgHR: currentGroup.intervalSplits.some(sp => sp.averageHeartrate) ?
+                currentGroup.intervalSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / currentGroup.intervalSplits.filter(sp => sp.averageHeartrate).length : undefined
+        });
+    }
+
+    // 5. Sammanställ summary
+    const warmupSplits = classified.filter(s => s.role === 'warmup');
+    const cooldownSplits = classified.filter(s => s.role === 'cooldown');
+    const allIntervalSplits = classified.filter(s => s.role === 'interval');
+    const allRecoverySplits = classified.filter(s => s.role === 'recovery');
+
+    const avgIntervalPace = allIntervalSplits.length > 0
+        ? allIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allIntervalSplits.length : 0;
+    const avgRecoveryPace = allRecoverySplits.length > 0
+        ? allRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allRecoverySplits.length : 0;
+    const intervalPaces = allIntervalSplits.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
+
+    return {
+        classified,
+        warmupSplits,
+        intervalGroups,
+        cooldownSplits,
+        summary: {
+            warmupKm: warmupSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            cooldownKm: cooldownSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            totalIntervalKm: allIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            totalRecoveryKm: allRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            avgIntervalPace,
+            avgRecoveryPace,
+            fastestIntervalPace: intervalPaces.length > 0 ? Math.min(...intervalPaces) : 0,
+            slowestIntervalPace: intervalPaces.length > 0 ? Math.max(...intervalPaces) : 0,
+        }
+    };
+}

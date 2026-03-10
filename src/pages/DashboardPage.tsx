@@ -778,7 +778,7 @@ export function DashboardPage() {
             <StravaActivityImportModal
                 isOpen={isStravaModalOpen}
                 onClose={() => setIsStravaModalOpen(false)}
-                initialRange="7days"
+                autoStart={true}
             />
             <EstimateLunchModal
                 isOpen={isEstimateModalOpen}
