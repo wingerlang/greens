@@ -79,13 +79,16 @@ export function TrainingPage() {
     const foundActivity = useMemo(() => {
         if (!selectedActivityId || unifiedActivities.length === 0) return null;
 
+        // The ID might contain a tab suffix like "123/splits", extract just the ID part
+        const cleanId = selectedActivityId.split('/')[0];
+
         // Try to find activity robustly: check id, externalId, and merged sub-IDs
         return unifiedActivities.find(e => {
             // 1. Direct match (id or externalId)
-            if (e.id === selectedActivityId || e.externalId === selectedActivityId) return true;
+            if (e.id === cleanId || e.externalId === cleanId) return true;
 
             // 2. Check source-specific IDs
-            if ((e as any).stravaId === selectedActivityId || (e as any).strengthId === selectedActivityId) return true;
+            if ((e as any).stravaId === cleanId || (e as any).strengthId === cleanId) return true;
 
             // 3. Check merged data
             if (e._mergeData) {
@@ -98,14 +101,14 @@ export function TrainingPage() {
                 const universalExtId = m.universalActivity?.performance?.source?.externalId;
                 const originalIds = m.universalActivity?.mergeInfo?.originalActivityIds || [];
 
-                return stravaId === selectedActivityId ||
-                    stravaExtId === selectedActivityId ||
-                    strengthId === selectedActivityId ||
-                    strengthExtId === selectedActivityId ||
-                    universalId === selectedActivityId ||
-                    universalExtId === selectedActivityId ||
-                    originalIds.includes(selectedActivityId) ||
-                    originalIds.some((id: string) => id.includes(selectedActivityId)); // Support partial matches for prefixed IDs
+                return stravaId === cleanId ||
+                    stravaExtId === cleanId ||
+                    strengthId === cleanId ||
+                    strengthExtId === cleanId ||
+                    universalId === cleanId ||
+                    universalExtId === cleanId ||
+                    originalIds.includes(cleanId) ||
+                    originalIds.some((id: string) => id.includes(cleanId)); // Support partial matches for prefixed IDs
             }
             return false;
         });
