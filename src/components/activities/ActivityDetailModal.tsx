@@ -21,7 +21,7 @@ import { parseHyroxText } from '../../utils/hyroxParser.ts';
 import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse } from 'lucide-react';
 
 // Expandable Exercise Component - click to show sets
-function ExpandableExercise({ exercise }: { exercise: any }) {
+const ExpandableExercise = React.memo(({ exercise }: { exercise: any }) => {
     const [expanded, setExpanded] = useState(false);
     const totalReps = exercise.sets.reduce((s: number, set: any) => s + (set.reps || 0), 0);
     const totalDistance = exercise.sets.reduce((s: number, set: any) => s + (set.distance || 0), 0);
@@ -69,10 +69,10 @@ function ExpandableExercise({ exercise }: { exercise: any }) {
             )}
         </div>
     );
-}
+});
 
 // Helper Component: Sparkline for Splits (Pace & HR)
-function SplitsSparkline({ splits }: { splits: any[] }) {
+const SplitsSparkline = React.memo(({ splits }: { splits: any[] }) => {
     if (!splits || splits.length < 2) return null;
 
     const data = splits.map((s, i) => ({
@@ -132,10 +132,10 @@ function SplitsSparkline({ splits }: { splits: any[] }) {
             </div>
         </div>
     );
-}
+});
 
 // Helper Component: Mini Interval Summary
-function IntervalMiniSummary({ segmentedSplits }: { segmentedSplits: any }) {
+const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: any }) => {
     if (!segmentedSplits) return null;
     const { classified, summary } = segmentedSplits;
 
@@ -151,7 +151,7 @@ function IntervalMiniSummary({ segmentedSplits }: { segmentedSplits: any }) {
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Intervallsammanfattning</h4>
                 <div className="text-[10px] font-bold text-slate-400">
-                    {summary.totalIntervalKm.toFixed(1)}km @ {formatPace(summary.avgIntervalPace)}
+                    {summary.totalIntervalKm.toFixed(1)}km
                 </div>
             </div>
 
@@ -173,9 +173,12 @@ function IntervalMiniSummary({ segmentedSplits }: { segmentedSplits: any }) {
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-emerald-500 transition-colors">Uppjogg</div>
                     <div className="text-[11px] font-black text-emerald-400">{summary.warmupKm.toFixed(1)}k</div>
                 </div>
-                <div className="text-center group">
+                <div className="text-center group flex flex-col items-center">
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-amber-400 transition-colors">Intervaller</div>
                     <div className="text-[11px] font-black text-amber-300">{summary.totalIntervalKm.toFixed(1)}k</div>
+                    {summary.avgIntervalPace > 0 && (
+                        <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{formatPace(summary.avgIntervalPace).replace('/km', '')}/km</div>
+                    )}
                 </div>
                 <div className="text-center group">
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-white transition-colors">Vila</div>
@@ -188,7 +191,7 @@ function IntervalMiniSummary({ segmentedSplits }: { segmentedSplits: any }) {
             </div>
         </div>
     );
-}
+});
 
 export interface ActivityDetailModalProps {
     activity: ExerciseEntry & { source: string; _mergeData?: any };
@@ -212,7 +215,33 @@ export function ActivityDetailModal({
     const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
-    const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
+
+    // Make tabs linkable by parsing the selectedActivityId (if available) for a tab suffix.
+    // E.g. activityId="123/splits" means tab="splits" for activity "123"
+    const initialTab = React.useMemo(() => {
+        // Find if window.location.search has ?activityId=123/splits
+        const searchParams = new URLSearchParams(window.location.search);
+        const activityParam = searchParams.get('activityId');
+        if (activityParam && activityParam.includes('/')) {
+            const parts = activityParam.split('/');
+            const maybeTab = parts[1];
+            if (['stats', 'compare', 'splits', 'merge', 'analysis'].includes(maybeTab)) {
+                return maybeTab as 'stats' | 'compare' | 'splits' | 'merge' | 'analysis';
+            }
+        }
+        return 'stats';
+    }, []);
+
+    const [activeTab, setActiveTabLocal] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>(initialTab);
+
+    const setActiveTab = (tab: 'stats' | 'compare' | 'splits' | 'merge' | 'analysis') => {
+        setActiveTabLocal(tab);
+        if (setSelectedActivityId) {
+            // Update URL parameters directly via parent's state handler
+            const baseId = activity.id;
+            setSelectedActivityId(`${baseId}/${tab}`);
+        }
+    };
 
     const [isUnmerging, setIsUnmerging] = useState(false);
 
@@ -1252,107 +1281,141 @@ export function ActivityDetailModal({
                             </div>
                         </div>
 
-                        <div className="flex gap-3 pt-4 border-t border-white/5">
+                        {/* Action Buttons (Moved here from view footer) */}
+                        <div className="pt-4 border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {isMergedActivity && (
+                                <button
+                                    type="button"
+                                    onClick={handleUnmerge}
+                                    disabled={isUnmerging}
+                                    className="bg-amber-600/20 hover:bg-amber-500/30 text-amber-500 disabled:opacity-50 font-bold py-2.5 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5"
+                                >
+                                    {isUnmerging ? '⏳...' : '🔀 Separera'}
+                                </button>
+                            )}
+                            {isMerged && onSeparate && !isMergedActivity && (
+                                <button
+                                    type="button"
+                                    onClick={onSeparate}
+                                    className="bg-amber-600/20 hover:bg-amber-500/30 text-amber-500 font-bold py-2.5 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5"
+                                >
+                                    🔀 Separera
+                                </button>
+                            )}
+
+                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'walking' || activity.type === 'swimming') && !activity.extractedFromId && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowExtractForm(!showExtractForm)}
+                                    className={`font-bold py-2.5 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5 ${showExtractForm ? 'bg-amber-500 text-slate-900' : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'}`}
+                                >
+                                    ✂️ Mätning
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
+                                className={`font-bold py-2.5 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                            >
+                                📄 Rådata
+                            </button>
+
                             <button
                                 type="button"
                                 onClick={handleDelete}
-                                className="px-6 py-3 rounded-xl bg-rose-500/10 text-rose-400 font-bold hover:bg-rose-500 hover:text-white transition-colors"
+                                className="bg-rose-500/10 text-rose-400 font-bold hover:bg-rose-500 hover:text-white transition-colors py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 md:col-start-4"
                             >
                                 Radera
                             </button>
-                            <div className="flex-1 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsEditing(false)}
-                                    className="flex-1 px-6 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 hover:text-white transition-colors"
-                                >
-                                    Avbryt
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-6 py-3 rounded-xl bg-emerald-500 text-slate-900 font-bold hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20"
-                                >
-                                    Spara
-                                </button>
-                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-6 border-t border-white/5 mt-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsEditing(false)}
+                                className="flex-1 px-6 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 hover:text-white transition-colors"
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="submit"
+                                className="flex-1 px-6 py-3 rounded-xl bg-emerald-500 text-slate-900 font-bold hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20"
+                            >
+                                Spara
+                            </button>
                         </div>
                     </form>
                 ) : (
                     <>
                         {/* Header */}
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <div className="flex items-center gap-3">
-                                    <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
-                                        {/* Type Label Badge */}
-                                        {(() => {
-                                            const typeInfo = EXERCISE_TYPES.find(t => t.type === activity.type) || EXERCISE_TYPES.find(t => t.type === 'other');
-                                            if (typeInfo?.icon === 'Activity') {
-                                                return (
-                                                    <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-500/15 rounded-lg border border-emerald-500/25 shrink-0">
-                                                        <Activity size={18} className="text-emerald-400" />
-                                                    </div>
-                                                );
-                                            }
-                                            return (
-                                                <div className="inline-flex items-center gap-1 bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-white/5 text-[9px] font-black uppercase tracking-tight leading-none h-5 shrink-0">
-                                                    <span>{typeInfo?.icon}</span>
-                                                    {typeInfo?.label}
-                                                </div>
-                                            );
-                                        })()}
-                                        {displayTitle}
-                                        {/* Subtype Label for Intervals */}
-                                        {activity.subType === 'interval' && (
-                                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-widest">
-                                                <span>📈</span> Intervaller
-                                                {parsedWorkout.summary && <span className="text-[8px] opacity-70 ml-1">({parsedWorkout.summary})</span>}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
+                            <div className="flex-1 min-w-0">
+                                {/* Type & Badges Row */}
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    {(() => {
+                                        const typeInfo = EXERCISE_TYPES.find(t => t.type === activity.type) || EXERCISE_TYPES.find(t => t.type === 'other');
+                                        return (
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 text-slate-300 rounded-full border border-white/5 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                                <span>{typeInfo?.icon === 'Activity' ? <Activity size={12} className="text-emerald-400" /> : typeInfo?.icon}</span>
+                                                {typeInfo?.label}
                                             </div>
-                                        )}
-                                        {/* Edit Button */}
+                                        );
+                                    })()}
 
-                                        {!isMerged && (
-                                            <button
-                                                onClick={() => setIsEditing(true)}
-                                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm"
-                                                title="Redigera aktivitet"
-                                            >
-                                                ✎
-                                            </button>
-                                        )}
-                                    </h2>
+                                    {/* Subtype Label for Intervals */}
+                                    {activity.subType === 'interval' && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                            <span>📈</span> Intervaller
+                                            {parsedWorkout.summary && <span className="opacity-70 ml-1">({parsedWorkout.summary})</span>}
+                                        </div>
+                                    )}
 
                                     {/* Parent Activity Link */}
                                     {parentActivity && (
-                                        <div className="flex items-center gap-2 bg-slate-800/50 px-2 py-1 rounded-lg border border-white/5">
-                                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Utdrag från:</span>
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/50 rounded-full border border-white/5 text-[10px]">
+                                            <span className="text-slate-500 font-bold uppercase tracking-wider">Utdrag från:</span>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setSelectedActivityId?.(parentActivity.id);
                                                 }}
-                                                className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 group/link"
+                                                className="font-black text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 group/link"
                                             >
-                                                {parentActivity.title || 'Huvudpasset'}
+                                                <span className="truncate max-w-[150px]">{parentActivity.title || 'Huvudpasset'}</span>
                                                 <ArrowRight size={10} className="group-hover/link:translate-x-0.5 transition-transform" />
                                             </button>
                                         </div>
                                     )}
 
                                     {/* Badges */}
-                                    <div className="flex items-center gap-2 ml-2">
-                                        {activity.extractedFromId && (
-                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm">
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Utdrag</span>
-                                            </div>
-                                        )}
-                                        {isTrulyMerged && (
-                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm">
-                                                <Zap size={10} className="fill-amber-500" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Sammanslagen</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    {activity.extractedFromId && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm text-[10px] font-black uppercase tracking-wider">
+                                            <span>✂️</span> Utdrag
+                                        </div>
+                                    )}
+                                    {isTrulyMerged && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm text-[10px] font-black uppercase tracking-wider">
+                                            <Zap size={10} className="fill-amber-500" />
+                                            Sammanslagen
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Title Row */}
+                                <div className="flex items-center gap-3">
+                                    <h2 className="text-3xl sm:text-4xl font-black text-white italic tracking-tight capitalize truncate" title={displayTitle}>
+                                        {displayTitle}
+                                    </h2>
+                                    {!isMerged && (
+                                        <button
+                                            onClick={() => setIsEditing(true)}
+                                            className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                            title="Redigera aktivitet"
+                                        >
+                                            ✎
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* Hyrox Specific Header Data */}
@@ -2623,59 +2686,11 @@ export function ActivityDetailModal({
                             </div>
                         )}
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-3 flex-wrap">
-                            {isMergedActivity && (
-                                <button
-                                    onClick={handleUnmerge}
-                                    disabled={isUnmerging}
-                                    className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors"
-                                >
-                                    {isUnmerging ? '⏳...' : '🔀 Separera'}
-                                </button>
-                            )}
-                            {isMerged && onSeparate && !isMergedActivity && (
-                                <button
-                                    onClick={onSeparate}
-                                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-colors"
-                                >
-                                    🔀 Separera
-                                </button>
-                            )}
-
-                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'walking' || activity.type === 'swimming') && !activity.extractedFromId && (
-                                <button
-                                    onClick={() => setShowExtractForm(!showExtractForm)}
-                                    className={`flex-1 ${showExtractForm ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-amber-500'} hover:opacity-90 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-                                >
-                                    ✂️ Mätning...
-                                </button>
-                            )}
-
-                            {/* Added delete functionality for all activities including Strengthlog leftovers */}
-                            <button
-                                onClick={() => {
-                                    if (confirm('Är du säker på att du vill ta bort den här aktiviteten?')) {
-                                        deleteExercise(activity.id);
-                                        onClose();
-                                    }
-                                }}
-                                className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold py-3 rounded-xl transition-colors"
-                            >
-                                Radera
-                            </button>
-
-                            {/* Raw Data Button - Moved to bottom per user request */}
-                            <button
-                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
-                                className={`px-4 py-3 rounded-xl text-xs font-bold transition-colors ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                            >
-                                📄 Rådata
-                            </button>
-
+                        {/* Footer Buttons - Only Close visible by default */}
+                        <div className="flex gap-3 mt-6">
                             <button
                                 onClick={onClose}
-                                className={`flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors`}
+                                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors text-sm uppercase tracking-wider"
                             >
                                 Stäng
                             </button>
