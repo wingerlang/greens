@@ -1374,6 +1374,8 @@ export interface PlannedActivity {
 
 export interface RaceDetails {
     isRegistered?: boolean;
+    isVirtual?: boolean; // Manually flag as virtual race (overrides location in UI)
+    isTrail?: boolean;   // Manually flag as trail race
     goals?: {
         a?: string; // Dream goal (e.g., "Sub 3:00")
         b?: string; // Realistic goal (e.g., "Sub 3:15")
