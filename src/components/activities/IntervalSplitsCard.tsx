@@ -147,7 +147,8 @@ function getBestEfforts(splits: ClassifiedSplit[]) {
 }
 
 export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
-    const { classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
+    const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
+    const isSustained = type === 'sustained';
 
     if (!classified.length) return null;
 
@@ -169,9 +170,11 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Intervallanalys (Strava laps)</h3>
+                <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                    {isSustained ? 'Tempoanalys (Strava laps)' : 'Intervallanalys (Strava laps)'}
+                </h3>
                 <span className="text-[9px] bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20 font-black uppercase tracking-widest">
-                    {intervalGroups.length} block
+                    {isSustained ? 'Sustained' : `${intervalGroups.length} block`}
                 </span>
             </div>
 
@@ -187,22 +190,26 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 })}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 bg-slate-900/30 rounded-xl border border-white/5 text-center">
+            <div className={`grid grid-cols-2 ${isSustained && summary.totalRecoveryKm === 0 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-2 p-3 bg-slate-900/30 rounded-xl border border-white/5 text-center`}>
                 <div className="flex flex-col items-center">
                     <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Uppjogg</div>
                     <div className="text-sm font-black text-emerald-400">{summary.warmupKm.toFixed(1)}<span className="text-[8px] text-slate-500">km</span></div>
                     {avgWarmupPace > 0 && <div className="text-[10px] text-emerald-400/60 font-mono mt-0.5">{formatPaceSec(avgWarmupPace)}/km</div>}
                 </div>
                 <div className="flex flex-col items-center">
-                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Intervall</div>
+                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">
+                        {isSustained ? 'Huvuddel' : 'Intervall'}
+                    </div>
                     <div className="text-sm font-black text-amber-300">{summary.totalIntervalKm.toFixed(1)}<span className="text-[8px] text-slate-500">km</span></div>
                     {summary.avgIntervalPace > 0 && <div className="text-[10px] text-amber-300/60 font-mono mt-0.5">{formatPaceSec(summary.avgIntervalPace)}/km</div>}
                 </div>
-                <div className="flex flex-col items-center">
-                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Vila</div>
-                    <div className="text-sm font-black text-slate-300">{summary.totalRecoveryKm.toFixed(1)}<span className="text-[8px] text-slate-500">km</span></div>
-                    {summary.avgRecoveryPace > 0 && <div className="text-[10px] text-slate-400/60 font-mono mt-0.5">{formatPaceSec(summary.avgRecoveryPace)}/km</div>}
-                </div>
+                {(!isSustained || summary.totalRecoveryKm > 0) && (
+                    <div className="flex flex-col items-center">
+                        <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Vila</div>
+                        <div className="text-sm font-black text-slate-300">{summary.totalRecoveryKm.toFixed(1)}<span className="text-[8px] text-slate-500">km</span></div>
+                        {summary.avgRecoveryPace > 0 && <div className="text-[10px] text-slate-400/60 font-mono mt-0.5">{formatPaceSec(summary.avgRecoveryPace)}/km</div>}
+                    </div>
+                )}
                 <div className="flex flex-col items-center">
                     <div className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Nerjogg</div>
                     <div className="text-sm font-black text-blue-300">{summary.cooldownKm.toFixed(1)}<span className="text-[8px] text-slate-500">km</span></div>
@@ -229,7 +236,7 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
 
             <SectionCard
                 title="Uppjogg"
-                subtitle="Identifierat före första intervallen"
+                subtitle={isSustained ? "Identifierat före huvuddelen" : "Identifierat före första intervallen"}
                 accentClass="bg-emerald-500/25"
                 splits={warmupSplits}
                 fastestPace={fastestPace}
@@ -240,7 +247,9 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 {intervalGroups.map((group) => (
                     <div key={group.number} className="bg-slate-900/50 rounded-2xl border border-amber-500/20 overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/15">
-                            <div className="text-xs font-black text-amber-300 uppercase tracking-wider">Intervallblock {group.number}</div>
+                            <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                                {isSustained ? 'Huvuddel' : `Intervallblock ${group.number}`}
+                            </div>
                             <div className="text-[10px] font-semibold text-slate-200">
                                 {formatPaceSec(group.avgPace)}/km
                                 {group.avgHR ? ` • ${Math.round(group.avgHR)} bpm` : ''}

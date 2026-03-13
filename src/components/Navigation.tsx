@@ -320,7 +320,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                 {onStravaSync && (
                                     <button onClick={onStravaSync} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-all w-full text-left">
                                         <span className="w-5 text-center">⚡</span>
-                                        <span>Strava Smart Sync</span>
+                                        <span>Strava Sync</span>
                                     </button>
                                 )}
                                 <div className="h-px bg-white/5 my-1" />

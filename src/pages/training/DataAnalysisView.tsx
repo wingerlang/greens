@@ -3,7 +3,8 @@ import { ExerciseEntry, UniversalActivity, ExerciseSubType } from '../../models/
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { formatSwedishDate, formatDuration } from '../../utils/dateUtils.ts';
-import { AlertCircle, CheckCircle2, Trash2, Zap, ArrowRight, Activity, ShieldCheck, Info, RefreshCcw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Trash2, Zap, ArrowRight, Activity, ShieldCheck, Info, RefreshCcw, Clock, Target } from 'lucide-react';
+import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 
 interface Anomaly {
     id: string;
@@ -61,20 +62,38 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
                     const pairId = [e1.id, e2.id].sort().join('_');
                     if (!duplicatePairs.has(pairId)) {
                         duplicatePairs.add(pairId);
+
+                        const s1 = (e1 as any).stravaId ? 'Strava' : 'Manuell';
+                        const s2 = (e2 as any).stravaId ? 'Strava' : 'Manuell';
+
+                        // Suggest keeping Strava if one is manual and one is Strava
+                        let suggestedAction = {
+                            label: 'Ta bort den senare',
+                            apply: async () => {
+                                await deleteExercise(e2.id);
+                            }
+                        };
+
+                        if (s1 === 'Strava' && s2 === 'Manuell') {
+                            suggestedAction = {
+                                label: 'Behåll Strava (Ta bort manuell)',
+                                apply: async () => { await deleteExercise(e2.id); }
+                            };
+                        } else if (s2 === 'Strava' && s1 === 'Manuell') {
+                            suggestedAction = {
+                                label: 'Behåll Strava (Ta bort manuell)',
+                                apply: async () => { await deleteExercise(e1.id); }
+                            };
+                        }
+
                         results.push({
                             id: `dup_${pairId}`,
                             type: 'duplicate',
                             severity: 'high',
                             title: 'Potentiell dubblett',
-                            description: `Två identiska pass på ${e1.distance.toFixed(1)}km hittades den ${formatSwedishDate(e1.date)}. Är detta samma pass loggat två gånger?`,
+                            description: `Två liknande pass (${s1} vs ${s2}) på ${e1.distance.toFixed(1)}km hittades den ${formatSwedishDate(e1.date)}. Är detta samma pass loggat två gånger?`,
                             affectedActivities: [e1, e2],
-                            suggestedAction: {
-                                label: 'Ta bort den senare',
-                                apply: async () => {
-                                    // Delete the one with the "higher" ID or later creation if indistinguishable
-                                    await deleteExercise(e2.id);
-                                }
-                            }
+                            suggestedAction
                         });
                     }
                 }
@@ -83,36 +102,63 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
 
         // 2. HIERARCHICAL QUALITY DETECTION (Löpning -> Kvalité)
         const qualityKeywords: { kw: string[], type: ExerciseSubType, label: string }[] = [
-            { kw: ['intervall', '5x3km', '10x100m', 'blandade intervaller', 'x', '*', 'tusingar'], type: 'interval', label: 'Intervaller' },
-            { kw: ['tempo', 'snabbdistans', '5k @', 'miltest', 'test', '@', 'pacerun', 'snabb'], type: 'tempo', label: 'Tempo' },
+            { kw: ['intervall', '5x3km', '10x100m', 'blandade intervaller', 'x', '*', 'tusingar', 'reps', 'set'], type: 'interval', label: 'Intervaller' },
+            { kw: ['tempo', 'snabbdistans', '5k @', 'miltest', 'test', '@', 'pacerun', 'snabb', 'tröskel', 'threshold', 't-fart'], type: 'tempo', label: 'Tempo' },
             { kw: ['fartlek'], type: 'fartlek', label: 'Fartlek' },
-            { kw: ['snabbdistans', 'max', '5k max', '10k max'], type: 'snabbdistans', label: 'Snabbdistans' }
+            { kw: ['snabbdistans', 'max', '5k max', '10k max', 'lopp', 'race', 'tävling', 'miltest'], type: 'snabbdistans', label: 'Snabbdistans' }
         ];
 
         filteredEntries.forEach(e => {
             if (e.type !== 'running' || e.subType !== 'default') return;
             const text = ((e.title || '') + ' ' + (e.notes || '')).toLowerCase();
 
+            // A. Keyword search
+            let suggestedType: ExerciseSubType | null = null;
+            let suggestedLabel: string = '';
+
             for (const group of qualityKeywords) {
                 if (group.kw.some(k => text.includes(k.toLowerCase()))) {
-                    results.push({
-                        id: `qual_${e.id}`,
-                        type: 'quality',
-                        severity: 'medium',
-                        title: `Möjligt kvalitétspass: ${group.label}`,
-                        description: `Passet "${e.title || 'Namnlöst'}" innehåller nyckelord som tyder på ${group.label.toLowerCase()}.`,
-                        affectedActivities: [e],
-                        suggestedAction: {
-                            label: `Ändra till ${group.label}`,
-                            apply: async () => {
-                                await updateExercise(e.id, { subType: group.type });
-                                // Persistence handled by parent/context if configured, 
-                                // otherwise we'd need a fetch here like in ActivityDetailModal
-                            }
-                        }
-                    });
-                    break; // Only one quality suggestion per activity
+                    suggestedType = group.type;
+                    suggestedLabel = group.label;
+                    break;
                 }
+            }
+
+            // B. Smart detection using split analysis (if no keyword match)
+            if (!suggestedType) {
+                const ua = universalActivities.find(u => u.id === e.id);
+                const splits = ua?.performance?.splits;
+                if (splits && splits.length >= 3) {
+                    const segmented = segmentSplits(splits);
+                    if (segmented) {
+                        if (segmented.type === 'intervals' && segmented.intervalGroups.length > 1) {
+                            suggestedType = 'interval';
+                            suggestedLabel = 'Intervaller (tempoväxlingar identifierade)';
+                        } else if (segmented.type === 'sustained' && segmented.summary.avgIntervalPace > 0 && segmented.summary.avgIntervalPace < 270) { // Faster than 4:30/km
+                            suggestedType = 'tempo';
+                            suggestedLabel = 'Tempo (sustained effort identifierad)';
+                        }
+                    }
+                }
+            }
+
+            if (suggestedType) {
+                results.push({
+                    id: `qual_${e.id}`,
+                    type: 'quality',
+                    severity: 'medium',
+                    title: `Möjligt kvalitétspass: ${suggestedLabel.split(' ')[0]}`,
+                    description: `Passet "${e.title || 'Namnlöst'}" ${suggestedLabel.includes('identifierad')
+                        ? `verkar vara ${suggestedLabel.toLowerCase()} baserat på tempofördelningen.`
+                        : `innehåller nyckelord som tyder på ${suggestedLabel.toLowerCase()}.`}`,
+                    affectedActivities: [e],
+                    suggestedAction: {
+                        label: `Ändra till ${suggestedLabel.split(' ')[0]}`,
+                        apply: async () => {
+                            await updateExercise(e.id, { subType: suggestedType! });
+                        }
+                    }
+                });
             }
         });
 
@@ -338,23 +384,58 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
                                 {/* Affected Activity Preview */}
                                 {anomaly.affectedActivities.length > 0 && (
                                     <div className="py-2 space-y-2">
-                                        {anomaly.affectedActivities.map((act, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => setSelectedActivityId(act.id)}
-                                                className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-white/5 text-[10px] hover:bg-slate-700/50 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-slate-500 font-mono">{formatSwedishDate(act.date)}</span>
-                                                    <span className="text-white font-bold truncate max-w-[120px]">{act.title || 'Aktivitet'}</span>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-emerald-400 font-bold">{act.distance}km</span>
-                                                    <span className="text-slate-500">{formatDuration(act.durationMinutes * 60)}</span>
-                                                    <ArrowRight size={10} className="text-slate-600" />
-                                                </div>
-                                            </button>
-                                        ))}
+                                        {anomaly.affectedActivities.map((act, i) => {
+                                            const time = act.date.includes('T') ? act.date.split('T')[1].substring(0, 5) : null;
+                                            const source = (act as any).stravaId ? 'Strava' : (act as any).strengthId ? 'Styrkelabbet' : 'Manual';
+
+                                            const typeNames: Record<string, string> = {
+                                                running: 'Löpning',
+                                                strength: 'Styrka',
+                                                cycling: 'Cykling',
+                                                swimming: 'Simning',
+                                                walking: 'Promenad',
+                                                hiking: 'Vandring',
+                                                cardio: 'Kondition'
+                                            };
+                                            const displayTitle = act.title || `Pass (${typeNames[act.type] || act.type})`;
+
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setSelectedActivityId(act.id)}
+                                                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-800/50 border border-white/5 text-[10px] hover:bg-slate-700/50 hover:border-white/10 transition-all group/btn"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-white font-black truncate max-w-[140px] group-hover/btn:text-indigo-400 transition-colors">
+                                                                    {displayTitle}
+                                                                </span>
+                                                                {time && (
+                                                                    <span className="flex items-center gap-0.5 text-slate-500 font-mono scale-90">
+                                                                        <Clock size={8} /> {time}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                                                                <span className={source === 'Strava' ? 'text-orange-400' : source === 'Styrkelabbet' ? 'text-blue-400' : 'text-slate-500'}>
+                                                                    {source}
+                                                                </span>
+                                                                <span>•</span>
+                                                                <span className="font-mono">{formatSwedishDate(act.date)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-right">
+                                                            <div className="text-emerald-400 font-black">{(act.distance || 0) > 0 ? `${act.distance}km` : `${act.tonnage || 0}kg`}</div>
+                                                            <div className="text-slate-500 font-mono scale-90">{formatDuration(act.durationMinutes * 60)}</div>
+                                                        </div>
+                                                        <ArrowRight size={10} className="text-slate-600 group-hover/btn:text-white transition-colors group-hover/btn:translate-x-0.5" />
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
 
@@ -389,76 +470,78 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
             </div>
 
             {/* Hidden / Excluded Sessions Discoverability */}
-            {hiddenActivities.length > 0 && (
-                <div className="space-y-4">
-                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-2">
-                        <ShieldCheck size={16} />
-                        Dolda eller exkluderade pass
-                    </h3>
+            {
+                hiddenActivities.length > 0 && (
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-2">
+                            <ShieldCheck size={16} />
+                            Dolda eller exkluderade pass
+                        </h3>
 
-                    <div className="bg-slate-900/50 border border-white/5 rounded-3xl overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                                <thead className="bg-slate-950/50">
-                                    <tr>
-                                        <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Datum</th>
-                                        <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Aktivitet</th>
-                                        <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wider">Åtgärd</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                    {hiddenActivities.map(act => (
-                                        <tr key={act.id} className="hover:bg-white/5 transition-colors group">
-                                            <td className="px-6 py-4 whitespace-nowrap text-slate-400 font-mono">
-                                                {formatSwedishDate(act.date)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex flex-col">
-                                                    <span className="text-white font-bold">{act.title || 'Namnlös'}</span>
-                                                    <span className="text-slate-500 text-[10px]">{act.distance || 0} km • {formatDuration(act.durationMinutes * 60)}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex flex-wrap gap-2">
-                                                    {(act.isHiddenInCalendar || (act as any)._mergeData?.universalActivity?.performance?.isHiddenInCalendar) && (
-                                                        <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-rose-500/20">Dold i kalender</span>
-                                                    )}
-                                                    {act.excludeFromStats && (
-                                                        <span className="bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-amber-500/20">Exkluderad statistik</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => setSelectedActivityId(act.id)}
-                                                        className="p-2 text-slate-500 hover:text-white transition-colors"
-                                                        title="Visa detaljer"
-                                                    >
-                                                        <ArrowRight size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={async () => {
-                                                            await updateExercise(act.id, {
-                                                                isHiddenInCalendar: false,
-                                                                excludeFromStats: false
-                                                            });
-                                                        }}
-                                                        className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-900 rounded-lg text-[10px] font-black uppercase transition-all"
-                                                    >
-                                                        Återställ
-                                                    </button>
-                                                </div>
-                                            </td>
+                        <div className="bg-slate-900/50 border border-white/5 rounded-3xl overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-slate-950/50">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Datum</th>
+                                            <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Aktivitet</th>
+                                            <th className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                            <th className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wider">Åtgärd</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {hiddenActivities.map(act => (
+                                            <tr key={act.id} className="hover:bg-white/5 transition-colors group">
+                                                <td className="px-6 py-4 whitespace-nowrap text-slate-400 font-mono">
+                                                    {formatSwedishDate(act.date)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-white font-bold">{act.title || 'Namnlös'}</span>
+                                                        <span className="text-slate-500 text-[10px]">{act.distance || 0} km • {formatDuration(act.durationMinutes * 60)}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(act.isHiddenInCalendar || (act as any)._mergeData?.universalActivity?.performance?.isHiddenInCalendar) && (
+                                                            <span className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-rose-500/20">Dold i kalender</span>
+                                                        )}
+                                                        {act.excludeFromStats && (
+                                                            <span className="bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-amber-500/20">Exkluderad statistik</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedActivityId(act.id)}
+                                                            className="p-2 text-slate-500 hover:text-white transition-colors"
+                                                            title="Visa detaljer"
+                                                        >
+                                                            <ArrowRight size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                await updateExercise(act.id, {
+                                                                    isHiddenInCalendar: false,
+                                                                    excludeFromStats: false
+                                                                });
+                                                            }}
+                                                            className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-900 rounded-lg text-[10px] font-black uppercase transition-all"
+                                                        >
+                                                            Återställ
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Quality Hierarchy Explainer */}
             <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
@@ -472,6 +555,6 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
                     </p>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

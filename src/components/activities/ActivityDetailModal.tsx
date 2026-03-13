@@ -137,7 +137,8 @@ const SplitsSparkline = React.memo(({ splits }: { splits: any[] }) => {
 // Helper Component: Mini Interval Summary
 const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: any }) => {
     if (!segmentedSplits) return null;
-    const { classified, summary } = segmentedSplits;
+    const { classified, summary, type } = segmentedSplits;
+    const isSustained = type === 'sustained';
 
     const colors: Record<string, string> = {
         warmup: 'bg-emerald-500',
@@ -149,7 +150,9 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
     return (
         <div className="bg-violet-500/5 border border-violet-500/10 rounded-2xl p-4 mt-2 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between mb-3">
-                <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Intervallsammanfattning</h4>
+                <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                    {isSustained ? 'Passutvärdering' : 'Intervallsammanfattning'}
+                </h4>
                 <div className="text-[10px] font-bold text-slate-400">
                     {summary.totalIntervalKm.toFixed(1)}km
                 </div>
@@ -168,22 +171,26 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
             </div>
 
             {/* Phase stats */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className={`grid ${isSustained && summary.totalRecoveryKm === 0 ? 'grid-cols-3' : 'grid-cols-4'} gap-2`}>
                 <div className="text-center group">
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-emerald-500 transition-colors">Uppjogg</div>
                     <div className="text-[11px] font-black text-emerald-400">{summary.warmupKm.toFixed(1)}k</div>
                 </div>
                 <div className="text-center group flex flex-col items-center">
-                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-amber-400 transition-colors">Intervaller</div>
+                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-amber-400 transition-colors">
+                        {isSustained ? 'Huvudpass' : 'Intervaller'}
+                    </div>
                     <div className="text-[11px] font-black text-amber-300">{summary.totalIntervalKm.toFixed(1)}k</div>
                     {summary.avgIntervalPace > 0 && (
                         <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{formatPace(summary.avgIntervalPace).replace('/km', '')}/km</div>
                     )}
                 </div>
-                <div className="text-center group">
-                    <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-white transition-colors">Vila</div>
-                    <div className="text-[11px] font-black text-slate-300">{summary.totalRecoveryKm.toFixed(1)}k</div>
-                </div>
+                {(!isSustained || summary.totalRecoveryKm > 0) && (
+                    <div className="text-center group">
+                        <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-white transition-colors">Vila</div>
+                        <div className="text-[11px] font-black text-slate-300">{summary.totalRecoveryKm.toFixed(1)}k</div>
+                    </div>
+                )}
                 <div className="text-center group">
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-blue-400 transition-colors">Nerjogg</div>
                     <div className="text-[11px] font-black text-blue-300">{summary.cooldownKm.toFixed(1)}k</div>
@@ -685,8 +692,13 @@ export function ActivityDetailModal({
 
                             console.log("Fetched strava splits, saving to activity:", mappedSplits);
 
+                            // Update local UI immediately via updateExercise
+                            updateExercise(activity.id, { splits: mappedSplits } as any);
+                            setFetchSplitsResult('success');
+
+                            // Then persist to backend in the background
                             const dateParam = activity.date.split('T')[0];
-                            const patchRes = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                            await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
                                 method: 'PATCH',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -699,14 +711,6 @@ export function ActivityDetailModal({
                                     }
                                 })
                             });
-
-                            if (patchRes.ok) {
-                                // We also patch the universalActivity via updateExercise so UI updates
-                                updateExercise(activity.id, { splits: mappedSplits } as any);
-                                setFetchSplitsResult('success');
-                            } else {
-                                setFetchSplitsResult('error');
-                            }
                         } else {
                             // No splits on strava
                             setFetchSplitsResult('error');
@@ -781,23 +785,9 @@ export function ActivityDetailModal({
             hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined
         };
 
-        // For 'merged' virtual activities, we must create a new manual entry (override).
-        // For 'strava' activities, we can now patch them locally (e.g. changing duration/time preference).
-        if (activity.source === 'merged') {
-            // Create manual override for foreign activity
-            addExercise({
-                ...commonData,
-                date: activity.date,
-                source: 'manual'
-                // We don't link via externalId yet, just creating a new entry
-            });
-            // Close modal as the specific instance we were viewing (merged) is technically unchanged/hidden
-            onClose();
-        } else {
-            // Local update (works for 'manual' and 'strava')
-            updateExercise(activity.id, commonData);
-            setIsEditing(false);
-        }
+        // Local update (works for 'manual', 'strava', and 'merged')
+        updateExercise(activity.id, commonData);
+        setIsEditing(false);
     };
 
     // Handle Delete
@@ -1313,13 +1303,6 @@ export function ActivityDetailModal({
                                 </button>
                             )}
 
-                            <button
-                                type="button"
-                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
-                                className={`font-bold py-2.5 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                            >
-                                📄 Rådata
-                            </button>
 
                             <button
                                 type="button"
@@ -1408,13 +1391,22 @@ export function ActivityDetailModal({
                                         {displayTitle}
                                     </h2>
                                     {!isMerged && (
-                                        <button
-                                            onClick={() => setIsEditing(true)}
-                                            className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
-                                            title="Redigera aktivitet"
-                                        >
-                                            ✎
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
+                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm shrink-0 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white'}`}
+                                                title="Visa rådata"
+                                            >
+                                                📄
+                                            </button>
+                                            <button
+                                                onClick={() => setIsEditing(true)}
+                                                className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                                title="Redigera aktivitet"
+                                            >
+                                                ✎
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 

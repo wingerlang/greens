@@ -927,6 +927,7 @@ export function TrainingPage() {
                         <DataAnalysisView
                             exerciseEntries={exerciseEntries}
                             universalActivities={universalActivities}
+                            setSelectedActivityId={setSelectedActivityId}
                         />
                     </div>
                 )

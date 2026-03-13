@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { MonthlyCalendarModal } from './MonthlyCalendarModal.tsx';
 import { useNavigate } from 'react-router-dom';
 import { Info } from 'lucide-react';
 
@@ -24,12 +23,11 @@ interface MonthBucket {
         strength: { tonnage: number; duration: number; count: number; };
         other: { duration: number; count: number; breakdown: Record<string, { duration: number, count: number }>; };
     };
-    total: { count: number; duration: number; };
+    total: { count: number; duration: number; distance: number; tonnage: number; };
 }
 
 export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, initialCalendarDay, onExerciseClick }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('all');
-    const [selectedMonth, setSelectedMonth] = useState<number | null>(initialCalendarMonth !== undefined ? initialCalendarMonth : null);
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
     const navigate = useNavigate();
@@ -96,12 +94,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
         alert(`Kopierade ${rows.length} dagar med träning till urklipp för AI-analys!`);
     };
 
-    // Sync state if URL changes (via navigate in modal)
-    React.useEffect(() => {
-        if (initialCalendarMonth !== undefined && initialCalendarMonth !== null) {
-            setSelectedMonth(initialCalendarMonth);
-        }
-    }, [initialCalendarMonth]);
+    // Remove old selectedMonth sync hook
 
     const months = useMemo(() => [
         'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
@@ -138,7 +131,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     strength: { tonnage: 0, duration: 0, count: 0 },
                     other: { duration: 0, count: 0, breakdown: {} }
                 },
-                total: { count: 0, duration: 0 }
+                total: { count: 0, duration: 0, distance: 0, tonnage: 0 }
             };
         });
 
@@ -165,6 +158,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
 
             bucket.total.count++;
             bucket.total.duration += e.durationMinutes;
+            if (type.includes('run') || type.includes('löp')) {
+                bucket.total.distance += e.distance || 0;
+            }
+            bucket.total.tonnage += e.tonnage || 0;
 
             if (isCardio) {
                 bucket.categories.cardio.count++;
@@ -269,7 +266,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             },
             total: {
                 count: acc.total.count + curr.total.count,
-                duration: acc.total.duration + curr.total.duration
+                duration: acc.total.duration + curr.total.duration,
+                distance: acc.total.distance + curr.total.distance,
+                tonnage: acc.total.tonnage + curr.total.tonnage,
             }
         }), {
             selected: { distance: 0, duration: 0, count: 0, tonnage: 0 },
@@ -278,7 +277,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 strength: { tonnage: 0, duration: 0, count: 0 },
                 other: { duration: 0, count: 0, breakdown: {} as Record<string, { duration: number, count: number }> }
             },
-            total: { count: 0, duration: 0 }
+            total: { count: 0, duration: 0, distance: 0, tonnage: 0 }
         });
     }, [data]);
 
@@ -335,7 +334,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             {/* Header */}
             <div className="grid grid-cols-[150px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
                 <div className="p-3"></div> {/* Month col */}
-                <div className="grid grid-cols-[1.2fr_0.8fr] lg:grid-cols-[1.6fr_0.4fr] divide-x divide-white/5">
+                <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
                     <div className="text-center p-2 text-white/90">
                         {activeTab === 'all' ? 'Sammanställning' :
                             activeTab === 'running' ? 'Löpning' :
@@ -343,7 +342,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                     activeTab === 'cycling' ? 'Cykling' :
                                         activeTab === 'swimming' ? 'Simning' : 'Vald Aktivitet'}
                     </div>
-                    <div className="text-center p-2 text-slate-500 text-[9px] bg-slate-900/30 flex items-center justify-center">TOTALT</div>
+                    <div className="text-center p-2 text-slate-500 text-[9px] bg-slate-900/40 flex items-center justify-center tracking-[0.2em] font-black">TOTALT</div>
                 </div>
             </div>
 
@@ -369,7 +368,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     Månad
                     {activeTab !== 'all' && <span className="text-[8px] opacity-60 ml-1">(Filtrerat)</span>}
                 </div>
-                <div className="grid grid-cols-[1.2fr_0.8fr] lg:grid-cols-[1.6fr_0.4fr] divide-x divide-white/5">
+                <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
                     {/* Specific Stats Columns */}
                     <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                         {activeTab === 'all' ? (
@@ -409,9 +408,11 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                         )}
                     </div>
                     {/* Total Stats Columns */}
-                    <div className="grid grid-cols-2 bg-slate-900/30 text-[9px]">
+                    <div className="grid grid-cols-4 bg-slate-900/40 text-[9px]">
                         <div className="p-2 text-right">Pass</div>
                         <div className="p-2 text-right">Tid</div>
+                        <div className="p-2 text-right">Distans</div>
+                        <div className="p-2 text-right">Volym</div>
                     </div>
                 </div>
             </div>
@@ -452,12 +453,13 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         if (selectionMode) {
                                             handleToggleMonthSelection(row.period, e);
                                         } else {
-                                            setSelectedMonth(row.monthIdx);
-                                            // Optional: update URL to include year if cross-year? For now keep existing behavior relative to year prop
                                             navigate({
                                                 pathname: `/träning/${row.year}/${months[row.monthIdx].toLowerCase()}`,
                                                 search: window.location.search
                                             }, { replace: true });
+                                            
+                                            // Scroll to top
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }}
                                     className={`grid grid-cols-[150px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
@@ -483,7 +485,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         </div>
                                         {!selectionMode && <span className="opacity-0 group-hover:opacity-100 text-[10px] text-sky-400 transition-opacity whitespace-nowrap ml-auto px-1">↗</span>}
                                     </div>
-                                    <div className="grid grid-cols-[1.2fr_0.8fr] lg:grid-cols-[1.6fr_0.4fr] divide-x divide-white/5 pointer-events-none">
+                                    <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5 pointer-events-none">
                                         {/* Specific Data */}
                                         <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                                             {activeTab === 'all' ? (
@@ -620,9 +622,23 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                             )}
                                         </div>
                                         {/* Total Data */}
-                                        <div className="grid grid-cols-2 bg-slate-900/30">
-                                            <div className="p-3 text-right font-mono text-slate-300">{row.total.count || '-'} <span className="text-xs text-slate-600">st</span></div>
-                                            <div className="p-3 text-right font-mono text-slate-300">{fmtDur(row.total.duration)}</div>
+                                        <div className="grid grid-cols-4 bg-slate-900/40 border-l border-white/5 relative overflow-hidden group-hover:bg-slate-900/60 transition-colors">
+                                            <div className="p-3 text-right font-mono text-slate-300 flex flex-col justify-center">
+                                                <span className="text-[11px] font-bold">{row.total.count || '-'}</span>
+                                                <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">pass</span>
+                                            </div>
+                                            <div className="p-3 text-right font-mono text-slate-300 flex flex-col justify-center">
+                                                <span className="text-[11px] font-bold">{fmtDur(row.total.duration)}</span>
+                                                <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">h:m</span>
+                                            </div>
+                                            <div className="p-3 text-right font-mono text-emerald-400/80 flex flex-col justify-center">
+                                                <span className="text-[11px] font-bold">{row.total.distance > 0 ? row.total.distance.toFixed(0) : '-'}</span>
+                                                <span className="text-[8px] text-emerald-900 uppercase font-black tracking-tighter">km</span>
+                                            </div>
+                                            <div className="p-3 text-right font-mono text-indigo-400/80 flex flex-col justify-center">
+                                                <span className="text-[11px] font-bold">{row.total.tonnage > 0 ? (row.total.tonnage / 1000).toFixed(0) : '-'}</span>
+                                                <span className="text-[8px] text-indigo-900 uppercase font-black tracking-tighter">ton</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -650,7 +666,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 {/* Footer Totals */}
                 <div className="grid grid-cols-[150px_1fr] text-sm font-bold bg-white/5 border-t border-white/10">
                     <div className="p-3 text-white">Totalt:</div>
-                    <div className="grid grid-cols-[1.2fr_0.8fr] lg:grid-cols-[1.6fr_0.4fr] divide-x divide-white/5">
+                    <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
                         <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                             {activeTab === 'all' ? (
                                 <>
@@ -785,30 +801,28 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                 </>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 bg-slate-900/30">
-                            <div className="p-3 text-right text-white">{totals.total.count} st</div>
-                            <div className="p-3 text-right text-white">{fmtDur(totals.total.duration)}</div>
+                        <div className="grid grid-cols-4 bg-slate-900/50">
+                            <div className="p-3 text-right text-white font-mono flex flex-col">
+                                <span className="text-xs">{totals.total.count}</span>
+                                <span className="text-[7px] text-slate-600 uppercase tracking-tighter">pass</span>
+                            </div>
+                            <div className="p-3 text-right text-white font-mono flex flex-col">
+                                <span className="text-xs">{fmtDur(totals.total.duration)}</span>
+                                <span className="text-[7px] text-slate-600 uppercase tracking-tighter">h:m</span>
+                            </div>
+                            <div className="p-3 text-right text-emerald-400 font-mono flex flex-col">
+                                <span className="text-xs">{totals.total.distance.toFixed(0)}</span>
+                                <span className="text-[7px] text-emerald-900 uppercase tracking-tighter">km</span>
+                            </div>
+                            <div className="p-3 text-right text-indigo-400 font-mono flex flex-col">
+                                <span className="text-xs">{(totals.total.tonnage / 1000).toFixed(0)}</span>
+                                <span className="text-[7px] text-indigo-900 uppercase tracking-tighter">ton</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {selectedMonth !== null && (
-                <MonthlyCalendarModal
-                    monthIndex={selectedMonth}
-                    year={year}
-                    exercises={exercises}
-                    initialDay={selectedMonth === initialCalendarMonth ? initialCalendarDay : undefined}
-                    onClose={() => {
-                        setSelectedMonth(null);
-                        navigate({
-                            pathname: `/träning/${year}`,
-                            search: window.location.search
-                        }, { replace: true });
-                    }}
-                    onExerciseClick={onExerciseClick}
-                />
-            )}
         </div>
     );
 }

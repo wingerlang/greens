@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 import { EXERCISE_TYPES } from './ExerciseModal.tsx';
+import { TrainingCalendar } from './TrainingCalendar.tsx';
 import { MonthlyTrainingTable } from './MonthlyTrainingTable.tsx';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 interface TrainingOverviewProps {
     exercises: ExerciseEntry[];
@@ -15,6 +17,7 @@ interface TrainingOverviewProps {
 
 export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay }: TrainingOverviewProps) {
     const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
+    const [showYearlyStats, setShowYearlyStats] = useState(false);
 
     const stats = useMemo(() => {
         const now = new Date();
@@ -133,34 +136,66 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
     return (
         <>
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                <button
-                    onClick={() => setStatFilter('all')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'all' ? 'bg-slate-700 text-white border-slate-600' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
+            {/* Calendar View (Primary) */}
+            <div className="mb-6 mt-2">
+                <TrainingCalendar 
+                    exercises={exercises}
+                    year={year}
+                    monthIndex={initialCalendarMonth ?? new Date().getMonth()}
+                    initialDay={initialCalendarDay}
+                    onExerciseClick={onExerciseClick}
+                />
+            </div>
+
+            <div className="mb-8">
+                <MonthlyTrainingTable 
+                    exercises={exercises}
+                    year={year}
+                    onExerciseClick={onExerciseClick}
+                    initialCalendarMonth={initialCalendarMonth}
+                />
+            </div>
+
+            <div className="flex items-center justify-between mt-8 mb-4">
+                <button 
+                    onClick={() => setShowYearlyStats(!showYearlyStats)}
+                    className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
                 >
-                    Alla
-                </button>
-                <button
-                    onClick={() => setStatFilter('run')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'run' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🏃 Löpning
-                </button>
-                <button
-                    onClick={() => setStatFilter('bike')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'bike' ? 'bg-sky-900/30 text-sky-400 border-sky-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🚴 Cykling
-                </button>
-                <button
-                    onClick={() => setStatFilter('strength')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'strength' ? 'bg-indigo-900/30 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🏋️ Styrka
+                    {showYearlyStats ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                    <h2 className="text-lg font-black uppercase tracking-widest text-white">Årsvolym & Detaljerad Statistik</h2>
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {showYearlyStats && (
+                <div className="animate-in slide-in-from-top-4 fade-in duration-300">
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                        <button
+                            onClick={() => setStatFilter('all')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'all' ? 'bg-slate-700 text-white border-slate-600' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
+                        >
+                            Alla
+                        </button>
+                        <button
+                            onClick={() => setStatFilter('run')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'run' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
+                        >
+                            🏃 Löpning
+                        </button>
+                        <button
+                            onClick={() => setStatFilter('bike')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'bike' ? 'bg-sky-900/30 text-sky-400 border-sky-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
+                        >
+                            🚴 Cykling
+                        </button>
+                        <button
+                            onClick={() => setStatFilter('strength')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'strength' ? 'bg-indigo-900/30 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
+                        >
+                            🏋️ Styrka
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {/* Year Stats */}
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all">
                     <div className="absolute top-0 right-0 p-4 opacity-[0.03] text-[100px] leading-none select-none group-hover:opacity-[0.06] transition-opacity">📅</div>
@@ -347,17 +382,8 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     </span>
                 </button>
             </div>
-
-            {/* Monthly Training Table (Detailed Breakdown) */}
-            <div className="mb-0">
-                <MonthlyTrainingTable
-                    exercises={exercises}
-                    year={year}
-                    initialCalendarMonth={initialCalendarMonth}
-                    initialCalendarDay={initialCalendarDay}
-                    onExerciseClick={onExerciseClick}
-                />
             </div>
+            )}
         </>
     );
 }

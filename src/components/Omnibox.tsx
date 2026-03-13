@@ -215,6 +215,28 @@ const canLogAsCooked = (item: FoodItem): { canCook: boolean; effectiveYieldFacto
     return { canCook: false, effectiveYieldFactor: 1 };
 };
 
+// Helper for remembering meal type preference
+const getSavedMealTypePreference = (): MealType | null => {
+    try {
+        const saved = localStorage.getItem('last_meal_type_preference');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Valid for 2 hours
+            if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
+                return parsed.mealType;
+            }
+        }
+    } catch {}
+    return null;
+};
+
+const saveMealTypePreference = (mealType: MealType) => {
+    localStorage.setItem('last_meal_type_preference', JSON.stringify({
+        mealType,
+        timestamp: Date.now()
+    }));
+};
+
 export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCreatePost, onOpenEstimate }: OmniboxProps) {
     const navigate = useNavigate();
     const location = useLocation();
@@ -360,14 +382,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     // Action suggestions
     const actionSuggestions = useMemo(() => {
         if (!isActionMode) return [];
-        if (!actionQuery) return ACTION_COMMANDS;
-
-        const filtered = ACTION_COMMANDS.filter(action =>
-            action.command.toLowerCase().includes(input.toLowerCase()) ||
-            action.label.toLowerCase().includes(actionQuery)
-        );
+        
+        let filtered = ACTION_COMMANDS;
+        if (actionQuery) {
+            filtered = ACTION_COMMANDS.filter(action =>
+                action.command.toLowerCase().includes(input.toLowerCase()) ||
+                action.label.toLowerCase().includes(actionQuery)
+            );
+        }
+        
         // Sort by usage count
-        return filtered.sort((a, b) => (actionUsage[b.id] || 0) - (actionUsage[a.id] || 0));
+        return [...filtered].sort((a, b) => (actionUsage[b.id] || 0) - (actionUsage[a.id] || 0));
     }, [isActionMode, actionQuery, input, actionUsage]);
 
 
@@ -459,9 +484,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         const usedFoodIds = new Set<string>();
         const recents: Array<FoodItem & { usageStats: { count: number; lastUsed: string; avgGrams: number } }> = [];
 
-        const sortedEntries = [...mealEntries].sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        const sortedEntries = [...mealEntries].sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
+            return timeB - timeA;
+        });
 
         for (const entry of sortedEntries) {
             for (const item of entry.items) {
@@ -657,7 +684,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 }
 
                 setDraftFoodQuantity(initialQty);
-                setDraftFoodMealType(foodData?.mealType || null);
+                setDraftFoodMealType(foodData?.mealType || getSavedMealTypePreference() || null);
                 setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
                 return;
             }
@@ -764,13 +791,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         let mealType: MealType = 'snack';
         if (draftFoodMealType) {
             mealType = draftFoodMealType;
+            saveMealTypePreference(mealType);
         } else if (intent.type === 'food' && intent.data.mealType) {
             mealType = intent.data.mealType;
+            saveMealTypePreference(mealType);
         } else {
-            const hour = new Date().getHours();
-            if (hour >= 5 && hour < 10) mealType = 'breakfast';
-            else if (hour >= 10 && hour < 14) mealType = 'lunch';
-            else if (hour >= 17 && hour < 21) mealType = 'dinner';
+            const savedPref = getSavedMealTypePreference();
+            if (savedPref) {
+                mealType = savedPref;
+            } else {
+                const hour = new Date().getHours();
+                if (hour >= 5 && hour < 10) mealType = 'breakfast';
+                else if (hour >= 10 && hour < 14) mealType = 'lunch';
+                else if (hour >= 17 && hour < 21) mealType = 'dinner';
+            }
         }
 
         // Check if logging as cooked

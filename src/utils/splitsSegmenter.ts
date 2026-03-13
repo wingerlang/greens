@@ -18,6 +18,7 @@ export interface ClassifiedSplit extends KmSplit {
 }
 
 export interface SegmentedSplits {
+    type: 'intervals' | 'sustained';
     classified: ClassifiedSplit[];
     warmupSplits: ClassifiedSplit[];
     intervalGroups: {
@@ -138,13 +139,21 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout): Segmen
     const allIntervalSplits = classified.filter(s => s.role === 'interval');
     const allRecoverySplits = classified.filter(s => s.role === 'recovery');
 
+    const totalIntervalKm = allIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    const totalRecoveryKm = allRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0);
+
     const avgIntervalPace = allIntervalSplits.length > 0
         ? allIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allIntervalSplits.length : 0;
     const avgRecoveryPace = allRecoverySplits.length > 0
         ? allRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allRecoverySplits.length : 0;
     const intervalPaces = allIntervalSplits.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
 
+    // Detect if this is a sustained effort (tempo/test run)
+    // We consider it sustained if it's one block and little to no recovery between warmup/cooldown
+    const type = (intervalGroups.length === 1 && totalRecoveryKm < 0.1) ? 'sustained' : 'intervals';
+
     return {
+        type,
         classified,
         warmupSplits,
         intervalGroups,
@@ -152,8 +161,8 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout): Segmen
         summary: {
             warmupKm: warmupSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
             cooldownKm: cooldownSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
-            totalIntervalKm: allIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
-            totalRecoveryKm: allRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            totalIntervalKm,
+            totalRecoveryKm,
             avgIntervalPace,
             avgRecoveryPace,
             fastestIntervalPace: intervalPaces.length > 0 ? Math.min(...intervalPaces) : 0,
