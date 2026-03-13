@@ -1,5 +1,6 @@
 import { getSession } from "../db/session.ts";
 import { getUserById } from "../db/user.ts";
+import { getUserData } from "../db/data.ts";
 import { activityRepo } from "../repositories/activityRepository.ts";
 import { calculateStravaCalories } from "../strava.ts";
 
@@ -19,6 +20,8 @@ export async function handleRecalculateCaloriesRoutes(req: Request, url: URL, he
             // Get user settings for calorie formula
             const user = await getUserById(userId);
             const userSettings = user?.settings || {};
+            const userData = await getUserData(userId) as any;
+            const latestWeight = userData?.weightEntries?.[0]?.weight;
 
             // Get all activities for this user
             const activities = await activityRepo.getAllActivities(userId);
@@ -62,7 +65,7 @@ export async function handleRecalculateCaloriesRoutes(req: Request, url: URL, he
                     achievement_count: 0,
                 };
 
-                const calorieResult = calculateStravaCalories(stravaLikeActivity as any, userSettings as any);
+                const calorieResult = calculateStravaCalories(stravaLikeActivity as any, userSettings as any, latestWeight);
 
                 // Only update if value changed significantly (more than 1 kcal difference)
                 if (Math.abs((activity.performance.calories || 0) - calorieResult.calories) > 1) {

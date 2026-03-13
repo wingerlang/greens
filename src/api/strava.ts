@@ -378,7 +378,7 @@ export function mapStravaSubType(type: string, workoutType?: number): any {
  * 2. Keytel formula with HR data (with sanity caps)
  * 3. Conservative fallback schablons
  */
-export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings): { calories: number; breakdown: string } {
+export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings, latestWeight?: number): { calories: number; breakdown: string } {
     const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
     const hr = activity.average_heartrate;
     const type = mapStravaType(activity.type);
@@ -407,10 +407,26 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
     }
 
     // 2. If we have HR and user profile data, use the scientific formula WITH sanity check
-    if (hr && userSettings && userSettings.weight && userSettings.birthYear) {
-        const weight = userSettings.weight;
+    if (hr && userSettings && (latestWeight || userSettings.weight) && userSettings.birthYear) {
+        const weight = latestWeight || userSettings.weight || 75;
         const age = new Date().getFullYear() - userSettings.birthYear;
         const gender = userSettings.gender || 'male';
+
+        // Styrketräning överskattas radikalt av Keytel-formeln (puls går upp utan samma syreupptag).
+        // Använd MET-baserad beräkning istället för styrka.
+        if (type === 'strength') {
+            let met = 3.5; // Basnivå
+            if (hr > 140) met = 5.0;
+            else if (hr > 120) met = 4.5;
+            else if (hr > 100) met = 4.0;
+
+            let kcalPerMin = (met * weight) / 60; // (MET * kg * timmar) => per minut
+            const total = Math.round(kcalPerMin * durationMin);
+
+            let breakdown = `Formel: MET (Metabolic Equivalent) anpassad för styrketräning\nIndata:\n- Puls: ${hr.toFixed(0)} bpm (gav ${met.toFixed(1)} METs)\n- Vikt: ${weight} kg\n- Tid: ${durationMin.toFixed(1)} min\nResultat: ~${kcalPerMin.toFixed(2)} kcal/min`;
+
+            return { calories: Math.max(total, 0), breakdown };
+        }
 
         let kjPerMin = 0;
         let formula = "";
@@ -463,8 +479,8 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
 /**
  * Convert Strava activity to app exercise entry format
  */
-export function mapStravaActivityToExercise(activity: StravaActivity, userSettings?: UserSettings) {
-    const calorieData = calculateStravaCalories(activity, userSettings);
+export function mapStravaActivityToExercise(activity: StravaActivity, userSettings?: UserSettings, latestWeight?: number) {
+    const calorieData = calculateStravaCalories(activity, userSettings, latestWeight);
 
     return {
         externalId: `strava_${activity.id}`,
@@ -512,8 +528,8 @@ export function mapStravaActivityToExercise(activity: StravaActivity, userSettin
 //     // ... other properties
 // }
 
-export function mapStravaToPerformance(activity: StravaActivity, userSettings?: UserSettings): ActivityPerformanceSection {
-    const calorieData = calculateStravaCalories(activity, userSettings);
+export function mapStravaToPerformance(activity: StravaActivity, userSettings?: UserSettings, latestWeight?: number): ActivityPerformanceSection {
+    const calorieData = calculateStravaCalories(activity, userSettings, latestWeight);
 
     return {
         source: {
@@ -560,8 +576,8 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
 /**
  * Create a new Universal Activity from a Strava Activity (Unplanned)
  */
-export function createUniversalFromStrava(activity: StravaActivity, userId: string, userSettings?: UserSettings): UniversalActivity {
-    const performance = mapStravaToPerformance(activity, userSettings);
+export function createUniversalFromStrava(activity: StravaActivity, userId: string, userSettings?: UserSettings, latestWeight?: number): UniversalActivity {
+    const performance = mapStravaToPerformance(activity, userSettings, latestWeight);
 
     return {
         id: crypto.randomUUID(),
