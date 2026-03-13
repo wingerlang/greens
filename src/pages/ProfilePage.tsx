@@ -967,13 +967,54 @@ export function ProfilePage() {
                         {/* Account Info */}
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Inloggning & Konto</h3>
-                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
-                                <div>
-                                    <div className="font-bold text-white">{profile.name}</div>
-                                    <div className="text-sm text-slate-400">{profile.email}</div>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                                    <div>
+                                        <div className="font-bold text-white">{profile.name}</div>
+                                        <div className="text-sm text-slate-400">{profile.email}</div>
+                                    </div>
+                                    <div className="px-3 py-1 bg-sky-500/10 text-sky-400 rounded-lg text-xs font-bold border border-sky-500/20">
+                                        Aktiv
+                                    </div>
                                 </div>
-                                <div className="px-3 py-1 bg-sky-500/10 text-sky-400 rounded-lg text-xs font-bold border border-sky-500/20">
-                                    Aktiv
+
+                                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                                    <div>
+                                        <div className="font-bold text-white text-sm">Räkna om historiska kalorier</div>
+                                        <div className="text-xs text-slate-400 mt-1 max-w-sm">Uppdaterar alla dina tidigare träningspass med den senaste kalorialgoritmen (bl.a. för styrketräning) och din nuvarande vikt. Detta kan ta en liten stund.</div>
+                                    </div>
+                                    <button
+                                        onClick={async (e) => {
+                                            const btn = e.currentTarget;
+                                            const originalText = btn.innerText;
+                                            btn.innerText = 'Räknar om...';
+                                            btn.disabled = true;
+                                            try {
+                                                const token = localStorage.getItem('token');
+                                                const res = await fetch('/api/recalculate-calories', {
+                                                    method: 'POST',
+                                                    headers: { 'Authorization': `Bearer ${token}` }
+                                                });
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    btn.innerText = `Klart! (${data.updated} uppdaterade)`;
+                                                    btn.classList.add('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+                                                } else {
+                                                    btn.innerText = 'Misslyckades';
+                                                }
+                                            } catch(err) {
+                                                btn.innerText = 'Misslyckades';
+                                            }
+                                            setTimeout(() => {
+                                                btn.innerText = originalText;
+                                                btn.disabled = false;
+                                                btn.classList.remove('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+                                            }, 5000);
+                                        }}
+                                        className="px-4 py-2 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 rounded-xl text-sm font-bold border border-indigo-500/30 transition-colors whitespace-nowrap"
+                                    >
+                                        Räkna om pass
+                                    </button>
                                 </div>
                             </div>
                         </section>

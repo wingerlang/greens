@@ -3,6 +3,7 @@ import { activityRepo } from '../repositories/activityRepository.ts';
 import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity, getAllStravaActivities, calculateStravaCalories } from '../strava.ts';
 import { FeedRepository } from '../repositories/feedRepository.ts';
 import { getUserById } from '../db/user.ts';
+import { getUserData } from '../db/data.ts';
 
 export interface SyncDiffReport {
     newActivities: StravaActivity[];
@@ -88,6 +89,8 @@ export class ReconciliationService {
         let updated = 0;
         let failed = 0;
         const user = await getUserById(userId);
+        const userData = await getUserData(userId) as any;
+        const latestWeight = userData?.weightEntries?.[0]?.weight;
 
         for (const stravaActivity of activitiesToSync) {
             try {
@@ -105,7 +108,7 @@ export class ReconciliationService {
                         await this.mergeActivity(planMatch, stravaActivity, user?.settings);
                         created++; // Count as created/synced
                     } else {
-                        const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings);
+                        const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings, latestWeight);
                         await activityRepo.saveActivity(newActivity);
                         created++;
                     }
@@ -120,7 +123,7 @@ export class ReconciliationService {
                     // We just update the `performance` section.
 
                     // Update performance data
-                    const freshPerformance = mapStravaToPerformance(stravaActivity, user?.settings);
+                    const freshPerformance = mapStravaToPerformance(stravaActivity, user?.settings, latestWeight);
 
                     // Maintain existing sub-fields if needed? 
                     // Usually fresh mapped data is better.
@@ -165,6 +168,8 @@ export class ReconciliationService {
         let skipped = 0;
 
         const user = await getUserById(userId);
+        const userData = await getUserData(userId) as any;
+        const latestWeight = userData?.weightEntries?.[0]?.weight;
         const privacy = user?.privacy;
 
         for (const stravaActivity of stravaActivities) {
@@ -193,7 +198,7 @@ export class ReconciliationService {
                 await this.emitStravaFeedEvent(userId, stravaActivity, user);
             } else {
                 // IMPORT AS NEW
-                const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings);
+                const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings, latestWeight);
                 await activityRepo.saveActivity(newActivity);
                 imported++;
                 await this.emitStravaFeedEvent(userId, stravaActivity, user);
@@ -285,7 +290,7 @@ export class ReconciliationService {
                 exerciseType: appType,
                 duration: durationMin,
                 distance: distanceKm,
-                calories: calculateStravaCalories(activity, userSettings).calories,
+                calories: calculateStravaCalories(activity, userSettings, latestWeight).calories,
                 intensity: 'moderate'
             },
             visibility: visibility as any,
@@ -293,7 +298,7 @@ export class ReconciliationService {
             metrics: [
                 { label: 'Tid', value: durationMin, unit: 'min', icon: '⏱️' },
                 ...(distanceKm ? [{ label: 'Distans', value: distanceKm.toFixed(1), unit: 'km', icon: '📍' }] : []),
-                { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings).calories), unit: 'kcal', icon: '🔥' }
+                { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings, latestWeight).calories), unit: 'kcal', icon: '🔥' }
             ]
         });
     }
