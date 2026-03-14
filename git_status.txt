@@ -1,0 +1,32 @@
+interactive rebase in progress; onto fe4b7dc
+Last command done (1 command done):
+   pick c73f8f6 adding stuff
+Next command to do (1 remaining command):
+   pick 4e5514b Improved training calendar
+  (use "git rebase --edit-todo" to view and edit)
+You are currently rebasing branch 'main' on 'fe4b7dc'.
+  (all conflicts fixed: run "git rebase --continue")
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   find_by_id.ts
+	new file:   list_all_activity_users.ts
+	modified:   list_all_prefixes.ts
+	new file:   list_guardian_keys.ts
+	new file:   list_guardian_kv.ts
+	new file:   list_sample_activities.ts
+	new file:   list_user_activities.ts
+	new file:   search_result.json
+	new file:   search_user.ts
+	modified:   src/api/handlers/activities.ts
+	modified:   src/api/handlers/strava.ts
+	modified:   src/components/Layout.tsx
+	modified:   src/components/activities/ActivityDetailModal.tsx
+	modified:   src/components/training/RaceList.tsx
+	modified:   src/components/training/TrainingCalendar.tsx
+	modified:   src/pages/ActivitiesPage.tsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	git_status.txt
+

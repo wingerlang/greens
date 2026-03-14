@@ -238,37 +238,37 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             </button>
                         </div>
 
-                        <div className="relative" ref={yearDropdownRef}>
-                            <button
-                                onClick={() => { setIsYearDropdownOpen(!isYearDropdownOpen); setIsMonthDropdownOpen(false); }}
-                                className={`flex items-center gap-1 text-base sm:text-lg font-bold transition-colors border px-2 py-0.5 rounded-lg ${isYearDropdownOpen ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
-                            >
-                                {year}
-                                <ChevronDown className={`w-3 h-3 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} />
-                            </button>
+                        <div className="flex items-center gap-2">
+                            <div className="relative" ref={yearDropdownRef}>
+                                <button
+                                    onClick={() => { setIsYearDropdownOpen(!isYearDropdownOpen); setIsMonthDropdownOpen(false); }}
+                                    className={`flex items-center gap-1 text-base sm:text-lg font-bold transition-colors border px-2 py-0.5 rounded-lg ${isYearDropdownOpen ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                >
+                                    {year}
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
 
-                            {isYearDropdownOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-24 bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                    {availableYears.map(y => (
-                                        <button
-                                            key={y}
-                                            onClick={() => { navigateTo(y, monthIndex); setIsYearDropdownOpen(false); }}
-                                            className={`w-full text-center px-2 py-2 text-sm font-bold transition-colors ${y === year ? 'bg-sky-500/10 text-sky-400' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
-                                        >
-                                            {y}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex justify-end mb-2">
+                                {isYearDropdownOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-24 bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                        {availableYears.map(y => (
+                                            <button
+                                                key={y}
+                                                onClick={() => { navigateTo(y, monthIndex); setIsYearDropdownOpen(false); }}
+                                                className={`w-full text-center px-2 py-2 text-sm font-bold transition-colors ${y === year ? 'bg-sky-500/10 text-sky-400' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                                            >
+                                                {y}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             <button
                                 onClick={() => setIsReversed(!isReversed)}
-                                className={`p-1.5 rounded-lg border transition-colors flex items-center text-xs font-bold ${isReversed ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                className={`p-1.5 rounded-lg border transition-colors flex items-center text-xs font-bold shrink-0 ${isReversed ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
                                 title="Växla sorteringsordning på veckor"
                             >
                                 <ArrowDownUp className="w-3.5 h-3.5" />
-                                {isReversed ? 'Senaste först' : 'Äldsta först'}
+                                <span className="hidden sm:inline ml-1">{isReversed ? 'Senaste först' : 'Äldsta först'}</span>
                             </button>
                         </div>
                     </div>
@@ -332,7 +332,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                 }}
                                                 className={`
                                             relative p-0.5 flex flex-col rounded-md sm:rounded-sm border group cursor-pointer transition-all duration-200 min-h-[70px] hover:z-50
-                                            ${!date.isCurrentMonth ? 'opacity-40 grayscale-[0.5] hover:opacity-80 hover:grayscale-0' : ''}
+                                            ${!date.isCurrentMonth ? 'opacity-60 grayscale-[0.3] hover:opacity-90 hover:grayscale-0' : ''}
                                             ${isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50 hover:border-sky-400' :
                                                         isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/20 hover:border-amber-400' :
                                                             hasExercise ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700/80 shadow-sm' :
@@ -351,8 +351,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                             const totMins = Math.round(date.exercises.reduce((sum, e) => sum + e.durationMinutes, 0));
                                                             const timeStr = totMins >= 60 ? `${Math.floor(totMins / 60)}h${totMins % 60}m` : `${totMins}m`;
                                                             return (
-                                                                <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold bg-white/5 px-1 py-0.5 rounded-sm cursor-help transition-colors hover:text-slate-300 hover:bg-white/10">
-                                                                    {date.exercises.length}st • {timeStr}
+                                                                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold bg-white/5 px-1 py-0.5 rounded-sm cursor-help transition-colors hover:text-slate-200 hover:bg-white/10">
+                                                                    {date.exercises.length} pass • {timeStr}
                                                                 </span>
                                                             );
                                                         })()}
@@ -435,7 +435,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                                                         return (
                                                             <div key={ex.id}
-                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight px-1 py-0.5 sm:px-1.5 sm:py-1 rounded-md border-l-[2px] sm:border-l-[2px] ${colorClass} cursor-pointer flex justify-between items-center group/ex min-w-0 transition-colors`}>
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedDate(date.dateStr);
+                                                                    navigate({
+                                                                        pathname: `/träning/${year}/${monthName.toLowerCase()}/${date.day}`,
+                                                                        search: `?activity=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
+                                                                    }, { replace: true });
+                                                                }}
+                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight px-1 py-0.5 sm:px-1.5 sm:py-1 rounded-md border-l-[2px] sm:border-l-[2px] ${colorClass} cursor-pointer flex justify-between items-center group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md`}>
                                                                 <span className="font-bold flex items-center min-w-0 shrink truncate z-10">
                                                                     <div className="opacity-60 shrink-0 z-0 scale-[1.15]">{icon}</div>
                                                                     <span className="truncate leading-none relative z-10 -ml-1 sm:-ml-1.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95">
@@ -532,7 +540,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                         <div className="flex items-baseline gap-1">
                                                             <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5 font-bold uppercase">km</span></span>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.2 font-bold uppercase opacity-70 italic">st</span></span>
+                                                            <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">pass</span></span>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
                                                             <span className="text-[10px]">
                                                                 {(() => {
@@ -593,7 +601,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
                                                             </span>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <span className="text-[10px]">{strengthExercises.length}<span className="text-[8px] ml-0.2 font-bold uppercase opacity-70 italic">st</span></span>
+                                                            <span className="text-[10px]">{strengthExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">pass</span></span>
                                                         </div>
                                                         {/* Rich Tooltip */}
                                                         <div
@@ -699,7 +707,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     >
                                                         <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10 flex justify-between">
                                                             <span>Alla pass v. {weekNumberStr.replace('v. ', '')}</span>
-                                                            <span className="text-sky-400">{weekExercises.length} st</span>
+                                                            <span className="text-slate-500">{weekExercises.length} pass</span>
                                                         </div>
                                                         <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                             {weekExercises.map((e, idx) => {
@@ -849,32 +857,43 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                     {/* Kolumn 4: Tidsfördelning */}
                     <div className="bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-white/5 shadow-inner flex flex-col">
                         <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-4">Tidsfördelning</p>
-                        <div className="space-y-3 w-full my-auto">
+                        <div className="space-y-1.5 w-full my-auto">
                             {Object.entries(stats.timeDist).sort((a, b) => b[1] - a[1]).map(([type, mins]) => {
                                 const percent = Math.round((mins / stats.duration) * 100);
+                                const icon = type.includes('running') || type.includes('run') ? '🏃' :
+                                    type === 'strength' ? '🏋️' :
+                                        type === 'cycling' ? '🚴' :
+                                            type === 'walking' ? '🚶' : '⚡';
+                                const label = type.includes('running') || type.includes('run') ? 'Löpning' :
+                                    type === 'strength' ? 'Styrka' :
+                                        type === 'cycling' ? 'Cykling' :
+                                            type === 'walking' ? 'Promenad' : type;
+
                                 return (
-                                    <div key={type}>
-                                        <div className="flex justify-between mb-1.5 items-end">
-                                            <span className="text-slate-300 capitalize flex items-center gap-1.5 text-[11px] font-bold">
-                                                {type.includes('running') || type.includes('run') ? '🏃 Löpning' :
-                                                    type === 'strength' ? '🏋️ Styrka' :
-                                                        type === 'cycling' ? '🚴 Cykling' :
-                                                            type === 'walking' ? '🚶 Promenad' : type}
-                                            </span>
-                                            <span className="font-mono font-bold text-white text-[11px] leading-none">
-                                                {percent}% <span className="text-slate-500 text-[9px]">
-                                                    ({mins >= 60 ? `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m` : `${Math.round(mins)}m`})
+                                    <div key={type} className="flex items-center gap-2 group/dist">
+                                        <span className="w-5 shrink-0 text-xs grayscale-[0.5] group-hover/dist:grayscale-0 transition-all text-center">
+                                            {icon}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between mb-0.5 items-center">
+                                                <span className="text-slate-400 capitalize text-[9px] font-black truncate leading-none uppercase tracking-tighter">
+                                                    {label}
                                                 </span>
-                                            </span>
-                                        </div>
-                                        <div className="h-2 bg-slate-900/50 rounded-full overflow-hidden shadow-inner border border-white/5">
-                                            <div
-                                                className={`h-full rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${type.includes('running') ? 'bg-emerald-500' :
-                                                    type === 'strength' ? 'bg-indigo-500' :
-                                                        type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
-                                                    }`}
-                                                style={{ width: `${percent}%` }}
-                                            />
+                                                <span className="font-mono font-bold text-white text-[9px] leading-none shrink-0 ml-1">
+                                                    {percent}% <span className="text-slate-500 font-normal">
+                                                        ({mins >= 60 ? `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m` : `${Math.round(mins)}m`})
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div className="h-1.5 bg-slate-900/50 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-500 ${type.includes('running') ? 'bg-emerald-500' :
+                                                        type === 'strength' ? 'bg-indigo-500' :
+                                                            type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
+                                                        }`}
+                                                    style={{ width: `${percent}%` }}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 );
