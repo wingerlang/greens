@@ -61,6 +61,7 @@ export function RunningStatsView({
     const [selectedPBForAnalysis, setSelectedPBForAnalysis] = useState<PBEvent | null>(null);
     const [selectedBuckets, setSelectedBuckets] = useState<string[]>(RUNNING_BUCKETS.map(b => b.key));
     const [activeUltraTab, setActiveUltraTab] = useState<string>('ultra50k');
+    const [showOnlyLatestPB, setShowOnlyLatestPB] = useState(false);
 
     const getDaysAgoText = (dateStr: string) => {
         const days = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / (1000 * 3600 * 24));
@@ -307,11 +308,25 @@ export function RunningStatsView({
         : undefined;
 
     const filteredTimeline = useMemo(() => {
-        return pbTimeline.filter(pb => {
+        let items = pbTimeline.filter(pb => {
             const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
             return bucket && selectedBuckets.includes(bucket.key);
         });
-    }, [pbTimeline, selectedBuckets]);
+
+        if (showOnlyLatestPB) {
+            // Sort to ensure we have the newest first before filtering,
+            // though pbTimeline is typically already sorted newest first
+            const sortedItems = [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const seen = new Set<string>();
+            items = sortedItems.filter(pb => {
+                if (seen.has(pb.bucketLabel)) return false;
+                seen.add(pb.bucketLabel);
+                return true;
+            });
+        }
+
+        return items;
+    }, [pbTimeline, selectedBuckets, showOnlyLatestPB]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -439,7 +454,7 @@ export function RunningStatsView({
                                                             onClick={() => setSelectedActivity(run)}
                                                             className={`hover:bg-white/5 transition-colors cursor-pointer group ${isThisYear ? 'border-l-2 border-l-amber-500 bg-amber-500/5' : ''}`}
                                                         >
-                                                            <td className="px-3 py-3 w-8 text-center">
+                                                            <td className="px-3 py-2 w-8 text-center">
                                                                 <span className={`font-black text-xs ${index === 0 ? 'text-amber-500 text-lg' :
                                                                     index === 1 ? 'text-slate-300' :
                                                                         index === 2 ? 'text-amber-700' : 'text-slate-600'
@@ -447,20 +462,22 @@ export function RunningStatsView({
                                                                     {index + 1}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-3 py-3">
-                                                                <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate max-w-[150px]">
-                                                                    {run.title && run.title !== '-' ? run.title : run.notes || 'Löprunda'}
-                                                                </div>
-                                                                <div className="flex items-center gap-2 mt-0.5">
-                                                                    <span className="text-[10px] text-slate-500 font-mono">
-                                                                        {run.date.substring(0, 10)}
-                                                                    </span>
-                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isThisYear ? 'bg-amber-500/20 text-amber-500' : 'bg-white/5 text-slate-400'}`}>
-                                                                        {daysAgo}
-                                                                    </span>
+                                                            <td className="px-3 py-2">
+                                                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                                                    <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate max-w-[150px]">
+                                                                        {run.title && run.title !== '-' ? run.title : run.notes || 'Löprunda'}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                                                                            {run.date.substring(0, 10)}
+                                                                        </span>
+                                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${isThisYear ? 'bg-amber-500/20 text-amber-500' : 'bg-white/5 text-slate-400'}`}>
+                                                                            {daysAgo}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-3 py-3 text-right">
+                                                            <td className="px-3 py-2 text-right">
                                                                 <div className="font-black text-white font-mono flex items-center justify-end gap-2">
                                                                     <span className="text-xs text-slate-500 font-medium">{paceFormatted}</span>
                                                                     <span className="text-lg">{formatTime(run.durationMinutes * 60)}</span>
@@ -524,7 +541,7 @@ export function RunningStatsView({
                                                         onClick={() => setSelectedActivity(run)}
                                                         className={`hover:bg-white/5 transition-colors cursor-pointer group ${isThisYear ? 'border-l-2 border-l-amber-500 bg-amber-500/5' : ''}`}
                                                     >
-                                                        <td className="px-3 py-3 w-8 text-center">
+                                                        <td className="px-3 py-2 w-8 text-center">
                                                             <span className={`font-black text-xs ${index === 0 ? 'text-amber-500 text-lg' :
                                                                 index === 1 ? 'text-slate-300' :
                                                                     index === 2 ? 'text-amber-700' : 'text-slate-600'
@@ -532,20 +549,22 @@ export function RunningStatsView({
                                                                 {index + 1}
                                                             </span>
                                                         </td>
-                                                        <td className="px-3 py-3">
-                                                            <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate max-w-[200px] sm:max-w-xs">
-                                                                {run.title && run.title !== '-' ? run.title : run.notes || 'Löprunda'}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 mt-0.5">
-                                                                <span className="text-[10px] text-slate-500 font-mono">
-                                                                    {run.date.substring(0, 10)}
-                                                                </span>
-                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isThisYear ? 'bg-amber-500/20 text-amber-500' : 'bg-white/5 text-slate-400'}`}>
-                                                                    {daysAgo}
-                                                                </span>
+                                                        <td className="px-3 py-2">
+                                                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                                                <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate max-w-[200px] sm:max-w-xs">
+                                                                    {run.title && run.title !== '-' ? run.title : run.notes || 'Löprunda'}
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                                                                        {run.date.substring(0, 10)}
+                                                                    </span>
+                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${isThisYear ? 'bg-amber-500/20 text-amber-500' : 'bg-white/5 text-slate-400'}`}>
+                                                                        {daysAgo}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-3 py-3 text-right">
+                                                        <td className="px-3 py-2 text-right">
                                                             <div className="font-black text-white font-mono flex items-center justify-end gap-2">
                                                                 <span className="text-xs text-slate-500 font-medium">{paceFormatted}</span>
                                                                 <span className="text-lg">{formatTime(run.durationMinutes * 60)}</span>
@@ -582,7 +601,8 @@ export function RunningStatsView({
                         </div>
 
                         {/* Timeline Filters */}
-                        <div className="flex flex-wrap gap-2 mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                            <div className="flex flex-wrap gap-2">
                             {RUNNING_BUCKETS.map(bucket => {
                                 const isSelected = selectedBuckets.includes(bucket.key);
                                 return (
@@ -610,6 +630,16 @@ export function RunningStatsView({
                                     </button>
                                 );
                             })}
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white transition-colors bg-slate-800/50 px-3 py-1.5 rounded-lg border border-white/5">
+                                <input
+                                    type="checkbox"
+                                    checked={showOnlyLatestPB}
+                                    onChange={(e) => setShowOnlyLatestPB(e.target.checked)}
+                                    className="form-checkbox h-4 w-4 text-amber-500 rounded border-slate-600 bg-slate-900 focus:ring-amber-500 focus:ring-offset-slate-900 transition-colors"
+                                />
+                                Visa endast senaste per distans
+                            </label>
                         </div>
 
                         <div className="flex gap-4 overflow-x-auto overflow-y-auto py-20 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[340px]">
@@ -625,12 +655,12 @@ export function RunningStatsView({
                                     return (
                                         <div
                                             key={`${pb.id}-${idx}`}
-                                            className={`relative w-56 flex-none flex justify-center items-center group cursor-pointer h-full transition-all duration-300 ${highlightedPBId && highlightedPBId !== pb.id ? 'opacity-30 grayscale' : 'opacity-100'} ${highlightedPBId === pb.id ? 'scale-110 z-50' : 'z-10'}`}
+                                            className={`relative w-32 sm:w-40 flex-none flex justify-center items-center group cursor-pointer h-full transition-all duration-300 ${highlightedPBId && highlightedPBId !== pb.id ? 'opacity-30 grayscale' : 'opacity-100'} ${highlightedPBId === pb.id ? 'scale-110 z-50' : 'z-10'}`}
                                             onClick={() => setSelectedActivity(pb.activity)}
                                         >
                                             {/* Connecting horizontal line to NEXT dot */}
                                             {idx < filteredTimeline.length - 1 && (
-                                                <div className="absolute top-1/2 left-1/2 w-[calc(100%+1.5rem)] h-[2px] bg-slate-800 -translate-y-1/2 z-0">
+                                                <div className="absolute top-1/2 left-1/2 w-[calc(100%+1rem)] h-[2px] bg-slate-800 -translate-y-1/2 z-0">
                                                     <div className={`h-full bg-${bucketDef?.color}-500/20 w-full rounded-full transition-all`} />
                                                 </div>
                                             )}
@@ -639,7 +669,7 @@ export function RunningStatsView({
                                             <div className={`w-4 h-4 rounded-full border-4 border-slate-900 bg-${bucketDef?.color}-500 relative z-10 shadow-lg shadow-${bucketDef?.color}-500/50 transition-transform group-hover:scale-150`} />
 
                                             {/* Content card - Alternating Up/Down */}
-                                            <div className={`absolute w-full ${isUp ? 'bottom-[calc(50%+1.25rem)]' : 'top-[calc(50%+1.25rem)]'} bg-slate-900/90 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-3 text-center transition-all z-20 shadow-xl shadow-black/40 backdrop-blur-sm group-hover:-translate-y-1`}>
+                                            <div className={`absolute w-56 left-1/2 -translate-x-1/2 ${isUp ? 'bottom-[calc(50%+1.25rem)]' : 'top-[calc(50%+1.25rem)]'} bg-slate-900/90 border border-white/5 hover:border-${bucketDef?.color}-500/50 rounded-2xl p-3 text-center transition-all z-20 shadow-xl shadow-black/40 backdrop-blur-sm group-hover:-translate-y-1`}>
 
                                                 {/* Connecting vertical tick */}
                                                 <div className={`absolute left-1/2 -ml-[1px] w-[2px] h-[1.5rem] bg-slate-800/50 ${isUp ? 'top-full' : 'bottom-full'}`}></div>
