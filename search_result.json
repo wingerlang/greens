@@ -1,0 +1,53 @@
+[
+  {
+    "key": [
+      "activities",
+      "9c0c8484-ec34-412a-81cc-b49048843cd6",
+      "2026-03-12",
+      "559d539e-82cf-40b1-859d-f9942f68daee"
+    ],
+    "value": {
+      "id": "559d539e-82cf-40b1-859d-f9942f68daee",
+      "userId": "9c0c8484-ec34-412a-81cc-b49048843cd6",
+      "date": "2026-03-12",
+      "status": "COMPLETED",
+      "performance": {
+        "source": {
+          "source": "strava",
+          "externalId": "17693174558",
+          "importedAt": "2026-03-12T07:16:30.505Z"
+        },
+        "distanceKm": 15.3,
+        "durationMinutes": 72.4,
+        "elapsedTimeSeconds": 4344,
+        "calories": 869,
+        "calorieBreakdown": "Formel: Keytel et al. (Male): -55.0969 + (0.6309 * HR) + (0.1988 * W) + (0.2017 * A)\nIndata:\n- Puls: 154 bpm\n- Vikt: 80 kg\n- Ålder: 35 år\n- Tid: 72.4 min\nResultat: ~12.00 kcal/min\n\nNotering: Begränsat från 15.5 till 12.0 kcal/min (rimliga gränser för running: 6-12 kcal/min).",
+        "avgHeartRate": 153.8,
+        "maxHeartRate": 176,
+        "elevationGain": 65,
+        "averageSpeed": 12.6792,
+        "maxSpeed": 18.36,
+        "prCount": 0,
+        "kudosCount": 1,
+        "achievementCount": 0,
+        "activityType": "running",
+        "startTimeLocal": "2026-03-12T05:48:46Z",
+        "notes": "3 x (2000m / 1000m)"
+      },
+      "createdAt": "2026-03-12T07:16:30.506Z",
+      "updatedAt": "2026-03-12T07:16:30.506Z"
+    }
+  },
+  {
+    "key": [
+      "idx_activities_by_id",
+      "559d539e-82cf-40b1-859d-f9942f68daee"
+    ],
+    "value": [
+      "activities",
+      "9c0c8484-ec34-412a-81cc-b49048843cd6",
+      "2026-03-12",
+      "559d539e-82cf-40b1-859d-f9942f68daee"
+    ]
+  }
+]

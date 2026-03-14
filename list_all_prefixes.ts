@@ -1,4 +1,4 @@
-const kv = await Deno.openKv("./greens.db");
+const kv = await Deno.openKv("./guardian.db");
 
 const prefixes = new Set();
 console.log("Listing all prefixes in KV store...");

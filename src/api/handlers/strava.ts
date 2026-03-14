@@ -108,9 +108,14 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
         try {
             const parts = url.pathname.split('/');
             const activityIdStr = parts[4];
-            const activityId = parseInt(activityIdStr, 10);
+            console.log(`[STRAVA API] Requested splits for activity: ${activityIdStr}`);
+            // Ensure we strip any 'strava_' prefix if it exists (for legacy/universal compatibility)
+            const sanitizedIdStr = activityIdStr.replace('strava_', '');
+            const activityId = parseInt(sanitizedIdStr, 10);
+            console.log(`[STRAVA API] Sanitized ID: ${sanitizedIdStr}, Parsed: ${activityId}`);
 
             if (isNaN(activityId)) {
+                console.error(`[STRAVA API] Invalid activity ID: ${sanitizedIdStr}`);
                 return new Response(JSON.stringify({ error: "Invalid activity ID" }), { status: 400, headers });
             }
 

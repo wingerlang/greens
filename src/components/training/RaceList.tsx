@@ -580,6 +580,7 @@ export function RaceList({
                         />
                     </div>
                 </div>
+            </div>
 
                 {/* History Stats Chart (Micro) */}
                 {stats.chartData.length > 0 && (

@@ -352,31 +352,57 @@ export function ActivitiesPage() {
     // 3. Deep Linking Logic
     useEffect(() => {
         const linkedId = searchParams.get('activityId');
-        if (linkedId && allActivities.length > 0) {
-            // 1. Direct match
-            let match = allActivities.find(a => a.id === linkedId);
+        if (!linkedId) return;
 
-            // 2. If no direct match, look inside merged/unified activities
-            if (!match) {
-                match = allActivities.find(a => {
-                    // Check Strava ID
-                    if (a.externalId === linkedId) return true;
-                    // Check _mergeData (for strength/strava merged)
-                    const am = a as any;
-                    if (am._mergeData) {
-                        if (am._mergeData.strava?.id === linkedId) return true;
-                        if (am._mergeData.strength?.id === linkedId) return true;
-                        if (am._mergeData.universalActivity?.id === linkedId) return true;
-                    }
-                    return false;
-                });
-            }
+        // 1. Check if already selected (avoid re-fetch)
+        if (selectedActivity?.id === linkedId) return;
 
-            if (match) {
-                setSelectedActivity(match);
-            }
+        // 2. Try to find in local state
+        let match = allActivities.find(a => a.id === linkedId);
+
+        // 3. If no direct match, look inside merged/unified activities
+        if (!match) {
+            match = allActivities.find(a => {
+                // Check Strava ID
+                if (a.externalId === linkedId) return true;
+                // Check _mergeData
+                const am = a as any;
+                if (am._mergeData) {
+                    if (am._mergeData.strava?.id === linkedId) return true;
+                    if (am._mergeData.strength?.id === linkedId) return true;
+                    if (am._mergeData.universalActivity?.id === linkedId) return true;
+                }
+                return false;
+            });
         }
-    }, [searchParams, allActivities]);
+
+        if (match) {
+            setSelectedActivity(match);
+        } else if (token && allActivities.length > 0) {
+            // 4. If still not found, try fetching from backend
+            console.log(`[ActivitiesPage] Activity ${linkedId} not found locally, attempting fetch...`);
+            fetch(`/api/activities/${linkedId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.id) {
+                        console.log(`[ActivitiesPage] Successfully fetched activity ${linkedId} from backend`);
+                        // Map universal activity to legacy format for the modal (using our mapper)
+                        const mapped = mapUniversalToLegacyEntry(data);
+                        if (mapped) {
+                            // Ensure source is present to satisfy state type requirement
+                            const withSource = {
+                                ...mapped,
+                                source: mapped.source || data.performance?.source?.source || 'unknown'
+                            } as (ExerciseEntry & { source: string });
+                            setSelectedActivity(withSource);
+                        }
+                    }
+                })
+                .catch(err => console.error('[ActivitiesPage] Failed to fetch deep-linked activity:', err));
+        }
+    }, [searchParams, allActivities, token]);
 
     // Update URL when opening/closing modal
     const handleSetSelectedActivity = (activity: (ExerciseEntry & { source: string }) | null) => {

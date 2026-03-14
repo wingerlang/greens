@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown, Flame, Scale } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 
@@ -290,6 +290,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             const strengthExercises = weekExercises.filter(e => e.type.toLowerCase().includes('strength') || e.type.toLowerCase().includes('styrka'));
                             const weekRunDist = runExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
                             const weekStrengthMin = strengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const weekTonnage = weekExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
+                            const weekCalories = weekExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
                             const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
 
                             const firstValidDay = week[0];
@@ -514,7 +516,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                         <div className="flex flex-col items-center gap-0.5 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-2 sm:mt-3">
                                             <div className="flex flex-col gap-0.5 w-full">
                                                 {weekRunDist > 0 && (
-                                                    <div className="flex items-center justify-between bg-emerald-500/10 text-emerald-400 px-1.5 py-1 rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10">
+                                                    <div className="flex items-center justify-between bg-emerald-500/10 text-emerald-400 px-1.5 py-1 rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10 mb-0.5">
                                                         <Activity className="w-3.5 h-3.5 stroke-[3]" />
                                                         <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5">km</span></span>
 
@@ -549,7 +551,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     </div>
                                                 )}
                                                 {weekStrengthMin > 0 && (
-                                                    <div className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10">
+                                                    <div className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10 mb-0.5">
                                                         <Dumbbell className="w-3.5 h-3.5" />
                                                         <span>
                                                             {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
@@ -583,6 +585,38 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 <span className="text-indigo-400 font-mono">
                                                                     {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h ` : ''}{Math.round(weekStrengthMin % 60)}m
                                                                 </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {weekTonnage > 0 && (
+                                                    <div className="flex items-center justify-between bg-slate-800/50 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weektng hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
+                                                        <Scale className="w-3.5 h-3.5" />
+                                                        <span>{(weekTonnage / 1000).toFixed(1)}<span className="text-[8px] ml-0.5">t</span></span>
+                                                        <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weektng:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weektng:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weektng:scale-100 shadow-indigo-500/10">
+                                                            <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Styrkevolym</div>
+                                                            <div className="space-y-1 text-xs">
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-slate-500">Totalt</span>
+                                                                    <span className="text-indigo-400 font-mono font-bold">{weekTonnage.toLocaleString('sv-SE')} kg</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-slate-500">I ton</span>
+                                                                    <span className="text-indigo-400 font-mono font-bold">{(weekTonnage / 1000).toFixed(2)} t</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {weekCalories > 0 && (
+                                                    <div className="flex items-center justify-between bg-slate-800/50 text-rose-400 px-1.5 py-1 rounded cursor-help relative group/weekcal hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
+                                                        <Flame className="w-3.5 h-3.5" />
+                                                        <span>{Math.round(weekCalories)}<span className="text-[8px] ml-0.5">cal</span></span>
+                                                        <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weekcal:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weekcal:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekcal:scale-100 shadow-rose-500/10">
+                                                            <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Energiförbrukning</div>
+                                                            <div className="flex justify-between text-xs">
+                                                                <span className="text-slate-500 text-[10px] uppercase font-black tracking-widest">Totalt</span>
+                                                                <span className="text-rose-400 font-mono font-bold">{Math.round(weekCalories).toLocaleString('sv-SE')} kcal</span>
                                                             </div>
                                                         </div>
                                                     </div>

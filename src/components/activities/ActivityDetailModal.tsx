@@ -219,7 +219,7 @@ export function ActivityDetailModal({
     setSelectedActivityId
 }: ActivityDetailModalProps) {
     const navigate = useNavigate();
-    const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
+    const perf = universalActivity?.performance || (activity as any).performance || activity._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
 
@@ -417,7 +417,7 @@ export function ActivityDetailModal({
 
 
     // Derived splits helper
-    const splits = universalActivity?.performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || [];
+    const splits = universalActivity?.performance?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits || [];
     const hasSplits = splits.length > 0;
     const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
 
@@ -431,7 +431,7 @@ export function ActivityDetailModal({
 
 
     // Compute existingSplits here so it's available for both the useEffect and the UI
-    const existingSplits = perf?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
+    const existingSplits = perf?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure || (existingSplits && existingSplits.length > 0);
 
     const segmentedSplits = React.useMemo(() => {
@@ -660,10 +660,21 @@ export function ActivityDetailModal({
 
     // Auto-fetch splits if Strava activity is missing them
     useEffect(() => {
-        const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
-        const source = perf?.source?.source || activity.source;
+        // Reset fetch state if the activity ID changes
+        if (activity.id !== (window as any)._lastActivityId) {
+            setFetchSplitsResult('idle');
+            (window as any)._lastActivityId = activity.id;
+        }
+
+        const perf = universalActivity?.performance || (activity as any).performance || activity._mergeData?.universalActivity?.performance;
+        const source = perf?.source?.source || activity.source || (activity as any).platform || (activity as any).source;
         const externalId = perf?.source?.externalId || activity.externalId;
-        // existingSplits computed at component scope
+
+        // More robust Strava detection
+        const effectivelyStrava =
+            source === 'strava' ||
+            (typeof externalId === 'string' && (externalId.startsWith('strava_') || /^\d+$/.test(externalId))) ||
+            (typeof externalId === 'number');
 
         // existingLaps calculated
         const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
@@ -671,16 +682,17 @@ export function ActivityDetailModal({
         // We trigger fetch if EITHER splits or laps are missing
         const needsFetch = (!existingSplits || existingSplits.length === 0) || (!existingLaps || existingLaps.length === 0);
 
-        console.log("Auto-fetch check:", { source, externalId, needsFetch, fetchSplitsResult, hasToken: !!token });
-        if (source === 'strava' && externalId && needsFetch && fetchSplitsResult === 'idle' && token) {
+        if (effectivelyStrava && externalId && needsFetch && fetchSplitsResult === 'idle' && token && !isFetchingSplits) {
+            console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
                 try {
-                    console.log("Fetching splits from Strava API for external ID:", externalId);
-                    const res = await fetch(`/api/strava/activities/${externalId}/splits`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
+                    // Sanitize externalId: strip 'strava_' prefix if present
+                    const sanitizedId = typeof externalId === 'string' ? externalId.replace('strava_', '') : externalId.toString();
+
+                    console.log("Fetching splits from Strava API for external ID:", sanitizedId);
+                    const res = await fetch(`/api/strava/activities/${sanitizedId}/splits`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
 
                     if (res.ok) {
@@ -735,14 +747,18 @@ export function ActivityDetailModal({
                                 })
                             });
                         } else {
-                            // No splits on strava
+                            console.log("No splits found in Strava API response");
                             setFetchSplitsResult('error');
                         }
+                    } else if (res.status === 404) {
+                        console.warn("Strava splits not found (404)");
+                        setFetchSplitsResult('error');
                     } else {
+                        console.error("❌ ActivityDetailModal: Split fetch failed with status:", res.status);
                         setFetchSplitsResult('error');
                     }
                 } catch (err) {
-                    console.error("Failed to fetch splits", err);
+                    console.error("❌ ActivityDetailModal: Split fetch error:", err);
                     setFetchSplitsResult('error');
                 } finally {
                     setIsFetchingSplits(false);
@@ -751,7 +767,7 @@ export function ActivityDetailModal({
 
             fetchSplits();
         }
-    }, [activity, universalActivity, token, fetchSplitsResult, updateExercise]);
+    }, [activity.id, activity.source, activity.externalId, (activity as any).platform, universalActivity, token, existingSplits, fetchSplitsResult, updateExercise, isFetchingSplits]);
 
     // Apply Category Helper - Updates the EXISTING activity's subType
     const handleApplyCategory = (category: ExerciseSubType) => {

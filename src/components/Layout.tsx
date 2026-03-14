@@ -219,7 +219,7 @@ export function Layout({ children }: LayoutProps) {
             )}
 
             <Navigation onOpenOmnibox={() => setIsOmniboxOpen(true)} onStravaSync={() => setIsStravaSyncOpen(true)} />
-            <main className="flex-1 w-full max-w-[1536px] mx-auto p-1 md:p-6">
+            <main className="flex-1 w-full max-w-[1536px] mx-auto p-1 md:p-2">
                 {children}
             </main>
             <Footer />

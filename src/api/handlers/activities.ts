@@ -14,6 +14,25 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
     const { user: session, token } = ctx;
     const userId = session.id; // ctx.user.id is string
 
+    // GET /api/activities/:id
+    if (url.pathname.startsWith("/api/activities/") && method === "GET") {
+        const parts = url.pathname.split('/');
+        if (parts.length === 4) {
+            try {
+                const activityId = parts[3];
+                const activity = await activityRepo.getActivityById(activityId);
+
+                if (!activity || activity.userId !== userId) {
+                    return new Response(JSON.stringify({ error: "Activity not found" }), { status: 404, headers });
+                }
+
+                return new Response(JSON.stringify(activity), { headers });
+            } catch (e: any) {
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+            }
+        }
+    }
+
     // GET /api/activities
     if (url.pathname === "/api/activities" && method === "GET") {
         try {
