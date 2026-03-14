@@ -68,6 +68,23 @@ export interface StravaActivity {
         pace_zone?: number;
     }>;
     excludeFromStats?: boolean;
+    laps?: Array<{
+        name: string;
+        elapsed_time: number;
+        moving_time: number;
+        start_date_local: string;
+        distance: number;
+        start_index: number;
+        end_index: number;
+        total_elevation_gain: number;
+        average_speed: number;
+        max_speed: number;
+        average_heartrate: number;
+        max_heartrate: number;
+        lap_index: number;
+        split: number;
+        pace_zone: number;
+    }>;
 }
 
 export interface StravaAthlete {
@@ -569,6 +586,16 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             elevationDiff: s.elevation_difference,
             averageSpeed: s.average_speed,
             averageHeartrate: s.average_heartrate
+        })),
+        laps: activity.laps?.map(l => ({
+            name: l.name,
+            elapsedTime: l.elapsed_time,
+            movingTime: l.moving_time,
+            distance: l.distance,
+            averageSpeed: l.average_speed,
+            averageHeartrate: l.average_heartrate,
+            lapIndex: l.lap_index,
+            split: l.split
         }))
     };
 }

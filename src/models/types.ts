@@ -1226,6 +1226,16 @@ export interface ActivityPerformanceSection {
         averageSpeed: number;
         averageHeartrate?: number;
     }>;
+    laps?: Array<{
+        name: string;
+        elapsedTime: number;
+        movingTime: number;
+        distance: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+        lapIndex?: number;
+        split?: number;
+    }>;
     prCount?: number;
     isHiddenInCalendar?: boolean;
 }

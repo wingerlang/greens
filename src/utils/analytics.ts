@@ -220,7 +220,7 @@ export function calculateExerciseCalories(
     weight: number
 ): number {
     // MET values
-    const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
+    const METS: any = {
         running: { low: 6, moderate: 8, high: 11, ultra: 14 },
         cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
         strength: { low: 2.5, moderate: 3.5, high: 5.0, ultra: 7.0 }, // Adjusted downwards to align better with Strava
