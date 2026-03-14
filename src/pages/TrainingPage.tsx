@@ -343,7 +343,7 @@ export function TrainingPage() {
 
 
             {/* Period Selector - Sticky Header */}
-            <div className="sticky top-[64px] z-40 -mx-4 px-4 py-4 mb-8 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl">
+            <div className="sticky top-[64px] z-40 -mx-4 px-4 py-1 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl">
                 <div className="flex flex-nowrap items-center gap-2 max-w-7xl mx-auto overflow-x-auto no-scrollbar">
                     <div className="flex items-center gap-2 px-3 border-r border-white/5 mr-1">
                         <span className="text-xl">📅</span>

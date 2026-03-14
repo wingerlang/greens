@@ -50,7 +50,7 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
     };
 
     return (
-        <div className="flex p-1 bg-slate-900 border border-white/5 rounded-xl mb-6 overflow-x-auto no-scrollbar">
+        <div className="flex p-1 bg-slate-900 border border-white/5 rounded-sm mb-2 overflow-x-auto no-scrollbar">
             {tabs.map(tab => (
                 <button
                     key={tab.id}

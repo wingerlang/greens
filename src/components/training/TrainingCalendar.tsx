@@ -41,6 +41,9 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     const monthDropdownRef = useRef<HTMLDivElement>(null);
     const yearDropdownRef = useRef<HTMLDivElement>(null);
 
+    // Pinned Tooltip State
+    const [pinnedTooltip, setPinnedTooltip] = useState<string | null>(null);
+
     const monthName = MONTHS[monthIndex];
 
     const exercises = useMemo(() => {
@@ -59,10 +62,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             if (yearDropdownRef.current && !yearDropdownRef.current.contains(e.target as Node)) {
                 setIsYearDropdownOpen(false);
             }
+            // Clear pinned tooltip if clicking outside
+            if (pinnedTooltip && !(e.target as Element).closest('.calendar-tooltip-container')) {
+                setPinnedTooltip(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [pinnedTooltip]);
 
     // Navigation helpers
     const navigateTo = useCallback((newYear: number, newMonthIdx: number) => {
@@ -194,9 +201,9 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     }, []);
 
     return (
-        <div className="bg-slate-900 border border-white/5 rounded-2xl shadow-xl w-full flex flex-col overflow-visible transition-all duration-300 relative z-10 my-8">
+        <div className="bg-slate-900 border border-white/5 rounded-lg shadow-xl w-full flex flex-col overflow-visible transition-all duration-300 relative z-10 my-4">
             {/* Header: Month/Year Nav */}
-            <div className="bg-slate-950/50 border-b border-white/5 p-4 flex items-center justify-between overflow-visible rounded-t-2xl relative z-50">
+            <div className="bg-slate-950/50 border-b border-white/5 p-4 flex items-center justify-between overflow-visible rounded-t-lg relative z-50">
                 <div className="flex flex-col gap-2 relative z-50">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
@@ -254,23 +261,24 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                 </div>
                             )}
                         </div>
+                        <div className="flex justify-end mb-2">
+                            <button
+                                onClick={() => setIsReversed(!isReversed)}
+                                className={`p-1.5 rounded-lg border transition-colors flex items-center text-xs font-bold ${isReversed ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                title="Växla sorteringsordning på veckor"
+                            >
+                                <ArrowDownUp className="w-3.5 h-3.5" />
+                                {isReversed ? 'Senaste först' : 'Äldsta först'}
+                            </button>
+                        </div>
                     </div>
+
+
                 </div>
             </div>
 
             {/* Main Content: Calendar Grid */}
             <div className="flex-1 p-1 sm:p-2 lg:p-3 bg-gradient-to-br from-slate-900 to-slate-800/50 relative z-10 flex flex-col justify-center">
-                <div className="flex justify-end mb-2">
-                    <button
-                        onClick={() => setIsReversed(!isReversed)}
-                        className={`p-1.5 rounded-lg border transition-colors flex items-center text-xs font-bold ${isReversed ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
-                        title="Växla sorteringsordning på veckor"
-                    >
-                        <ArrowDownUp className="w-3.5 h-3.5" />
-                        {isReversed ? 'Senaste först' : 'Äldsta först'}
-                    </button>
-                </div>
-
                 <div className="grid grid-cols-8 mb-1 sm:mb-1">
                     {['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön', 'Tot'].map((d, i) => (
                         <div key={d} className={`text-center text-[10px] sm:text-xs uppercase font-bold tracking-wider ${i === 7 ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -516,14 +524,31 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                         <div className="flex flex-col items-center gap-0.5 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-2 sm:mt-3">
                                             <div className="flex flex-col gap-0.5 w-full">
                                                 {weekRunDist > 0 && (
-                                                    <div className="flex items-center justify-between bg-emerald-500/10 text-emerald-400 px-1.5 py-1 rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10 mb-0.5">
+                                                    <div
+                                                        className="flex items-center justify-between bg-emerald-500/10 text-emerald-400 px-1.5 py-1 rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10 mb-0.5 calendar-tooltip-container"
+                                                        onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `run-${weekIdx}` ? null : `run-${weekIdx}`) }}
+                                                    >
                                                         <Activity className="w-3.5 h-3.5 stroke-[3]" />
-                                                        <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5">km</span></span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5 font-bold uppercase">km</span></span>
+                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
+                                                            <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.2 font-bold uppercase opacity-70 italic">st</span></span>
+                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
+                                                            <span className="text-[10px]">
+                                                                {(() => {
+                                                                    const mins = runExercises.reduce((acc, e) => acc + e.durationMinutes, 0);
+                                                                    return Math.floor(mins / 60) > 0 ? `${Math.floor(mins / 60)}h${Math.round(mins % 60)}m` : `${Math.round(mins)}m`;
+                                                                })()}
+                                                            </span>
+                                                        </div>
 
                                                         {/* Rich Tooltip */}
-                                                        <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-sm p-4 shadow-2xl opacity-0 xl:group-hover/weekrun:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weekrun:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekrun:scale-100 shadow-emerald-500/10">
-                                                            <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Löpning</div>
-                                                            <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                        <div
+                                                            className={`absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-sm p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-emerald-500/10 ${pinnedTooltip === `run-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weekrun:opacity-100 -translate-x-2 xl:group-hover/weekrun:translate-x-0 pointer-events-none xl:group-hover/weekrun:scale-100 cursor-default'}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10">Veckans Löpning</div>
+                                                            <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                                 {runExercises.map((e, idx) => {
                                                                     const [dYear, dMonth, dDay] = e.date.split('-');
                                                                     const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
@@ -537,30 +562,46 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                     search: window.location.search
                                                                                 }, { replace: true });
                                                                             }}>
-                                                                            <span className="capitalize truncate text-slate-200 font-medium" title={e.title || e.type}>{e.title || 'Löpning'}</span>
-                                                                            <span className="text-white font-mono font-bold shrink-0 text-xs">{e.distance?.toFixed(1)}km</span>
+                                                                            <span className="capitalize text-emerald-100 font-medium truncate" title={e.title || e.type}>{e.subType === 'race' ? '🏆 ' : ''}{e.title || 'Löpning'}</span>
+                                                                            <div className="text-right shrink-0">
+                                                                                <div className="text-emerald-400 font-mono font-bold text-xs">{e.distance?.toFixed(1)}km</div>
+                                                                                <div className="text-slate-400 font-mono text-[9px]">{Math.round(e.durationMinutes)}m • {Math.round(e.caloriesBurned || 0)} kcal</div>
+                                                                            </div>
                                                                         </div>
                                                                     );
                                                                 })}
                                                             </div>
-                                                            <div className="mt-3 pt-3 border-t border-white/5 flex justify-between text-xs font-black">
+                                                            <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs font-black items-end">
                                                                 <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
-                                                                <span className="text-emerald-400 font-mono">{weekRunDist.toFixed(1)} km</span>
+                                                                <div className="text-right">
+                                                                    <div className="text-emerald-400 font-mono">{weekRunDist.toFixed(1)} km</div>
+                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">{runExercises.reduce((acc, e) => acc + e.durationMinutes, 0)}m</div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
                                                 {weekStrengthMin > 0 && (
-                                                    <div className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10 mb-0.5">
+                                                    <div
+                                                        className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10 mb-0.5 calendar-tooltip-container"
+                                                        onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `str-${weekIdx}` ? null : `str-${weekIdx}`) }}
+                                                    >
                                                         <Dumbbell className="w-3.5 h-3.5" />
-                                                        <span>
-                                                            {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
-                                                            {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
-                                                        </span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span>
+                                                                {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
+                                                                {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
+                                                            </span>
+                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
+                                                            <span className="text-[10px]">{strengthExercises.length}<span className="text-[8px] ml-0.2 font-bold uppercase opacity-70 italic">st</span></span>
+                                                        </div>
                                                         {/* Rich Tooltip */}
-                                                        <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weekstr:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weekstr:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekstr:scale-100 shadow-indigo-500/10">
-                                                            <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Styrka</div>
-                                                            <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                        <div
+                                                            className={`absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-indigo-500/10 ${pinnedTooltip === `str-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weekstr:opacity-100 -translate-x-2 xl:group-hover/weekstr:translate-x-0 pointer-events-none xl:group-hover/weekstr:scale-100 cursor-default'}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10">Veckans Styrka</div>
+                                                            <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                                 {strengthExercises.map((e, idx) => {
                                                                     const [dYear, dMonth, dDay] = e.date.split('-');
                                                                     const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
@@ -574,17 +615,23 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                     search: window.location.search
                                                                                 }, { replace: true });
                                                                             }}>
-                                                                            <span className="capitalize truncate text-slate-200 font-medium" title={e.title || e.type}>{e.title || 'Styrka'}</span>
-                                                                            <span className="text-white font-mono font-bold shrink-0 text-xs">{Math.round(e.durationMinutes)}m</span>
+                                                                            <span className="capitalize text-indigo-100 font-medium truncate" title={e.title || e.type}>{e.title || 'Styrka'}</span>
+                                                                            <div className="text-right shrink-0">
+                                                                                <div className="text-indigo-400 font-mono font-bold text-xs">{Math.round(e.durationMinutes)}m</div>
+                                                                                <div className="text-slate-400 font-mono text-[9px]">{(e.tonnage || 0) > 0 ? `${(e.tonnage! / 1000).toFixed(1)}t • ` : ''}{Math.round(e.caloriesBurned || 0)} kcal</div>
+                                                                            </div>
                                                                         </div>
                                                                     );
                                                                 })}
                                                             </div>
-                                                            <div className="mt-3 pt-3 border-t border-white/5 flex justify-between text-xs font-black">
+                                                            <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs font-black items-end">
                                                                 <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
-                                                                <span className="text-indigo-400 font-mono">
-                                                                    {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h ` : ''}{Math.round(weekStrengthMin % 60)}m
-                                                                </span>
+                                                                <div className="text-right">
+                                                                    <div className="text-indigo-400 font-mono">
+                                                                        {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h ` : ''}{Math.round(weekStrengthMin % 60)}m
+                                                                    </div>
+                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">{(weekTonnage / 1000).toFixed(1)}t</div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -609,11 +656,17 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     </div>
                                                 )}
                                                 {weekCalories > 0 && (
-                                                    <div className="flex items-center justify-between bg-slate-800/50 text-rose-400 px-1.5 py-1 rounded cursor-help relative group/weekcal hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
+                                                    <div
+                                                        className="flex items-center justify-between bg-slate-800/50 text-rose-400 px-1.5 py-1 rounded cursor-help relative group/weekcal hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5 calendar-tooltip-container"
+                                                        onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `cal-${weekIdx}` ? null : `cal-${weekIdx}`) }}
+                                                    >
                                                         <Flame className="w-3.5 h-3.5" />
                                                         <span>{Math.round(weekCalories)}<span className="text-[8px] ml-0.5">cal</span></span>
-                                                        <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weekcal:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weekcal:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weekcal:scale-100 shadow-rose-500/10">
-                                                            <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Energiförbrukning</div>
+                                                        <div
+                                                            className={`absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-rose-500/10 ${pinnedTooltip === `cal-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weekcal:opacity-100 -translate-x-2 xl:group-hover/weekcal:translate-x-0 pointer-events-none xl:group-hover/weekcal:scale-100 cursor-default'}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10">Veckans Energiförbrukning</div>
                                                             <div className="flex justify-between text-xs">
                                                                 <span className="text-slate-500 text-[10px] uppercase font-black tracking-widest">Totalt</span>
                                                                 <span className="text-rose-400 font-mono font-bold">{Math.round(weekCalories).toLocaleString('sv-SE')} kcal</span>
@@ -627,23 +680,52 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                             </div>
 
                                             {weekTotalMin > 0 && (
-                                                <div className="flex items-center justify-between border-t border-white/5 pt-1 mt-0.5 w-full text-[9px] sm:text-[10px] relative group/weektot cursor-help px-1">
-                                                    <span className="text-slate-500 hidden xl:inline">Tot.</span>
-                                                    <span className="text-slate-300 ml-auto flex items-center gap-1.5 font-bold">
-                                                        <span className="text-slate-500">{weekExercises.length}st</span>
-                                                        <span>
-                                                            {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}
-                                                            {Math.round(weekTotalMin % 60)}m
+                                                <div
+                                                    className="flex flex-col border-t border-white/5 pt-1 w-full relative group/weektot cursor-help calendar-tooltip-container"
+                                                    onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `tot-${weekIdx}` ? null : `tot-${weekIdx}`) }}
+                                                >
+                                                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest text-left w-full pl-0.5 mb-0.5 mt-0.5">TOT</span>
+                                                    <div className="flex items-center justify-between w-full px-0.5 bg-white/5 rounded py-1 hover:bg-white/10 transition-colors">
+                                                        <span className="text-[10px] text-slate-400 font-bold">{weekExercises.length} pass</span>
+                                                        <span className="text-[10px] text-slate-300 font-mono font-bold">
+                                                            {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h` : ''}
+                                                            {Math.floor(weekTotalMin / 60) > 0 && Math.round(weekTotalMin % 60) === 0 ? '' : `${Math.round(weekTotalMin % 60)}m`}
                                                         </span>
-                                                    </span>
+                                                    </div>
                                                     {/* Rich Tooltip */}
-                                                    <div className="absolute right-full mr-2 bottom-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weektot:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weektot:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weektot:scale-100 shadow-sky-500/10">
-                                                        <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Alla Pass</div>
-                                                        <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                    <div
+                                                        className={`absolute right-full mr-2 bottom-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-sky-500/10 ${pinnedTooltip === `tot-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weektot:opacity-100 -translate-x-2 xl:group-hover/weektot:translate-x-0 pointer-events-none xl:group-hover/weektot:scale-100 cursor-default'}`}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10 flex justify-between">
+                                                            <span>Alla pass v. {weekNumberStr.replace('v. ', '')}</span>
+                                                            <span className="text-sky-400">{weekExercises.length} st</span>
+                                                        </div>
+                                                        <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                             {weekExercises.map((e, idx) => {
                                                                 const [dYear, dMonth, dDay] = e.date.split('-');
                                                                 const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
                                                                 const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
+
+                                                                const isRun = e.type.includes('run') || e.type.includes('löp');
+                                                                const isStrength = e.type.includes('strength') || e.type.includes('styrka');
+                                                                const isRace = e.subType === 'race';
+
+                                                                let colorName = 'text-slate-200';
+                                                                if (isRace) colorName = 'text-amber-400 font-bold';
+                                                                else if (isRun) colorName = 'text-emerald-100';
+                                                                else if (isStrength) colorName = 'text-indigo-100';
+                                                                else if (e.type.includes('cycl')) colorName = 'text-sky-100';
+                                                                else if (e.type.includes('walk')) colorName = 'text-amber-100';
+
+                                                                let valueStr = Math.round(e.durationMinutes) + 'm';
+                                                                if (e.distance && e.distance > 0) valueStr = e.distance.toFixed(1) + 'km';
+
+                                                                let valColor = 'text-slate-300';
+                                                                if (isRun) valColor = 'text-emerald-400';
+                                                                else if (isStrength) valColor = 'text-indigo-400';
+                                                                else if (e.type.includes('cycl')) valColor = 'text-sky-400';
+
                                                                 return (
                                                                     <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1.5 -mx-1.5 rounded-lg cursor-pointer transition-colors"
                                                                         onClick={() => {
@@ -653,21 +735,27 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                 search: window.location.search
                                                                             }, { replace: true });
                                                                         }}>
-                                                                        <span className="capitalize truncate text-slate-200 font-medium" title={e.title || e.type}>
-                                                                            {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                        <span className={`capitalize truncate text-[11px] ${colorName}`} title={e.title || e.type}>
+                                                                            {isRace ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
                                                                         </span>
-                                                                        <span className="text-white font-mono font-bold shrink-0 text-xs">
-                                                                            {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
-                                                                        </span>
+                                                                        <div className="text-right shrink-0">
+                                                                            <span className={`font-mono font-bold text-xs ${valColor}`}>
+                                                                                {valueStr}
+                                                                            </span>
+                                                                            <div className="text-slate-500 font-mono text-[9px] mt-0.5">{Math.round(e.caloriesBurned || 0)} kcal</div>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}
                                                         </div>
-                                                        <div className="mt-3 pt-3 border-t border-white/5 flex justify-between text-xs font-black">
+                                                        <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs font-black items-end">
                                                             <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
-                                                            <span className="text-sky-400 font-mono">
-                                                                {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}{Math.round(weekTotalMin % 60)}m
-                                                            </span>
+                                                            <div className="text-right">
+                                                                <div className="text-sky-400 font-mono">
+                                                                    {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}{Math.round(weekTotalMin % 60)}m
+                                                                </div>
+                                                                <div className="text-slate-500 font-mono text-[9px] font-normal">{Math.round(weekCalories)} kcal</div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
