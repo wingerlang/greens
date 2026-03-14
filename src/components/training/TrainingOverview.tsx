@@ -224,7 +224,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Tid totalt</div>
                         </div>
                         <div>
-                            <div className="text-3xl font-black text-sky-400">{stats.year.count} <span className="text-sm font-bold text-sky-500/50">st</span></div>
+                            <div className="text-3xl font-black text-sky-400">{stats.year.count} <span className="text-sm font-bold text-sky-500/50">pass</span></div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Antal pass</div>
                         </div>
                     </div>

@@ -495,20 +495,20 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                         <span className="text-slate-600 mx-1.5">•</span>
                                                         <span className="text-slate-300">{row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}</span>
                                                         <span className="text-slate-600 mx-1.5">•</span>
-                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} st</span>
+                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} pass</span>
                                                     </div>
                                                     <div className="p-3 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
                                                         <span className="text-indigo-400 font-bold">{row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
                                                         <span className="text-slate-600 mx-1.5">•</span>
                                                         <span className="text-slate-300">{row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}</span>
                                                         <span className="text-slate-600 mx-1.5">•</span>
-                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} st</span>
+                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} pass</span>
                                                     </div>
                                                     <div className="p-3 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other">
                                                         {row.categories.other.duration > 0 ? (
                                                             <>
                                                                 <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
-                                                                    {fmtDur(row.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{row.categories.other.count} st</span>
+                                                                    {fmtDur(row.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{row.categories.other.count} pass</span>
                                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other:text-sky-400 transition-colors" />
                                                                 </span>
 
@@ -520,7 +520,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                                         </div>
                                                                         <div className="flex flex-col">
                                                                             <span className="text-[10px] font-black uppercase tracking-widest text-white">Övrig Träning</span>
-                                                                            <span className="text-[9px] text-slate-500 font-bold">{months[i]} {year}</span>
+                                                                            <span className="text-[9px] text-slate-500 font-bold">{months[row.monthIdx]} {row.year}</span>
                                                                         </div>
                                                                     </div>
 
@@ -604,7 +604,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <>
                                                     <div className="p-3 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
                                                     <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
                                                     <div className="p-3 text-right text-slate-400 font-mono">
                                                         {row.selected.count > 0 ? ((row.selected.tonnage / 1000) / row.selected.count).toFixed(1) + ' t' : '-'}
                                                     </div>
@@ -613,8 +613,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <>
                                                     <div className="p-3 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
                                                     <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-3 text-right text-slate-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration)}</div>
-                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
                                                     <div className="p-3 text-right text-slate-400 font-mono">
                                                         {row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}
                                                     </div>
@@ -675,20 +674,20 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-300">{totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} st</span>
+                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} pass</span>
                                     </div>
                                     <div className="p-3 text-right font-mono text-xs border-r border-white/5">
                                         <span className="text-indigo-400">{totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-300">{totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} st</span>
+                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} pass</span>
                                     </div>
                                     <div className="p-3 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other-total">
                                         {totals.categories.other.duration > 0 ? (
                                             <>
                                                 <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
-                                                    {fmtDur(totals.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{totals.categories.other.count} st</span>
+                                                    {fmtDur(totals.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{totals.categories.other.count} pass</span>
                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other-total:text-sky-400 transition-colors" />
                                                 </span>
 
@@ -784,7 +783,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                 <>
                                     <div className="p-3 text-right text-indigo-400">{fmtTon(totals.selected.tonnage)}</div>
                                     <div className="p-3 text-right text-white">{fmtDur(totals.selected.duration)}</div>
-                                    <div className="p-3 text-right text-white">{totals.selected.count} st</div>
+                                    <div className="p-3 text-right text-white">{totals.selected.count} pass</div>
                                     <div className="p-3 text-right text-slate-400">
                                         {totals.selected.count > 0 ? ((totals.selected.tonnage / 1000) / totals.selected.count).toFixed(1) + ' t' : '-'}
                                     </div>
@@ -794,7 +793,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                     <div className="p-3 text-right text-emerald-400">{fmtDist(totals.selected.distance)}</div>
                                     <div className="p-3 text-right text-white">{fmtDur(totals.selected.duration)}</div>
                                     <div className="p-3 text-right text-slate-400">{fmtPace(totals.selected.distance, totals.selected.duration)}</div>
-                                    <div className="p-3 text-right text-white">{totals.selected.count} st</div>
+                                    <div className="p-3 text-right text-white">{totals.selected.count} pass</div>
                                     <div className="p-3 text-right text-slate-400">
                                         {totals.selected.count > 0 ? (totals.selected.distance / totals.selected.count).toFixed(1) + ' km' : '-'}
                                     </div>

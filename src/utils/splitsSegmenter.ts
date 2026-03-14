@@ -41,8 +41,12 @@ export interface SegmentedSplits {
     };
 }
 
-export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout): SegmentedSplits | null {
+export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?: string): SegmentedSplits | null {
     if (!splits || splits.length < 3) return null;
+
+    const lowerTitle = (title || '').toLowerCase();
+    const isExplicitlyDistance = lowerTitle.includes('distans') || lowerTitle.includes('zone 2') || lowerTitle.includes('z2') || lowerTitle.includes('lugnt');
+    const isExplicitlyInterval = lowerTitle.includes('intervall') || lowerTitle.includes('reps') || lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || (parsed && parsed.suggestedSubType === 'interval');
 
     // 1. Beräkna tempo (sekunder per km)
     const paces = splits.map(s => s.movingTime / (Math.max(s.distance, 1) / 1000));
@@ -66,6 +70,25 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout): Segmen
         if (g2.length) c2 = g2.reduce((a, b) => a + b, 0) / g2.length;
         if (g3.length) c3 = g3.reduce((a, b) => a + b, 0) / g3.length;
     }
+
+    // --- Robusthets-checkar ---
+    const maxPace = Math.max(...paces);
+    const minPace = Math.min(...paces);
+    const paceRange = maxPace - minPace;
+    const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
+
+    // 1. Om spridningen är för liten (t.ex totalt under 25s/km skillnad mellan snabbaste och långsammaste), 
+    //    så är det troligen bara ett vanligt pass med naturlig variation.
+    const minRequiredRange = isExplicitlyInterval ? 15 : 35; // Kräver mer spridning om det inte uttryckligen är intervall
+    if (paceRange < minRequiredRange && !isExplicitlyInterval) return null;
+
+    // 2. Om det uttryckligen heter "distans" och spridningen är under en viss tröskel, avbryt.
+    if (isExplicitlyDistance && paceRange < 50) return null;
+
+    // 3. Kontrollera att det faktiskt är en meningsfull skillnad mellan Intervall-klustret och Vila-klustret
+    const clusterDiff = Math.abs(c1 - c2);
+    const minClusterDiff = isExplicitlyInterval ? 10 : 25;
+    if (clusterDiff < minClusterDiff && !isExplicitlyInterval) return null;
 
     // Tröskeln läggs rakt mellan intervall-snittet och vilo-snittet
     const threshold = (c1 + c2) / 2;

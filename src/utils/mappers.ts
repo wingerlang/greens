@@ -50,6 +50,8 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         excludeFromStats: a.performance.excludeFromStats,
         hyroxStats: (a.performance as any).hyroxStats,
         source: a.performance.source?.source || 'unknown',
+        splits: a.performance.splits,
+        laps: a.performance.laps,
     };
 }
 

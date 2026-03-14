@@ -437,8 +437,16 @@ export function ActivityDetailModal({
     const segmentedSplits = React.useMemo(() => {
         const splitsData = existingSplits || splits;
         if (!splitsData || splitsData.length < 3) return null;
-        return segmentSplits(splitsData, parsedWorkout);
-    }, [existingSplits, splits, parsedWorkout]);
+        return segmentSplits(splitsData, parsedWorkout, activity.title);
+    }, [existingSplits, splits, parsedWorkout, activity.title]);
+
+    const areLapsAndSplitsIdentical = React.useMemo(() => {
+        if (!splits || !existingLaps || splits.length !== existingLaps.length) return false;
+        return splits.every((s: any, i: number) => {
+            const lap = existingLaps[i];
+            return Math.abs(s.distance - lap.distance) < 2 && Math.abs(s.movingTime - lap.movingTime) < 2;
+        });
+    }, [splits, existingLaps]);
 
 
     // Detect if child of another activity
@@ -667,7 +675,7 @@ export function ActivityDetailModal({
         }
 
         const perf = universalActivity?.performance || (activity as any).performance || activity._mergeData?.universalActivity?.performance;
-        const source = perf?.source?.source || activity.source || (activity as any).platform || (activity as any).source;
+        const source = perf?.source?.source || activity.platform || (activity as any).source || (activity as any).platform;
         const externalId = perf?.source?.externalId || activity.externalId;
 
         // More robust Strava detection
@@ -676,13 +684,16 @@ export function ActivityDetailModal({
             (typeof externalId === 'string' && (externalId.startsWith('strava_') || /^\d+$/.test(externalId))) ||
             (typeof externalId === 'number');
 
-        // existingLaps calculated
-        const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
+        // Check for existing data
+        const existingSplits = perf?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
+        const existingLaps = perf?.laps || (activity as any).performance?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
 
         // We trigger fetch if EITHER splits or laps are missing
         const needsFetch = (!existingSplits || existingSplits.length === 0) || (!existingLaps || existingLaps.length === 0);
 
-        if (effectivelyStrava && externalId && needsFetch && fetchSplitsResult === 'idle' && token && !isFetchingSplits) {
+        // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
+        // but it's good practice to log if it's there. The backend handles the cookie.
+        if (effectivelyStrava && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -690,9 +701,9 @@ export function ActivityDetailModal({
                     // Sanitize externalId: strip 'strava_' prefix if present
                     const sanitizedId = typeof externalId === 'string' ? externalId.replace('strava_', '') : externalId.toString();
 
-                    console.log("Fetching splits from Strava API for external ID:", sanitizedId);
+                    console.log("Fetching splits/laps from Strava API for external ID:", sanitizedId);
                     const res = await fetch(`/api/strava/activities/${sanitizedId}/splits`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                     });
 
                     if (res.ok) {
@@ -2439,18 +2450,45 @@ export function ActivityDetailModal({
                                 {/* Split Chart */}
                                 <div className="h-48 bg-slate-800/30 rounded-xl p-2">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={splits.map((s: any, i: number) => ({
-                                            km: `Km ${i + 1}`,
-                                            seconds: s.movingTime,
-                                            pace: (s.movingTime / 60).toFixed(2)
-                                        }))}>
+                                        <BarChart data={splits.map((s: any, i: number) => {
+                                            const distKm = s.distance / 1000;
+                                            const paceVal = s.movingTime / (distKm || 1);
+                                            return {
+                                                km: `Km ${i + 1}`,
+                                                seconds: paceVal,
+                                                realDistance: distKm,
+                                                movingTime: s.movingTime,
+                                                label: distKm < 0.95 ? `Km ${i + 1} (${distKm.toFixed(2)}km)` : `Km ${i + 1}`
+                                            };
+                                        })}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                             <XAxis dataKey="km" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                             <YAxis hide domain={['dataMin - 30', 'dataMax + 30']} />
                                             <Tooltip
+                                                cursor={{ fill: 'transparent' }}
                                                 contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                                 labelStyle={{ color: '#94a3b8', fontWeight: 'bold', marginBottom: '4px' }}
-                                                formatter={(val: number) => [`${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')} /km`, 'Tempo']}
+                                                formatter={(val: number, name: any, props: any) => {
+                                                    const payload = props.payload;
+                                                    const min = Math.floor(val / 60);
+                                                    const sec = Math.round(val % 60);
+                                                    const paceStr = `${min}:${sec.toString().padStart(2, '0')} /km`;
+                                                    
+                                                    if (payload.realDistance < 0.95) {
+                                                        const m = Math.floor(payload.movingTime / 60);
+                                                        const s = Math.round(payload.movingTime % 60);
+                                                        const timeStr = `${m}:${s.toString().padStart(2, '0')}`;
+                                                        return [
+                                                            <div key="custom-tooltip">
+                                                                <div className="text-white font-black">{paceStr}</div>
+                                                                <div className="text-[10px] text-slate-500 mt-1">Tid: {timeStr} för {payload.realDistance.toFixed(2)} km</div>
+                                                            </div>,
+                                                            'Tempo'
+                                                        ];
+                                                    }
+                                                    
+                                                    return [paceStr, 'Tempo'];
+                                                }}
                                             />
                                             <Bar dataKey="seconds" fill="#6366f1" radius={[6, 6, 0, 0]} />
                                         </BarChart>
@@ -2490,7 +2528,7 @@ export function ActivityDetailModal({
                                 )}
 
                                 {/* Laps Table */}
-                                {existingLaps && existingLaps.length > 0 && (
+                                {existingLaps && existingLaps.length > 0 && !areLapsAndSplitsIdentical && (
                                     <div className="bg-slate-800/50 rounded-xl overflow-hidden mt-6">
                                         <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-900/50">
                                             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">

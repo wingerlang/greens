@@ -437,10 +437,9 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                             <div key={ex.id}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    setSelectedDate(date.dateStr);
                                                                     navigate({
-                                                                        pathname: `/träning/${year}/${monthName.toLowerCase()}/${date.day}`,
-                                                                        search: `?activity=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
+                                                                        pathname: `/träning/${year}/${monthName.toLowerCase()}`,
+                                                                        search: `?activityId=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                     }, { replace: true });
                                                                 }}
                                                                 className={`relative text-[9.5px] sm:text-[10px] leading-tight px-1 py-0.5 sm:px-1.5 sm:py-1 rounded-md border-l-[2px] sm:border-l-[2px] ${colorClass} cursor-pointer flex justify-between items-center group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md`}>
@@ -737,10 +736,9 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 return (
                                                                     <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1.5 -mx-1.5 rounded-lg cursor-pointer transition-colors"
                                                                         onClick={() => {
-                                                                            setSelectedDate(e.date);
                                                                             navigate({
-                                                                                pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
-                                                                                search: window.location.search
+                                                                                pathname: `/träning/${dYear}/${dMonthName}`,
+                                                                                search: `?activityId=${e.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                             }, { replace: true });
                                                                         }}>
                                                                         <span className={`capitalize truncate text-[11px] ${colorName}`} title={e.title || e.type}>

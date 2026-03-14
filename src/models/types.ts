@@ -723,9 +723,29 @@ export interface ExerciseEntry {
     maxSpeed?: number;
     kilojoules?: number;
 
-    // Hyrox Specifics
     hyroxStats?: HyroxActivityStats;
     extractedFromId?: string;
+
+    // Performance Data
+    splits?: Array<{
+        split: number;
+        distance: number;
+        elapsedTime: number;
+        movingTime: number;
+        elevationDiff: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+    }>;
+    laps?: Array<{
+        name: string;
+        elapsedTime: number;
+        movingTime: number;
+        distance: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+        lapIndex?: number;
+        split?: number;
+    }>;
 }
 
 export type HyroxStation =
