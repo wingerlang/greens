@@ -340,7 +340,8 @@ export function ActivityDetailModal({
             extractedFromId: activity.id,
             source: 'manual',
             subType: 'default',
-            isHiddenInCalendar: extractForm.isHiddenInCalendar
+            isHiddenInCalendar: extractForm.isHiddenInCalendar,
+            caloriesBurned: 0 // Will be recalculated by backend or when needed
         };
 
         try {
@@ -418,6 +419,7 @@ export function ActivityDetailModal({
     // Derived splits helper
     const splits = universalActivity?.performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || [];
     const hasSplits = splits.length > 0;
+    const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
 
     // Analysis visibility criteria - Strict check for meaningful content
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.heartRateAvg && activity.heartRateAvg > 0);
@@ -663,7 +665,14 @@ export function ActivityDetailModal({
         const externalId = perf?.source?.externalId || activity.externalId;
         // existingSplits computed at component scope
 
-        if (source === 'strava' && externalId && (!existingSplits || existingSplits.length === 0) && fetchSplitsResult === 'idle' && token) {
+        // existingLaps calculated
+        const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
+
+        // We trigger fetch if EITHER splits or laps are missing
+        const needsFetch = (!existingSplits || existingSplits.length === 0) || (!existingLaps || existingLaps.length === 0);
+
+        console.log("Auto-fetch check:", { source, externalId, needsFetch, fetchSplitsResult, hasToken: !!token });
+        if (source === 'strava' && externalId && needsFetch && fetchSplitsResult === 'idle' && token) {
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
                 try {
@@ -676,7 +685,8 @@ export function ActivityDetailModal({
 
                     if (res.ok) {
                         const data = await res.json();
-                        if (data.splits && data.splits.length > 0) {
+                        console.log("Strava response data:", data);
+                        if ((data.splits && data.splits.length > 0) || (data.laps && data.laps.length > 0)) {
 
                             // Transform strava splits to our format
                             const mappedSplits = data.splits.map((s: any) => ({
@@ -693,7 +703,19 @@ export function ActivityDetailModal({
                             console.log("Fetched strava splits, saving to activity:", mappedSplits);
 
                             // Update local UI immediately via updateExercise
-                            updateExercise(activity.id, { splits: mappedSplits } as any);
+                            // Map laps
+                            const mappedLaps = (data.laps || []).map((l: any) => ({
+                                name: l.name,
+                                elapsedTime: l.elapsed_time,
+                                movingTime: l.moving_time,
+                                distance: l.distance,
+                                averageSpeed: l.average_speed,
+                                averageHeartrate: l.average_heartrate,
+                                lapIndex: l.lap_index,
+                                split: l.split
+                            }));
+
+                            updateExercise(activity.id, { splits: mappedSplits, laps: mappedLaps } as any);
                             setFetchSplitsResult('success');
 
                             // Then persist to backend in the background
@@ -707,7 +729,8 @@ export function ActivityDetailModal({
                                 body: JSON.stringify({
                                     performance: {
                                         ...(perf || {}),
-                                        splits: mappedSplits
+                                        splits: mappedSplits,
+                                        laps: mappedLaps
                                     }
                                 })
                             });
@@ -1350,7 +1373,7 @@ export function ActivityDetailModal({
                                     {activity.subType === 'interval' && (
                                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
                                             <span>📈</span> Intervaller
-                                            {parsedWorkout.summary && <span className="opacity-70 ml-1">({parsedWorkout.summary})</span>}
+                                            {(parsedWorkout as any).summary && <span className="opacity-70 ml-1">({(parsedWorkout as any).summary})</span>}
                                         </div>
                                     )}
 
@@ -1606,12 +1629,12 @@ export function ActivityDetailModal({
                                     Jämför
                                 </button>
                             )}
-                            {hasSplits && (
+                            {(hasSplits || (existingLaps && existingLaps.length > 0)) && (
                                 <button
                                     onClick={() => setActiveTab('splits')}
                                     className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${activeTab === 'splits' ? 'text-indigo-400 border-indigo-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                                 >
-                                    Splits
+                                    Splits & Laps
                                 </button>
                             )}
                             {isTrulyMerged && (
@@ -1637,7 +1660,7 @@ export function ActivityDetailModal({
                         {isFetchingSplits && (
                             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4">
                                 <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-                                <p className="text-xs font-bold text-amber-400">Hämtar kilometertider från Strava...</p>
+                                <p className="text-xs font-bold text-amber-400">Hämtar kilometertider & laps från Strava...</p>
                             </div>
                         )}
                         {fetchSplitsResult === 'error' && (
@@ -1649,7 +1672,7 @@ export function ActivityDetailModal({
                         {fetchSplitsResult === 'success' && (
                             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4 transition-all duration-1000 delay-3000 opacity-100" style={{ animation: 'fadeOut 1s forwards 3s' }}>
                                 <span>✅</span>
-                                <p className="text-xs font-bold text-emerald-400">Kilometertider hämtades från Strava!</p>
+                                <p className="text-xs font-bold text-emerald-400">Kilometertider & laps hämtades från Strava!</p>
                             </div>
                         )}
 
@@ -2447,6 +2470,51 @@ export function ActivityDetailModal({
                                                 </LineChart>
                                             </ResponsiveContainer>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Laps Table */}
+                                {existingLaps && existingLaps.length > 0 && (
+                                    <div className="bg-slate-800/50 rounded-xl overflow-hidden mt-6">
+                                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-900/50">
+                                            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                                <span>⏱️</span> Laps (Manuella / Auto)
+                                            </h4>
+                                            <span className="text-[10px] text-slate-500 font-mono">{existingLaps.length} varv</span>
+                                        </div>
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-slate-950/50">
+                                                <tr>
+                                                    <th className="px-4 py-2 text-left text-slate-500">Varv</th>
+                                                    <th className="px-4 py-2 text-right text-slate-500">Tid</th>
+                                                    <th className="px-4 py-2 text-right text-slate-500">Distans</th>
+                                                    <th className="px-4 py-2 text-right text-slate-500">Tempo</th>
+                                                    <th className="px-4 py-2 text-right text-slate-500">Puls</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {existingLaps.map((l: any, i: number) => {
+                                                    const lapPace = l.movingTime / (l.distance / 1000);
+                                                    return (
+                                                        <tr key={i} className="hover:bg-indigo-500/10 transition-colors group">
+                                                            <td className="px-4 py-3 text-white font-bold">{l.name || `Varv ${i+1}`}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-300">
+                                                                {Math.floor(l.movingTime / 60)}:{(l.movingTime % 60).toString().padStart(2, '0')}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-slate-400 font-mono text-xs">
+                                                                {(l.distance / 1000).toFixed(2)} km
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-amber-400 font-mono text-xs">
+                                                                {isFinite(lapPace) ? `${Math.floor(lapPace / 60)}:${(Math.round(lapPace % 60)).toString().padStart(2, '0')} /km` : '-'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-rose-400">
+                                                                {l.averageHeartrate ? Math.round(l.averageHeartrate) : '-'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
 
