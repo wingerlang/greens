@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts';
 
 interface IntervalSplitsCardProps {
@@ -135,13 +135,20 @@ function getBestEfforts(splits: ClassifiedSplit[]) {
             }
 
             const pace = timeAcc / (Math.max(distAcc, 1) / 1000);
-            if (timeAcc < bestTime) {
+            const targetDist = n * 1000;
+            // Only consider this effort if the distance is close to the target (within 50m tolerance per km)
+            const tolerance = 50 * n;
+            const isCorrectDistance = Math.abs(distAcc - targetDist) < tolerance;
+
+            if (isCorrectDistance && timeAcc < bestTime) {
                 bestTime = timeAcc;
                 bestPace = pace;
             }
         }
 
-        efforts.push({ distance: n, time: bestTime, pace: bestPace });
+        if (bestTime !== Infinity) {
+            efforts.push({ distance: n, time: bestTime, pace: bestPace });
+        }
     }
     return efforts;
 }

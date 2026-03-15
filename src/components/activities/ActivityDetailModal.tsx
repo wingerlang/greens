@@ -219,7 +219,21 @@ export function ActivityDetailModal({
     setSelectedActivityId
 }: ActivityDetailModalProps) {
     const navigate = useNavigate();
-    const perf = universalActivity?.performance || (activity as any).performance || activity._mergeData?.universalActivity?.performance;
+    const { 
+        exerciseEntries, 
+        universalActivities, 
+        updateExercise, 
+        deleteExercise, 
+        addExercise, 
+        calculateExerciseCalories 
+    } = useData();
+    const { user, token } = useAuth();
+
+    // Support finding the latest version of this activity from current context
+    const currentActivity = exerciseEntries.find(e => e.id === activity.id) || activity;
+    const currentUniversal = universalActivities.find(u => u.id === activity.id) || universalActivity;
+
+    const perf = currentUniversal?.performance || (currentActivity as any).performance || (currentActivity as any)._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
 
@@ -267,19 +281,28 @@ export function ActivityDetailModal({
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
-        title: universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || '',
-        type: activity.type,
-        duration: (activity.durationMinutes || 0).toString(),
-        intensity: activity.intensity || 'moderate',
-        notes: activity.notes || '',
-        subType: activity.subType || 'default',
-        tonnage: activity.tonnage ? activity.tonnage.toString() : '',
-        distance: activity.distance ? activity.distance.toString() : '',
-        location: activity.location || '',
-        excludeFromStats: activity.excludeFromStats || false,
+        title: currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || '',
+        type: currentActivity.type,
+        duration: (currentActivity.durationMinutes || 0).toString(),
+        intensity: currentActivity.intensity || 'moderate',
+        notes: currentActivity.notes || '',
+        subType: currentActivity.subType || 'default',
+        tonnage: currentActivity.tonnage ? currentActivity.tonnage.toString() : '',
+        distance: currentActivity.distance ? currentActivity.distance.toString() : '',
+        location: currentActivity.location || '',
+        excludeFromStats: currentActivity.excludeFromStats || false,
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
-        hyroxStats: activity.hyroxStats || { runSplits: [], stations: {} }
+        hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} }
     });
+
+    // Local title state for immediate optimistic updates
+    const [displayTitle, setDisplayTitle] = useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type || 'Aktivitet');
+
+    // Sync display title if prop/current changes
+    useEffect(() => {
+        const t = currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type;
+        if (t) setDisplayTitle(t);
+    }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.notes, currentActivity.type]);
 
     // Stations definition
     const HYROX_STATIONS: { id: HyroxStation; label: string; icon: string }[] = [
@@ -293,19 +316,8 @@ export function ActivityDetailModal({
         { id: 'wall_balls', label: 'Wall Balls', icon: '🏐' },
     ];
 
-    const { exerciseEntries, universalActivities, updateExercise, deleteExercise, addExercise, calculateExerciseCalories } = useData();
-    const { token } = useAuth();
-
-    // Local title state for immediate optimistic updates
-    const [displayTitle, setDisplayTitle] = useState(universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || activity.type || 'Aktivitet');
-
-    // Sync display title if prop changes (e.g. on load)
-    useEffect(() => {
-        const t = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || activity.type;
-        if (t) setDisplayTitle(t);
-    }, [universalActivity?.plan?.title, activity._mergeData?.universalActivity?.plan?.title, activity.title, activity.notes, activity.type]);
-
-    // Handle Extract Submit
+    // Recalculate derived properties from currentActivity
+    const splits = perf?.splits || (currentActivity as any).splits || [];
     const handleExtractSubmit = async () => {
         if (!extractForm.distance || !extractForm.duration || !extractForm.title) {
             alert('Vänligen fyll i alla fält för utdraget.');
@@ -412,33 +424,22 @@ export function ActivityDetailModal({
     }, [activity.hyroxStats, activity.type, activity.notes]);
 
     // const hyroxStats = activity.hyroxStats; // OLD
-    const isHyrox = activity.type === 'hyrox';
+    const isHyrox = currentActivity.type === 'hyrox';
 
-
-
-    // Derived splits helper
-    const splits = universalActivity?.performance?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits || [];
     const hasSplits = splits.length > 0;
-    const existingLaps = perf?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
+    const existingLaps = perf?.laps || (currentActivity as any)._mergeData?.universalActivity?.performance?.laps || (currentActivity as any).laps;
 
-    // Analysis visibility criteria - Strict check for meaningful content
-    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.heartRateAvg && activity.heartRateAvg > 0);
+    // Analysis visibility criteria
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (currentActivity.heartRateAvg && currentActivity.heartRateAvg > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
-    // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
 
-
-
-
-
-    // Compute existingSplits here so it's available for both the useEffect and the UI
-    const existingSplits = perf?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
-    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure || (existingSplits && existingSplits.length > 0);
+    const existingSplits = splits;
+    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && currentActivity.type !== 'strength') || hasWorkoutStructure;
 
     const segmentedSplits = React.useMemo(() => {
-        const splitsData = existingSplits || splits;
-        if (!splitsData || splitsData.length < 3) return null;
-        return segmentSplits(splitsData, parsedWorkout, activity.title);
-    }, [existingSplits, splits, parsedWorkout, activity.title]);
+        if (!existingSplits || existingSplits.length < 3) return null;
+        return segmentSplits(existingSplits, parsedWorkout, currentActivity.title || currentActivity.type);
+    }, [existingSplits, parsedWorkout, currentActivity]);
 
     const areLapsAndSplitsIdentical = React.useMemo(() => {
         if (!splits || !existingLaps || splits.length !== existingLaps.length) return false;
@@ -451,14 +452,14 @@ export function ActivityDetailModal({
 
     // Detect if child of another activity
     const parentActivity = React.useMemo(() => {
-        if (!activity.extractedFromId) return null;
-        return exerciseEntries.find(e => e.id === activity.extractedFromId);
-    }, [activity.extractedFromId, exerciseEntries]);
+        if (!currentActivity.extractedFromId) return null;
+        return exerciseEntries.find(e => e.id === currentActivity.extractedFromId);
+    }, [currentActivity.extractedFromId, exerciseEntries]);
 
     // Sub-performances (Internal measurements like 5k tests extracted from this session)
     const subPerformances = React.useMemo(() => {
-        return exerciseEntries.filter(e => e.extractedFromId === activity.id);
-    }, [exerciseEntries, activity.id]);
+        return exerciseEntries.filter(e => e.extractedFromId === currentActivity.id);
+    }, [exerciseEntries, currentActivity.id]);
 
     // Smart Extraction Detection (Performance Markers)
     const smartExtractInfo = React.useMemo(() => {

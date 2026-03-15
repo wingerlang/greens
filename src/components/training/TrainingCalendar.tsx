@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown, Flame, Scale } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown, Flame, Scale, HeartPulse } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 
@@ -296,11 +296,17 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             const weekExercises = week.flatMap(d => d ? d.exercises : []);
                             const runExercises = weekExercises.filter(e => e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp'));
                             const strengthExercises = weekExercises.filter(e => e.type.toLowerCase().includes('strength') || e.type.toLowerCase().includes('styrka'));
+                            const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
                             const weekRunDist = runExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
                             const weekStrengthMin = strengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
-                            const weekTonnage = weekExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
+                            const weekTonnage = strengthExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
                             const weekCalories = weekExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
-                            const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const otherCardioExercises = weekExercises.filter(e => {
+                                const type = e.type.toLowerCase();
+                                return !type.includes('run') && !type.includes('löp') && !type.includes('strength') && !type.includes('styrka');
+                            });
+                            const weekOtherCardioMin = otherCardioExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const weekOtherCardioCount = otherCardioExercises.length;
 
                             const firstValidDay = week[0];
                             let weekNumberStr = '';
@@ -528,7 +534,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                             </div>
                                         )}
 
-                                        <div className="flex flex-col items-center gap-0.5 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-2 sm:mt-3">
+                                        <div className="flex flex-col items-center gap-0 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-2 sm:mt-2.5">
                                             <div className="flex flex-col gap-0.5 w-full">
                                                 {weekRunDist > 0 && (
                                                     <div
@@ -640,6 +646,18 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                     <div className="text-slate-400 font-mono text-[9px] font-normal">{(weekTonnage / 1000).toFixed(1)}t</div>
                                                                 </div>
                                                             </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {weekOtherCardioMin > 0 && (
+                                                    <div className="flex items-center justify-between bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded cursor-help relative group/weekother hover:bg-sky-500/20 transition-colors w-full border border-sky-500/10 mb-0.5">
+                                                        <HeartPulse className="w-3.5 h-3.5" />
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span>
+                                                                {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h` : ''}
+                                                                {Math.floor(weekOtherCardioMin / 60) > 0 && Math.round(weekOtherCardioMin % 60) === 0 ? '' : `${Math.round(weekOtherCardioMin % 60)}m`}
+                                                            </span>
+                                                            <span className="text-[10px] ml-0.5 opacity-50 font-normal">{weekOtherCardioCount}p</span>
                                                         </div>
                                                     </div>
                                                 )}

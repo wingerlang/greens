@@ -642,7 +642,7 @@ export function RunningStatsView({
                             </label>
                         </div>
 
-                        <div className="flex gap-4 overflow-x-auto overflow-y-auto py-20 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[340px]">
+                        <div className="flex gap-4 overflow-x-auto overflow-y-auto py-20 px-32 relative scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent snap-x snap-mandatory items-center min-h-[340px]">
                             {filteredTimeline.length === 0 ? (
                                 <div className="text-center text-slate-500 text-sm italic py-10 w-full">
                                     Inga personbästan registrerade för valda distanser och filter.
