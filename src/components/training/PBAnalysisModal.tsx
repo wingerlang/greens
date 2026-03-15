@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { 
-    X, Medal, Zap, Activity, Clock, TrendingUp, TrendingDown, 
+import {
+    X, Medal, Zap, Activity, Clock, TrendingUp, TrendingDown,
     Mountain, Coffee, Timer, Sparkles, RefreshCw, Trophy,
     Shield, Target, Heart, ChevronRight, ChevronLeft, MapPin, Star, Trophy as TrophyIcon
 } from 'lucide-react';
@@ -9,6 +9,8 @@ import { formatTime, isCompetition } from '../../utils/activityUtils.ts';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ComposedChart, Line, Scatter, CartesianGrid } from 'recharts';
 import { useData } from '../../context/DataContext.tsx';
 import { useNavigate } from 'react-router-dom';
+import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
+import { ExerciseSubType } from '../../models/types.ts';
 
 interface PBEvent {
     id: string;
@@ -32,7 +34,8 @@ interface PBAnalysisModalProps {
 export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisModalProps) {
     const navigate = useNavigate();
     const [timeframeWeeks, setTimeframeWeeks] = useState(12);
-    const { weightEntries, calculateDailyNutrition } = useData();
+    const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
+    const { weightEntries, calculateDailyNutrition, exerciseEntries } = useData();
 
     // 1. Setup the dynamic window leading UP TO the PB date
     const analysisWindow = useMemo(() => {
@@ -50,11 +53,13 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         let totalRunTimeMin = 0;
         let totalActiveTimeMin = 0; // Total time all sports
         let totalElevationGain = 0;
+        let maxElevationInOneRun = 0;
         let totalRunCount = 0;
 
         let qualityCount = 0; // Intervals, tempo, thresholds
-        let longRunCount = 0; // > 15km
-        let longRunsOver21Count = 0; // > 21km
+        let longerDistCount = 0; // 14-20km (Längre Distans)
+        let longRunCount = 0; // 20-40km (Långpass)
+        let ultraLongRunCount = 0; // 40km+ (Överlångt)
         let distanceCount = 0; // Everything else
 
         let strengthCount = 0;
@@ -147,20 +152,33 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                 totalElevationGain += (act.elevationGain || 0);
                 totalRunCount++;
 
-                if (!isRace) trainingRuns.push(act);
-
                 const isQuality = act.title?.toLowerCase().includes('intervall') ||
                     act.notes?.toLowerCase().includes('intervall') ||
                     act.title?.toLowerCase().includes('tempo') ||
                     act.title?.toLowerCase().includes('tröskel');
 
                 if (!isRace) {
+                    const enriched = { ...act, isQuality: !!isQuality };
+                    trainingRuns.push(enriched);
+                }
+                
+                const pace = (act.durationMinutes * 60) / act.distance;
+                if (pace < fastestPaceSecPerKm && pace > 120) {
+                    fastestPaceSecPerKm = pace;
+                    fastestRun = act;
+                }
+                if ((act.elevationGain || 0) > maxElevationInOneRun) {
+                    maxElevationInOneRun = act.elevationGain || 0;
+                }
+
+                if (!isRace) {
                     if (isQuality) {
                         qualityCount++;
                         qualitySessions.push(act);
-                    } else if (act.distance >= 15) {
-                        longRunCount++;
-                        if (act.distance > 21) longRunsOver21Count++;
+                    } else if (act.distance >= 14) {
+                        if (act.distance >= 40) ultraLongRunCount++;
+                        else if (act.distance >= 20) longRunCount++;
+                        else longerDistCount++;
                     } else {
                         distanceCount++;
                     }
@@ -257,7 +275,7 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         if (longestStreak >= 5) pros.push(`Stark kontinuitet i träningen (max-streak: ${longestStreak} dagar)`);
         if (restDays < timeframeWeeks) cons.push("Väldigt få vilodagar (potentiell underåterhämtning)");
 
-        const rawChartData = Object.keys(weeklyVolume).sort((a,b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1])).map(key => ({
+        const rawChartData = Object.keys(weeklyVolume).sort((a, b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1])).map(key => ({
             week: key,
             vol: Math.round(weeklyVolume[key] * 10) / 10,
             raceCount: weeklyHealth[key].raceCount,
@@ -269,15 +287,18 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         const weightDataPoints = weightEntries.filter(w => new Date(w.date).getTime() >= startDateMs && new Date(w.date).getTime() <= pbDate);
         const hasHealthData = weightDataPoints.length >= 3;
 
-        const allLongRuns = trainingRuns
-            .filter(r => (r.distance || 0) >= 15)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const longRunsList = trainingRuns.filter(r => (r.distance || 0) >= 20 && !(r as any).isQuality);
+        const longerDistList = trainingRuns.filter(r => (r.distance || 0) >= 14 && (r.distance || 0) < 20 && !(r as any).isQuality);
+        const easyRunsList = trainingRuns.filter(r => (r.distance || 0) < 14 && !(r as any).isQuality); // For "Andra Distans" OR Recovery subtiling if needed
 
         return {
             top3LongRuns, fastestRun: fastestRun as ExerciseEntry | null,
             races: races.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            qualityCount, distanceCount, longRunCount, longRunsOver21Count,
-            totalElevationGain, totalActiveTimeMin, restDays,
+            qualityCount, distanceCount, longRunCount, longerDistCount, ultraLongRunCount,
+            totalElevationGain, maxElevationInOneRun, fastestPaceSecPerKm, totalActiveTimeMin, restDays, activeDaysCount: activeDays.size, totalDaysInPeriod,
+            longRunsList: longRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            longerDistList: longerDistList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            easyRunsList: easyRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             avgWeeklyVol, lastWeekVol, prevWeeksVolAvg, avgPaceSecPerKm,
             strengthCount, cyclingCount, otherCount, doubleDaysCount, avgSessionsPerWeek,
             chartData: rawChartData, hasHealthData,
@@ -285,7 +306,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             windowActivities, longestStreak, peakVolumeWeek, consistencyScore, qualityRatio,
             pros, cons,
             qualitySessions: qualitySessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            allLongRuns,
             totalRunTimeMin,
             totalRunCount,
             totalRunVolumeKm
@@ -306,15 +326,11 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         const paceSec = r.durationMinutes > 0 ? (r.durationMinutes * 60) / (r.distance || 1) : 0;
 
         return (
-            <div 
-                key={r.id} 
+            <div
+                key={r.id}
                 className="flex justify-between items-center bg-white/5 rounded-lg p-2 hover:bg-white/10 cursor-pointer transition-colors border border-white/[0.03] hover:border-white/10"
                 onClick={() => {
-                    navigate({
-                        pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
-                        search: window.location.search
-                    }, { replace: true });
-                    onClose();
+                    setSelectedDetailId(r.id);
                 }}
             >
                 <div className="overflow-hidden flex items-center gap-2">
@@ -322,11 +338,22 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         {icon}
                     </div>
                     <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate max-w-[120px]" title={r.title || r.type}>
+                        <div className="text-xs font-bold text-white truncate" title={r.title || r.type}>
                             {r.title || r.type}
                         </div>
-                        <div className="text-[9px] text-slate-500 font-mono">
-                            {r.date.substring(0, 10)}
+                        <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1">
+                            <span>{r.date.substring(0, 10)}</span>
+                            {r.distance && (
+                                <span className={`text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider ${
+                                    r.distance >= 40 ? 'bg-purple-500/20 text-purple-400' : 
+                                    r.distance >= 20 ? 'bg-emerald-500/20 text-emerald-400' : 
+                                    r.distance >= 14 ? 'bg-sky-500/20 text-sky-400' :
+                                    r.distance <= 7 ? 'bg-indigo-500/20 text-indigo-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                }`}>
+                                    {r.distance >= 40 ? 'Överlångt' : r.distance >= 20 ? 'Långpass' : r.distance >= 14 ? 'Längre Distans' : r.distance <= 7 ? 'Återhämtning' : 'Distans'}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -396,6 +423,11 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <h2 className="text-base font-black text-white">
                                 {pbEvent.bucketLabel} Rekord
                             </h2>
+                            <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-0.5 scale-90">
+                                {[4, 8, 12, 16].map(weeks => (
+                                    <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
+                                ))}
+                            </div>
                             <div className="flex items-center gap-3">
                                 <span className="text-xl font-black text-amber-400 font-mono">
                                     {pbEvent.durationFormatted}
@@ -422,46 +454,60 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
                     {/* Compact Metrics Bar */}
-                    <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
-                        <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Snitt Veckovolym</div>
-                            <div className="text-xl font-black text-white">{Math.round(analysisWindow.avgWeeklyVol)} <span className="text-[10px] font-bold text-slate-500">km/v</span></div>
-                            <div className="text-[10px] text-slate-400 mt-1">
-                                {analysisWindow.avgSessionsPerWeek.toFixed(1)} pass/v • {Math.round(analysisWindow.totalRunTimeMin / timeframeWeeks)} m/v
+                    {/* Compact Metrics Bar */}
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl flex flex-col justify-between">
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Volym (Totalt & Snitt)</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-xl font-black text-white">{Math.round(analysisWindow.totalRunVolumeKm)} <span className="text-[10px] font-bold text-slate-500">km</span></span>
+                                <span className="text-xs text-slate-400">({Math.round(analysisWindow.avgWeeklyVol)} km/v)</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-1 flex gap-1 items-center">
+                                <span>{analysisWindow.totalRunCount} pass</span>
+                                <span>•</span>
+                                <span>{Math.floor(analysisWindow.totalRunTimeMin / 60)}h {Math.round(analysisWindow.totalRunTimeMin % 60)}m</span>
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Clock size={12} className="text-emerald-500" /> Total Volym</div>
-                            <div className="text-xl font-black text-white">{Math.round(analysisWindow.totalRunVolumeKm)} <span className="text-[10px] font-bold text-slate-500">km</span></div>
-                            <div className="text-[10px] text-slate-400 mt-1">
-                                {Math.floor(analysisWindow.totalRunTimeMin / 60)}h {Math.round(analysisWindow.totalRunTimeMin % 60)}m • {analysisWindow.totalRunCount} pass
-                            </div>
-                        </div>
+
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Zap size={12} className="text-amber-500" /> Snitt-tempo</div>
                             <div className="text-xl font-black text-white">{formatPace(analysisWindow.avgPaceSecPerKm)}</div>
+                            <div className="text-[9px] text-slate-500 mt-1">
+                                {analysisWindow.fastestPaceSecPerKm < Infinity && (
+                                    <span>Topp: <span className="font-bold text-amber-400">{formatPace(analysisWindow.fastestPaceSecPerKm)}</span></span>
+                                )}
+                            </div>
                         </div>
+
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Mountain size={12} className="text-rose-500" /> Total Höjd</div>
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Mountain size={12} className="text-rose-500" /> Totalt Höjd</div>
                             <div className="text-xl font-black text-rose-400">{Math.round(analysisWindow.totalElevationGain)} <span className="text-[10px] font-bold text-slate-500">m+</span></div>
+                            <div className="text-[9px] text-slate-500 mt-1">
+                                {analysisWindow.maxElevationInOneRun > 0 && (
+                                    <span>Max/pass: <span className="font-bold text-rose-400">{Math.round(analysisWindow.maxElevationInOneRun)} m</span></span>
+                                )}
+                            </div>
                         </div>
+
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><TrendingUp size={12} className="text-emerald-500" /> Kontinuitet</div>
                             <div className="text-xl font-black text-emerald-400">{Math.round(analysisWindow.consistencyScore)}%</div>
+                            <div className="text-[9px] text-slate-500 mt-1 flex flex-wrap gap-1 leading-tight">
+                                <span>{analysisWindow.totalDaysInPeriod}d totalt</span>
+                                <span className="opacity-50">•</span>
+                                <span className="text-emerald-400">{analysisWindow.activeDaysCount} träningsdagar</span>
+                            </div>
                         </div>
+
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><TrophyIcon size={12} className="text-indigo-500" /> Toppvecka</div>
                             <div className="text-xl font-black text-indigo-400">{(analysisWindow.peakVolumeWeek || 0).toFixed(1)} <span className="text-[10px] font-bold text-slate-500">km</span></div>
                         </div>
-                        <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Coffee size={12} className="text-amber-400" /> Vilodagar</div>
-                            <div className="text-xl font-black text-amber-500">{analysisWindow.restDays} <span className="text-[10px] font-bold text-slate-500">st</span></div>
-                        </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-2 justify-between items-center bg-slate-800/20 p-2 rounded-xl border border-white/5">
+                    <div className="hidden flex flex-col md:flex-row gap-2 justify-between items-center bg-slate-800/20 p-2 rounded-xl border border-white/5">
                         <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-1">
                             {[4, 8, 12, 16].map(weeks => (
                                 <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-3 py-1 text-[9px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
@@ -538,26 +584,34 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-slate-900/50 border border-white/5 p-4 rounded-xl flex flex-col max-h-[350px]">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <div className="bg-slate-900/50 border border-white/5 p-3 rounded-xl flex flex-col max-h-[350px]">
                             <div className="text-[10px] font-black uppercase text-amber-500 mb-2 flex items-center gap-1"><Medal size={12} /> Tävlingar ({analysisWindow.races.length})</div>
-                            <div className="overflow-y-auto custom-scrollbar space-y-1.5">
+                            <div className="overflow-y-auto custom-scrollbar space-y-1.5 flex-1">
                                 {analysisWindow.races.length > 0 ? analysisWindow.races.map(r => (
                                     <ActivityRow key={r.id} r={r} icon={<TrophyIcon size={12} className="text-amber-500" />} />
                                 )) : <div className="text-center py-4 text-xs text-slate-500">Inga tävlingar loggade</div>}
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-white/5 p-4 rounded-xl flex flex-col max-h-[350px]">
-                            <div className="text-[10px] font-black uppercase text-emerald-500 mb-2 flex items-center gap-1"><Star size={12} /> Samtliga Långpass</div>
-                            <div className="overflow-y-auto custom-scrollbar space-y-1.5">
-                                {analysisWindow.allLongRuns.length > 0 ? analysisWindow.allLongRuns.map(r => (
+                        <div className="bg-slate-900/50 border border-white/5 p-3 rounded-xl flex flex-col max-h-[350px]">
+                            <div className="text-[10px] font-black uppercase text-emerald-500 mb-2 flex items-center gap-1"><Star size={12} /> Långpass ({analysisWindow.longRunsList.length})</div>
+                            <div className="overflow-y-auto custom-scrollbar space-y-1.5 flex-1">
+                                {analysisWindow.longRunsList.length > 0 ? analysisWindow.longRunsList.map(r => (
                                     <ActivityRow key={r.id} r={r} icon={<Activity size={12} className="text-emerald-400" />} />
-                                )) : <div className="text-center py-4 text-xs text-slate-500">Inga långpass {">= 15km"}</div>}
+                                )) : <div className="text-center py-4 text-xs text-slate-500">Inga långpass {">= 20km"}</div>}
                             </div>
                         </div>
-                        <div className="bg-slate-900/50 border border-white/5 p-4 rounded-xl flex flex-col max-h-[350px]">
+                        <div className="bg-slate-900/50 border border-white/5 p-3 rounded-xl flex flex-col max-h-[350px]">
+                            <div className="text-[10px] font-black uppercase text-sky-500 mb-2 flex items-center gap-1"><Clock size={12} className="text-sky-500" /> Längre Distans ({analysisWindow.longerDistList.length})</div>
+                            <div className="overflow-y-auto custom-scrollbar space-y-1.5 flex-1">
+                                {analysisWindow.longerDistList.length > 0 ? analysisWindow.longerDistList.map(r => (
+                                    <ActivityRow key={r.id} r={r} icon={<Activity size={12} className="text-sky-400" />} />
+                                )) : <div className="text-center py-4 text-xs text-slate-500">Inga distanser {"14-20km"}</div>}
+                            </div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-white/5 p-3 rounded-xl flex flex-col max-h-[350px]">
                             <div className="text-[10px] font-black uppercase text-blue-500 mb-2 flex items-center gap-1"><Zap size={12} /> Kvalitétspass ({analysisWindow.qualitySessions.length})</div>
-                            <div className="overflow-y-auto custom-scrollbar space-y-1.5">
+                            <div className="overflow-y-auto custom-scrollbar space-y-1.5 flex-1">
                                 {analysisWindow.qualitySessions.length > 0 ? analysisWindow.qualitySessions.map(r => (
                                     <ActivityRow key={r.id} r={r} icon={<Zap size={12} className="text-blue-400" />} />
                                 )) : <div className="text-center py-4 text-xs text-slate-500">Inga kvalitetspass hittades</div>}
@@ -573,11 +627,17 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <div className="flex-1 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={analysisWindow.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="volGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
                                         <XAxis dataKey="week" hide />
                                         <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Area type="monotone" dataKey="vol" stroke="#10b981" strokeWidth={2} fillOpacity={0.1} fill="#10b981" />
+                                        <Area type="monotone" dataKey="vol" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#volGradient)" />
                                         <Scatter dataKey="vol" shape={(props: any) => {
                                             const { cx, cy, payload } = props;
                                             if (payload.raceCount > 0) {
@@ -609,9 +669,9 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                                 </ResponsiveContainer>
                             ) : (
                                 <div className="space-y-2 overflow-y-auto flex-1 custom-scrollbar">
-                                    {analysisWindow.weightDataPoints.length > 0 ? analysisWindow.weightDataPoints.map((w,i) => (
+                                    {analysisWindow.weightDataPoints.length > 0 ? analysisWindow.weightDataPoints.map((w, i) => (
                                         <div key={i} className="flex justify-between items-center bg-white/5 p-2 rounded-lg text-xs">
-                                            <span className="text-slate-500">{w.date.substring(0,10)}</span>
+                                            <span className="text-slate-500">{w.date.substring(0, 10)}</span>
                                             <span className="font-black text-white">{(w.weight || 0).toFixed(1)} kg</span>
                                         </div>
                                     )) : <div className="text-xs text-slate-500 italic text-center py-10">Ingen hälsodata hittades.</div>}
@@ -620,6 +680,12 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         </div>
                     </div>
                 </div>
+                {selectedDetailId && (
+                    <ActivityDetailModal 
+                        activity={allActivities.find(e => e.id === selectedDetailId) as any}
+                        onClose={() => setSelectedDetailId(null)}
+                    />
+                )}
             </div>
         </div>
     );

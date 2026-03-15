@@ -191,7 +191,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         const line = cleanLines[i];
         // Match: <reps>x (<work_dist> / <recovery_dist>)
         // Also match variants: "5x (2000m / 1000m jogg)", "5x(2k/1k)", "5 x (2000 / 1000)"
-        const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*[\/\|]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*(?:jogg|vila|rest)?\s*\)/);
+        const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*[\/\|\+]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*\)/);
         if (parenMatch) {
             const reps = parseInt(parenMatch[1], 10);
             let workDist = parseFloat(parenMatch[2].replace(',', '.'));

@@ -436,11 +436,6 @@ export function ActivityDetailModal({
     const existingSplits = splits;
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && currentActivity.type !== 'strength') || hasWorkoutStructure;
 
-    const segmentedSplits = React.useMemo(() => {
-        if (!existingSplits || existingSplits.length < 3) return null;
-        return segmentSplits(existingSplits, parsedWorkout, currentActivity.title || currentActivity.type);
-    }, [existingSplits, parsedWorkout, currentActivity]);
-
     const areLapsAndSplitsIdentical = React.useMemo(() => {
         if (!splits || !existingLaps || splits.length !== existingLaps.length) return false;
         return splits.every((s: any, i: number) => {
@@ -448,6 +443,23 @@ export function ActivityDetailModal({
             return Math.abs(s.distance - lap.distance) < 2 && Math.abs(s.movingTime - lap.movingTime) < 2;
         });
     }, [splits, existingLaps]);
+
+    const segmentedSplits = React.useMemo(() => {
+        const useLaps = existingLaps && existingLaps.length >= 3 && !areLapsAndSplitsIdentical;
+        const source = useLaps
+            ? existingLaps.map((l: any, i: number) => ({
+                split: i + 1,
+                distance: l.distance,
+                movingTime: l.movingTime,
+                elapsedTime: l.elapsedTime,
+                averageHeartrate: l.averageHeartrate || l.avgHeartRate || l.heartRateAvg,
+                elevationDiff: l.elevationDiff
+            }))
+            : existingSplits;
+
+        if (!source || source.length < 3) return null;
+        return segmentSplits(source, parsedWorkout, currentActivity.title || currentActivity.type);
+    }, [existingSplits, existingLaps, areLapsAndSplitsIdentical, parsedWorkout, currentActivity]);
 
 
     // Detect if child of another activity

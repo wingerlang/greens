@@ -51,76 +51,126 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     // 1. Beräkna tempo (sekunder per km)
     const paces = splits.map(s => s.movingTime / (Math.max(s.distance, 1) / 1000));
 
-    // 2. K-Means Klustring (k=3) för att dynamiskt hitta tempogränser
-    let c1 = Math.min(...paces); // Snabbast (Intervall)
-    let c3 = Math.max(...paces); // Långsammast (Uppjogg/Nerjogg)
-    let c2 = (c1 + c3) / 2;      // Vila (Mellan)
-
-    for (let iter = 0; iter < 5; iter++) {
-        const g1: number[] = [], g2: number[] = [], g3: number[] = [];
-        for (const p of paces) {
-            const d1 = Math.abs(p - c1);
-            const d2 = Math.abs(p - c2);
-            const d3 = Math.abs(p - c3);
-            if (d1 <= d2 && d1 <= d3) g1.push(p);
-            else if (d2 <= d1 && d2 <= d3) g2.push(p);
-            else g3.push(p);
-        }
-        if (g1.length) c1 = g1.reduce((a, b) => a + b, 0) / g1.length;
-        if (g2.length) c2 = g2.reduce((a, b) => a + b, 0) / g2.length;
-        if (g3.length) c3 = g3.reduce((a, b) => a + b, 0) / g3.length;
-    }
-
-    // --- Robusthets-checkar ---
-    const maxPace = Math.max(...paces);
-    const minPace = Math.min(...paces);
-    const paceRange = maxPace - minPace;
-    const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
-
-    // 1. Om spridningen är för liten (t.ex totalt under 25s/km skillnad mellan snabbaste och långsammaste), 
-    //    så är det troligen bara ett vanligt pass med naturlig variation.
-    const minRequiredRange = isExplicitlyInterval ? 15 : 35; // Kräver mer spridning om det inte uttryckligen är intervall
-    if (paceRange < minRequiredRange && !isExplicitlyInterval) return null;
-
-    // 2. Om det uttryckligen heter "distans" och spridningen är under en viss tröskel, avbryt.
-    if (isExplicitlyDistance && paceRange < 50) return null;
-
-    // 3. Kontrollera att det faktiskt är en meningsfull skillnad mellan Intervall-klustret och Vila-klustret
-    const clusterDiff = Math.abs(c1 - c2);
-    const minClusterDiff = isExplicitlyInterval ? 10 : 25;
-    if (clusterDiff < minClusterDiff && !isExplicitlyInterval) return null;
-
-    // Tröskeln läggs rakt mellan intervall-snittet och vilo-snittet
-    const threshold = (c1 + c2) / 2;
-    const isFast = paces.map(p => p < threshold);
-
-    const firstFastIdx = isFast.indexOf(true);
-    const lastFastIdx = isFast.lastIndexOf(true);
-
-    if (firstFastIdx === -1) return null;
-
     const classified: ClassifiedSplit[] = splits.map(s => ({ ...s, role: 'unknown' as const }));
 
-    // 3. Applicera roller enbart baserat på faktisk data
-    for (let i = 0; i < firstFastIdx; i++) classified[i].role = 'warmup';
-    for (let i = lastFastIdx + 1; i < classified.length; i++) classified[i].role = 'cooldown';
-
-    let intervalNumber = 0;
-    let inInterval = false;
-
-    // Grupperar snabba laps till pågående block, och första efterföljande långsamma till vilan
-    for (let i = firstFastIdx; i <= lastFastIdx; i++) {
-        if (isFast[i]) {
-            if (!inInterval) {
-                intervalNumber++;
-                inInterval = true;
+    // --- Pre-check: Title-Driven sequence matching ---
+    const expectedSequence: { role: 'interval' | 'recovery', distance: number }[] = [];
+    if (parsed) {
+        parsed.segments.forEach(seg => {
+            for (let i = 0; i < seg.reps; i++) {
+                if (seg.work.dist) expectedSequence.push({ role: 'interval', distance: seg.work.dist });
+                if (seg.recovery && seg.recovery.type === 'distance' && seg.recovery.value) {
+                    expectedSequence.push({ role: 'recovery', distance: seg.recovery.value });
+                }
             }
-            classified[i].role = 'interval';
-            classified[i].intervalNumber = intervalNumber;
-        } else {
-            inInterval = false;
-            classified[i].role = 'recovery';
-            classified[i].intervalNumber = intervalNumber;
+        });
+    }
+
+    let isTitleMatched = false;
+    let bestStart = -1;
+    let bestMatchCount = 0;
+
+    if (expectedSequence.length >= 2 && splits.length >= expectedSequence.length) {
+        for (let i = 0; i <= splits.length - expectedSequence.length; i++) {
+            let matchCount = 0;
+            for (let j = 0; j < expectedSequence.length; j++) {
+                const split = splits[i + j];
+                const exp = expectedSequence[j];
+                const distDiff = Math.abs(split.distance - exp.distance);
+                const tolerance = Math.max(150, exp.distance * 0.20); // 20% tolerance or 150m
+                if (distDiff <= tolerance) matchCount++;
+            }
+            if (matchCount > bestMatchCount) {
+                bestMatchCount = matchCount;
+                bestStart = i;
+            }
+        }
+        // At least 75% items match, and matched items count has to be reasonable
+        if (bestMatchCount >= Math.ceil(expectedSequence.length * 0.75) && bestStart !== -1) {
+            isTitleMatched = true;
+        }
+    }
+
+    if (isTitleMatched && bestStart !== -1) {
+        for (let i = 0; i < bestStart; i++) classified[i].role = 'warmup';
+        for (let i = bestStart + expectedSequence.length; i < classified.length; i++) classified[i].role = 'cooldown';
+        
+        let intervalNumber = 0;
+        for (let j = 0; j < expectedSequence.length; j++) {
+            const splitIdx = bestStart + j;
+            const exp = expectedSequence[j];
+            if (exp.role === 'interval') {
+                intervalNumber++;
+                classified[splitIdx].role = 'interval';
+                classified[splitIdx].intervalNumber = intervalNumber;
+            } else {
+                classified[splitIdx].role = 'recovery';
+                classified[splitIdx].intervalNumber = intervalNumber;
+            }
+        }
+    } else {
+        // 2. K-Means Klustring (k=3) för att dynamiskt hitta tempogränser
+        let c1 = Math.min(...paces); // Snabbast (Intervall)
+        let c3 = Math.max(...paces); // Långsammast (Uppjogg/Nerjogg)
+        let c2 = (c1 + c3) / 2;      // Vila (Mellan)
+
+        for (let iter = 0; iter < 5; iter++) {
+            const g1: number[] = [], g2: number[] = [], g3: number[] = [];
+            for (const p of paces) {
+                const d1 = Math.abs(p - c1);
+                const d2 = Math.abs(p - c2);
+                const d3 = Math.abs(p - c3);
+                if (d1 <= d2 && d1 <= d3) g1.push(p);
+                else if (d2 <= d1 && d2 <= d3) g2.push(p);
+                else g3.push(p);
+            }
+            if (g1.length) c1 = g1.reduce((a, b) => a + b, 0) / g1.length;
+            if (g2.length) c2 = g2.reduce((a, b) => a + b, 0) / g2.length;
+            if (g3.length) c3 = g3.reduce((a, b) => a + b, 0) / g3.length;
+        }
+
+        // --- Robusthets-checkar ---
+        const maxPace = Math.max(...paces);
+        const minPace = Math.min(...paces);
+        const paceRange = maxPace - minPace;
+        const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
+
+        const minRequiredRange = isExplicitlyInterval ? 15 : 35;
+        if (paceRange < minRequiredRange && !isExplicitlyInterval) return null;
+        if (isExplicitlyDistance && paceRange < 50) return null;
+
+        const clusterDiff = Math.abs(c1 - c2);
+        const minClusterDiff = isExplicitlyInterval ? 10 : 25;
+        if (clusterDiff < minClusterDiff && !isExplicitlyInterval) return null;
+
+        const threshold = (c1 + c2) / 2;
+        const isFast = paces.map(p => p < threshold);
+
+        const firstFastIdx = isFast.indexOf(true);
+        const lastFastIdx = isFast.lastIndexOf(true);
+
+        if (firstFastIdx === -1) return null;
+
+        // 3. Applicera roller enbart baserat på faktisk data
+        for (let i = 0; i < firstFastIdx; i++) classified[i].role = 'warmup';
+        for (let i = lastFastIdx + 1; i < classified.length; i++) classified[i].role = 'cooldown';
+
+        let intervalNumber = 0;
+        let inInterval = false;
+
+        for (let i = firstFastIdx; i <= lastFastIdx; i++) {
+            if (isFast[i]) {
+                if (!inInterval) {
+                    intervalNumber++;
+                    inInterval = true;
+                }
+                classified[i].role = 'interval';
+                classified[i].intervalNumber = intervalNumber;
+            } else {
+                inInterval = false;
+                classified[i].role = 'recovery';
+                classified[i].intervalNumber = intervalNumber;
+            }
         }
     }
 

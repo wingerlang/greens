@@ -63,17 +63,31 @@ function SplitRows({ splits, fastestPace, slowestPace }: { splits: ClassifiedSpl
             {splits.map((split, i) => {
                 const pace = split.movingTime / (Math.max(split.distance, 1) / 1000);
                 return (
-                    <div key={`${split.split}-${i}`} className="flex items-center gap-3 py-1 hover:bg-white/5 transition-all rounded px-1 -mx-1 group">
-                        <span className="text-[10px] font-mono text-slate-500 w-12">Lap {split.split}</span>
-                        <SplitBar pace={pace} fastestPace={fastestPace} slowestPace={slowestPace} role={split.role} />
-                        <span className="text-xs font-black text-white ml-auto">{formatPaceSec(pace)}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${roleClasses(split.role)}`}>
-                            {roleSwedish(split.role)}
-                        </span>
+                    <div key={`${split.split}-${i}`} className="flex items-center gap-3 py-1.5 hover:bg-white/5 transition-all rounded px-1 -mx-1 group">
+                        <span className="text-[10px] font-mono text-slate-500 w-12 shrink-0">Lap {split.split}</span>
+                        
+                        <div className="flex-1 flex flex-col gap-0.5">
+                            <SplitBar pace={pace} fastestPace={fastestPace} slowestPace={slowestPace} role={split.role} />
+                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                                <span className={split.role === 'interval' ? 'text-amber-400/80' : ''}>{(split.distance / 1000).toFixed(2)} km</span>
+                                <span className="opacity-40">•</span>
+                                <span>{formatDuration(split.movingTime || 0)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-0.5 ml-auto">
+                            <span className="text-xs font-black text-white">{formatPaceSec(pace)}</span>
+                            <span className={`text-[8px] px-1 py-0.25 rounded border ${roleClasses(split.role)} scale-90 origin-right font-black uppercase`}>
+                                {roleSwedish(split.role)}
+                            </span>
+                        </div>
+
                         {split.averageHeartrate ? (
-                            <span className="text-[10px] text-rose-400/80 font-mono w-8 text-right">{Math.round(split.averageHeartrate)}</span>
+                            <div className="flex items-center gap-0.5 w-8 justify-end shrink-0">
+                                <span className="text-[10px] text-rose-400 font-mono font-bold">{Math.round(split.averageHeartrate)}</span>
+                            </div>
                         ) : (
-                            <span className="text-[10px] text-slate-600 font-mono w-8 text-right">-</span>
+                            <span className="text-[10px] text-slate-600 font-mono w-8 text-right shrink-0">-</span>
                         )}
                     </div>
                 );
