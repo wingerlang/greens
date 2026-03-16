@@ -33,6 +33,7 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
         { id: 'races', label: '🏆 Tävlingar', path: '/training/races', color: 'amber' },
         { id: 'lopstatistik', label: '⏱️ Löpstatistik', path: '/training/lopstatistik', color: 'indigo' },
         { id: 'summary', label: '📊 Summering', path: '/summary', color: 'emerald' },
+        { id: 'form', label: '📈 Aktuell Form', path: '/training/form', color: 'emerald' },
         { id: 'dataanalys', label: '🔍 Dataanalys', path: '/training/dataanalys', color: 'indigo' },
         { id: 'review', label: '📅 Årsöversikt', path: '/review', color: 'emerald' },
     ];
