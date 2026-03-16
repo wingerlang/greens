@@ -422,9 +422,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 // Pass down reasoning for UI
                 sortReason: contextCount > 0
                     ? `${contextCount} ggr härifrån`
-                    : globalOmniCount > 0
-                        ? `${globalOmniCount} ggr globalt`
-                        : `${globalTotalCount} besök totalt`,
+                    : `${globalOmniCount} besök via omnibox`,
                 contextCount,
                 globalOmniCount,
                 globalTotalCount

@@ -43,6 +43,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
     // Pinned Tooltip State
     const [pinnedTooltip, setPinnedTooltip] = useState<string | null>(null);
+    const [distMode, setDistMode] = useState<'time' | 'count'>('time');
 
     const monthName = MONTHS[monthIndex];
 
@@ -186,7 +187,18 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             return acc;
         }, {} as Record<string, number>);
 
-        return { distance, duration, count, tonnage, timeDist, perWeek, freqPercent, timePerDay, distancePerWeek, sessionsPerActiveDay };
+        const countDist = monthData.reduce((acc, e) => {
+            acc[e.type] = (acc[e.type] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const hrActivities = monthData.filter(e => e.heartRateAvg && e.heartRateAvg > 0);
+        const avgHr = hrActivities.length > 0 
+            ? Math.round(hrActivities.reduce((sum, e) => sum + e.heartRateAvg!, 0) / hrActivities.length) 
+            : 0;
+        const inactiveDays = Math.max(0, daysPassedForStats - uniqueActiveDays);
+
+        return { distance, duration, count, tonnage, timeDist, countDist, perWeek, freqPercent, timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays };
     }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
 
     if (monthIndex < 0) return null;
@@ -873,7 +885,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                         <div className="flex items-end justify-between mb-4">
                             <p className="text-4xl font-black text-white leading-none">{stats.count} <span className="text-lg font-bold text-slate-500">pass</span></p>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mt-auto pt-4 border-t border-white/5">
+                        <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-white/5">
                             <div>
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / Vecka</p>
                                 <p className="text-base font-black text-slate-300">{stats.perWeek} <span className="text-[10px] font-bold text-slate-500">pass</span></p>
@@ -881,6 +893,10 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             <div>
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Per aktiv dag</p>
                                 <p className="text-base font-black text-slate-300">{stats.sessionsPerActiveDay} <span className="text-[10px] font-bold text-slate-500">pass</span></p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Inaktiva dagar</p>
+                                <p className="text-base font-black text-slate-300">{stats.inactiveDays || 0} <span className="text-[10px] font-bold text-slate-500">dagar</span></p>
                             </div>
                         </div>
                     </div>
@@ -896,14 +912,18 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                 {Math.round(stats.duration % 60)}<span className="text-xl font-bold text-slate-500 ml-1">m</span>
                             </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mt-auto pt-4 border-t border-white/5">
+                        <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-white/5">
                             <div>
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / dag</p>
                                 <p className="text-base font-black text-sky-400">{stats.timePerDay} <span className="text-[10px] font-bold text-sky-500/70">min</span></p>
                             </div>
                             <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / pass</p>
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/pass</p>
                                 <p className="text-base font-black text-sky-400">{stats.count > 0 ? Math.round(stats.duration / stats.count) : 0} <span className="text-[10px] font-bold text-sky-500/70">min</span></p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snittpuls</p>
+                                <p className="text-base font-black text-sky-400">{stats.avgHr > 0 ? `${stats.avgHr} ` : '-'}{stats.avgHr > 0 && <span className="text-[10px] font-bold text-sky-500/70">bpm</span>}</p>
                             </div>
                         </div>
                     </div>
@@ -939,10 +959,17 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                     {/* Kolumn 4: Tidsfördelning */}
                     <div className="bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-white/5 shadow-inner flex flex-col">
-                        <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-4">Tidsfördelning</p>
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">
+                                {distMode === 'time' ? 'Tidsfördelning' : 'Passfördelning'}
+                            </p>
+                            <button onClick={() => setDistMode(distMode === 'time' ? 'count' : 'time')} className="text-[9px] font-bold text-slate-400 hover:text-sky-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md transition-colors">
+                                {distMode === 'time' ? 'Visa Pass' : 'Visa Tid'}
+                            </button>
+                        </div>
                         <div className="space-y-1.5 w-full my-auto">
-                            {Object.entries(stats.timeDist).sort((a, b) => b[1] - a[1]).map(([type, mins]) => {
-                                const percent = Math.round((mins / stats.duration) * 100);
+                            {Object.entries(distMode === 'time' ? stats.timeDist : stats.countDist).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([type, value]) => {
+                                const percent = Math.round(((value as number) / (distMode === 'time' ? stats.duration : stats.count)) * 100);
                                 const icon = type.includes('running') || type.includes('run') ? '🏃' :
                                     type === 'strength' ? '🏋️' :
                                         type === 'cycling' ? '🚴' :
@@ -964,7 +991,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                 </span>
                                                 <span className="font-mono font-bold text-white text-[9px] leading-none shrink-0 ml-1">
                                                     {percent}% <span className="text-slate-500 font-normal">
-                                                        ({mins >= 60 ? `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m` : `${Math.round(mins)}m`})
+                                                        {distMode === 'time' ? (
+                                                            `(${value >= 60 ? `${Math.floor(value as number / 60)}h ${Math.round(value as number % 60)}m` : `${Math.round(value as number)}m`})`
+                                                        ) : (
+                                                            `(${value} pass)`
+                                                        )}
                                                     </span>
                                                 </span>
                                             </div>
