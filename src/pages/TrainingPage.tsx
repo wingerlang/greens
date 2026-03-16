@@ -32,6 +32,7 @@ import { KonditionView } from './Health/KonditionView.tsx';
 import { RunningStatsView } from './Health/RunningStatsView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
 import { DataAnalysisView } from './training/DataAnalysisView.tsx';
+import { CurrentFitnessView } from '../components/training/CurrentFitnessView.tsx';
 
 export function TrainingPage() {
     const {
@@ -888,6 +889,19 @@ export function TrainingPage() {
                             filterEndDate={filterEndDate}
                             exerciseEntries={exerciseEntries}
                             universalActivities={universalActivities}
+                        />
+                    </div>
+                )
+            }
+
+            {
+                currentTab === 'form' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <CurrentFitnessView
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
                         />
                     </div>
                 )
