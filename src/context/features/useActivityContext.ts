@@ -567,7 +567,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 type: finalType,
                 durationMinutes: totalDurationMinutes,
                 intensity: 'moderate' as const,
-                caloriesBurned: 0,
+                caloriesBurned: calculateExerciseCalories(finalType, totalDurationMinutes, 'moderate'),
                 distance: totalDistance > 0 ? totalDistance / 1000 : undefined, // Convert to km
                 tonnage: w.totalVolume || 0,
                 totalSets: w.totalSets || 0,

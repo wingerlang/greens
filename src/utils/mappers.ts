@@ -6,7 +6,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
     const titleObj = a.plan?.title || a.performance?.notes || '';
 
     // Retroactive fix for existing "Cardio: xxx" workouts AND Strava activities incorrectly saved as strength
-    if (finalType === 'strength') {
+    if (finalType === 'strength' || finalType === 'workout' || finalType === 'other' || finalType === 'cardio') {
         const lowerTitle = titleObj.toLowerCase();
         const isFromStrava = a.performance?.source?.source === 'strava';
         const hasCardioPrefix = /^cardio\b/i.test(titleObj);

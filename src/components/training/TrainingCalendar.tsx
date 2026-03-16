@@ -478,9 +478,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                                                                         <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-left px-1">
                                                                             <div className="flex flex-col">
-                                                                                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Tid</span>
-                                                                                <span className="font-mono text-slate-200 font-bold">{Math.round(ex.durationMinutes)} min</span>
-                                                                            </div>
+                                                                                 <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Tid</span>
+                                                                                 <span className="font-mono text-slate-200 font-bold">{Math.round(ex.durationMinutes)} min</span>
+                                                                             </div>
+                                                                             {ex.startTime && (
+                                                                                 <div className="flex flex-col">
+                                                                                     <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Start</span>
+                                                                                     <span className="font-mono text-slate-200 font-bold">{ex.startTime}</span>
+                                                                                 </div>
+                                                                             )}
                                                                             {ex.distance !== undefined && ex.distance > 0 && (
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[9px] text-emerald-500/80 uppercase font-black tracking-widest">Distans</span>
@@ -576,10 +582,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                 }, { replace: true });
                                                                             }}>
                                                                             <span className="capitalize text-emerald-100 font-medium truncate" title={e.title || e.type}>{e.subType === 'race' ? '🏆 ' : ''}{e.title || 'Löpning'}</span>
-                                                                            <div className="text-right shrink-0">
-                                                                                <div className="text-emerald-400 font-mono font-bold text-xs">{e.distance?.toFixed(1)}km</div>
-                                                                                <div className="text-slate-400 font-mono text-[9px]">{Math.round(e.durationMinutes)}m • {Math.round(e.caloriesBurned || 0)} kcal</div>
-                                                                            </div>
+                                                                            <div className="text-right shrink-0 flex items-center gap-1 font-mono text-[10px] font-bold">
+                                                                                 {e.distance && <span className="text-emerald-400">{e.distance.toFixed(1)}k</span>}
+                                                                                 {e.distance && <span className="text-slate-500">•</span>}
+                                                                                 <span className="text-sky-400">{Math.round(e.durationMinutes)}m</span>
+                                                                                 {e.heartRateAvg && <span className="text-slate-500">•</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 <span className="text-slate-500">•</span>
+                                                                                 <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
+                                                                             </div>
                                                                         </div>
                                                                     );
                                                                 })}
@@ -629,10 +640,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                 }, { replace: true });
                                                                             }}>
                                                                             <span className="capitalize text-indigo-100 font-medium truncate" title={e.title || e.type}>{e.title || 'Styrka'}</span>
-                                                                            <div className="text-right shrink-0">
-                                                                                <div className="text-indigo-400 font-mono font-bold text-xs">{Math.round(e.durationMinutes)}m</div>
-                                                                                <div className="text-slate-400 font-mono text-[9px]">{(e.tonnage || 0) > 0 ? `${(e.tonnage! / 1000).toFixed(1)}t • ` : ''}{Math.round(e.caloriesBurned || 0)} kcal</div>
-                                                                            </div>
+                                                                            <div className="text-right shrink-0 flex items-center gap-1 font-mono text-[10px] font-bold">
+                                                                                 <span className="text-sky-400">{Math.round(e.durationMinutes)}m</span>
+                                                                                 {(e.tonnage || 0) > 0 && <span className="text-slate-500">•</span>}
+                                                                                 {(e.tonnage || 0) > 0 && <span className="text-indigo-400">{(e.tonnage! / 1000).toFixed(1)}t</span>}
+                                                                                 {e.heartRateAvg && <span className="text-slate-500">•</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 <span className="text-slate-500">•</span>
+                                                                                 <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
+                                                                             </div>
                                                                         </div>
                                                                     );
                                                                 })}
@@ -650,16 +666,67 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     </div>
                                                 )}
                                                 {weekOtherCardioMin > 0 && (
-                                                    <div className="flex items-center justify-between bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded cursor-help relative group/weekother hover:bg-sky-500/20 transition-colors w-full border border-sky-500/10 mb-0.5">
-                                                        <HeartPulse className="w-3.5 h-3.5" />
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span>
-                                                                {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h` : ''}
-                                                                {Math.floor(weekOtherCardioMin / 60) > 0 && Math.round(weekOtherCardioMin % 60) === 0 ? '' : `${Math.round(weekOtherCardioMin % 60)}m`}
-                                                            </span>
-                                                            <span className="text-[10px] ml-0.5 opacity-50 font-normal">{weekOtherCardioCount}p</span>
-                                                        </div>
-                                                    </div>
+                                                    <div
+                                                         className="flex items-center justify-between bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded cursor-help relative group/weekother hover:bg-sky-500/20 transition-colors w-full border border-sky-500/10 mb-0.5 calendar-tooltip-container"
+                                                         onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `other-${weekIdx}` ? null : `other-${weekIdx}`) }}
+                                                     >
+                                                         <HeartPulse className="w-3.5 h-3.5" />
+                                                         <div className="flex items-baseline gap-1">
+                                                             <span>
+                                                                 {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h` : ''}
+                                                                 {Math.floor(weekOtherCardioMin / 60) > 0 && Math.round(weekOtherCardioMin % 60) === 0 ? '' : `${Math.round(weekOtherCardioMin % 60)}m`}
+                                                             </span>
+                                                             <span className="text-[10px] ml-0.5 opacity-50 font-normal">{weekOtherCardioCount}p</span>
+                                                         </div>
+
+                                                         {/* Rich Tooltip */}
+                                                         <div
+                                                             className={`absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-sm p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-sky-500/10 ${pinnedTooltip === `other-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weekother:opacity-100 -translate-x-2 xl:group-hover/weekother:translate-x-0 pointer-events-none xl:group-hover/weekother:scale-100 cursor-default'}`}
+                                                             onClick={(e) => e.stopPropagation()}
+                                                         >
+                                                             <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10">Alternativ Cardio</div>
+                                                             <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                                 {otherCardioExercises.map((e, idx) => {
+                                                                     const [dYear, dMonth, dDay] = e.date.split('-');
+                                                                     const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
+                                                                     const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
+                                                                     
+                                                                     let typeStr = e.type.replace('cycling', 'Cykling').replace('walking', 'Promenad').replace('swimming', 'Simning').replace('cardio', 'Kondition');
+                                                                     let valueStr = Math.round(e.durationMinutes) + 'm';
+                                                                     if (e.distance && e.distance > 0) valueStr = e.distance.toFixed(1) + 'km';
+
+                                                                     return (
+                                                                         <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1.5 -mx-1.5 rounded-sm cursor-pointer transition-colors"
+                                                                             onClick={() => {
+                                                                                 setSelectedDate(e.date);
+                                                                                 navigate({
+                                                                                     pathname: `/träning/${dYear}/${dMonthName}/${parseInt(dDay)}`,
+                                                                                     search: window.location.search
+                                                                                 }, { replace: true });
+                                                                             }}>
+                                                                             <span className="capitalize text-sky-100 font-medium truncate" title={e.title || e.type}>{e.title || typeStr}</span>
+                                                                             <div className="text-right shrink-0 flex items-center gap-1 font-mono text-[10px] font-bold">
+                                                                                 <span className="text-sky-400">{valueStr}</span>
+                                                                                 {e.heartRateAvg && <span className="text-slate-500">•</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 <span className="text-slate-500">•</span>
+                                                                                 <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
+                                                                             </div>
+                                                                         </div>
+                                                                     );
+                                                                 })}
+                                                             </div>
+                                                             <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs font-black items-end">
+                                                                 <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
+                                                                 <div className="text-right">
+                                                                     <div className="text-sky-400 font-mono">
+                                                                         {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h ` : ''}{Math.round(weekOtherCardioMin % 60)}m
+                                                                     </div>
+                                                                     <div className="text-slate-400 font-mono text-[9px] font-normal">{otherCardioExercises.reduce((acc, e) => acc + (e.caloriesBurned || 0), 0)} kcal</div>
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     </div>
                                                 )}
                                                 {weekTonnage > 0 && (
                                                     <div className="flex items-center justify-between bg-slate-800/50 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weektng hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
@@ -762,12 +829,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         <span className={`capitalize truncate text-[11px] ${colorName}`} title={e.title || e.type}>
                                                                             {isRace ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
                                                                         </span>
-                                                                        <div className="text-right shrink-0">
-                                                                            <span className={`font-mono font-bold text-xs ${valColor}`}>
-                                                                                {valueStr}
-                                                                            </span>
-                                                                            <div className="text-slate-500 font-mono text-[9px] mt-0.5">{Math.round(e.caloriesBurned || 0)} kcal</div>
-                                                                        </div>
+                                                                        <div className="text-right shrink-0 flex items-center gap-1.5 mt-0.5">
+                                                                             <span className={`font-mono font-bold text-xs ${valColor}`}>
+                                                                                 {valueStr}
+                                                                             </span>
+                                                                             <span className="text-slate-500 font-mono text-[9px]">• {Math.round(e.caloriesBurned || 0)} kcal</span>
+                                                                         </div>
                                                                     </div>
                                                                 );
                                                             })}

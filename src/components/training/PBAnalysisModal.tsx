@@ -155,7 +155,10 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                 const isQuality = act.title?.toLowerCase().includes('intervall') ||
                     act.notes?.toLowerCase().includes('intervall') ||
                     act.title?.toLowerCase().includes('tempo') ||
-                    act.title?.toLowerCase().includes('tröskel');
+                    act.title?.toLowerCase().includes('tröskel') ||
+                    act.subType === 'interval' || 
+                    act.subType === 'tempo' || 
+                    act.subType === 'race';
 
                 if (!isRace) {
                     const enriched = { ...act, isQuality: !!isQuality };
@@ -341,17 +344,33 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         <div className="text-xs font-bold text-white truncate" title={r.title || r.type}>
                             {r.title || r.type}
                         </div>
-                        <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1">
+                        <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1 flex-wrap">
                             <span>{r.date.substring(0, 10)}</span>
                             {r.distance && (
                                 <span className={`text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider ${
+                                    r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'bg-amber-500/20 text-amber-500' :
+                                    r.subType === 'tempo' || r.title?.toLowerCase().includes('tempo') ? 'bg-yellow-500/20 text-yellow-500' :
+                                    (r as any).isQuality ? 'bg-orange-500/20 text-orange-400' :
                                     r.distance >= 40 ? 'bg-purple-500/20 text-purple-400' : 
                                     r.distance >= 20 ? 'bg-emerald-500/20 text-emerald-400' : 
                                     r.distance >= 14 ? 'bg-sky-500/20 text-sky-400' :
                                     r.distance <= 7 ? 'bg-indigo-500/20 text-indigo-400' :
                                     'bg-slate-500/20 text-slate-400'
                                 }`}>
-                                    {r.distance >= 40 ? 'Överlångt' : r.distance >= 20 ? 'Långpass' : r.distance >= 14 ? 'Längre Distans' : r.distance <= 7 ? 'Återhämtning' : 'Distans'}
+                                    {r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'Intervall' :
+                                     r.subType === 'tempo' || r.title?.toLowerCase().includes('tempo') ? 'Tempo' :
+                                     (r as any).isQuality ? 'Kvalitét' :
+                                     r.distance >= 40 ? 'Överlångt' : r.distance >= 20 ? 'Långpass' : r.distance >= 14 ? 'Längre Distans' : r.distance <= 7 ? 'Återhämtning' : 'Distans'}
+                                </span>
+                            )}
+                            {isCompetition(r) && (
+                                <span className="bg-red-500/20 text-red-500 text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider">
+                                    Tävling
+                                </span>
+                            )}
+                            {isCompetition(r) && r.distance && r.distance >= 45 && (
+                                <span className="bg-fuchsia-500/20 text-fuchsia-400 text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider">
+                                    Ultra
                                 </span>
                             )}
                         </div>
@@ -409,6 +428,68 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         return null;
     };
 
+    const handleExportJson = () => {
+        const exportData = {
+            metadata: {
+                generateDate: new Date().toISOString(),
+                timeframeWeeks: timeframeWeeks,
+                pbDate: pbEvent.date.substring(0, 10),
+            },
+            pbEvent: {
+                title: pbEvent.activity?.title || pbEvent.bucketLabel,
+                distance: pbEvent.distance,
+                durationSeconds: pbEvent.durationSeconds,
+                pace: formatPace(pbEvent.durationSeconds / pbEvent.distance),
+                date: pbEvent.date.substring(0, 10)
+            },
+            summaryStats: {
+                totalVolumeKm: Math.round(analysisWindow.totalRunVolumeKm),
+                avgWeeklyVolKm: Math.round(analysisWindow.avgWeeklyVol),
+                totalRuns: analysisWindow.totalRunCount,
+                totalRunTimeHours: Math.floor(analysisWindow.totalRunTimeMin / 60),
+                avgPace: formatPace(analysisWindow.avgPaceSecPerKm),
+                totalElevationGain: Math.round(analysisWindow.totalElevationGain),
+                maxElevationInOneRun: Math.round(analysisWindow.maxElevationInOneRun),
+                consistencyScore: Math.round(analysisWindow.consistencyScore),
+                activeDaysCount: analysisWindow.activeDaysCount,
+                totalDaysInPeriod: analysisWindow.totalDaysInPeriod,
+                longestStreakDays: analysisWindow.longestStreak,
+                peakVolumeWeekKm: (analysisWindow.peakVolumeWeek || 0).toFixed(1),
+                strengthCount: analysisWindow.strengthCount,
+                cyclingCount: analysisWindow.cyclingCount,
+                doubleDaysCount: analysisWindow.doubleDaysCount
+            },
+            distributionCounts: {
+                races: analysisWindow.races.length,
+                quality: analysisWindow.qualityCount,
+                longRuns: analysisWindow.longRunCount,
+                longerDistans: analysisWindow.longerDistCount,
+                distans: analysisWindow.distanceCount
+            },
+            races: analysisWindow.races.map(r => ({
+                date: r.date.substring(0, 10),
+                title: r.title || r.type,
+                distance: r.distance,
+                pace: r.durationMinutes > 0 ? formatPace((r.durationMinutes * 60) / (r.distance || 1)) : '-',
+                heartRateAvg: r.heartRateAvg,
+                elevationGain: r.elevationGain
+            })),
+            top3LongRuns: analysisWindow.top3LongRuns.map(r => ({
+                date: r.date.substring(0, 10),
+                title: r.title || r.type,
+                distance: r.distance,
+                pace: r.durationMinutes > 0 ? formatPace((r.durationMinutes * 60) / (r.distance || 1)) : '-'
+            })),
+            weeklyTrends: analysisWindow.chartData,
+            weightStats: analysisWindow.weightDataPoints ? analysisWindow.weightDataPoints.map(w => ({
+                date: w.date.substring(0, 10),
+                weight: w.weight
+            })) : undefined
+        };
+        navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
+        alert('All synlig data har kopierats till urklipp i JSON-format!');
+    };
+
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
@@ -423,11 +504,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <h2 className="text-base font-black text-white">
                                 {pbEvent.bucketLabel} Rekord
                             </h2>
-                            <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-0.5 scale-90">
-                                {[4, 8, 12, 16].map(weeks => (
-                                    <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
-                                ))}
-                            </div>
                             <div className="flex items-center gap-3">
                                 <span className="text-xl font-black text-amber-400 font-mono">
                                     {pbEvent.durationFormatted}
@@ -444,7 +520,15 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-0.5 scale-90">
+                            {[4, 8, 12, 16].map(weeks => (
+                                <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
+                            ))}
+                        </div>
+                        <button onClick={handleExportJson} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-white/10 rounded-lg flex items-center gap-1 text-[10px] font-black uppercase tracking-wider" title="Exportera JSON till urklipp">
+                            <div className="bg-amber-500/10 p-1 rounded-sm border border-amber-500/20"><Activity size={12} className="text-amber-500" /></div> JSON
+                        </button>
                         <div className="hidden lg:block text-[10px] font-bold text-slate-500 uppercase">
                             Analys t.o.m. {pbEvent.date.substring(0, 10)}
                         </div>
@@ -516,70 +600,74 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         <div className="text-[9px] font-black text-slate-600 uppercase flex items-center gap-2"><Activity size={10} className="text-amber-500" /> Data fram till {pbEvent.date.substring(0, 10)}</div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2 mb-2"><TrendingUp size={12} className="text-blue-500" /> Mängd & Formtoppning</h3>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-sm font-black text-white">Sista veckan:</span>
-                                        <span className="text-xl font-black text-white">{(analysisWindow.lastWeekVol || 0).toFixed(1)} <span className="text-xs font-bold text-slate-500">km</span></span>
-                                        {analysisWindow.prevWeeksVolAvg > 0 && (
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                                {analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? '-' : '+'}
-                                                {(Math.abs((((analysisWindow.lastWeekVol - analysisWindow.prevWeeksVolAvg) / analysisWindow.prevWeeksVolAvg) * 100)) || 0).toFixed(0)}%
-                                            </span>
-                                        )}
-                                    </div>
+                    {/* 1. Mängd & Formtoppning (Narrower) */}
+                    <div className="max-w-xl mx-auto w-full bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl">
+                        <div className="flex justify-between items-baseline">
+                            <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><TrendingUp size={12} className="text-blue-500" /> Mängd & Formtoppning</h3>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-xs font-black text-slate-400">Sista veckan:</span>
+                                <span className="text-lg font-black text-white">{(analysisWindow.lastWeekVol || 0).toFixed(1)} <span className="text-xs font-bold text-slate-500">km</span></span>
+                                {analysisWindow.prevWeeksVolAvg > 0 && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                        {analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? '-' : '+'}
+                                        {(Math.abs((((analysisWindow.lastWeekVol - analysisWindow.prevWeeksVolAvg) / analysisWindow.prevWeeksVolAvg) * 100)) || 0).toFixed(0)}%
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. Variation, Frekvens & Passfördelning (Full Width Flex) */}
+                    <div className="bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl flex flex-col md:flex-row justify-between gap-4 items-center">
+                        <div>
+                            <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2 mb-2"><RefreshCw size={12} className="text-indigo-500" /> Variation & Frekvens</h3>
+                            <div className="flex gap-4">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] text-slate-500 font-black uppercase">Styrka</span>
+                                    <span className="text-lg font-black text-amber-500">{analysisWindow.strengthCount} <span className="text-[10px] text-slate-600">st</span></span>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Passfördelning</div>
-                                    <div className="flex gap-1.5">
-                                        <div className="bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded text-center">
-                                            <div className="text-xs font-black text-amber-500">{analysisWindow.races.length}</div>
-                                            <div className="text-[8px] font-bold text-amber-600 uppercase">Tävl</div>
-                                        </div>
-                                        <div className="bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded text-center">
-                                            <div className="text-xs font-black text-blue-400">{analysisWindow.qualityCount}</div>
-                                            <div className="text-[8px] font-bold text-blue-500 uppercase">Kval</div>
-                                        </div>
-                                        <div className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded text-center">
-                                            <div className="text-xs font-black text-emerald-400">{analysisWindow.longRunCount}</div>
-                                            <div className="text-[8px] font-bold text-emerald-500 uppercase">Lång</div>
-                                        </div>
-                                        <div className="bg-slate-800/50 px-2 py-1 rounded text-center">
-                                            <div className="text-xs font-black text-white">{analysisWindow.distanceCount}</div>
-                                            <div className="text-[8px] font-bold text-slate-500 uppercase">Dist</div>
-                                        </div>
-                                    </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] text-slate-500 font-black uppercase">Cykling</span>
+                                    <span className="text-lg font-black text-blue-400">{analysisWindow.cyclingCount} <span className="text-[10px] text-slate-600">st</span></span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] text-slate-500 font-black uppercase">Dubbelpass</span>
+                                    <span className="text-lg font-black text-white">{analysisWindow.doubleDaysCount} <span className="text-[10px] text-slate-600">st</span></span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2 mb-2"><RefreshCw size={12} className="text-indigo-500" /> Variation & Frekvens</h3>
-                                    <div className="flex gap-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase">Styrka</span>
-                                            <span className="text-lg font-black text-amber-500">{analysisWindow.strengthCount} <span className="text-[10px] text-slate-600">st</span></span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase">Cykling</span>
-                                            <span className="text-lg font-black text-blue-400">{analysisWindow.cyclingCount} <span className="text-[10px] text-slate-600">st</span></span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[9px] text-slate-500 font-black uppercase">Dubbelpass</span>
-                                            <span className="text-lg font-black text-white">{analysisWindow.doubleDaysCount} <span className="text-[10px] text-slate-600">st</span></span>
-                                        </div>
+                        <div className="flex flex-col md:flex-row items-center gap-4">
+                            <div className="text-right">
+                                <div className="text-[10px] font-black text-slate-500 uppercase mb-1 text-center md:text-right">Passfördelning</div>
+                                <div className="flex gap-1.5 flex-wrap justify-center">
+                                    <div className="bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded text-center">
+                                        <div className="text-xs font-black text-amber-500">{analysisWindow.races.length}</div>
+                                        <div className="text-[8px] font-bold text-amber-600 uppercase">Tävl</div>
+                                    </div>
+                                    <div className="bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded text-center">
+                                        <div className="text-xs font-black text-blue-400">{analysisWindow.qualityCount}</div>
+                                        <div className="text-[8px] font-bold text-blue-500 uppercase">Kval</div>
+                                    </div>
+                                    <div className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded text-center">
+                                        <div className="text-xs font-black text-emerald-400">{analysisWindow.longRunCount}</div>
+                                        <div className="text-[8px] font-bold text-emerald-500 uppercase">Lång</div>
+                                    </div>
+                                    <div className="bg-sky-500/10 border border-sky-500/20 px-2 py-1 rounded text-center">
+                                        <div className="text-xs font-black text-sky-400">{analysisWindow.longerDistCount || 0}</div>
+                                        <div className="text-[8px] font-bold text-sky-500 uppercase">Längre</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 px-2 py-1 rounded text-center">
+                                        <div className="text-xs font-black text-white">{analysisWindow.distanceCount}</div>
+                                        <div className="text-[8px] font-bold text-slate-500 uppercase">Dist</div>
                                     </div>
                                 </div>
-                                <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-xl text-center">
-                                    <div className="text-[9px] font-bold text-indigo-400 uppercase mb-0.5">Längsta Streak</div>
-                                    <div className="text-2xl font-black text-white leading-none">{analysisWindow.longestStreak}</div>
-                                    <div className="text-[9px] font-bold text-slate-500 uppercase">Dagar</div>
-                                </div>
+                            </div>
+
+                            <div className="bg-indigo-500/5 border border-indigo-500/10 p-2 rounded-xl text-center min-w-[75px]">
+                                <div className="text-[8px] font-bold text-indigo-400 uppercase mb-0.5">Längsta Streak</div>
+                                <div className="text-lg font-black text-white leading-none">{analysisWindow.longestStreak}</div>
+                                <div className="text-[8px] font-bold text-slate-500 uppercase">Dagar</div>
                             </div>
                         </div>
                     </div>

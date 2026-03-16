@@ -283,7 +283,7 @@ export function ActivityDetailModal({
     const [editForm, setEditForm] = useState({
         title: currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || '',
         type: currentActivity.type,
-        duration: (currentActivity.durationMinutes || 0).toString(),
+        duration: Math.round(currentActivity.durationMinutes || 0).toString(),
         intensity: currentActivity.intensity || 'moderate',
         notes: currentActivity.notes || '',
         subType: currentActivity.subType || 'default',
@@ -317,7 +317,11 @@ export function ActivityDetailModal({
     ];
 
     // Recalculate derived properties from currentActivity
-    const splits = perf?.splits || (currentActivity as any).splits || [];
+    const splits = (perf?.splits && perf.splits.length > 0) 
+        ? perf.splits 
+        : ((currentActivity as any).splits && (currentActivity as any).splits.length > 0) 
+            ? (currentActivity as any).splits 
+            : [];
     const handleExtractSubmit = async () => {
         if (!extractForm.distance || !extractForm.duration || !extractForm.title) {
             alert('Vänligen fyll i alla fält för utdraget.');
@@ -427,7 +431,11 @@ export function ActivityDetailModal({
     const isHyrox = currentActivity.type === 'hyrox';
 
     const hasSplits = splits.length > 0;
-    const existingLaps = perf?.laps || (currentActivity as any)._mergeData?.universalActivity?.performance?.laps || (currentActivity as any).laps;
+    const existingLaps = (perf?.laps && perf.laps.length > 0) 
+        ? perf.laps 
+        : ((currentActivity as any).laps && (currentActivity as any).laps.length > 0) 
+            ? (currentActivity as any).laps 
+            : [];
 
     // Analysis visibility criteria
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (currentActivity.heartRateAvg && currentActivity.heartRateAvg > 0);
@@ -698,15 +706,26 @@ export function ActivityDetailModal({
             (typeof externalId === 'number');
 
         // Check for existing data
-        const existingSplits = perf?.splits || (activity as any).performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || (activity as any).splits;
-        const existingLaps = perf?.laps || (activity as any).performance?.laps || activity._mergeData?.universalActivity?.performance?.laps || (activity as any).laps;
+        const existingSplits = (perf?.splits && perf.splits.length > 0) 
+            ? perf.splits 
+            : ((activity as any).splits && (activity as any).splits.length > 0) 
+                ? (activity as any).splits 
+                : [];
+        const existingLaps = (perf?.laps && perf.laps.length > 0) 
+            ? perf.laps 
+            : ((activity as any).laps && (activity as any).laps.length > 0) 
+                ? (activity as any).laps 
+                : [];
 
-        // We trigger fetch if EITHER splits or laps are missing
-        const needsFetch = (!existingSplits || existingSplits.length === 0) || (!existingLaps || existingLaps.length === 0);
+        const isStrength = activity.type?.toLowerCase().includes('strength') || activity.type?.toLowerCase().includes('styrka') || activity.type?.toLowerCase() === 'weighttraining';
+        
+        // We trigger fetch only if BOTH splits and laps are completely missing
+        // This avoids infinite loop fetches if an activity genuinely has zero laps on Strava.
+        const needsFetch = (!existingSplits || existingSplits.length === 0) && (!existingLaps || existingLaps.length === 0);
 
         // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
         // but it's good practice to log if it's there. The backend handles the cookie.
-        if (effectivelyStrava && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
+        if (effectivelyStrava && !isStrength && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -1037,7 +1056,7 @@ export function ActivityDetailModal({
                                     onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
                                     className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500/50"
                                 />
-                                {perf?.elapsedTimeSeconds && Math.abs((perf.elapsedTimeSeconds / 60) - parseInt(editForm.duration || '0')) > 1 && (
+                                {perf?.elapsedTimeSeconds && perf?.durationMinutes && Math.abs((perf.elapsedTimeSeconds / 60) - perf.durationMinutes) > 0.1 && (
                                     <div className="flex gap-2 mt-1">
                                         <button
                                             type="button"
