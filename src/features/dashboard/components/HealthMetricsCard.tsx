@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, X, ChevronRight } from 'lucide-react';
+import { Target, X, ChevronRight, Trash2 } from 'lucide-react';
 import { WeightTrendChart } from '../../../components/charts/WeightTrendChart.tsx';
 
 // Helper functions (moved from DashboardPage)
@@ -36,6 +36,7 @@ interface HealthMetricsCardProps {
     weightTrendEntries: any[]; // Using any[] to match usage, ideally strict types
     unifiedHistory: any[];
     onOpenWeightModal: (data: { weight?: number, waist?: number, chest?: number, date?: string }) => void;
+    onDeleteEntry?: (data: { weightEntryId?: string, waistId?: string, chestId?: string }) => void;
 }
 
 export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
@@ -49,7 +50,8 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
     setWeightRange,
     weightTrendEntries,
     unifiedHistory,
-    onOpenWeightModal
+    onOpenWeightModal,
+    onDeleteEntry
 }) => {
     const [showAllHistory, setShowAllHistory] = useState(false);
 
@@ -232,7 +234,27 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                                             )}
                                         </div>
                                     </div>
-                                    <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
+                                    <div className="flex items-center gap-1">
+                                        {onDeleteEntry && (w.weightEntryId || w.waistId || w.chestId) && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm('Vill du verkligen ta bort denna loggning?')) {
+                                                        onDeleteEntry({
+                                                            weightEntryId: w.weightEntryId,
+                                                            waistId: w.waistId,
+                                                            chestId: w.chestId
+                                                        });
+                                                    }
+                                                }}
+                                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg text-rose-500 opacity-0 group-hover/item:opacity-100 transition-all"
+                                                title="Ta bort"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                        <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
+                                    </div>
                                 </div>
                             ))}
                             {unifiedHistory.length === 0 && (

@@ -20,7 +20,7 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
     initialWaist = "",
     initialChest = ""
 }) => {
-    const { addWeightEntry, bulkAddWeightEntries, deleteWeightEntry, weightEntries } = useData();
+    const { addWeightEntry, bulkAddWeightEntries, deleteWeightEntry, weightEntries, deleteBodyMeasurement, bodyMeasurements } = useData();
     const [tempWeight, setTempWeight] = useState(initialWeight);
     const [tempWaist, setTempWaist] = useState(initialWaist);
     const [tempChest, setTempChest] = useState(initialChest);
@@ -59,12 +59,23 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         const w = parseFloat(tempWeight.replace(',', '.'));
-        const waist = tempWaist ? parseFloat(tempWaist.replace(',', '.')) : undefined;
-        const chest = tempChest ? parseFloat(tempChest.replace(',', '.')) : undefined;
+        const waist = tempWaist === "" ? null : parseFloat(tempWaist.replace(',', '.'));
+        const chest = tempChest === "" ? null : parseFloat(tempChest.replace(',', '.'));
 
         // Either weight or at least one measurement must be provided
         if (!isNaN(w) || waist !== undefined || chest !== undefined) {
             addWeightEntry(!isNaN(w) ? w : 0, selectedDate, waist, chest);
+
+            // Cascade to delete separate bodyMeasurements if explicitly cleared (suddas ut)
+            if (waist === null) {
+                const related = (bodyMeasurements || []).find(m => m.date === selectedDate && m.type === 'waist');
+                if (related) deleteBodyMeasurement(related.id);
+            }
+            if (chest === null) {
+                const related = (bodyMeasurements || []).find(m => m.date === selectedDate && m.type === 'chest');
+                if (related) deleteBodyMeasurement(related.id);
+            }
+
             onClose();
         }
     };
@@ -258,6 +269,8 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
                                                     e.stopPropagation();
                                                     if (window.confirm('Vill du verkligen ta bort denna loggning?')) {
                                                         deleteWeightEntry(entry.id);
+                                                        const related = (bodyMeasurements || []).filter(m => m.date === entry.date);
+                                                        related.forEach(m => deleteBodyMeasurement(m.id));
                                                     }
                                                 }}
                                                 className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg text-rose-500 transition-colors"

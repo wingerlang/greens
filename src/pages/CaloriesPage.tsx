@@ -53,7 +53,8 @@ export function CaloriesPage() {
         deleteExercise,
         quickMeals,
         addQuickMeal,
-        foodAliases
+        foodAliases,
+        setSelectedDate: setDataSelectedDate
     } = useData();
 
     const { settings } = useSettings();
@@ -62,6 +63,13 @@ export function CaloriesPage() {
     // Initialize from URL or default to today
     const urlDate = searchParams.get('date');
     const [selectedDate, setSelectedDate] = useState(urlDate || getISODate());
+
+    // Sync context date
+    useEffect(() => {
+        if (setDataSelectedDate) {
+            setDataSelectedDate(selectedDate);
+        }
+    }, [selectedDate, setDataSelectedDate]);
 
     // Sync URL when date changes
     useEffect(() => {
@@ -89,7 +97,7 @@ export function CaloriesPage() {
     };
 
     const [mealType, setMealType] = useState<MealType>(getDefaultMealType(urlDate || getISODate()));
-    const [viewMode, setViewMode] = useState<'normal' | 'compact'>('compact');
+    const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => (localStorage.getItem('calories_view_mode') as 'normal' | 'compact') || 'normal');
 
     // Quick-add state
     const [searchQuery, setSearchQuery] = useState('');
@@ -588,14 +596,14 @@ export function CaloriesPage() {
                     <div className="absolute right-4 flex items-center gap-1 p-1 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
                         <button
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'compact' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                            onClick={() => setViewMode('compact')}
+                            onClick={() => { setViewMode('compact'); localStorage.setItem('calories_view_mode', 'compact'); }}
                             title="Hotkeys: V"
                         >
                             📊 Tiny
                         </button>
                         <button
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'normal' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                            onClick={() => setViewMode('normal')}
+                            onClick={() => { setViewMode('normal'); localStorage.setItem('calories_view_mode', 'normal'); }}
                             title="Hotkeys: V"
                         >
                             📋 Detalj

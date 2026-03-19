@@ -3,6 +3,7 @@ import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts
 
 interface IntervalSplitsCardProps {
     segmented: SegmentedSplits;
+    highlightRange?: { start: number; end: number };
 }
 
 function formatPaceSec(seconds: number): string {
@@ -57,13 +58,15 @@ function SplitBar({ pace, fastestPace, slowestPace, role }: { pace: number; fast
     );
 }
 
-function SplitRows({ splits, fastestPace, slowestPace }: { splits: ClassifiedSplit[]; fastestPace: number; slowestPace: number }) {
+function SplitRows({ splits, fastestPace, slowestPace, highlightRange }: { splits: ClassifiedSplit[]; fastestPace: number; slowestPace: number; highlightRange?: { start: number; end: number } }) {
     return (
         <div className="space-y-1.5">
             {splits.map((split, i) => {
                 const pace = split.movingTime / (Math.max(split.distance, 1) / 1000);
+                const isHighlighted = highlightRange && split.split >= highlightRange.start && split.split <= highlightRange.end;
+
                 return (
-                    <div key={`${split.split}-${i}`} className="flex items-center gap-3 py-1.5 hover:bg-white/5 transition-all rounded px-1 -mx-1 group">
+                    <div key={`${split.split}-${i}`} className={`flex items-center gap-3 py-1.5 hover:bg-white/5 transition-all rounded px-1 -mx-1 group ${isHighlighted ? 'bg-amber-500/10 border-l-2 border-amber-400' : ''}`}>
                         <span className="text-[10px] font-mono text-slate-500 w-12 shrink-0">Lap {split.split}</span>
                         
                         <div className="flex-1 flex flex-col gap-0.5">
@@ -103,6 +106,7 @@ function SectionCard({
     splits,
     fastestPace,
     slowestPace,
+    highlightRange,
 }: {
     title: string;
     subtitle?: string;
@@ -110,6 +114,7 @@ function SectionCard({
     splits: ClassifiedSplit[];
     fastestPace: number;
     slowestPace: number;
+    highlightRange?: { start: number; end: number };
 }) {
     if (splits.length === 0) return null;
 
@@ -123,7 +128,7 @@ function SectionCard({
                 {subtitle && <div className="text-[10px] text-slate-200/70 mt-0.5">{subtitle}</div>}
             </div>
             <div className="px-4 py-2.5">
-                <SplitRows splits={splits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                <SplitRows splits={splits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} />
             </div>
         </div>
     );
@@ -167,7 +172,7 @@ function getBestEfforts(splits: ClassifiedSplit[]) {
     return efforts;
 }
 
-export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
+export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplitsCardProps) {
     const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
     const isSustained = type === 'sustained';
 
@@ -262,6 +267,7 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 splits={warmupSplits}
                 fastestPace={fastestPace}
                 slowestPace={slowestPace}
+                highlightRange={highlightRange}
             />
 
             <div className="space-y-3">
@@ -277,11 +283,11 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                             </div>
                         </div>
                         <div className="px-4 py-2.5 space-y-2">
-                            <SplitRows splits={group.intervalSplits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                            <SplitRows splits={group.intervalSplits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} />
                             {group.recoverySplits.length > 0 && (
                                 <div className="pt-1 border-t border-white/5">
                                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Vila/Joggvila efter block</div>
-                                    <SplitRows splits={group.recoverySplits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                                    <SplitRows splits={group.recoverySplits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} />
                                 </div>
                             )}
                         </div>
@@ -296,6 +302,7 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 splits={cooldownSplits}
                 fastestPace={fastestPace}
                 slowestPace={slowestPace}
+                highlightRange={highlightRange}
             />
 
             <p className="text-[10px] text-slate-600 italic text-center">

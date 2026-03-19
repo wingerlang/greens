@@ -10,11 +10,12 @@ interface NutritionInsightsProps {
 export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
     const { mealEntries, recipes, foodItems, calculateDailyNutrition } = useData();
     const { settings } = useSettings();
+    const [range, setRange] = React.useState<7 | 14 | 30>(7);
 
-    // Calculate last 7 days of data
-    const last7Days = useMemo(() => {
+    // Calculate last N days of data
+    const daysData = useMemo(() => {
         const days = [];
-        for (let i = 6; i >= 0; i--) {
+        for (let i = range as number; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
             const dateStr = getISODate(date);
@@ -22,16 +23,17 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
 
             days.push({
                 date: dateStr,
-                label: i === 0 ? 'Idag' : new Date(dateStr).toLocaleDateString('sv-SE', { weekday: 'short' }),
+                label: i === 0 ? 'Idag' : i === 1 ? 'Igår' : new Date(dateStr).toLocaleDateString('sv-SE', { weekday: 'short' }),
                 calories: nutrition.calories,
                 protein: nutrition.protein,
+                isToday: i === 0
             });
         }
         return days;
-    }, [mealEntries, recipes, foodItems, calculateDailyNutrition]);
+    }, [mealEntries, recipes, foodItems, calculateDailyNutrition, range]);
 
-    // Filter out incomplete days for averages
-    const completeDays = last7Days.filter((d: any) => !settings.incompleteDays?.[d.date]);
+    // Filter out incomplete days, and EXCLUDE TODAY for the average
+    const completeDays = daysData.filter((d: any) => !d.isToday && !settings.incompleteDays?.[d.date]);
 
     // Safety check to avoid division by zero
     const divisor = completeDays.length || 1;
@@ -44,7 +46,6 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
 
     // SVG Chart Constants
     const chartHeight = 100;
-    const chartWidth = 300;
     const barWidth = 32;
     const gap = 8;
 
@@ -55,18 +56,33 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
     const maxCalDisplay = calorieGoal * CALORIE_CAP_FACTOR;
     const maxProtDisplay = proteinGoal * PROTEIN_CAP_FACTOR;
 
-    const maxCal = Math.max(...last7Days.map(d => d.calories), calorieGoal, 1);
-    const maxProt = Math.max(...last7Days.map(d => d.protein), proteinGoal, 1);
+    const maxCal = Math.max(...daysData.map(d => d.calories), calorieGoal, 1);
+    const maxProt = Math.max(...daysData.map(d => d.protein), proteinGoal, 1);
 
     // Scaling for chart rendering
     const calScale = Math.min(maxCal, maxCalDisplay);
     const protScale = Math.min(maxProt, maxProtDisplay);
 
+    const chartWidth = daysData.length * (barWidth + gap);
+
     return (
-        <div className="nutrition-insights p-4 bg-slate-900/50 rounded-2xl border border-slate-800 animate-fadeIn mt-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span>📈</span> Insikter & Trender
-            </h3>
+        <div className="nutrition-insights p-4 bg-slate-900/50 rounded-2xl border border-slate-800 animate-fadeIn mt-4 overflow-x-auto">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>📈</span> Insikter & Trender
+                </h3>
+                <div className="flex gap-1 bg-slate-800/80 p-1 rounded-xl">
+                    {[7, 14, 30].map(r => (
+                        <button
+                            key={r}
+                            onClick={() => setRange(r as any)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${range === r ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            {r}d
+                        </button>
+                    ))}
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Calorie Trend */}
@@ -85,12 +101,12 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                             x2={chartWidth} y2={chartHeight - (calorieGoal / calScale) * chartHeight}
                             stroke="#334155" strokeDasharray="4 2"
                         />
-                        {last7Days.map((day: any, i: number) => {
+                        {daysData.map((day: any, i: number) => {
                             const actualH = (day.calories / calScale) * chartHeight;
                             const isCapped = day.calories > maxCalDisplay;
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
-                            const isToday = i === 6;
+                            const isToday = day.isToday;
                             const isIncomplete = settings.incompleteDays?.[day.date];
 
                             return (
@@ -164,12 +180,12 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                             x2={chartWidth} y2={chartHeight - (proteinGoal / protScale) * chartHeight}
                             stroke="#334155" strokeDasharray="4 2"
                         />
-                        {last7Days.map((day: any, i: number) => {
+                        {daysData.map((day: any, i: number) => {
                             const actualH = (day.protein / protScale) * chartHeight;
                             const isCapped = day.protein > maxProtDisplay;
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
-                            const isToday = i === 6;
+                            const isToday = day.isToday;
                             const isIncomplete = settings.incompleteDays?.[day.date];
 
                             return (

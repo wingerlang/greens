@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { isCompetition, formatTime } from '../../utils/activityUtils.ts';
@@ -54,14 +55,35 @@ export function RunningStatsView({
     filterStartDate,
     filterEndDate
 }: RunningStatsViewProps) {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activityIdFromUrl = searchParams.get('activityId');
+
     const [filter, setFilter] = useState<FilterType>('all');
     const [showMatrix, setShowMatrix] = useState(false);
     const [highlightedPBId, setHighlightedPBId] = useState<string | null>(null);
-    const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
     const [selectedPBForAnalysis, setSelectedPBForAnalysis] = useState<PBEvent | null>(null);
     const [selectedBuckets, setSelectedBuckets] = useState<string[]>(RUNNING_BUCKETS.map(b => b.key));
     const [activeUltraTab, setActiveUltraTab] = useState<string>('ultra50k');
     const [showOnlyLatestPB, setShowOnlyLatestPB] = useState(false);
+
+    // Derived selectedActivity driven from URL
+    const selectedActivity = useMemo(() => {
+        if (activityIdFromUrl) {
+            return exerciseEntries.find(e => e.id === activityIdFromUrl) || null;
+        }
+        return null;
+    }, [activityIdFromUrl, exerciseEntries]);
+
+    const setSelectedActivity = (run: ExerciseEntry | null) => {
+        if (run) {
+            setSearchParams({ activityId: run.id });
+        } else {
+            // Remove from URL
+            const params = new URLSearchParams(searchParams);
+            params.delete('activityId');
+            setSearchParams(params);
+        }
+    };
 
     const getDaysAgoText = (dateStr: string) => {
         const days = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / (1000 * 3600 * 24));

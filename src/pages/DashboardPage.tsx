@@ -67,6 +67,8 @@ export function DashboardPage() {
         addMealEntry,
         weightEntries,
         bodyMeasurements,
+        deleteWeightEntry,
+        deleteBodyMeasurement,
         trainingPeriods,
         performanceGoals,
         toggleIncompleteDay,
@@ -246,9 +248,12 @@ export function DashboardPage() {
                 weight: weightEntry?.weight,
                 waist: weightEntry?.waist ?? measurements?.waist,
                 chest: weightEntry?.chest ?? measurements?.chest,
+                weightEntryId: weightEntry?.id,
+                waistId: (bodyMeasurements || []).find(m => m.date === date && m.type === 'waist')?.id,
+                chestId: (bodyMeasurements || []).find(m => m.date === date && m.type === 'chest')?.id,
             };
         });
-    }, [allUniqueDatesDesc, weightEntries, measurementsByDate]);
+    }, [allUniqueDatesDesc, weightEntries, bodyMeasurements, measurementsByDate]);
 
     const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
     const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
@@ -685,6 +690,11 @@ export function DashboardPage() {
                         setWeightRange={setWeightRange}
                         weightTrendEntries={weightTrendEntries}
                         unifiedHistory={unifiedHistory}
+                        onDeleteEntry={(data) => {
+                            if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
+                            if (data.waistId) deleteBodyMeasurement(data.waistId);
+                            if (data.chestId) deleteBodyMeasurement(data.chestId);
+                        }}
                         onOpenWeightModal={(data) => {
                             setTempValue(data.weight?.toString() || "");
                             setTempWaist(data.waist?.toString() || "");

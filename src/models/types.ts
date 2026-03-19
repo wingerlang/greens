@@ -1435,10 +1435,10 @@ export interface WeightEntry {
     id: string;
     date: string; // ISO date string (YYYY-MM-DD)
     weight: number; // kg
-    waist?: number; // cm
-    chest?: number; // cm
-    hips?: number; // cm
-    thigh?: number; // cm
+    waist?: number | null; // cm
+    chest?: number | null; // cm
+    hips?: number | null; // cm
+    thigh?: number | null; // cm
     createdAt: string;
 }
 

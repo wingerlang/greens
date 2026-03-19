@@ -40,7 +40,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     // Weight Management
     // ============================================
 
-    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number, chest?: number, hips?: number, thigh?: number): WeightEntry => {
+    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number | null, chest?: number | null, hips?: number | null, thigh?: number | null): WeightEntry => {
         // Check if an entry for this date already exists
         const existingEntry = weightEntries.find(w => w.date === date);
 
@@ -74,10 +74,10 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
             id: generateId(),
             weight,
             date,
-            waist,
-            chest,
-            hips,
-            thigh,
+            waist: waist ?? undefined,
+            chest: chest ?? undefined,
+            hips: hips ?? undefined,
+            thigh: thigh ?? undefined,
             createdAt: new Date().toISOString(),
         };
 
@@ -160,7 +160,8 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     }, [weightEntries]);
 
     const getLatestWaist = useCallback((): number | undefined => {
-        return weightEntries.find(w => w.waist !== undefined)?.waist;
+        const entry = weightEntries.find(w => w.waist !== undefined && w.waist !== null);
+        return entry ? (entry.waist as number) : undefined;
     }, [weightEntries]);
 
     // ============================================

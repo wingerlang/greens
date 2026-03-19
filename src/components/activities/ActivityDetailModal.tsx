@@ -233,6 +233,17 @@ export function ActivityDetailModal({
     const currentActivity = exerciseEntries.find(e => e.id === activity.id) || activity;
     const currentUniversal = universalActivities.find(u => u.id === activity.id) || universalActivity;
 
+    // Detect if child of another activity
+    const parentActivity = React.useMemo(() => {
+        if (!currentActivity.extractedFromId) return null;
+        return exerciseEntries.find(e => e.id === currentActivity.extractedFromId);
+    }, [currentActivity.extractedFromId, exerciseEntries]);
+
+    const parentUniversal = React.useMemo(() => {
+        if (!currentActivity.extractedFromId) return null;
+        return universalActivities.find(u => u.id === currentActivity.extractedFromId);
+    }, [currentActivity.extractedFromId, universalActivities]);
+
     const perf = currentUniversal?.performance || (currentActivity as any).performance || (currentActivity as any)._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
@@ -276,7 +287,8 @@ export function ActivityDetailModal({
         distance: '',
         duration: '', // hh:mm:ss
         title: '',
-        isHiddenInCalendar: true // Default to true for extracts to avoid double-counting
+        isHiddenInCalendar: true, // Default to true for extracts to avoid double-counting
+        startKm: '0'
     });
 
     // Edit Form State
@@ -292,7 +304,8 @@ export function ActivityDetailModal({
         location: currentActivity.location || '',
         excludeFromStats: currentActivity.excludeFromStats || false,
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
-        hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} }
+        hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
+        startKm: '0'
     });
 
     // Local title state for immediate optimistic updates
@@ -303,6 +316,13 @@ export function ActivityDetailModal({
         const t = currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type;
         if (t) setDisplayTitle(t);
     }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.notes, currentActivity.type]);
+
+    // Sync startKm from notes for Edit Form
+    useEffect(() => {
+        const startKmMatch = (currentActivity.notes || '').match(/\[START_KM:\s*([\d.]+)\]/);
+        const startKm = startKmMatch ? startKmMatch[1] : '0';
+        setEditForm(prev => ({ ...prev, startKm }));
+    }, [currentActivity.notes]);
 
     // Stations definition
     const HYROX_STATIONS: { id: HyroxStation; label: string; icon: string }[] = [
@@ -321,7 +341,9 @@ export function ActivityDetailModal({
         ? perf.splits 
         : ((currentActivity as any).splits && (currentActivity as any).splits.length > 0) 
             ? (currentActivity as any).splits 
-            : [];
+            : (currentActivity.extractedFromId && parentUniversal?.performance?.splits)
+                ? parentUniversal.performance.splits
+                : [];
     const handleExtractSubmit = async () => {
         if (!extractForm.distance || !extractForm.duration || !extractForm.title) {
             alert('Vänligen fyll i alla fält för utdraget.');
@@ -382,7 +404,7 @@ export function ActivityDetailModal({
             }
 
             setShowExtractForm(false);
-            setExtractForm({ distance: '', duration: '', title: '', isHiddenInCalendar: true });
+            setExtractForm({ distance: '', duration: '', title: '', isHiddenInCalendar: true, startKm: '0' });
             alert('Prestationsmätningen har sparats!');
         } catch (e) {
             console.error('Failed to create extract:', e);
@@ -435,7 +457,9 @@ export function ActivityDetailModal({
         ? perf.laps 
         : ((currentActivity as any).laps && (currentActivity as any).laps.length > 0) 
             ? (currentActivity as any).laps 
-            : [];
+            : (currentActivity.extractedFromId && parentUniversal?.performance?.laps)
+                ? parentUniversal.performance.laps
+                : [];
 
     // Analysis visibility criteria
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (currentActivity.heartRateAvg && currentActivity.heartRateAvg > 0);
@@ -470,12 +494,6 @@ export function ActivityDetailModal({
     }, [existingSplits, existingLaps, areLapsAndSplitsIdentical, parsedWorkout, currentActivity]);
 
 
-    // Detect if child of another activity
-    const parentActivity = React.useMemo(() => {
-        if (!currentActivity.extractedFromId) return null;
-        return exerciseEntries.find(e => e.id === currentActivity.extractedFromId);
-    }, [currentActivity.extractedFromId, exerciseEntries]);
-
     // Sub-performances (Internal measurements like 5k tests extracted from this session)
     const subPerformances = React.useMemo(() => {
         return exerciseEntries.filter(e => e.extractedFromId === currentActivity.id);
@@ -486,24 +504,39 @@ export function ActivityDetailModal({
         if (activity.extractedFromId) return null; // Don't suggest extracts from extracts
         const text = ((activity.title || '') + ' ' + (activity.notes || '')).toLowerCase();
 
-        // 5k patterns
+        let distance = 0;
+        let title = '';
         if (text.includes('5k max') || text.includes('5km max') || text.includes('5 k max') || text.includes('snabb 5k')) {
-            return { distance: 5.0, title: '5k Max', label: '⚡ Spara 5k-tid' };
-        }
-        // 10k patterns
-        if (text.includes('10k max') || text.includes('10km max') || text.includes('10 k max') || text.includes('snabb 10k')) {
-            return { distance: 10.0, title: '10k Max', label: '⚡ Spara 10k-tid' };
-        }
-        // General patterns
-        if (text.includes('max') || text.includes('test') || text.includes('pb') || text.includes('pers')) {
+            distance = 5.0; title = '5k Max';
+        } else if (text.includes('10k max') || text.includes('10km max') || text.includes('10 k max') || text.includes('snabb 10k')) {
+            distance = 10.0; title = '10k Max';
+        } else {
             const distMatch = text.match(/(\d+(?:[.,]\d+)?)\s*km/);
-            if (distMatch) {
-                const d = parseFloat(distMatch[1].replace(',', '.'));
-                return { distance: d, title: `${d}km Max`, label: `⚡ Spara ${d}km-tid` };
+            if (distMatch) distance = parseFloat(distMatch[1].replace(',', '.'));
+        }
+
+        if (distance > 0) {
+            // Find best rolling window pace start offset to autoposition the extract!
+            let bestTime = Infinity;
+            let bestStartKm = 0;
+            const n = Math.floor(distance);
+
+            if (existingSplits && existingSplits.length >= n) {
+                for (let i = 0; i <= existingSplits.length - n; i++) {
+                    let timeAcc = 0;
+                    for (let j = 0; j < n; j++) {
+                        timeAcc += existingSplits[i + j].movingTime;
+                    }
+                    if (timeAcc < bestTime) {
+                        bestTime = timeAcc;
+                        bestStartKm = existingSplits[i].split - 1; // 0-indexed offset (assuming 1-indexed split value)
+                    }
+                }
             }
+            return { distance, title: title || `${distance}km Max`, label: `⚡ Spara ${distance}km-tid`, startKm: bestStartKm.toString() };
         }
         return null;
-    }, [activity.id, activity.title, activity.notes]);
+    }, [activity.id, activity.title, activity.notes, existingSplits]);
 
     const handleApplySmartExtract = () => {
         if (!smartExtractInfo) return;
@@ -511,6 +544,7 @@ export function ActivityDetailModal({
             ...extractForm,
             distance: smartExtractInfo.distance.toString(),
             title: smartExtractInfo.title,
+            startKm: (smartExtractInfo as any).startKm || '0',
             duration: '', // User still needs to input duration for accurate PR tracking
             isHiddenInCalendar: true
         });
@@ -851,12 +885,18 @@ export function ActivityDetailModal({
         const duration = parseInt(editForm.duration) || 0;
         const calories = calculateExerciseCalories(editForm.type, duration, editForm.intensity);
 
+        let updatedNotes = editForm.notes;
+        if ((editForm as any).startKm && parseFloat((editForm as any).startKm) >= 0) {
+            updatedNotes = updatedNotes.replace(/\[START_KM:\s*[\d.]+\]/g, '').trim();
+            updatedNotes += ` [START_KM: ${parseFloat((editForm as any).startKm).toFixed(1)}]`;
+        }
+
         const commonData = {
             title: editForm.title,
             type: editForm.type,
             durationMinutes: duration,
             intensity: editForm.intensity,
-            notes: editForm.notes,
+            notes: updatedNotes,
             subType: editForm.subType as any,
             tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
@@ -1106,6 +1146,25 @@ export function ActivityDetailModal({
                                 </select>
                             </div>
 
+                            {/* Race Toggle */}
+                            <div className="md:col-span-2">
+                                <div
+                                    onClick={() => setEditForm(prev => ({ ...prev, subType: prev.subType === 'race' ? 'default' : 'race' }))}
+                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${editForm.subType === 'race' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-800 border-white/5 opacity-80 hover:opacity-100'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className={`text-lg ${editForm.subType === 'race' ? 'opacity-100' : 'opacity-40'}`}>🏁</span>
+                                        <div>
+                                            <p className={`text-xs font-bold ${editForm.subType === 'race' ? 'text-amber-400' : 'text-white'}`}>Tävling / Race</p>
+                                            <p className="text-[10px] text-slate-500">Markera att detta pass var ett tävlingslopp</p>
+                                        </div>
+                                    </div>
+                                    <div className={`w-10 h-6 rounded-full relative transition-all ${editForm.subType === 'race' ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editForm.subType === 'race' ? 'left-5' : 'left-1'}`} />
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Hyrox Toggle for specific competition mode */}
                             {editForm.type === 'hyrox' && (
                                 <div className="space-y-1">
@@ -1143,6 +1202,29 @@ export function ActivityDetailModal({
                                         onChange={e => setEditForm({ ...editForm, distance: e.target.value })}
                                         className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
                                     />
+                                </div>
+                            )}
+
+                            {/* Start KM Slider for Extracts */}
+                            {activity.extractedFromId && parentUniversal && (
+                                <div className="space-y-1 bg-slate-800/50 p-3 rounded-xl border border-white/5 md:col-span-2">
+                                    <label className="text-xs font-bold text-amber-400 uppercase flex justify-between">
+                                        <span>Skjutreglage: Start-kilometer</span>
+                                        <span>{parseFloat((editForm as any).startKm || '0').toFixed(1)} km</span>
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={Math.max(0, (parentUniversal?.performance?.distanceKm || 0) - (parseFloat(editForm.distance) || 0))}
+                                        step="0.1"
+                                        value={(editForm as any).startKm || '0'}
+                                        onChange={e => setEditForm(prev => ({ ...prev, startKm: e.target.value }))}
+                                        className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                                        <span>0.0 km</span>
+                                        <span>{Math.max(0, (parentUniversal?.performance?.distanceKm || 0) - (parseFloat(editForm.distance) || 0)).toFixed(1)} km</span>
+                                    </div>
                                 </div>
                             )}
 
@@ -1915,6 +1997,29 @@ export function ActivityDetailModal({
                         {/* COMBINED VIEW - Now also for Hyrox */}
                         {(viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
                             <>
+                                {/* Extract Parent Link Banner */}
+                                {activity.extractedFromId && parentUniversal && (
+                                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between mb-4 shadow-lg shadow-amber-500/5 animate-pulse-subtle">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-amber-500/20 p-2 rounded-xl text-amber-400">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-amber-500 font-bold uppercase">Utdragen från</p>
+                                                <h4 className="text-sm font-black text-white">{parentUniversal.plan?.title || 'Originalpass'}</h4>
+                                                <p className="text-[10px] text-slate-400">Total distans: {(parentUniversal.performance?.distanceKm || 0).toFixed(1)} km</p>
+                                            </div>
+                                        </div>
+                                        {setSelectedActivityId && (
+                                            <button 
+                                                onClick={() => setSelectedActivityId(parentUniversal.id)}
+                                                className="text-xs font-bold text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500 px-3 py-1.5 rounded-lg transition-all"
+                                            >
+                                                Visa Original ↗
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                                 {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
                                 {showStravaCard ? (
                                     <div className="space-y-4">
@@ -1956,7 +2061,10 @@ export function ActivityDetailModal({
                                                         <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Distans</span>
                                                         <div className="flex items-baseline gap-1">
                                                             <span className="text-3xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
-                                                            <span className="text-xs uppercase text-slate-500 font-bold">km</span>
+                                                            {activity.extractedFromId && parentUniversal?.performance?.distanceKm && (
+                                                                <span className="text-xs text-slate-400 font-bold ml-1">(av {parentUniversal.performance.distanceKm.toFixed(1)}km)</span>
+                                                            )}
+                                                            <span className="text-xs uppercase text-slate-500 font-bold ml-1">km</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -2108,7 +2216,12 @@ export function ActivityDetailModal({
                                             {/* Distance (Only if running/has value) */}
                                             {(activity.distance || 0) > 0 ? (
                                                 <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                    <p className="text-2xl font-black text-emerald-400">{(activity.distance || 0).toFixed(1)}</p>
+                                                    <p className="text-2xl font-black text-emerald-400">
+                                                        {(activity.distance || 0).toFixed(1)}
+                                                        {activity.extractedFromId && parentUniversal?.performance?.distanceKm && (
+                                                            <span className="text-xs text-slate-500 font-bold ml-1">(av {parentUniversal.performance.distanceKm.toFixed(1)}km)</span>
+                                                        )}
+                                                    </p>
                                                     <p className="text-xs text-slate-500 uppercase">Km</p>
                                                 </div>
                                             ) : null}
@@ -2133,6 +2246,26 @@ export function ActivityDetailModal({
                                                     <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
                                                 </div>
                                             ) : null}
+
+                                            {/* Watts (Generic Fallback for Extracts) */}
+                                            {activity.extractedFromId && parentUniversal?.performance?.averageWatts && (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                    <p className="text-2xl font-black text-white">{Math.round(parentUniversal.performance.averageWatts)}</p>
+                                                    <p className="text-xs text-slate-500 uppercase">Effekt (W)</p>
+                                                </div>
+                                            )}
+
+                                            {/* Achievements (Generic Fallback for Extracts) */}
+                                            {activity.extractedFromId && parentUniversal?.performance && (parentUniversal.performance.achievementCount || parentUniversal.performance.prCount || parentUniversal.performance.kudosCount) && (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col items-center justify-center">
+                                                    <div className="flex items-center gap-2">
+                                                        {(parentUniversal.performance.prCount || 0) > 0 && <span className="text-orange-400 font-bold">⚡ {parentUniversal.performance.prCount}</span>}
+                                                        {(parentUniversal.performance.achievementCount || 0) > 0 && <span className="text-yellow-400 font-bold">🏆 {parentUniversal.performance.achievementCount}</span>}
+                                                        {(parentUniversal.performance.kudosCount || 0) > 0 && <span className="text-pink-400 font-bold">❤️ {parentUniversal.performance.kudosCount}</span>}
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 uppercase mt-1">Prestationer</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Interval Summary (Generic) */}
@@ -2179,13 +2312,21 @@ export function ActivityDetailModal({
                                 )}
 
                                 {/* Heart Rate Zone Visualization (for cardio with HR data) */}
-                                {(perf?.avgHeartRate || activity.heartRateAvg) && activity.type?.toLowerCase() !== 'strength' && (
-                                    <HeartRateZones
-                                        avgHeartRate={Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
-                                        maxHeartRate={(perf?.maxHeartRate || activity.heartRateMax) ? Math.round(perf?.maxHeartRate || activity.heartRateMax || 0) : undefined}
-                                        duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
-                                    />
-                                )}
+                                {(() => {
+                                    const effectiveAvgHr = perf?.avgHeartRate || activity.heartRateAvg || (activity.extractedFromId && parentUniversal?.performance?.avgHeartRate ? Math.round(parentUniversal.performance.avgHeartRate) : 0);
+                                    const effectiveMaxHr = perf?.maxHeartRate || activity.heartRateMax || (activity.extractedFromId && parentUniversal?.performance?.maxHeartRate ? Math.round(parentUniversal.performance.maxHeartRate) : undefined);
+                                    
+                                    if (effectiveAvgHr > 0 && activity.type?.toLowerCase() !== 'strength') {
+                                        return (
+                                            <HeartRateZones
+                                                avgHeartRate={effectiveAvgHr}
+                                                maxHeartRate={effectiveMaxHr || undefined}
+                                                duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })()}
 
                                 {/* Simple HR display fallback (for strength or merged) - Only show if Strava Card is NOT shown */}
                                 {(perf?.avgHeartRate || perf?.maxHeartRate) && activity.type?.toLowerCase() === 'strength' && !showStravaCard && (
@@ -2618,8 +2759,13 @@ export function ActivityDetailModal({
                                         <tbody className="divide-y divide-white/5">
                                             {splits.map((s: any, i: number) => {
                                                 const splitPace = s.movingTime / (s.distance / 1000);
+                                                
+                                                const startKmMatch = activity.notes?.match(/\[START_KM:\s*([\d.]+)\]/);
+                                                const startKm = startKmMatch ? parseFloat(startKmMatch[1]) : 0;
+                                                const isHighlighted = activity.extractedFromId && (i + 1) >= Math.floor(startKm) && (i + 1) <= Math.ceil(startKm + (activity.distance || 0));
+
                                                 return (
-                                                    <tr key={i} className="hover:bg-indigo-500/10 transition-colors group">
+                                                    <tr key={i} className={`hover:bg-indigo-500/10 transition-colors group ${isHighlighted ? 'bg-amber-500/10 border-l-2 border-amber-500' : ''}`}>
                                                         <td className="px-4 py-3 text-white font-bold">{i + 1} km</td>
                                                         <td className="px-4 py-3 text-right text-slate-300">
                                                             {Math.floor(s.movingTime / 60)}:{(s.movingTime % 60).toString().padStart(2, '0')}

@@ -253,6 +253,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         foodItems,
         recipes,
         addMealEntry,
+        updateMealEntry,
         mealEntries,
         addExercise,
         calculateExerciseCalories,
@@ -277,7 +278,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Locked food state - when a food is matched with high confidence
     // Locked food state - when a food is matched with high confidence
-    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number } | null>(null);
+    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number; date: string; type: 'foodItem' | 'quickMeal' } | null>(null);
     const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
@@ -848,7 +849,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             brand: item.brand,
             id: item.id,
             calories: Math.round(displayCalories),
-            quantity
+            quantity,
+            date: logDate,
+            type: 'foodItem'
         });
         setShowFeedback(true);
         setInput('');
@@ -901,9 +904,38 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             durationMs
         });
 
+        setLastLoggedItem({
+            name: lockedQuickMeal.name,
+            id: lockedQuickMeal.id,
+            calories: Math.round(lockedQuickMeal.totals?.calories || 0),
+            quantity: 1,
+            date: logDate,
+            type: 'quickMeal'
+        });
+
         setShowFeedback(true);
         setInput('');
         setLockedQuickMeal(null);
+    };
+
+    const handleMoveToYesterday = () => {
+        if (!lastLoggedItem) return;
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+        const entry = [...mealEntries]
+            .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
+            .find(e => 
+                e.date === today && 
+                (lastLoggedItem.type === 'foodItem' 
+                    ? e.items.some(i => i.type === 'foodItem' && i.referenceId === lastLoggedItem.id)
+                    : e.snabbvalId === lastLoggedItem.id)
+            );
+
+        if (entry) {
+            updateMealEntry(entry.id, { date: yesterday });
+            setLastLoggedItem(prev => prev ? { ...prev, date: yesterday } : null);
+        }
     };
 
     // Lock a food item for detailed editing
@@ -1184,7 +1216,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                     </div>
                                 </div>
                             </div>
-                            <button
+                            <div className="flex items-center gap-2">
+                                {lastLoggedItem.date === new Date().toISOString().split('T')[0] && (
+                                    <button
+                                        onClick={handleMoveToYesterday}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-400 border border-amber-500/20 transition-colors"
+                                    >
+                                        ⏪ Igår
+                                    </button>
+                                )}
+                                <button
                                 onClick={() => {
                                     if (onOpenNutrition && lastLoggedItem) {
                                         onOpenNutrition({
@@ -1204,6 +1245,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                 <span>Mer info</span>
                                 <ArrowRight size={14} className="opacity-50" />
                             </button>
+                            </div>
                         </div>
                     )}
                     {showFeedback && !lastLoggedItem && (

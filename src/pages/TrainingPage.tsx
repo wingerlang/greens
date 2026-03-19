@@ -119,7 +119,7 @@ export function TrainingPage() {
     const currentTab = useMemo(() => {
         if (!tab) return 'overview';
         if (/^\d{4}$/.test(tab)) return 'overview';
-        return (['overview', 'styrka', 'kondition', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races' | 'lopstatistik' | 'dataanalys';
+        return (['overview', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'form' | 'races' | 'lopstatistik' | 'dataanalys';
     }, [tab]);
 
     const initialCalendarMonth = useMemo(() => {
@@ -278,12 +278,22 @@ export function TrainingPage() {
 
     // Apply Period Filter to data
     const filteredExerciseEntries = useMemo(() => {
-        return exerciseEntries.filter(e => {
-            if (filterStartDate && e.date < filterStartDate) return false;
-            if (filterEndDate && e.date > filterEndDate) return false;
-            return true;
-        });
+        return exerciseEntries
+            .filter(e => {
+                if (filterStartDate && e.date < filterStartDate) return false;
+                if (filterEndDate && e.date > filterEndDate) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                const dateCompare = b.date.localeCompare(a.date); // Descending (Newer first)
+                if (dateCompare !== 0) return dateCompare;
+                
+                const timeA = a.startTime || '00:00';
+                const timeB = b.startTime || '00:00';
+                return timeA.localeCompare(timeB); // Ascending (Earlier first)
+            });
     }, [exerciseEntries, filterStartDate, filterEndDate]);
+
 
     const filteredWeightEntries = useMemo(() => {
         return (weightEntries || []).filter(e => {
@@ -902,6 +912,7 @@ export function TrainingPage() {
                             universalActivities={universalActivities}
                             filterStartDate={filterStartDate}
                             filterEndDate={filterEndDate}
+                            onOpenActivity={setSelectedActivityId}
                         />
                     </div>
                 )
