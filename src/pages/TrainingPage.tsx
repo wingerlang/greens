@@ -117,12 +117,18 @@ export function TrainingPage() {
 
     // URL State Management
     const currentTab = useMemo(() => {
-        if (!tab) return 'overview';
-        if (/^\d{4}$/.test(tab)) return 'overview';
-        return (['overview', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'form' | 'races' | 'lopstatistik' | 'dataanalys';
+        if (!tab) return 'kalender';
+        if (tab === 'kalender') return 'kalender';
+        if (/^\d{4}$/.test(tab)) return 'kalender';
+        return (['kalender', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'kalender') as 'kalender' | 'styrka' | 'kondition' | 'form' | 'races' | 'lopstatistik' | 'dataanalys';
     }, [tab]);
 
     const initialCalendarMonth = useMemo(() => {
+        if (tab === 'kalender' && subTab) {
+            const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+            const idx = months.indexOf(subTab.toLowerCase());
+            return idx >= 0 ? idx : undefined;
+        }
         if (!tab || !/^\d{4}$/.test(tab) || !subTab) return undefined;
         const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
         const idx = months.indexOf(subTab.toLowerCase());
@@ -130,6 +136,10 @@ export function TrainingPage() {
     }, [tab, subTab]);
 
     const initialCalendarDay = useMemo(() => {
+        if (tab === 'kalender' && subTab && id) {
+            const day = parseInt(id, 10);
+            return isNaN(day) ? undefined : day;
+        }
         if (!tab || !/^\d{4}$/.test(tab) || !subTab || !id) return undefined;
         const day = parseInt(id, 10);
         return isNaN(day) ? undefined : day;
@@ -139,6 +149,8 @@ export function TrainingPage() {
     const handleTabChange = (newTab: string) => {
         if (newTab === 'styrka' && currentTab !== 'styrka') {
             navigate('/styrka');
+        } else if (newTab === 'kalender') {
+            navigate('/träning/kalender');
         } else {
             navigate(`/training/${newTab}`);
         }
@@ -385,7 +397,7 @@ export function TrainingPage() {
 
             {/* Conditionally render based on tab */}
             {
-                currentTab === 'overview' && (
+                currentTab === 'kalender' && (
                     <>
 
                         {/* Dashboard Overview */}

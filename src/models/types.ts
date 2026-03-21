@@ -84,6 +84,7 @@ export interface UserSettings {
     dailyAlcoholLimitWeekend?: number;
     densityMode?: 'compact' | 'slim' | 'cozy';
     expandedSections?: Record<string, boolean>; // Persisted UI state
+    hiddenMetrics?: string[]; // Metrics to hide on dashboard graphs (e.g. 'chest')
     // Calorie Mode: 'tdee' = TDEE-based, 'fixed' = fixed base + exercise calories
     calorieMode?: 'tdee' | 'fixed';
     fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'

@@ -8,7 +8,7 @@ import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed, formatSecondsToTime } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea } from 'recharts';
 
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 
@@ -72,7 +72,7 @@ const ExpandableExercise = React.memo(({ exercise }: { exercise: any }) => {
 });
 
 // Helper Component: Sparkline for Splits (Pace & HR)
-const SplitsSparkline = React.memo(({ splits }: { splits: any[] }) => {
+const SplitsSparkline = React.memo(({ splits, highlightRange }: { splits: any[], highlightRange?: { start: number; end: number } }) => {
     if (!splits || splits.length < 2) return null;
 
     const data = splits.map((s, i) => ({
@@ -89,38 +89,60 @@ const SplitsSparkline = React.memo(({ splits }: { splits: any[] }) => {
     return (
         <div className="h-24 w-full mt-4 bg-black/20 rounded-xl p-2 border border-white/5">
             <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                <AreaChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                    <defs>
+                        <linearGradient id="colorPace" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#fb7185" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#fb7185" stopOpacity={0.01}/>
+                        </linearGradient>
+                        <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.01}/>
+                        </linearGradient>
+                    </defs>
+                    <XAxis dataKey="index" hide />
+                    
+                    {highlightRange && (
+                        <ReferenceArea 
+                            x1={highlightRange.start + 1} 
+                            x2={highlightRange.end} 
+                            fill="#f59e0b" 
+                            fillOpacity={0.3} 
+                        />
+                    )}
+
                     <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px' }}
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', borderRadius: '8px' }}
                         labelStyle={{ color: '#94a3b8' }}
                         formatter={(value: any, name: string) => [
                             name === 'pace' ? `${Math.floor(value / 60)}:${(Math.round(value % 60)).toString().padStart(2, '0')} /km` : `${Math.round(value)} bpm`,
                             name === 'pace' ? 'Tempo' : 'Puls'
                         ]}
                     />
-                    <Line
+                    
+                    <Area
                         type="monotone"
                         dataKey="pace"
                         name="pace"
                         stroke="#fb7185"
                         strokeWidth={2}
-                        dot={false}
+                        fill="url(#colorPace)"
                         yAxisId="pace"
                         connectNulls
                     />
-                    <Line
+                    <Area
                         type="monotone"
                         dataKey="hr"
                         name="hr"
                         stroke="#6366f1"
-                        strokeWidth={2}
-                        dot={false}
+                        strokeWidth={1.5}
+                        fill="url(#colorHr)"
                         yAxisId="hr"
                         connectNulls
                     />
                     <YAxis yAxisId="pace" hide domain={['auto', 'auto']} reversed />
                     <YAxis yAxisId="hr" hide domain={[minHr, maxHr]} />
-                </LineChart>
+                </AreaChart>
             </ResponsiveContainer>
             <div className="flex justify-between px-2 text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1">
                 <span>Start</span>
@@ -133,6 +155,7 @@ const SplitsSparkline = React.memo(({ splits }: { splits: any[] }) => {
         </div>
     );
 });
+
 
 // Helper Component: Mini Interval Summary
 const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: any }) => {
@@ -308,6 +331,8 @@ export function ActivityDetailModal({
         startKm: '0'
     });
 
+    const [hoveredExtractEffort, setHoveredExtractEffort] = useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
+
     // Local title state for immediate optimistic updates
     const [displayTitle, setDisplayTitle] = useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type || 'Aktivitet');
 
@@ -374,7 +399,7 @@ export function ActivityDetailModal({
             distance: distance,
             durationMinutes: durationMin,
             intensity: activity.intensity,
-            notes: `Utdrag från: ${displayTitle}`,
+            notes: `Utdrag från: ${displayTitle}${extractForm.startKm && extractForm.startKm !== '0' ? ` [START_KM: ${extractForm.startKm}]` : ''}`,
             extractedFromId: activity.id,
             source: 'manual',
             subType: 'default',
@@ -516,9 +541,7 @@ export function ActivityDetailModal({
         }
 
         if (distance > 0) {
-            // Find best rolling window pace start offset to autoposition the extract!
-            let bestTime = Infinity;
-            let bestStartKm = 0;
+            let efforts: { time: number; startKm: number }[] = [];
             const n = Math.floor(distance);
 
             if (existingSplits && existingSplits.length >= n) {
@@ -527,29 +550,71 @@ export function ActivityDetailModal({
                     for (let j = 0; j < n; j++) {
                         timeAcc += existingSplits[i + j].movingTime;
                     }
-                    if (timeAcc < bestTime) {
-                        bestTime = timeAcc;
-                        bestStartKm = existingSplits[i].split - 1; // 0-indexed offset (assuming 1-indexed split value)
-                    }
+                    efforts.push({ time: timeAcc, startKm: Math.max(0, existingSplits[i].split - 1) });
                 }
             }
-            return { distance, title: title || `${distance}km Max`, label: `⚡ Spara ${distance}km-tid`, startKm: bestStartKm.toString() };
+
+            // Sort by time ascending (fastest first)
+            efforts.sort((a, b) => a.time - b.time);
+            
+            // Take top 3
+            const top3 = efforts.slice(0, 3);
+
+            if (top3.length > 0) {
+                return {
+                    distance,
+                    title: title || `${distance}km Max`,
+                    topEfforts: top3.map(e => ({
+                        startKm: e.startKm,
+                        durationSeconds: e.time,
+                        title: `${title || `${distance}km Max`} (${e.startKm}-${e.startKm + n} km)`
+                    }))
+                };
+            }
+            return null;
         }
         return null;
     }, [activity.id, activity.title, activity.notes, existingSplits]);
 
-    const handleApplySmartExtract = () => {
+    const activeHighlightRange = React.useMemo(() => {
+        if (hoveredExtractEffort) {
+            return { 
+                start: hoveredExtractEffort.startKm, 
+                end: hoveredExtractEffort.startKm + Math.floor(smartExtractInfo?.distance || 0) 
+            };
+        }
+        if (activity.extractedFromId) {
+            const startVal = parseFloat(editForm.startKm || '0');
+            return { 
+                start: startVal, 
+                end: startVal + (activity.distance || 0) 
+            };
+        }
+        return undefined;
+    }, [hoveredExtractEffort, activity.extractedFromId, editForm.startKm, activity.distance, smartExtractInfo?.distance]);
+
+    const handleApplySmartExtract = (effort: { startKm: number; durationSeconds: number; title: string }) => {
         if (!smartExtractInfo) return;
+
+        const formatSecondsToDuration = (sec: number) => {
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = Math.round(sec % 60);
+            if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        };
+
         setExtractForm({
             ...extractForm,
             distance: smartExtractInfo.distance.toString(),
-            title: smartExtractInfo.title,
-            startKm: (smartExtractInfo as any).startKm || '0',
-            duration: '', // User still needs to input duration for accurate PR tracking
+            title: effort.title,
+            startKm: effort.startKm.toString(),
+            duration: formatSecondsToDuration(effort.durationSeconds),
             isHiddenInCalendar: true
         });
         setShowExtractForm(true);
     };
+
 
     // Auto-populate subtype in edit form if detected
     const handleRecategorize = async (newType: ExerciseType) => {
@@ -1050,7 +1115,7 @@ export function ActivityDetailModal({
     return (
         <div id="activity-detail-modal" className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[300] p-4 animate-in fade-in duration-200" onClick={onClose}>
             <div
-                className="bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
+                className="bg-slate-900 border border-white/10 rounded-3xl max-w-4xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* EDIT MODE */}
@@ -1712,22 +1777,41 @@ export function ActivityDetailModal({
 
                         {/* SMART EXTRACTION HINT */}
                         {smartExtractInfo && !showExtractForm && !activity.extractedFromId && subPerformances.length === 0 && (
-                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl shadow-amber-500/5">
+                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col gap-3 shadow-xl shadow-amber-500/5">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg shadow-inner">💡</div>
                                     <div>
                                         <h4 className="text-sm font-black text-white italic">Rekord-potential identifierad! 🚀</h4>
-                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong> som du kan spara som eget rekord.</p>
+                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong>. Välj block att spara som eget rekord:</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={handleApplySmartExtract}
-                                    className="w-full sm:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[10px] uppercase rounded-xl transition-all shadow-lg shadow-amber-500/20 active:scale-95"
-                                >
-                                    {smartExtractInfo.label}
-                                </button>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                                    {(smartExtractInfo as any).topEfforts.map((effort: any, index: number) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => handleApplySmartExtract(effort)}
+                                            onMouseEnter={() => setHoveredExtractEffort(effort)}
+                                            onMouseLeave={() => setHoveredExtractEffort(null)}
+                                            className="px-3 py-2 bg-slate-800/80 hover:bg-amber-500 hover:text-slate-900 border border-white/5 hover:border-amber-400 rounded-xl transition-all shadow-md text-slate-300 font-bold flex flex-col items-center justify-center group"
+                                        >
+                                            <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(smartExtractInfo.distance)}</span>
+                                            <span className="text-sm font-black text-white group-hover:text-slate-950">
+                                                 {(() => {
+                                                    const sec = effort.durationSeconds;
+                                                    const m = Math.floor(sec / 60);
+                                                    const s = Math.round(sec % 60);
+                                                    return `${m}:${s.toString().padStart(2, '0')}`;
+                                                 })()}
+                                            </span>
+                                            <span className="text-[9px] text-slate-500 group-hover:text-slate-800">
+                                                {formatPace(effort.durationSeconds / smartExtractInfo.distance)} /km
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
+
 
                         {/* Warning Banner: This activity is a component of a merge */}
                         {isMergedInto && parentMergedActivity && (
@@ -2094,7 +2178,7 @@ export function ActivityDetailModal({
 
                                             {/* Minigraph */}
                                             {existingSplits && existingSplits.length > 2 && (
-                                                <SplitsSparkline splits={existingSplits} />
+                                                <SplitsSparkline splits={existingSplits} highlightRange={activeHighlightRange} />
                                             )}
 
                                             {/* Secondary Stats Grid */}
@@ -2267,6 +2351,17 @@ export function ActivityDetailModal({
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Minigraph for Generic/Extracted */}
+                                        {existingSplits && existingSplits.length > 2 && (
+                                            <div className="bg-slate-800/30 rounded-2xl p-4 border border-white/5">
+                                                <h4 className="font-black text-slate-500 uppercase text-[10px] tracking-widest mb-3 flex items-center gap-2">
+                                                    <span>📈</span> Tempo & Puls över tid
+                                                </h4>
+                                                <SplitsSparkline splits={existingSplits} highlightRange={activeHighlightRange} />
+                                            </div>
+                                        )}
+
 
                                         {/* Interval Summary (Generic) */}
                                         {activity.subType === 'interval' && segmentedSplits && (
@@ -2446,12 +2541,27 @@ export function ActivityDetailModal({
                                                         const isFastest = existingSplits.reduce((min: any, s: any) => s.movingTime < min.movingTime ? s : min, existingSplits[0]).split === split.split;
                                                         const paceStr = formatPace(split.movingTime / (split.distance / 1000));
 
-                                                        return (
-                                                            <tr key={split.split} className="hover:bg-indigo-500/10 transition-colors group">
+                                                        const startKmVal = parseFloat(editForm.startKm || '0');
+                                                        const isHighlighted = activity.extractedFromId && startKmVal >= 0 && (
+                                                            split.split > startKmVal && 
+                                                            split.split <= (startKmVal + (activity.distance || 0))
+                                                        );
 
+                                                        return (
+                                                            <tr 
+                                                                key={split.split} 
+                                                                className={`hover:bg-indigo-500/10 transition-all group ${isHighlighted ? 'bg-amber-500/5 border-l-2 border-amber-500' : ''}`}
+                                                            >
                                                                 <td className="px-4 py-3 font-mono font-bold text-slate-400 text-center">
-                                                                    {split.split}
+                                                                    {activity.extractedFromId && editForm.startKm ? (
+                                                                        <span className={isHighlighted ? 'text-amber-400 font-black text-xs' : 'text-slate-500 text-[10px]'}>
+                                                                            {(startKmVal + split.split - 1).toFixed(0)}-{(startKmVal + split.split).toFixed(0)}
+                                                                        </span>
+                                                                    ) : (
+                                                                        split.split
+                                                                    )}
                                                                 </td>
+
                                                                 <td className="px-4 py-3">
                                                                     <div className="flex items-center gap-2">
                                                                         <span className={`font-mono font-bold ${isFastest ? 'text-amber-400' : 'text-white'}`}>
@@ -2669,6 +2779,53 @@ export function ActivityDetailModal({
                                 </div>
 
                                 {/* Heart Rate Intensity Graph (Split-based) */}
+                                {/* Tempo intensity Graph (Split-based) */}
+                                {splits.length >= 2 && (
+                                    <div className="space-y-3 mb-6">
+                                        <h3 className="text-sm font-bold text-indigo-400 uppercase">📈 Tempoutveckling</h3>
+                                        <div className="h-48 bg-slate-800/30 rounded-xl p-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={splits.map((s: any, i: number) => ({
+                                                    km: `Km ${i + 1}`,
+                                                    pace: s.movingTime / (Math.max(s.distance, 1) / 1000)
+                                                }))} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorLargePace" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/>
+                                                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0.01}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                                    <XAxis dataKey="km" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                    
+                                                    {activeHighlightRange && (
+                                                        <ReferenceArea 
+                                                            x1={`Km ${activeHighlightRange.start + 1}`} 
+                                                            x2={`Km ${activeHighlightRange.end}`} 
+                                                            fill="#f59e0b" 
+                                                            fillOpacity={0.15} 
+                                                        />
+                                                    )}
+
+                                                    <YAxis domain={['auto', 'auto']} reversed hide />
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px' }}
+                                                        labelStyle={{ color: '#94a3b8', fontWeight: 'bold' }}
+                                                        formatter={(val: number) => [`${Math.floor(val / 60)}:${(Math.round(val % 60)).toString().padStart(2, '0')} /km`, 'Tempo']}
+                                                    />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="pace"
+                                                        stroke="#818cf8"
+                                                        strokeWidth={3}
+                                                        fill="url(#colorLargePace)"
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {splits.some((s: any) => s.averageHeartrate) && (
                                     <div className="space-y-3">
                                         <h3 className="text-sm font-bold text-rose-400 uppercase">❤️ Pulsutveckling</h3>
@@ -2680,6 +2837,16 @@ export function ActivityDetailModal({
                                                 }))}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                                     <XAxis dataKey="km" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                    
+                                                    {activeHighlightRange && (
+                                                        <ReferenceArea 
+                                                            x1={`Km ${activeHighlightRange.start + 1}`} 
+                                                            x2={`Km ${activeHighlightRange.end}`} 
+                                                            fill="#f59e0b" 
+                                                            fillOpacity={0.15} 
+                                                        />
+                                                    )}
+
                                                     <YAxis domain={['dataMin - 10', 'dataMax + 10']} hide />
                                                     <Tooltip
                                                         contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px' }}
@@ -2760,18 +2927,28 @@ export function ActivityDetailModal({
                                             {splits.map((s: any, i: number) => {
                                                 const splitPace = s.movingTime / (s.distance / 1000);
                                                 
-                                                const startKmMatch = activity.notes?.match(/\[START_KM:\s*([\d.]+)\]/);
-                                                const startKm = startKmMatch ? parseFloat(startKmMatch[1]) : 0;
-                                                const isHighlighted = activity.extractedFromId && (i + 1) >= Math.floor(startKm) && (i + 1) <= Math.ceil(startKm + (activity.distance || 0));
+                                                const startKmVal = parseFloat(editForm.startKm || '0');
+                                                const isHighlighted = activity.extractedFromId && startKmVal >= 0 && (
+                                                    (i + 1) > startKmVal && 
+                                                    (i + 1) <= (startKmVal + (activity.distance || 0))
+                                                );
 
                                                 return (
                                                     <tr key={i} className={`hover:bg-indigo-500/10 transition-colors group ${isHighlighted ? 'bg-amber-500/10 border-l-2 border-amber-500' : ''}`}>
-                                                        <td className="px-4 py-3 text-white font-bold">{i + 1} km</td>
+                                                        <td className="px-4 py-3 text-white font-bold">
+                                                            {activity.extractedFromId && editForm.startKm ? (
+                                                                <span className={isHighlighted ? 'text-amber-400 font-black text-xs' : 'text-slate-400 text-[10px]'}>
+                                                                    {(startKmVal + i).toFixed(0)}-{(startKmVal + i + 1).toFixed(0)} km
+                                                                </span>
+                                                            ) : (
+                                                                `${i + 1} km`
+                                                            )}
+                                                        </td>
                                                         <td className="px-4 py-3 text-right text-slate-300">
                                                             {Math.floor(s.movingTime / 60)}:{(s.movingTime % 60).toString().padStart(2, '0')}
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-indigo-400">
-                                                            {Math.floor(splitPace / 60)}:{(Math.round(splitPace % 60)).toString().padStart(2, '0')} /km
+                                                            {isFinite(splitPace) ? `${Math.floor(splitPace / 60)}:${(Math.round(splitPace % 60)).toString().padStart(2, '0')} /km` : '-'}
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-rose-400">
                                                             {s.averageHeartrate ? Math.round(s.averageHeartrate) : '-'}
@@ -2779,30 +2956,14 @@ export function ActivityDetailModal({
                                                     </tr>
                                                 );
                                             })}
+
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         )}
 
-                        {/* SMART EXTRACTION HINT (PERFORMANCE MARKERS) */}
-                        {smartExtractInfo && !showExtractForm && !activity.extractedFromId && subPerformances.length === 0 && (
-                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg">⚡</div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-white italic">Nyckelinsats identifierad! ⚡</h4>
-                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong> som du kan spara som en separat prestationsmätning.</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleApplySmartExtract}
-                                    className="w-full sm:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[10px] uppercase rounded-xl transition-all shadow-lg shadow-amber-500/20"
-                                >
-                                    {smartExtractInfo.label}
-                                </button>
-                            </div>
-                        )}
+
 
                         {/* MERGE TAB - Shows original activities for manually merged activities */}
                         {activeTab === 'merge' && isMergedActivity && (

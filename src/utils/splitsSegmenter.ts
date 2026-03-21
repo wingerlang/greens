@@ -45,8 +45,12 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     if (!splits || splits.length < 3) return null;
 
     const lowerTitle = (title || '').toLowerCase();
-    const isExplicitlyDistance = lowerTitle.includes('distans') || lowerTitle.includes('zone 2') || lowerTitle.includes('z2') || lowerTitle.includes('lugnt');
+    const isExplicitlyDistance = lowerTitle.includes('distans') || lowerTitle.includes('zone 2') || lowerTitle.includes('z2') || lowerTitle.includes('lugnt') || lowerTitle.includes('återhämtning') || lowerTitle.includes('recovery');
     const isExplicitlyInterval = lowerTitle.includes('intervall') || lowerTitle.includes('reps') || lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || (parsed && parsed.suggestedSubType === 'interval');
+
+    if (isExplicitlyDistance && !isExplicitlyInterval) {
+        return null; // Skip interval clustering for explicit distance/recovery runs
+    }
 
     // 1. Beräkna tempo (sekunder per km)
     const paces = splits.map(s => s.movingTime / (Math.max(s.distance, 1) / 1000));
@@ -110,9 +114,11 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
         }
     } else {
         // 2. K-Means Klustring (k=3) för att dynamiskt hitta tempogränser
-        let c1 = Math.min(...paces); // Snabbast (Intervall)
-        let c3 = Math.max(...paces); // Långsammast (Uppjogg/Nerjogg)
-        let c2 = (c1 + c3) / 2;      // Vila (Mellan)
+        // Use unique paces to prevent extreme lap count ratios from skewing centers
+        const uniquePaces = [...new Set(paces)].sort((a, b) => a - b);
+        let c1 = uniquePaces[0]; // Snabbast (Intervall)
+        let c3 = uniquePaces[uniquePaces.length - 1]; // Långsammast (Uppjogg/Nerjogg)
+        let c2 = uniquePaces.length >= 3 ? uniquePaces[Math.floor(uniquePaces.length / 2)] : (c1 + c3) / 2;
 
         for (let iter = 0; iter < 5; iter++) {
             const g1: number[] = [], g2: number[] = [], g3: number[] = [];

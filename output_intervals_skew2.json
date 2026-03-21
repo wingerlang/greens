@@ -1,0 +1,29 @@
+{
+  "scenario5": [
+    {
+      "split": 1,
+      "role": "warmup",
+      "pace": 313
+    },
+    {
+      "split": 2,
+      "role": "interval",
+      "pace": 224
+    },
+    {
+      "split": 3,
+      "role": "recovery",
+      "pace": 650
+    },
+    {
+      "split": 4,
+      "role": "interval",
+      "pace": 224
+    },
+    {
+      "split": 5,
+      "role": "cooldown",
+      "pace": 650
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "scenario6_fixed": [
+    {
+      "split": 1,
+      "role": "warmup",
+      "pace": 312
+    },
+    {
+      "split": 2,
+      "role": "interval",
+      "pace": 220
+    },
+    {
+      "split": 3,
+      "role": "recovery",
+      "pace": 450
+    },
+    {
+      "split": 4,
+      "role": "interval",
+      "pace": 220
+    },
+    {
+      "split": 5,
+      "role": "recovery",
+      "pace": 450
+    },
+    {
+      "split": 6,
+      "role": "interval",
+      "pace": 220
+    },
+    {
+      "split": 7,
+      "role": "cooldown",
+      "pace": 450
+    },
+    {
+      "split": 8,
+      "role": "cooldown",
+      "pace": 450
+    },
+    {
+      "split": 9,
+      "role": "cooldown",
+      "pace": 450
+    },
+    {
+      "split": 10,
+      "role": "cooldown",
+      "pace": 450
+    },
+    {
+      "split": 11,
+      "role": "cooldown",
+      "pace": 450
+    },
+    {
+      "split": 12,
+      "role": "cooldown",
+      "pace": 312
+    }
+  ]
+}

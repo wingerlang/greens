@@ -109,8 +109,10 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
     const monthData = useMemo(() => {
         return exercises.filter(e => {
-            const d = new Date(e.date);
-            return d.getMonth() === monthIndex && d.getFullYear() === year;
+            const parts = e.date.split('-');
+            const m = parseInt(parts[1]) - 1;
+            const y = parseInt(parts[0]);
+            return m === monthIndex && y === year;
         });
     }, [exercises, monthIndex, year]);
 
@@ -158,13 +160,18 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     }, [year, monthIndex, monthData, exercises]);
 
     const stats = useMemo(() => {
-        const distance = monthData.reduce((sum, e) => {
+        const countableExercises = monthData.filter(e => 
+            !e.type.toLowerCase().includes('walk') && 
+            !e.type.toLowerCase().includes('promenad')
+        );
+
+        const distance = countableExercises.reduce((sum, e) => {
             const isRun = e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp');
             return sum + (isRun ? (e.distance || 0) : 0);
         }, 0);
-        const duration = monthData.reduce((sum, e) => sum + e.durationMinutes, 0);
-        const count = monthData.length;
-        const tonnage = monthData.reduce((sum, e) => sum + (e.tonnage || 0), 0);
+        const duration = countableExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+        const count = countableExercises.length;
+        const tonnage = countableExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
 
         const today = new Date();
         const isCurrentMonth = today.getMonth() === monthIndex && today.getFullYear() === year;
@@ -182,12 +189,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
         const distancePerWeek = daysPassedForStats > 0 ? (distance / daysPassedForStats) * 7 : 0;
         const sessionsPerActiveDay = uniqueActiveDays > 0 ? (count / uniqueActiveDays).toFixed(1) : '0';
 
-        const timeDist = monthData.reduce((acc, e) => {
+        const timeDist = countableExercises.reduce((acc, e) => {
             acc[e.type] = (acc[e.type] || 0) + e.durationMinutes;
             return acc;
         }, {} as Record<string, number>);
 
-        const countDist = monthData.reduce((acc, e) => {
+        const countDist = countableExercises.reduce((acc, e) => {
             acc[e.type] = (acc[e.type] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
@@ -460,16 +467,19 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         search: `?activityId=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                     }, { replace: true });
                                                                 }}
-                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight px-1 py-0.5 sm:px-1.5 sm:py-1 rounded-md border-l-[2px] sm:border-l-[2px] ${colorClass} cursor-pointer flex justify-between items-center group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md`}>
+                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md`}>
                                                                 <span className="font-bold flex items-center min-w-0 shrink truncate z-10">
-                                                                    <div className="opacity-60 shrink-0 z-0 scale-[1.15]">{icon}</div>
-                                                                    <span className="truncate leading-none relative z-10 -ml-1 sm:-ml-1.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95">
-                                                                        {ex.title || typeName}
+                                                                    <div className="opacity-70 shrink-0 z-0 scale-[1.1]">{icon}</div>
+                                                                    <span className="flex items-center gap-0.5 truncate leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95">
+                                                                        {(ex.subType === 'interval' || ex.subType === 'tempo' || ex.title?.toLowerCase().includes('intervall')) && <span className="text-amber-400 shrink-0">⚡</span>}
+                                                                        <span className="truncate">{ex.title || typeName}</span>
                                                                     </span>
                                                                 </span>
-                                                                <span className="font-mono opacity-90 font-bold shrink-0 text-[10px] leading-none z-10 pl-0.5">
-                                                                    {shortVal}
-                                                                </span>
+                                                                <div className="flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 ml-auto whitespace-nowrap">
+                                                                    {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
+                                                                    {ex.distance !== undefined && ex.distance > 0 && <span className="opacity-30">•</span>}
+                                                                    <span>{Math.round(ex.durationMinutes)}m</span>
+                                                                </div>
 
                                                                 {/* Rich Tooltip per Activity - positioned absolutely inside the relative day cell */}
                                                                 <div className={`absolute ${weekIdx <= 1 ? 'mt-2 top-full' : 'mb-2 bottom-full'} ${dayIdx <= 3 ? 'left-[-10%]' : 'right-[-10%]'} w-56 sm:w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 sm:p-4 shadow-2xl opacity-0 group-hover/ex:opacity-100 transition-all duration-300 z-[9999] hidden md:block pointer-events-none scale-95 group-hover/ex:scale-100`}>
@@ -759,25 +769,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                         </div>
                                                     </div>
                                                 )}
-                                                {weekCalories > 0 && (
-                                                    <div
-                                                        className="flex items-center justify-between bg-slate-800/50 text-rose-400 px-1.5 py-1 rounded cursor-help relative group/weekcal hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5 calendar-tooltip-container"
-                                                        onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `cal-${weekIdx}` ? null : `cal-${weekIdx}`) }}
-                                                    >
-                                                        <Flame className="w-3.5 h-3.5" />
-                                                        <span>{Math.round(weekCalories)}<span className="text-[8px] ml-0.5">cal</span></span>
-                                                        <div
-                                                            className={`absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-rose-500/10 ${pinnedTooltip === `cal-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weekcal:opacity-100 -translate-x-2 xl:group-hover/weekcal:translate-x-0 pointer-events-none xl:group-hover/weekcal:scale-100 cursor-default'}`}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10">Veckans Energiförbrukning</div>
-                                                            <div className="flex justify-between text-xs">
-                                                                <span className="text-slate-500 text-[10px] uppercase font-black tracking-widest">Totalt</span>
-                                                                <span className="text-rose-400 font-mono font-bold">{Math.round(weekCalories).toLocaleString('sv-SE')} kcal</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
+
                                                 {weekTotalMin === 0 && (
                                                     <div className="text-slate-600 italic text-[10px] text-center w-full py-2">Vila</div>
                                                 )}
@@ -788,13 +780,22 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     className="flex flex-col border-t border-white/5 pt-1 w-full relative group/weektot cursor-help calendar-tooltip-container"
                                                     onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `tot-${weekIdx}` ? null : `tot-${weekIdx}`) }}
                                                 >
-                                                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest text-left w-full pl-0.5 mb-0.5 mt-0.5">TOT</span>
-                                                    <div className="flex items-center justify-between w-full px-0.5 bg-white/5 rounded py-1 hover:bg-white/10 transition-colors">
-                                                        <span className="text-[10px] text-slate-400 font-bold">{weekExercises.length} pass</span>
-                                                        <span className="text-[10px] text-slate-300 font-mono font-bold">
-                                                            {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h` : ''}
-                                                            {Math.floor(weekTotalMin / 60) > 0 && Math.round(weekTotalMin % 60) === 0 ? '' : `${Math.round(weekTotalMin % 60)}m`}
-                                                        </span>
+                                                    <div className="flex items-center justify-between w-full px-1 bg-white/5 rounded py-0.5 hover:bg-white/10 transition-colors text-[9px] font-bold">
+                                                        <span className="text-slate-500 uppercase font-black tracking-widest leading-none">TOT</span>
+                                                        <div className="flex items-center gap-1 text-[9px] font-bold leading-none">
+                                                            <span className="text-slate-400">{weekExercises.length}p</span>
+                                                            <span className="text-slate-500 opacity-60">•</span>
+                                                            <span className="text-slate-300 font-mono">
+                                                                {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h` : ''}
+                                                                {Math.floor(weekTotalMin / 60) > 0 && Math.round(weekTotalMin % 60) === 0 ? '' : `${Math.round(weekTotalMin % 60)}m`}
+                                                            </span>
+                                                            {weekCalories > 0 && (
+                                                                <>
+                                                                    <span className="text-slate-500 opacity-60">•</span>
+                                                                    <span className="text-rose-400/90 font-mono">{Math.round(weekCalories)}<span className="text-[7.5px] ml-0.25 opacity-70">c</span></span>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     {/* Rich Tooltip */}
                                                     <div

@@ -381,13 +381,21 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         };
         // Optimistic update for local navigation counts
         if (type === 'omnibox_nav' && metadata?.path) {
-            setVisitStats(prev => ({
-                ...prev,
-                omniboxNavs: {
-                    ...prev.omniboxNavs,
-                    [metadata.path]: (prev.omniboxNavs[metadata.path] || 0) + 1
-                }
-            }));
+            setVisitStats(prev => {
+                const updatedContextualNavs = { ...prev.contextualNavs };
+                const currentPath = location.pathname;
+                if (!updatedContextualNavs[currentPath]) updatedContextualNavs[currentPath] = {};
+                updatedContextualNavs[currentPath][metadata.path] = (updatedContextualNavs[currentPath][metadata.path] || 0) + 1;
+
+                return {
+                    ...prev,
+                    omniboxNavs: {
+                        ...prev.omniboxNavs,
+                        [metadata.path]: (prev.omniboxNavs[metadata.path] || 0) + 1
+                    },
+                    contextualNavs: updatedContextualNavs
+                };
+            });
         }
 
         fetch('/api/usage/event', {
