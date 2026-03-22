@@ -12,6 +12,7 @@ import {
     MealType,
     BodyMeasurementType,
     QuickMeal,
+    MealItem,
 } from '../models/types.ts';
 import {
     Search,
@@ -254,6 +255,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         foodItems,
         recipes,
         addMealEntry,
+        updateMealEntry,
         mealEntries,
         addExercise,
         calculateExerciseCalories,
@@ -261,6 +263,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         addBodyMeasurement,
         selectedDate,
         quickMeals,
+        addQuickMeal,
         calculateRecipeNutrition
     } = useData();
     const { logEvent, visitStats } = useAnalytics();
@@ -278,7 +281,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Locked food state - when a food is matched with high confidence
     // Locked food state - when a food is matched with high confidence
-    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number } | null>(null);
+    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number; date: string; type: 'foodItem' | 'quickMeal' } | null>(null);
     const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
@@ -400,11 +403,87 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     // Navigation suggestions for slash mode
     const navSuggestions = useMemo(() => {
         if (!isSlashMode) return [];
-        const base = NAVIGATION_ROUTES.filter(route =>
+
+        const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+        const text = slashQuery.trim();
+        const dateSuggestions: any[] = [];
+
+        if (text) {
+            // 1. Check ISO: YYYY-MM-DD or YYYY-MM
+            const isoMatch = text.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+            if (isoMatch) {
+                const year = isoMatch[1];
+                const monthIdx = parseInt(isoMatch[2], 10) - 1;
+                const day = isoMatch[3];
+                if (monthIdx >= 0 && monthIdx < 12) {
+                    const mName = months[monthIdx];
+                    if (day) {
+                        dateSuggestions.push({
+                            path: `/träning/kalender/${year}/${mName}/${parseInt(day, 10)}`,
+                            label: `📅 Gå till ${parseInt(day, 10)} ${mName} ${year}`,
+                            aliases: []
+                        });
+                    } else {
+                        dateSuggestions.push({
+                            path: `/träning/kalender/${year}/${mName}`,
+                            label: `📅 Gå till ${mName.toUpperCase()} ${year}`,
+                            aliases: []
+                        });
+                    }
+                }
+            }
+
+            // 2. Year Match + Month Name Match
+            const yearMatch = text.match(/\b(\d{4})\b/);
+            const year = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
+
+            let matchedMonth: string | undefined;
+            let mIndex = -1;
+            for (let i = 0; i < months.length; i++) {
+                if (text.includes(months[i]) || (text.length >= 3 && text.includes(months[i].slice(0, 3)))) {
+                    matchedMonth = months[i];
+                    mIndex = i;
+                    break;
+                }
+            }
+
+            const textWithoutYear = text.replace(year, '').trim();
+            const dayMatch = textWithoutYear.match(/\b([1-9]|[12]\d|3[01])\b/);
+            const day = dayMatch ? dayMatch[1] : undefined;
+
+            if (matchedMonth) {
+                if (day) {
+                    dateSuggestions.push({
+                        path: `/träning/kalender/${year}/${matchedMonth}/${parseInt(day, 10)}`,
+                        label: `📅 Gå till ${day} ${matchedMonth} ${year}`,
+                        aliases: []
+                    });
+                } else {
+                    dateSuggestions.push({
+                        path: `/träning/kalender/${year}/${matchedMonth}`,
+                        label: `📅 Gå till ${matchedMonth.toUpperCase()} ${year}`,
+                        aliases: []
+                    });
+                }
+            }
+
+            // 3. Just a Year
+            if (/^\d{4}$/.test(text)) {
+                dateSuggestions.push({
+                    path: `/träning/kalender/${text}/januari`,
+                    label: `📅 Gå till år ${text}`,
+                    aliases: []
+                });
+            }
+        }
+
+        const baseNavs = NAVIGATION_ROUTES.filter(route =>
             route.path.toLowerCase().includes(slashQuery) ||
             route.label.toLowerCase().includes(slashQuery) ||
             route.aliases.some(alias => alias.toLowerCase().includes(slashQuery))
         );
+
+        const base = [...dateSuggestions, ...baseNavs];
 
         const currentPath = location.pathname;
         const currentContextStats = visitStats.contextualNavs?.[currentPath] || {};
@@ -423,9 +502,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 // Pass down reasoning for UI
                 sortReason: contextCount > 0
                     ? `${contextCount} ggr härifrån`
-                    : globalOmniCount > 0
-                        ? `${globalOmniCount} ggr globalt`
-                        : `${globalTotalCount} besök totalt`,
+                    : `${globalOmniCount} besök via omnibox`,
                 contextCount,
                 globalOmniCount,
                 globalTotalCount
@@ -579,6 +656,32 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         };
     };
 
+    const processItem = (qm: any, type: 'quickMeal' | 'savedEstimate') => {
+        const totals = qm.items.reduce((acc: any, item: any) => {
+            const n = getItemNutrition(item);
+            return {
+                calories: acc.calories + n.calories,
+                protein: acc.protein + n.protein,
+                carbs: acc.carbs + (n.carbs || 0),
+                fat: acc.fat + (n.fat || 0)
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+        const summary = qm.items.map((item: any) => {
+            const name = getItemName(item);
+            const servings = item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`;
+            return `${servings} ${name}`;
+        }).join(', ');
+
+        return {
+            ...qm,
+            itemType: type,
+            totals,
+            summary,
+            usageStats: qm.usageStats || (snabbvalUsageStats && snabbvalUsageStats[qm.id]) || null
+        };
+    };
+
     // Quick Meal results
     const { standardQuickMeals, savedEstimates } = useMemo(() => {
         if (isSlashMode) return { standardQuickMeals: [], savedEstimates: [] };
@@ -600,37 +703,61 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             limit: 3
         });
 
-        const processItem = (qm: any, type: 'quickMeal' | 'savedEstimate') => {
-            const totals = qm.items.reduce((acc: any, item: any) => {
-                const n = getItemNutrition(item);
-                return {
-                    calories: acc.calories + n.calories,
-                    protein: acc.protein + n.protein,
-                    carbs: acc.carbs + (n.carbs || 0),
-                    fat: acc.fat + (n.fat || 0)
-                };
-            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-            const summary = qm.items.map((item: any) => {
-                const name = getItemName(item);
-                const servings = item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`;
-                return `${servings} ${name}`;
-            }).join(', ');
-
-            return {
-                ...qm,
-                itemType: type,
-                totals,
-                summary,
-                usageStats: snabbvalUsageStats[qm.id] || null
-            };
-        };
 
         return {
             standardQuickMeals: standardMatches.map(m => processItem(m, 'quickMeal')),
             savedEstimates: estimateMatches.map(m => processItem(m, 'savedEstimate'))
         };
     }, [input, quickMeals, isSlashMode, intent, foodItems, recipes, snabbvalUsageStats]);
+
+    // Frequent Meal Combinations suggestions
+    const frequentCombos = useMemo(() => {
+        if (isSlashMode || isActionMode) return [];
+        if (intent.type !== 'food' || !intent.data.mealType) return [];
+        if (intent.data.query && intent.data.query.trim().length > 0) return []; // Only when just typing the meal category
+
+        const mealType = intent.data.mealType;
+        const comboCounts: Record<string, { count: number; items: MealItem[]; lastUsed: string }> = {};
+
+        mealEntries.forEach(entry => {
+            if (entry.mealType !== mealType) return;
+            const subItems = entry.items.filter(i => i.type === 'foodItem' || i.type === 'recipe');
+            if (subItems.length < 2) return; // Combinations of 2+ items
+
+            // Sort to make order-invariant
+            const sortedItems = [...subItems].sort((a, b) => a.referenceId.localeCompare(b.referenceId));
+            const key = sortedItems.map(i => i.referenceId).join('|');
+
+            if (!comboCounts[key]) {
+                comboCounts[key] = { count: 0, items: sortedItems, lastUsed: entry.date };
+            }
+            comboCounts[key].count++;
+            if (entry.date > comboCounts[key].lastUsed) {
+                comboCounts[key].lastUsed = entry.date;
+            }
+        });
+
+        return Object.entries(comboCounts)
+            .filter(([_, data]) => data.count >= 3)
+            .map(([key, data]) => {
+                const names = data.items.map(i => getItemName(i));
+                let name = names.join(' med ');
+                if (name.length > 40) name = names.slice(0, 2).join(' med ') + '...';
+
+                const virtualCombo = {
+                    id: `combo-${key}`,
+                    name: `💡 ${name}`,
+                    items: data.items,
+                    createdAt: new Date().toISOString(),
+                    usageStats: { count: data.count, lastUsed: data.lastUsed }
+                };
+
+                return processItem(virtualCombo, 'quickMeal');
+            })
+            .sort((a, b) => (b.usageStats?.count || 0) - (a.usageStats?.count || 0))
+            .slice(0, 3);
+    }, [intent, mealEntries, isSlashMode, isActionMode, foodItems, recipes, snabbvalUsageStats]);
 
 
     // Auto-lock: Only when there's exactly ONE matching result AND explicit intent
@@ -714,6 +841,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
         // Blanda in estimates, quick meals och råvaror
         const mixedFoodItems: any[] = [
+            ...frequentCombos,
             ...savedEstimates,
             ...standardQuickMeals,
             ...foodResults.map(f => ({ itemType: 'food' as const, ...f }))
@@ -860,7 +988,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             brand: item.brand,
             id: item.id,
             calories: Math.round(displayCalories),
-            quantity
+            quantity,
+            date: logDate,
+            type: 'foodItem'
         });
         setShowFeedback(true);
         setInput('');
@@ -919,9 +1049,47 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             durationMs
         });
 
+        setLastLoggedItem({
+            name: lockedQuickMeal.name,
+            id: lockedQuickMeal.id,
+            calories: Math.round(lockedQuickMeal.totals?.calories || 0),
+            quantity: 1,
+            date: logDate,
+            type: 'quickMeal'
+        });
+
         setShowFeedback(true);
         setInput('');
         setLockedQuickMeal(null);
+    };
+
+    const handleSaveComboAsQuickMeal = (meal: any) => {
+        const cleanName = meal.name.replace('💡 ', '').trim();
+        const saved = addQuickMeal(cleanName, meal.items);
+        if (saved) {
+            setLockedQuickMeal(processItem(saved, 'quickMeal'));
+            setShowFeedback(true);
+        }
+    };
+
+    const handleMoveToYesterday = () => {
+        if (!lastLoggedItem) return;
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+        const entry = [...mealEntries]
+            .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
+            .find(e =>
+                e.date === today &&
+                (lastLoggedItem.type === 'foodItem'
+                    ? e.items.some(i => i.type === 'foodItem' && i.referenceId === lastLoggedItem.id)
+                    : e.snabbvalId === lastLoggedItem.id)
+            );
+
+        if (entry) {
+            updateMealEntry(entry.id, { date: yesterday });
+            setLastLoggedItem(prev => prev ? { ...prev, date: yesterday } : null);
+        }
     };
 
     // Lock a food item for detailed editing
@@ -1093,8 +1261,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
         // Handle user selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'user') {
-            const selectedUser = selectableItems[selectedIndex];
-            navigate(`/u/${selectedUser.handle || selectedUser.username}`);
+            const selectedUser = selectableItems[selectedIndex] as any;
+            const path = `/u/${selectedUser.handle || selectedUser.username}`;
+            logEvent('omnibox_nav', `Navigated to user ${selectedUser.name}`, 'omnibox', { path });
+            navigate(path);
             onClose();
             return;
         }
@@ -1133,6 +1303,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (!input.trim()) return;
 
         if (intent.type === 'navigate') {
+            logEvent('omnibox_nav', `Navigated to ${intent.data.path}`, 'omnibox', { path: intent.data.path });
             navigate(intent.data.path);
             onClose();
         } else if (intent.type === 'weight') {
@@ -1202,7 +1373,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                     </div>
                                 </div>
                             </div>
-                            <button
+                            <div className="flex items-center gap-2">
+                                {lastLoggedItem.date === new Date().toISOString().split('T')[0] && (
+                                    <button
+                                        onClick={handleMoveToYesterday}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-400 border border-amber-500/20 transition-colors"
+                                    >
+                                        ⏪ Igår
+                                    </button>
+                                )}
+                                <button
                                 onClick={() => {
                                     if (onOpenNutrition && lastLoggedItem) {
                                         onOpenNutrition({
@@ -1222,6 +1402,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                 <span>Mer info</span>
                                 <ArrowRight size={14} className="opacity-50" />
                             </button>
+                            </div>
                         </div>
                     )}
                     {showFeedback && !lastLoggedItem && (
@@ -1246,7 +1427,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                 <div
                                     key={route.path}
                                     id={`omnibox-item-${idx}`}
-                                    onClick={() => { navigate(route.path); onClose(); }}
+                                    onClick={() => {
+                                        logEvent('omnibox_nav', `Navigated to ${route.label}`, 'omnibox', { path: route.path });
+                                        navigate(route.path);
+                                        onClose();
+                                    }}
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                         ? 'bg-cyan-500/20 text-cyan-400'
                                         : 'hover:bg-white/5 text-white'
@@ -1586,6 +1771,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                         Totalt
                                     </div>
                                 </div>
+                            )}
+
+                            {lockedQuickMeal.id.startsWith('combo-') && (
+                                <button
+                                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-xl border border-amber-500/30 flex items-center justify-center gap-2 mb-2 transition-colors text-sm"
+                                    onClick={() => handleSaveComboAsQuickMeal(lockedQuickMeal)}
+                                >
+                                    <span>💾 Spara som snabbmål</span>
+                                </button>
                             )}
 
                             {/* Action Button */}

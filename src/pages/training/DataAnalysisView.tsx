@@ -128,8 +128,17 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
             if (!suggestedType) {
                 const ua = universalActivities.find(u => u.id === e.id);
                 const splits = ua?.performance?.splits;
+                const laps = ua?.performance?.laps;
                 if (splits && splits.length >= 3) {
-                    const segmented = segmentSplits(splits);
+                    const areIdentical = laps && splits.length === laps.length && splits.every((s, i) => laps[i] && Math.abs(s.distance - laps[i].distance) < 2);
+                    const source = laps && laps.length >= 3 && !areIdentical
+                        ? laps.map((l: any, i: number) => ({
+                            ...l,
+                            split: i + 1,
+                            averageHeartrate: l.averageHeartrate || l.avgHeartRate || l.heartRateAvg
+                          }))
+                        : splits;
+                    const segmented = segmentSplits(source);
                     if (segmented) {
                         if (segmented.type === 'intervals' && segmented.intervalGroups.length > 1) {
                             suggestedType = 'interval';

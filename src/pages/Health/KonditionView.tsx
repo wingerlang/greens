@@ -89,12 +89,25 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
     const totalDistance = filteredEntries.reduce((s, e) => s + (e.distance || 0), 0);
     const totalDuration = filteredEntries.reduce((s, e) => s + (e.durationMinutes || 0), 0);
     const totalCalories = filteredEntries.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
-    const avgPace = totalDistance > 0 ? totalDuration / totalDistance : 0;
+
+    // Running specific stats
+    const runningEntries = useMemo(() => {
+        return filteredEntries.filter(e => e.type.toLowerCase().includes('running') || e.type.toLowerCase().includes('löpning') || e.type.toLowerCase().includes('run'));
+    }, [filteredEntries]);
+
+    const runDistance = runningEntries.reduce((s, e) => s + (e.distance || 0), 0);
+    const runDuration = runningEntries.reduce((s, e) => s + (e.durationMinutes || 0), 0);
+    const avgRunPace = runDistance > 0 ? runDuration / runDistance : 0;
+
+    const hrRunningEntries = runningEntries.filter(e => e.heartRateAvg && e.heartRateAvg > 0);
+    const avgHeartRate = hrRunningEntries.length > 0
+        ? Math.round(hrRunningEntries.reduce((s, e) => s + e.heartRateAvg!, 0) / hrRunningEntries.length)
+        : 0;
 
     return (
         <div className="space-y-6">
             {/* Header / Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
                     <p className="text-3xl font-black text-sky-400">{filteredEntries.length}</p>
                     <p className="text-xs text-slate-500 uppercase mt-1">Pass</p>
@@ -110,6 +123,16 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
                     <p className="text-3xl font-black text-rose-400">{Math.round(totalCalories / 1000)}k</p>
                     <p className="text-xs text-slate-500 uppercase mt-1">Kalorier</p>
+                </div>
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+                    <p className="text-3xl font-black text-pink-400">{avgHeartRate > 0 ? avgHeartRate : '-'}</p>
+                    <p className="text-xs text-slate-500 uppercase mt-1">Snitt HR</p>
+                </div>
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+                    <p className="text-3xl font-black text-amber-500">
+                        {avgRunPace > 0 ? `${Math.floor(avgRunPace)}:${String(Math.round((avgRunPace % 1) * 60)).padStart(2, '0')}` : '-'}
+                    </p>
+                    <p className="text-xs text-slate-500 uppercase mt-1">Snittempo</p>
                 </div>
             </div>
 
@@ -131,13 +154,13 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
                     <ConditioningStreaks dates={dates} />
 
                     {/* Pace Card (if running) */}
-                    {avgPace > 0 && (
+                    {avgRunPace > 0 && (
                         <div className="bg-sky-950/30 border border-sky-500/20 rounded-2xl p-5 flex items-center gap-6">
                             <div className="text-4xl">🏃</div>
                             <div>
                                 <p className="text-xs text-sky-400 uppercase font-bold">Snitt tempo</p>
                                 <p className="text-3xl font-black text-white">
-                                    {Math.floor(avgPace)}:{String(Math.round((avgPace % 1) * 60)).padStart(2, '0')}
+                                    {Math.floor(avgRunPace)}:{String(Math.round((avgRunPace % 1) * 60)).padStart(2, '0')}
                                     <span className="text-sm text-slate-400 ml-1">min/km</span>
                                 </p>
                             </div>

@@ -151,22 +151,43 @@ function parseRecovery(line: string, prevSegmentReps: number = 1): RecoveryDefin
     }
 
     // Simple recovery
-    let dist = parseDistance(line);
-    let time = parseDuration(line);
+    let dist = undefined;
+    let time = undefined;
 
-    // If explicit "vila X min" found
+    const hasKeyword = line.includes('vila') || line.includes('rest') || line.includes('jogg') || line.includes('stå') || line.includes('gå');
+    const singleSeparatorMatch = line.match(/[\/\|\+]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m|min|s)?(?!\w)/);
+
+    if (hasKeyword) {
+        dist = parseDistance(line);
+        time = parseDuration(line);
+    } else if (singleSeparatorMatch) {
+        // Verify it isn't an arbitrary descriptive list (e.g., 42k/21k/10k) by counting slashes
+        const countSlashes = (line.match(/[\/\|\+]/g) || []).length;
+        if (countSlashes === 1) {
+            const val = parseFloat(singleSeparatorMatch[1].replace(',', '.'));
+            const unit = singleSeparatorMatch[2];
+            if (unit && (unit.startsWith('k') || (unit === 'm' && val < 20))) {
+                dist = val * 1000;
+            } else if (unit === 'm') {
+                dist = val;
+            } else if (unit === 'min' || (unit === 's' && val < 10)) {
+                time = unit === 'min' ? val * 60 : val;
+            } else if (!unit) {
+                if (val >= 100) dist = val;
+                else time = val * 60;
+            }
+        }
+    }
+
+    // Explicit Rest Vila overrides
     const explicitRestVila = line.match(/vila\s*(\d+)\s*(m|min|s)/);
     if (explicitRestVila) {
         const val = parseInt(explicitRestVila[1]);
         const unit = explicitRestVila[2];
         if (unit === 's') time = val;
         if (unit === 'min' || unit === 'm') {
-            // ambiguity 'm' for vila could be min.
-            // In 'vila 1 min' -> min.
-            // In 'vila 200m' -> meter?
-            // Context heuristic: < 10 usually min, > 50 usually m/s.
             if (val < 10) time = val * 60;
-            else if (line.includes('jogg')) dist = val; // "vila 200m jogg"
+            else if (line.includes('jogg')) dist = val;
         }
     }
 
@@ -191,7 +212,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         const line = cleanLines[i];
         // Match: <reps>x (<work_dist> / <recovery_dist>)
         // Also match variants: "5x (2000m / 1000m jogg)", "5x(2k/1k)", "5 x (2000 / 1000)"
-        const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*[\/\|]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*(?:jogg|vila|rest)?\s*\)/);
+        const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*[\/\|\+]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*\)/);
         if (parenMatch) {
             const reps = parseInt(parenMatch[1], 10);
             let workDist = parseFloat(parenMatch[2].replace(',', '.'));

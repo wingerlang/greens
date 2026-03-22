@@ -84,6 +84,7 @@ export interface UserSettings {
     dailyAlcoholLimitWeekend?: number;
     densityMode?: 'compact' | 'slim' | 'cozy';
     expandedSections?: Record<string, boolean>; // Persisted UI state
+    hiddenMetrics?: string[]; // Metrics to hide on dashboard graphs (e.g. 'chest')
     // Calorie Mode: 'tdee' = TDEE-based, 'fixed' = fixed base + exercise calories
     calorieMode?: 'tdee' | 'fixed';
     fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'
@@ -723,9 +724,29 @@ export interface ExerciseEntry {
     maxSpeed?: number;
     kilojoules?: number;
 
-    // Hyrox Specifics
     hyroxStats?: HyroxActivityStats;
     extractedFromId?: string;
+
+    // Performance Data
+    splits?: Array<{
+        split: number;
+        distance: number;
+        elapsedTime: number;
+        movingTime: number;
+        elevationDiff: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+    }>;
+    laps?: Array<{
+        name: string;
+        elapsedTime: number;
+        movingTime: number;
+        distance: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+        lapIndex?: number;
+        split?: number;
+    }>;
 }
 
 export type HyroxStation =
@@ -1415,10 +1436,10 @@ export interface WeightEntry {
     id: string;
     date: string; // ISO date string (YYYY-MM-DD)
     weight: number; // kg
-    waist?: number; // cm
-    chest?: number; // cm
-    hips?: number; // cm
-    thigh?: number; // cm
+    waist?: number | null; // cm
+    chest?: number | null; // cm
+    hips?: number | null; // cm
+    thigh?: number | null; // cm
     createdAt: string;
 }
 

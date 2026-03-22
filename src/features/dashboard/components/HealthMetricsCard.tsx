@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Target, X, ChevronRight } from 'lucide-react';
+import { Target, X, ChevronRight, Trash2 } from 'lucide-react';
 import { WeightTrendChart } from '../../../components/charts/WeightTrendChart.tsx';
+import { useSettings } from '../../../context/SettingsContext.tsx';
 
 // Helper functions (moved from DashboardPage)
 const getBMICategory = (bmi: number) => {
@@ -36,6 +37,7 @@ interface HealthMetricsCardProps {
     weightTrendEntries: any[]; // Using any[] to match usage, ideally strict types
     unifiedHistory: any[];
     onOpenWeightModal: (data: { weight?: number, waist?: number, chest?: number, date?: string }) => void;
+    onDeleteEntry?: (data: { weightEntryId?: string, waistId?: string, chestId?: string }) => void;
 }
 
 export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
@@ -49,9 +51,19 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
     setWeightRange,
     weightTrendEntries,
     unifiedHistory,
-    onOpenWeightModal
+    onOpenWeightModal,
+    onDeleteEntry
 }) => {
     const [showAllHistory, setShowAllHistory] = useState(false);
+    const { settings, updateSettings } = useSettings();
+    const hiddenMetrics = settings.hiddenMetrics || [];
+
+    const handleToggleMetric = (metric: string) => {
+        const next = hiddenMetrics.includes(metric)
+            ? hiddenMetrics.filter(m => m !== metric)
+            : [...hiddenMetrics, metric];
+        updateSettings({ hiddenMetrics: next });
+    };
 
     return (
         <div className={`col-span-1 md:col-span-12 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
@@ -111,34 +123,38 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                         </div>
 
                         {/* Waist Detail */}
-                        <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
-                            onOpenWeightModal({
-                                weight: unifiedHistory[0]?.weight,
-                                waist: latestWaist,
-                                chest: latestChest,
-                            });
-                        }}>
-                            <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
-                            <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">
-                                {latestWaist || '--'}
-                                <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                        {!hiddenMetrics.includes('waist') && (
+                            <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
+                                onOpenWeightModal({
+                                    weight: unifiedHistory[0]?.weight,
+                                    waist: latestWaist,
+                                    chest: latestChest,
+                                });
+                            }}>
+                                <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
+                                <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">
+                                    {latestWaist || '--'}
+                                    <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Chest (Bröst) */}
-                        <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex cursor-pointer" onClick={() => {
-                            onOpenWeightModal({
-                                weight: unifiedHistory[0]?.weight,
-                                waist: latestWaist,
-                                chest: latestChest,
-                            });
-                        }}>
-                            <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
-                            <div className="text-xl font-black text-slate-900 dark:text-white">
-                                {latestChest || '--'}
-                                <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                        {!hiddenMetrics.includes('chest') && (
+                            <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex cursor-pointer" onClick={() => {
+                                onOpenWeightModal({
+                                    weight: unifiedHistory[0]?.weight,
+                                    waist: latestWaist,
+                                    chest: latestChest,
+                                });
+                            }}>
+                                <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
+                                <div className="text-xl font-black text-slate-900 dark:text-white">
+                                    {latestChest || '--'}
+                                    <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* BMI Meter */}
                         <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center">
@@ -174,11 +190,13 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                                 }))}
                                 currentWeight={latestWeightVal || 0}
                                 hideHeader={true}
+                                hiddenMetrics={hiddenMetrics}
+                                onToggleMetric={handleToggleMetric}
                                 onEntryClick={(entry) => {
                                     onOpenWeightModal({
                                         weight: entry.weight > 0 ? entry.weight : undefined,
-                                        waist: entry.waist,
-                                        chest: entry.chest,
+                                        waist: entry.waist ?? undefined,
+                                        chest: entry.chest ?? undefined,
                                         date: entry.date
                                     });
                                 }}
@@ -217,14 +235,14 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                                                 <span className="text-[10px] font-bold text-slate-300 italic">Ingen vikt</span>
                                             )}
 
-                                            {w.waist && (
+                                            {!hiddenMetrics.includes('waist') && w.waist && (
                                                 <>
                                                     <span className="text-slate-200 dark:text-slate-700">|</span>
                                                     <span className="text-sm font-bold text-emerald-500">{w.waist} <span className="text-[10px] font-normal opacity-70">cm (midja)</span></span>
                                                 </>
                                             )}
 
-                                            {w.chest && (
+                                            {!hiddenMetrics.includes('chest') && w.chest && (
                                                 <>
                                                     <span className="text-slate-200 dark:text-slate-700">|</span>
                                                     <span className="text-sm font-bold text-indigo-500">{w.chest} <span className="text-[10px] font-normal opacity-70">cm (bröst)</span></span>
@@ -232,7 +250,27 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                                             )}
                                         </div>
                                     </div>
-                                    <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
+                                    <div className="flex items-center gap-1">
+                                        {onDeleteEntry && (w.weightEntryId || w.waistId || w.chestId) && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm('Vill du verkligen ta bort denna loggning?')) {
+                                                        onDeleteEntry({
+                                                            weightEntryId: w.weightEntryId,
+                                                            waistId: w.waistId,
+                                                            chestId: w.chestId
+                                                        });
+                                                    }
+                                                }}
+                                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg text-rose-500 opacity-0 group-hover/item:opacity-100 transition-all"
+                                                title="Ta bort"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                        <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
+                                    </div>
                                 </div>
                             ))}
                             {unifiedHistory.length === 0 && (

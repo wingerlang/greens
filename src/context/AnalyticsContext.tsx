@@ -379,6 +379,24 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             timestamp: new Date().toISOString(),
             metadata
         };
+        // Optimistic update for local navigation counts
+        if (type === 'omnibox_nav' && metadata?.path) {
+            setVisitStats(prev => {
+                const updatedContextualNavs = { ...prev.contextualNavs };
+                const currentPath = location.pathname;
+                if (!updatedContextualNavs[currentPath]) updatedContextualNavs[currentPath] = {};
+                updatedContextualNavs[currentPath][metadata.path] = (updatedContextualNavs[currentPath][metadata.path] || 0) + 1;
+
+                return {
+                    ...prev,
+                    omniboxNavs: {
+                        ...prev.omniboxNavs,
+                        [metadata.path]: (prev.omniboxNavs[metadata.path] || 0) + 1
+                    },
+                    contextualNavs: updatedContextualNavs
+                };
+            });
+        }
 
         fetch('/api/usage/event', {
             method: 'POST',
@@ -396,13 +414,13 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             const [statsData, usersData, omniboxData] = await Promise.all([
                 safeFetch<any>('/api/usage/stats?days=30', {
                     headers: { 'Authorization': `Bearer ${token}` }
-                }),
+                }).catch(e => { console.error("Stats fetch failed:", e); return null; }),
                 safeFetch<any>('/api/usage/users?days=30', {
                     headers: { 'Authorization': `Bearer ${token}` }
-                }),
+                }).catch(e => { console.error("Users fetch failed:", e); return null; }),
                 safeFetch<any>('/api/usage/omnibox?days=30', {
                     headers: { 'Authorization': `Bearer ${token}` }
-                })
+                }).catch(e => { console.error("Omnibox fetch failed:", e); return null; })
             ]);
 
             const paths: Record<string, number> = {};

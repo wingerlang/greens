@@ -85,7 +85,7 @@ export function MealTimeline({
         return (
             <div
                 key={entry.id}
-                className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'} cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
+                className={`group relative flex items-center justify-between ${isCompact ? 'p-1 py-0.5' : 'py-1.5 px-3'} bg-slate-900/40 border rounded-xl hover:border-white/10 transition-all gap-4 cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
                     ? 'border-emerald-500/30 bg-emerald-500/5'
                     : 'border-white/5'
                     }`}
@@ -349,7 +349,7 @@ export function MealTimeline({
 
     // Normal view (Detailed Sections)
     return (
-        <div className="meals-timeline flex flex-col gap-8">
+        <div className="meals-timeline flex flex-col gap-4">
             {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][]).map(([mealTypeKey, entries]) => (
                 <div
                     key={mealTypeKey}
@@ -370,7 +370,7 @@ export function MealTimeline({
                         }
                     }}
                 >
-                    <div className="flex items-center justify-between mb-4 px-2">
+                    <div className="flex items-center justify-between mb-2 px-2">
                         <div className="flex items-center gap-4">
                             <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
                                 <span className="text-lg">

@@ -115,7 +115,7 @@ export interface DataContextType {
 
     // Weight CRUD
     weightEntries: WeightEntry[];
-    addWeightEntry: (weight: number, date?: string, waist?: number, chest?: number, hips?: number, thigh?: number) => WeightEntry;
+    addWeightEntry: (weight: number, date?: string, waist?: number | null, chest?: number | null, hips?: number | null, thigh?: number | null) => WeightEntry;
     bulkAddWeightEntries: (entries: Partial<WeightEntry>[]) => void;
     updateWeightEntry: (id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => void;
     deleteWeightEntry: (id: string) => void;

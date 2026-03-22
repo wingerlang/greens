@@ -32,6 +32,7 @@ import { KonditionView } from './Health/KonditionView.tsx';
 import { RunningStatsView } from './Health/RunningStatsView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
 import { DataAnalysisView } from './training/DataAnalysisView.tsx';
+import { CurrentFitnessView } from '../components/training/CurrentFitnessView.tsx';
 
 export function TrainingPage() {
     const {
@@ -116,12 +117,18 @@ export function TrainingPage() {
 
     // URL State Management
     const currentTab = useMemo(() => {
-        if (!tab) return 'overview';
-        if (/^\d{4}$/.test(tab)) return 'overview';
-        return (['overview', 'styrka', 'kondition', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races' | 'lopstatistik' | 'dataanalys';
+        if (!tab) return 'kalender';
+        if (tab === 'kalender') return 'kalender';
+        if (/^\d{4}$/.test(tab)) return 'kalender';
+        return (['kalender', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'kalender') as 'kalender' | 'styrka' | 'kondition' | 'form' | 'races' | 'lopstatistik' | 'dataanalys';
     }, [tab]);
 
     const initialCalendarMonth = useMemo(() => {
+        if (tab === 'kalender' && subTab) {
+            const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+            const idx = months.indexOf(subTab.toLowerCase());
+            return idx >= 0 ? idx : undefined;
+        }
         if (!tab || !/^\d{4}$/.test(tab) || !subTab) return undefined;
         const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
         const idx = months.indexOf(subTab.toLowerCase());
@@ -129,6 +136,10 @@ export function TrainingPage() {
     }, [tab, subTab]);
 
     const initialCalendarDay = useMemo(() => {
+        if (tab === 'kalender' && subTab && id) {
+            const day = parseInt(id, 10);
+            return isNaN(day) ? undefined : day;
+        }
         if (!tab || !/^\d{4}$/.test(tab) || !subTab || !id) return undefined;
         const day = parseInt(id, 10);
         return isNaN(day) ? undefined : day;
@@ -138,6 +149,8 @@ export function TrainingPage() {
     const handleTabChange = (newTab: string) => {
         if (newTab === 'styrka' && currentTab !== 'styrka') {
             navigate('/styrka');
+        } else if (newTab === 'kalender') {
+            navigate('/träning/kalender');
         } else {
             navigate(`/training/${newTab}`);
         }
@@ -277,12 +290,22 @@ export function TrainingPage() {
 
     // Apply Period Filter to data
     const filteredExerciseEntries = useMemo(() => {
-        return exerciseEntries.filter(e => {
-            if (filterStartDate && e.date < filterStartDate) return false;
-            if (filterEndDate && e.date > filterEndDate) return false;
-            return true;
-        });
+        return exerciseEntries
+            .filter(e => {
+                if (filterStartDate && e.date < filterStartDate) return false;
+                if (filterEndDate && e.date > filterEndDate) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                const dateCompare = b.date.localeCompare(a.date); // Descending (Newer first)
+                if (dateCompare !== 0) return dateCompare;
+
+                const timeA = a.startTime || '00:00';
+                const timeB = b.startTime || '00:00';
+                return timeA.localeCompare(timeB); // Ascending (Earlier first)
+            });
     }, [exerciseEntries, filterStartDate, filterEndDate]);
+
 
     const filteredWeightEntries = useMemo(() => {
         return (weightEntries || []).filter(e => {
@@ -374,7 +397,7 @@ export function TrainingPage() {
 
             {/* Conditionally render based on tab */}
             {
-                currentTab === 'overview' && (
+                currentTab === 'kalender' && (
                     <>
 
                         {/* Dashboard Overview */}
@@ -888,6 +911,20 @@ export function TrainingPage() {
                             filterEndDate={filterEndDate}
                             exerciseEntries={exerciseEntries}
                             universalActivities={universalActivities}
+                        />
+                    </div>
+                )
+            }
+
+            {
+                currentTab === 'form' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <CurrentFitnessView
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
+                            onOpenActivity={setSelectedActivityId}
                         />
                     </div>
                 )

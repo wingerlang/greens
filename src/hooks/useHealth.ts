@@ -57,9 +57,16 @@ export function useHealth(date: string = getISODate()) {
 
     // 4. Exercise & Burned - Using ALL activity sources (Strava, manual, strength)
     const dailyExercises = useMemo(() =>
-        unifiedActivities.filter(e => e.date === date),
+        unifiedActivities
+            .filter(e => e.date === date)
+            .sort((a, b) => {
+                const timeA = a.startTime || '00:00';
+                const timeB = b.startTime || '00:00';
+                return timeA.localeCompare(timeB);
+            }),
         [unifiedActivities, date]
     );
+
 
     const dailyCaloriesBurned = useMemo(() =>
         dailyExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0),

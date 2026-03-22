@@ -16,6 +16,7 @@ interface WeightTrendChartProps {
     currentWeight: number;
     onEntryClick?: (entry: WeightEntry) => void;
     hideHeader?: boolean;
+    hiddenMetrics?: string[];
 }
 
 interface TrendSegment {
@@ -123,8 +124,16 @@ const TREND_COLORS = {
     gain: '#ef4444',   // Red
     stable: '#3b82f6', // Blue
 };
+interface WeightTrendChartProps {
+    entries: WeightEntry[];
+    currentWeight: number;
+    onEntryClick?: (entry: WeightEntry) => void;
+    hideHeader?: boolean;
+    hiddenMetrics?: string[];
+    onToggleMetric?: (metric: string) => void;
+}
 
-export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHeader = false }: WeightTrendChartProps) {
+export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHeader = false, hiddenMetrics, onToggleMetric }: WeightTrendChartProps) {
     // 1. Process entries: Sort and Unique by Date (taking the latest entry for a day if multiple)
     const sortedUniqueEntries = useMemo(() => {
         const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -198,12 +207,12 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                     <div>
                         <div className="text-2xl font-black text-white">
                             {currentWeight.toFixed(1)} <span className="text-xs text-slate-500 font-bold">kg</span>
-                            {latestWaist && (
+                            {!hiddenMetrics?.includes('waist') && latestWaist && (
                                 <span className="ml-3 text-lg text-purple-400">
                                     {latestWaist} <span className="text-xs text-slate-500 font-bold">cm (midja)</span>
                                 </span>
                             )}
-                            {latestChest && (
+                            {!hiddenMetrics?.includes('chest') && latestChest && (
                                 <span className="ml-3 text-lg text-indigo-400">
                                     {latestChest} <span className="text-xs text-slate-500 font-bold">cm (bröst)</span>
                                 </span>
@@ -230,10 +239,10 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                         </span>
                         {hasMeasurements && (
                             <>
-                                <span className="flex items-center gap-1">
+                                <span className={`flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity ${hiddenMetrics?.includes('waist') ? 'opacity-30' : 'opacity-100'}`} onClick={() => onToggleMetric?.('waist')}>
                                     <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
                                 </span>
-                                <span className="flex items-center gap-1">
+                                <span className={`flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity ${hiddenMetrics?.includes('chest') ? 'opacity-30' : 'opacity-100'}`} onClick={() => onToggleMetric?.('chest')}>
                                     <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
                                 </span>
                             </>
@@ -253,10 +262,10 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                         </div>
                         Vikt
                     </span>
-                    <span className="flex items-center gap-1">
+                    <span className={`flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity ${hiddenMetrics?.includes('waist') ? 'opacity-30' : 'opacity-100'}`} onClick={() => onToggleMetric?.('waist')}>
                         <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
                     </span>
-                    <span className="flex items-center gap-1">
+                    <span className={`flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity ${hiddenMetrics?.includes('chest') ? 'opacity-30' : 'opacity-100'}`} onClick={() => onToggleMetric?.('chest')}>
                         <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
                     </span>
                 </div>
@@ -329,18 +338,16 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                                             <div className="text-lg font-bold text-white">
                                                 {typeof data.weight === 'number' ? data.weight.toFixed(1) : '-'} kg
                                             </div>
-                                            {data.waist && (
-                                                <div className="text-sm font-bold text-purple-400">
-                                                    {data.waist} cm <span className="text-xs text-slate-500">(midja)</span>
-                                                </div>
-                                            )}
-                                            {
-                                                data.chest && (
-                                                    <div className="text-sm font-bold text-indigo-400">
-                                                        {data.chest} cm <span className="text-xs text-slate-500">(bröst)</span>
-                                                    </div>
-                                                )
-                                            }
+                                             {!hiddenMetrics?.includes('waist') && data.waist && (
+                                                 <div className="text-sm font-bold text-purple-400">
+                                                     {data.waist} cm <span className="text-xs text-slate-500">(midja)</span>
+                                                 </div>
+                                             )}
+                                             {!hiddenMetrics?.includes('chest') && data.chest && (
+                                                 <div className="text-sm font-bold text-indigo-400">
+                                                     {data.chest} cm <span className="text-xs text-slate-500">(bröst)</span>
+                                                 </div>
+                                             )}
                                             <div className="text-[10px] text-slate-400 mt-1">
                                                 {data.date}
                                             </div>
@@ -397,28 +404,32 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                         />
 
                         {/* Measurement Lines (Right Axis) - Always render, they'll just be empty if no data */}
-                        <Line
-                            yAxisId="cm"
-                            type="linear"
-                            dataKey="waist"
-                            stroke="#a855f7"
-                            strokeWidth={3}
-                            dot={{ r: 4, fill: '#a855f7', strokeWidth: 0 }}
-                            activeDot={{ r: 6, fill: '#a855f7' }}
-                            isAnimationActive={true}
-                            connectNulls={true}
-                        />
-                        <Line
-                            yAxisId="cm"
-                            type="linear"
-                            dataKey="chest"
-                            stroke="#818cf8"
-                            strokeWidth={3}
-                            dot={{ r: 4, fill: '#818cf8', strokeWidth: 0 }}
-                            activeDot={{ r: 6, fill: '#818cf8' }}
-                            isAnimationActive={true}
-                            connectNulls={true}
-                        />
+                        {!hiddenMetrics?.includes('waist') && (
+                            <Line
+                                yAxisId="cm"
+                                type="linear"
+                                dataKey="waist"
+                                stroke="#a855f7"
+                                strokeWidth={3}
+                                dot={{ r: 4, fill: '#a855f7', strokeWidth: 0 }}
+                                activeDot={{ r: 6, fill: '#a855f7' }}
+                                isAnimationActive={true}
+                                connectNulls={true}
+                            />
+                        )}
+                        {!hiddenMetrics?.includes('chest') && (
+                            <Line
+                                yAxisId="cm"
+                                type="linear"
+                                dataKey="chest"
+                                stroke="#818cf8"
+                                strokeWidth={3}
+                                dot={{ r: 4, fill: '#818cf8', strokeWidth: 0 }}
+                                activeDot={{ r: 6, fill: '#818cf8' }}
+                                isAnimationActive={true}
+                                connectNulls={true}
+                            />
+                        )}
 
                         {/* Invisible dot layer for click interactions everywhere */}
                         <Line

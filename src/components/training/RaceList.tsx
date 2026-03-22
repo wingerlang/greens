@@ -673,6 +673,7 @@ export function RaceList({
                                         const isTrail = isTrailRace(race.title);
                                         const isUltra = isUltraRace(race.title, race.estimatedDistance);
                                         const distStyle = getDistanceStyle(race.estimatedDistance);
+                                        const isVirtual = race.raceDetails?.isVirtual;
 
                                         return (
                                             <tr

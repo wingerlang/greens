@@ -38,7 +38,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             || "unknown";
 
         // Skip rate limiting for localhost/internal requests (e.g., load balancer simulator)
-        const isInternal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost";
+        const isInternal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost" || clientIp === "unknown";
 
         // Skip rate limiting for Guardian Simulator
         const userAgent = req.headers.get("user-agent") || "";

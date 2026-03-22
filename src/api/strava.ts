@@ -317,7 +317,7 @@ type ExerciseIntensity = 'low' | 'moderate' | 'high';
 /**
  * Map Strava activity type to app exercise type
  */
-export function mapStravaType(stravaType: string): ExerciseType {
+export function mapStravaType(stravaType: string, name?: string): ExerciseType {
     const mapping: Record<string, ExerciseType> = {
         'Run': 'running',
         'TrailRun': 'running',
@@ -339,7 +339,18 @@ export function mapStravaType(stravaType: string): ExerciseType {
         'Bouldering': 'climbing',
         'Soccer': 'football',
     };
-    return mapping[stravaType] || 'other';
+
+    let type = mapping[stravaType] || 'other';
+
+    // Retroactive override based on title if direct mapping resolves to strength/other
+    if (name && (type === 'strength' || type === 'other')) {
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes('cycl') || lowerName.includes('cyk') || lowerName.includes('bike') || lowerName.includes('ride')) return 'cycling';
+        if (lowerName.includes('run') || lowerName.includes('löp')) return 'running';
+        if (lowerName.includes('walk') || lowerName.includes('gång')) return 'walking';
+    }
+
+    return type;
 }
 
 /**
@@ -398,7 +409,7 @@ export function mapStravaSubType(type: string, workoutType?: number): any {
 export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings, latestWeight?: number): { calories: number; breakdown: string } {
     const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
     const hr = activity.average_heartrate;
-    const type = mapStravaType(activity.type);
+    const type = mapStravaType(activity.type, activity.name);
 
     // Sanity limits per activity type (kcal/min) - based on research and Strava comparisons
     const KCAL_LIMITS: Record<string, { min: number; max: number }> = {
@@ -503,7 +514,7 @@ export function mapStravaActivityToExercise(activity: StravaActivity, userSettin
         externalId: `strava_${activity.id}`,
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
-        type: mapStravaType(activity.type),
+        type: mapStravaType(activity.type, activity.name),
         durationMinutes: (userSettings?.stravaTimePreference === 'elapsed' ? activity.elapsed_time : (activity.moving_time || activity.elapsed_time)) / 60,
         intensity: estimateIntensity(activity),
         caloriesBurned: calorieData.calories,
@@ -573,7 +584,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         kudosCount: activity.kudos_count,
         achievementCount: activity.achievement_count,
 
-        activityType: mapStravaType(activity.type),
+        activityType: mapStravaType(activity.type, activity.name),
         startTimeLocal: activity.start_date_local, // Full ISO for time-of-day analysis
         notes: activity.name,
         subType: mapStravaSubType(activity.type, activity.workout_type),

@@ -1,8 +1,9 @@
-﻿import React from 'react';
+import React from 'react';
 import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts';
 
 interface IntervalSplitsCardProps {
     segmented: SegmentedSplits;
+    highlightRange?: { start: number; end: number };
 }
 
 function formatPaceSec(seconds: number): string {
@@ -57,23 +58,47 @@ function SplitBar({ pace, fastestPace, slowestPace, role }: { pace: number; fast
     );
 }
 
-function SplitRows({ splits, fastestPace, slowestPace }: { splits: ClassifiedSplit[]; fastestPace: number; slowestPace: number }) {
+function SplitRows({ splits, fastestPace, slowestPace, highlightRange, fastestIntervalPace }: { splits: ClassifiedSplit[]; fastestPace: number; slowestPace: number; highlightRange?: { start: number; end: number }; fastestIntervalPace?: number }) {
     return (
         <div className="space-y-1.5">
             {splits.map((split, i) => {
                 const pace = split.movingTime / (Math.max(split.distance, 1) / 1000);
+                const isHighlighted = highlightRange && split.split >= highlightRange.start && split.split <= highlightRange.end;
+                const isFastest = fastestIntervalPace && split.role === 'interval' && Math.abs(pace - fastestIntervalPace) < 0.5; // Small tolerance for float match
+                const roundedMeters = Math.round(split.distance / 10) * 10;
+                const isUnderKm = roundedMeters < 1000;
+
                 return (
-                    <div key={`${split.split}-${i}`} className="flex items-center gap-3 py-1 hover:bg-white/5 transition-all rounded px-1 -mx-1 group">
-                        <span className="text-[10px] font-mono text-slate-500 w-12">Lap {split.split}</span>
-                        <SplitBar pace={pace} fastestPace={fastestPace} slowestPace={slowestPace} role={split.role} />
-                        <span className="text-xs font-black text-white ml-auto">{formatPaceSec(pace)}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${roleClasses(split.role)}`}>
-                            {roleSwedish(split.role)}
-                        </span>
+                    <div key={`${split.split}-${i}`} className={`flex items-center gap-1.5 py-0.5 hover:bg-white/5 transition-all rounded px-1 -mx-1 group ${isHighlighted ? 'bg-amber-500/10 border-l-2 border-amber-400' : ''}`}>
+                        <div className="flex items-center gap-1.5 shrink-0 min-w-[95px]">
+                            <span className="text-[10px] font-mono text-slate-500 w-4">#{split.split}</span>
+                            {isUnderKm ? (
+                                <span className={`text-xs font-black ${split.role === 'interval' ? 'text-amber-300' : 'text-slate-300'}`}>{roundedMeters}<span className="text-[10px] opacity-70">m</span></span>
+                            ) : (
+                                <span className={`text-xs font-black ${split.role === 'interval' ? 'text-amber-300' : 'text-slate-300'}`}>{(split.distance / 1000).toFixed(2)}<span className="text-[10px] opacity-70">k</span></span>
+                            )}
+                            <span className="text-[10px] text-slate-400 font-mono">{formatDuration(split.movingTime || 0)}</span>
+                        </div>
+
+                        <div className="flex-1 max-w-[100px] ml-1">
+                            <SplitBar pace={pace} fastestPace={fastestPace} slowestPace={slowestPace} role={split.role} />
+                        </div>
+
+                        {isFastest && <span className="text-[10px] text-amber-300 font-black ml-1">🏆</span>}
+
+                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                            <span className="text-xs font-black text-white font-mono leading-none">{formatPaceSec(pace)}</span>
+                            <span className={`text-[7.5px] px-1 py-0.2 border border-white/5 ${roleClasses(split.role)} scale-95 origin-right font-black uppercase tracking-tighter`}>
+                                {roleSwedish(split.role).slice(0, 5)}
+                            </span>
+                        </div>
+
                         {split.averageHeartrate ? (
-                            <span className="text-[10px] text-rose-400/80 font-mono w-8 text-right">{Math.round(split.averageHeartrate)}</span>
+                            <div className="flex items-center gap-0.5 w-7 justify-end shrink-0">
+                                <span className="text-[11px] font-black text-rose-400 font-mono leading-none">{Math.round(split.averageHeartrate)}</span>
+                            </div>
                         ) : (
-                            <span className="text-[10px] text-slate-600 font-mono w-8 text-right">-</span>
+                            <span className="text-[10px] text-slate-600 font-mono w-7 text-right shrink-0">-</span>
                         )}
                     </div>
                 );
@@ -89,6 +114,7 @@ function SectionCard({
     splits,
     fastestPace,
     slowestPace,
+    highlightRange,
 }: {
     title: string;
     subtitle?: string;
@@ -96,6 +122,7 @@ function SectionCard({
     splits: ClassifiedSplit[];
     fastestPace: number;
     slowestPace: number;
+    highlightRange?: { start: number; end: number };
 }) {
     if (splits.length === 0) return null;
 
@@ -109,7 +136,7 @@ function SectionCard({
                 {subtitle && <div className="text-[10px] text-slate-200/70 mt-0.5">{subtitle}</div>}
             </div>
             <div className="px-4 py-2.5">
-                <SplitRows splits={splits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                <SplitRows splits={splits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} />
             </div>
         </div>
     );
@@ -117,36 +144,51 @@ function SectionCard({
 
 // Beräknar "Snabbaste X km" med ett rullande fönster
 function getBestEfforts(splits: ClassifiedSplit[]) {
-    const targets = [1, 2, 3, 5, 10, 21]; // Antal laps/km att leta efter
+    const targets = [1, 2, 3, 5, 10, 21]; // KM-mål
     const efforts: { distance: number; time: number; pace: number }[] = [];
 
     for (const n of targets) {
-        if (splits.length < n) continue;
-
+        const targetM = n * 1000;
         let bestTime = Infinity;
         let bestPace = Infinity;
 
-        for (let i = 0; i <= splits.length - n; i++) {
-            let timeAcc = 0;
+        // Rullande fönster baserat på faktisk distans
+        for (let i = 0; i < splits.length; i++) {
             let distAcc = 0;
-            for (let j = 0; j < n; j++) {
-                timeAcc += splits[i + j].movingTime;
-                distAcc += splits[i + j].distance;
+            let timeAcc = 0;
+            let j = i;
+
+            while (j < splits.length && distAcc < targetM) {
+                distAcc += splits[j].distance;
+                timeAcc += splits[j].movingTime;
+                j++;
             }
 
-            const pace = timeAcc / (Math.max(distAcc, 1) / 1000);
-            if (timeAcc < bestTime) {
-                bestTime = timeAcc;
-                bestPace = pace;
+            if (distAcc >= targetM) {
+                const overshootM = distAcc - targetM;
+                const lastSplit = splits[j - 1];
+
+                // Uppskatta tid för exakt targetM genom linjär interpolation av sista spliten
+                const lastSplitPace = lastSplit.movingTime / Math.max(lastSplit.distance, 1);
+                const correctedTime = timeAcc - (overshootM * lastSplitPace);
+                const pace = correctedTime / (targetM / 1000);
+
+                // Tillåt max 100m överskjutning per km (för att inte extrapolera för brett över viloperioder etc)
+                if (correctedTime < bestTime) {
+                    bestTime = correctedTime;
+                    bestPace = pace;
+                }
             }
         }
 
-        efforts.push({ distance: n, time: bestTime, pace: bestPace });
+        if (bestTime !== Infinity) {
+            efforts.push({ distance: n, time: bestTime, pace: bestPace });
+        }
     }
     return efforts;
 }
 
-export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
+export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplitsCardProps) {
     const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
     const isSustained = type === 'sustained';
 
@@ -241,6 +283,7 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 splits={warmupSplits}
                 fastestPace={fastestPace}
                 slowestPace={slowestPace}
+                highlightRange={highlightRange}
             />
 
             <div className="space-y-3">
@@ -255,12 +298,32 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                                 {group.avgHR ? ` • ${Math.round(group.avgHR)} bpm` : ''}
                             </div>
                         </div>
-                        <div className="px-4 py-2.5 space-y-2">
-                            <SplitRows splits={group.intervalSplits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                        <div className="px-4 py-2.5 flex flex-col md:flex-row gap-4 md:items-start">
+                            <div className="flex-1">
+                                <SplitRows splits={group.intervalSplits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} fastestIntervalPace={summary.fastestIntervalPace} />
+                            </div>
                             {group.recoverySplits.length > 0 && (
-                                <div className="pt-1 border-t border-white/5">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Vila/Joggvila efter block</div>
-                                    <SplitRows splits={group.recoverySplits} fastestPace={fastestPace} slowestPace={slowestPace} />
+                                <div className="border-t md:border-t-0 md:border-l border-white/5 pt-2 md:pt-0 md:pl-3 mt-2 md:mt-0 flex items-center gap-2 max-w-sm">
+                                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider shrink-0">VILA</div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {group.recoverySplits.map(s => {
+                                            const pace = s.movingTime / (Math.max(s.distance, 1) / 1000);
+                                            const roundedMeters = Math.round(s.distance / 10) * 10;
+                                            const isUnderKm = roundedMeters < 1000;
+                                            return (
+                                                <div key={s.split} className="flex items-center gap-1 py-0.5 text-[10px] text-slate-300 px-1.5 bg-white/10 hover:bg-white/20 transition-all rounded border border-white/5">
+                                                    <span className="text-slate-500 font-mono">#{s.split}</span>
+                                                    {isUnderKm ? (
+                                                        <span className="font-bold text-white">{roundedMeters}m</span>
+                                                    ) : (
+                                                        <span className="font-bold text-white">{(s.distance / 1000).toFixed(2)}k</span>
+                                                    )}
+                                                    <span className="text-amber-400 font-mono font-bold">{formatPaceSec(pace)}</span>
+                                                    {s.averageHeartrate && <span className="text-rose-400 font-black ml-0.5">{Math.round(s.averageHeartrate)}</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -275,6 +338,7 @@ export function IntervalSplitsCard({ segmented }: IntervalSplitsCardProps) {
                 splits={cooldownSplits}
                 fastestPace={fastestPace}
                 slowestPace={slowestPace}
+                highlightRange={highlightRange}
             />
 
             <p className="text-[10px] text-slate-600 italic text-center">

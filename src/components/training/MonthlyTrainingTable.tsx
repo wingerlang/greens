@@ -17,9 +17,9 @@ interface MonthBucket {
     period: string;
     year: number;
     monthIdx: number;
-    selected: { distance: number; duration: number; count: number; tonnage: number; };
+    selected: { distance: number; duration: number; count: number; tonnage: number; hrSum: number; hrCount: number; };
     categories: {
-        cardio: { distance: number; duration: number; count: number; };
+        cardio: { distance: number; duration: number; count: number; hrSum: number; hrCount: number; };
         strength: { tonnage: number; duration: number; count: number; };
         other: { duration: number; count: number; breakdown: Record<string, { duration: number, count: number }>; };
     };
@@ -125,9 +125,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 year: y,
                 monthIdx: m - 1,
                 hasRace: false,
-                selected: { distance: 0, duration: 0, count: 0, tonnage: 0 },
+                selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0 },
                 categories: {
-                    cardio: { distance: 0, duration: 0, count: 0 },
+                    cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0 },
                     strength: { tonnage: 0, duration: 0, count: 0 },
                     other: { duration: 0, count: 0, breakdown: {} }
                 },
@@ -193,6 +193,18 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             else if (activeTab === 'swimming') matchesTab = type.includes('swim') || type.includes('sim');
             else if (activeTab === 'other') matchesTab = !isCardio && !isStrength;
 
+            const hr = (e as any).averageHeartrate || (e as any).avgHeartRate;
+            if (hr) {
+                if (isCardio) {
+                    bucket.categories.cardio.hrSum += hr;
+                    bucket.categories.cardio.hrCount++;
+                }
+                if (matchesTab) {
+                    bucket.selected.hrSum += hr;
+                    bucket.selected.hrCount++;
+                }
+            }
+
             if (matchesTab) {
                 bucket.selected.count++;
                 bucket.selected.duration += e.durationMinutes;
@@ -240,12 +252,16 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 duration: acc.selected.duration + curr.selected.duration,
                 count: acc.selected.count + curr.selected.count,
                 tonnage: acc.selected.tonnage + curr.selected.tonnage,
+                hrSum: acc.selected.hrSum + curr.selected.hrSum,
+                hrCount: acc.selected.hrCount + curr.selected.hrCount,
             },
             categories: {
                 cardio: {
                     distance: acc.categories.cardio.distance + curr.categories.cardio.distance,
                     duration: acc.categories.cardio.duration + curr.categories.cardio.duration,
                     count: acc.categories.cardio.count + curr.categories.cardio.count,
+                    hrSum: (acc.categories.cardio.hrSum || 0) + curr.categories.cardio.hrSum,
+                    hrCount: (acc.categories.cardio.hrCount || 0) + curr.categories.cardio.hrCount,
                 },
                 strength: {
                     tonnage: acc.categories.strength.tonnage + curr.categories.strength.tonnage,
@@ -271,9 +287,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 tonnage: acc.total.tonnage + curr.total.tonnage,
             }
         }), {
-            selected: { distance: 0, duration: 0, count: 0, tonnage: 0 },
+            selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0 },
             categories: {
-                cardio: { distance: 0, duration: 0, count: 0 },
+                cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0 },
                 strength: { tonnage: 0, duration: 0, count: 0 },
                 other: { duration: 0, count: 0, breakdown: {} as Record<string, { duration: number, count: number }> }
             },
@@ -370,12 +386,12 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 </div>
                 <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
                     {/* Specific Stats Columns */}
-                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                         {activeTab === 'all' ? (
                             <>
                                 <div className="p-2 text-right border-r border-white/5">
                                     <div className="font-bold mb-0.5 text-emerald-400 flex justify-end items-center gap-1"><span>🏃</span> Kondition</div>
-                                    <div className="text-emerald-500/70">Distans <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> Pass</div>
+                                    <div className="text-emerald-500/70 text-[9px]">Distans <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> Tempo <span className="text-slate-600">•</span> HR <span className="text-slate-600">•</span> Pass</div>
                                 </div>
                                 <div className="p-2 text-right border-r border-white/5">
                                     <div className="font-bold mb-0.5 text-indigo-400 flex justify-end items-center gap-1"><span>💪</span> Styrka</div>
@@ -402,6 +418,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                 <div className="p-2 text-right">Distans</div>
                                 <div className="p-2 text-right">Tid</div>
                                 <div className="p-2 text-right">Tempo</div>
+                                <div className="p-2 text-right">HR</div>
                                 <div className="p-2 text-right">Pass</div>
                                 <div className="p-2 text-right">Km/Pass</div>
                             </>
@@ -487,28 +504,32 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                     </div>
                                     <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5 pointer-events-none">
                                         {/* Specific Data */}
-                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                                             {activeTab === 'all' ? (
                                                 <>
-                                                    <div className="p-3 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                    <div className="p-3 text-right font-mono text-[10px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center justify-end gap-1">
                                                         <span className="text-emerald-400 font-bold">{row.categories.cardio.distance > 0 ? row.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'} km</span>
-                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-600">•</span>
                                                         <span className="text-slate-300">{row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}</span>
-                                                        <span className="text-slate-600 mx-1.5">•</span>
-                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} st</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className="text-emerald-400/80">{fmtPace(row.categories.cardio.distance, row.categories.cardio.duration).replace(' min/km', '')}</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className="text-red-400">{row.categories.cardio.hrCount > 0 ? Math.round(row.categories.cardio.hrSum / row.categories.cardio.hrCount) : '-'} bpm</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} p</span>
                                                     </div>
                                                     <div className="p-3 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
                                                         <span className="text-indigo-400 font-bold">{row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
                                                         <span className="text-slate-600 mx-1.5">•</span>
                                                         <span className="text-slate-300">{row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}</span>
                                                         <span className="text-slate-600 mx-1.5">•</span>
-                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} st</span>
+                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} pass</span>
                                                     </div>
                                                     <div className="p-3 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other">
                                                         {row.categories.other.duration > 0 ? (
                                                             <>
                                                                 <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
-                                                                    {fmtDur(row.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{row.categories.other.count} st</span>
+                                                                    {fmtDur(row.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{row.categories.other.count} pass</span>
                                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other:text-sky-400 transition-colors" />
                                                                 </span>
 
@@ -520,7 +541,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                                         </div>
                                                                         <div className="flex flex-col">
                                                                             <span className="text-[10px] font-black uppercase tracking-widest text-white">Övrig Träning</span>
-                                                                            <span className="text-[9px] text-slate-500 font-bold">{months[i]} {year}</span>
+                                                                            <span className="text-[9px] text-slate-500 font-bold">{months[row.monthIdx]} {row.year}</span>
                                                                         </div>
                                                                     </div>
 
@@ -604,7 +625,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <>
                                                     <div className="p-3 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
                                                     <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
                                                     <div className="p-3 text-right text-slate-400 font-mono">
                                                         {row.selected.count > 0 ? ((row.selected.tonnage / 1000) / row.selected.count).toFixed(1) + ' t' : '-'}
                                                     </div>
@@ -613,8 +634,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <>
                                                     <div className="p-3 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
                                                     <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-3 text-right text-slate-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration)}</div>
-                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right text-emerald-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration).replace(' min/km', '')}</div>
+                                                    <div className="p-3 text-right text-red-400 font-mono">{row.selected.hrCount > 0 ? Math.round(row.selected.hrSum / row.selected.hrCount) + ' bpm' : '-'}</div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
                                                     <div className="p-3 text-right text-slate-400 font-mono">
                                                         {row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}
                                                     </div>
@@ -667,7 +689,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 <div className="grid grid-cols-[150px_1fr] text-sm font-bold bg-white/5 border-t border-white/10">
                     <div className="p-3 text-white">Totalt:</div>
                     <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
-                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                             {activeTab === 'all' ? (
                                 <>
                                     <div className="p-3 text-right font-mono text-xs border-r border-white/5">
@@ -675,20 +697,20 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-300">{totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} st</span>
+                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} pass</span>
                                     </div>
                                     <div className="p-3 text-right font-mono text-xs border-r border-white/5">
                                         <span className="text-indigo-400">{totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-300">{totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} st</span>
+                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} pass</span>
                                     </div>
                                     <div className="p-3 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other-total">
                                         {totals.categories.other.duration > 0 ? (
                                             <>
                                                 <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
-                                                    {fmtDur(totals.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{totals.categories.other.count} st</span>
+                                                    {fmtDur(totals.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{totals.categories.other.count} pass</span>
                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other-total:text-sky-400 transition-colors" />
                                                 </span>
 
@@ -784,7 +806,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                 <>
                                     <div className="p-3 text-right text-indigo-400">{fmtTon(totals.selected.tonnage)}</div>
                                     <div className="p-3 text-right text-white">{fmtDur(totals.selected.duration)}</div>
-                                    <div className="p-3 text-right text-white">{totals.selected.count} st</div>
+                                    <div className="p-3 text-right text-white">{totals.selected.count} pass</div>
                                     <div className="p-3 text-right text-slate-400">
                                         {totals.selected.count > 0 ? ((totals.selected.tonnage / 1000) / totals.selected.count).toFixed(1) + ' t' : '-'}
                                     </div>
@@ -793,8 +815,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                 <>
                                     <div className="p-3 text-right text-emerald-400">{fmtDist(totals.selected.distance)}</div>
                                     <div className="p-3 text-right text-white">{fmtDur(totals.selected.duration)}</div>
-                                    <div className="p-3 text-right text-slate-400">{fmtPace(totals.selected.distance, totals.selected.duration)}</div>
-                                    <div className="p-3 text-right text-white">{totals.selected.count} st</div>
+                                    <div className="p-3 text-right text-slate-400">{fmtPace(totals.selected.distance, totals.selected.duration).replace(' min/km', '')}</div>
+                                    <div className="p-3 text-right text-red-400 font-mono">{totals.selected.hrCount > 0 ? Math.round(totals.selected.hrSum / totals.selected.hrCount) + ' bpm' : '-'}</div>
+                                    <div className="p-3 text-right text-white">{totals.selected.count} pass</div>
                                     <div className="p-3 text-right text-slate-400">
                                         {totals.selected.count > 0 ? (totals.selected.distance / totals.selected.count).toFixed(1) + ' km' : '-'}
                                     </div>
