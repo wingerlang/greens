@@ -1103,6 +1103,45 @@ export function ActivityDetailModal({
         }
     }, [isTrulyMerged, originalActivities, universalActivity?.plan?.title, activity.title, activity.id, token]);
 
+    const handleCopyJson = () => {
+        const payload: any = {
+            titel: displayTitle,
+            datum: activity.date,
+            typ: activity.type,
+            tid: activity.durationMinutes ? `${Math.floor(activity.durationMinutes)} min ${Math.round((activity.durationMinutes % 1) * 60)} sek` : '0 min',
+            distans: activity.distance ? `${activity.distance.toFixed(2)} km` : undefined,
+        };
+
+        if (perf) {
+            if (perf.avgHeartRate) payload.pulsSnitt = `${Math.round(perf.avgHeartRate)} bpm`;
+            if (perf.maxHeartrate) payload.pulsMax = `${Math.round(perf.maxHeartrate)} bpm`;
+            
+            if (activity.distance && perf.durationMinutes) {
+                const speedKmh = (activity.distance / (perf.durationMinutes / 60));
+                payload.hastighetSnitt = `${speedKmh.toFixed(1)} km/h`;
+                // Average pace in seconds per km
+                const paceSec = (perf.durationMinutes * 60) / activity.distance;
+                payload.tempoSnitt = `${Math.floor(paceSec / 60)}:${Math.round(paceSec % 60).toString().padStart(2, '0')} /km`;
+            }
+        }
+
+        if (splits && splits.length > 0) {
+            payload.splittar = splits.map((s: any, idx: number) => {
+                const distMeters = s.distance || 1000;
+                const paceSec = s.movingTime / (distMeters / 1000);
+                return {
+                    km: s.split || idx + 1,
+                    tid: formatSecondsToTime(s.movingTime),
+                    puls: s.averageHeartrate || s.avgHeartRate ? Math.round(s.averageHeartrate || s.avgHeartRate) : undefined,
+                    tempo: `${Math.floor(paceSec / 60)}:${Math.round(paceSec % 60).toString().padStart(2, '0')} /km`
+                };
+            });
+        }
+
+        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+        alert('Kopierat till JSON! 📋');
+    };
+
     // ESC to close
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
@@ -1621,6 +1660,13 @@ export function ActivityDetailModal({
                                     </h2>
                                     {!isMerged && (
                                         <div className="flex gap-2">
+                                            <button
+                                                onClick={handleCopyJson}
+                                                className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                                title="Kopiera till JSON"
+                                            >
+                                                📋
+                                            </button>
                                             <button
                                                 onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
                                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm shrink-0 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white'}`}
