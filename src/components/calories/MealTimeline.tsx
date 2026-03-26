@@ -460,7 +460,7 @@ function PortionControls({
         if (isSubmitting.current) return;
         isSubmitting.current = true;
 
-        const val = parseFloat(inputValue);
+        const val = parseFloat(inputValue.replace(',', '.'));
         if (!isNaN(val) && val > 0) {
             onUpdate(val);
         }

@@ -502,9 +502,17 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
             let totalDurationMinutes = w.duration || w.durationMinutes;
             if (!totalDurationMinutes || totalDurationMinutes === 0) {
-                const totalTimeSeconds = w.exercises.reduce((sum: number, ex: any) =>
-                    sum + ex.sets.reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
-                totalDurationMinutes = totalTimeSeconds > 0 ? Math.round(totalTimeSeconds / 60) : 0;
+                // Strength sets typically lack timeSeconds, so estimating derived from sets (3min/set incl rest) 
+                // prevents pure cardio sets from incorrectly dominating the duration ratio.
+                const strengthSetsCount = w.exercises.reduce((sum: number, ex: any) => {
+                    if (isDistanceBasedExercise(ex.exerciseName)) return sum;
+                    return sum + ex.sets.length;
+                }, 0);
+                
+                const estimatedStrengthMinutes = strengthSetsCount * 3;
+                const cardioMinutesFromSets = cardioTimeSeconds > 0 ? Math.round(cardioTimeSeconds / 60) : 0;
+                
+                totalDurationMinutes = estimatedStrengthMinutes + cardioMinutesFromSets;
             }
 
             const cardioDurationMinutes = cardioTimeSeconds / 60;
@@ -514,7 +522,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 workoutName.includes('run') || workoutName.includes('löp') ||
                 workoutName.includes('walk') || workoutName.includes('gång');
 
-            const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (cardioDurationMinutes / totalDurationMinutes) > 0.25;
+            const cardioExerciseRatio = w.exercises.length > 0 ? cardioExercises.length / w.exercises.length : 0;
+            const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (
+                (cardioDurationMinutes / totalDurationMinutes) >= 0.20
+            );
 
             // 3. Helper to determine the best EXERCISE_TYPE
             const getPrimaryCardioType = (exercises: any[]): ExerciseType => {
@@ -629,7 +640,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             if (sType === 'cardio' || sType.includes('cardio')) return true;
 
             if (slType === 'strength') {
-                return sType.includes('weight') || sType.includes('styrka') || sType.includes('strength') || sType === 'other';
+                return sType.includes('weight') || sType.includes('styrka') || sType.includes('strength') || sType === 'other' || sType.includes('workout');
             }
             if (slType === 'cycling') {
                 return sType.includes('ride') || sType.includes('bike') || sType.includes('cycl') || sType.includes('cykel') || sType === 'other';
@@ -641,12 +652,12 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 return sType.includes('walk') || sType.includes('gång') || sType === 'other';
             }
             if (slType === 'cardio') {
-                return sType.includes('strength') || sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other';
+                return sType.includes('strength') || sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other' || sType.includes('workout');
             }
             if (slType === 'hybrid') {
                 return true; // Hybrid could be anything
             }
-            return sType === 'other' || sType === slType; // Fallback
+            return sType === 'other' || sType === slType || sType === 'workout'; // Fallback
         };
 
         const mergedStrengthEntries: any[] = [];
@@ -684,9 +695,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 // 1. By approximate duration (within 10 mins) - moving time
                 match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
 
-                // 2. By approximate duration (within 20 mins) - a bit looser
+                // 2. By approximate duration (within 45 mins) - a bit looser
                 if (!match) {
-                    match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 20);
+                    match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 45);
                 }
 
                 // 3. Also compare against elapsed time (Strava rest periods can inflate the gap)
@@ -696,7 +707,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         const elapsedSec = (c as any)._mergeData?.universalActivity?.performance?.elapsedTimeSeconds;
                         if (!elapsedSec) return false;
                         const elapsedMin = elapsedSec / 60;
-                        return Math.abs(elapsedMin - se.durationMinutes) <= 10;
+                        return Math.abs(elapsedMin - se.durationMinutes) <= 20; // 20m tolerance on elapsed
                     });
                 }
 
@@ -717,10 +728,13 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     source: 'merged' as const,
                     caloriesBurned: match.caloriesBurned || se.caloriesBurned,
                     durationMinutes: match.durationMinutes || se.durationMinutes,
+                    distance: match.distance || se.distance,
+                    elevationGain: match.elevationGain,
+                    externalId: match.externalId || (se as any).externalId,
                     totalSets: se.totalSets,
                     totalReps: se.totalReps,
-                    avgHeartRate: perf?.avgHeartRate,
-                    maxHeartRate: perf?.maxHeartRate,
+                    avgHeartRate: match.heartRateAvg || perf?.avgHeartRate || (se as any).heartRateAvg || (se as any).avgHeartRate,
+                    maxHeartRate: match.heartRateMax || perf?.maxHeartRate || (se as any).heartRateMax || (se as any).maxHeartRate,
                     subType: match.subType,
                     _mergeData: {
                         strava: match,
@@ -731,6 +745,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     hyroxStats: se.hyroxStats || (sw as any)?.hyroxStats || (universalMatch?.performance as any)?.hyroxStats
                 });
             } else {
+                // DEBUG: log unmerged strength entries for Sep 2025
+                if (se.date.startsWith('2025-09')) {
+                    console.log(`🔴 UNMERGED STRENGTH: ${se.date.substring(0,10)} | ${se.title} | type:${se.type} | dur:${se.durationMinutes}m | candidates:${candidates.length} | compatible:${compatibleCandidates.length}`);
+                    candidates.forEach(c => console.log(`   candidate: ${c.title || c.type} | type:${c.type} | dur:${c.durationMinutes}m | merged:${mergedStravaIds.has(c.id)} | compatible:${isTypeCompatible(se.type, c.type || 'other')}`));
+                }
                 mergedStrengthEntries.push(se);
             }
         });
@@ -759,28 +778,64 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
         });
 
-        initialResult = initialResult.filter(e => !allMergedChildIds.has(e.id) && !(e.externalId && allMergedChildIds.has(e.externalId)));
+        initialResult = initialResult.filter(e => {
+            if (allMergedChildIds.has(e.id)) return false;
+            if (e.externalId) {
+                const cleanExtId = e.externalId.replace('strava_', '').replace('strava-', '');
+                if (allMergedChildIds.has(cleanExtId) || allMergedChildIds.has(`strava-${cleanExtId}`) || allMergedChildIds.has(`strava_${cleanExtId}`)) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
-        // Final De-duplication: Ensure only one entry per unique ID (Defense in Depth)
+        // Final De-duplication: Ensure only one entry per unique ID or External ID (Defense in Depth)
         const finalMap = new Map<string, typeof initialResult[0]>();
+        
         initialResult.forEach(item => {
-            const existing = finalMap.get(item.id);
+            // Check both local id and (if present) externalId
+            const extId = item.externalId ? `ext_${item.externalId.replace('strava_', '')}` : null;
+            const existingById = finalMap.get(item.id);
+            const existingByExt = extId ? finalMap.get(extId) : undefined;
+            
+            const existing = existingById || existingByExt;
+
             if (!existing) {
                 finalMap.set(item.id, item);
+                if (extId) finalMap.set(extId, item);
             } else {
-                // Priority: merged > strava/strength > manual
-                const getPriority = (source: string) => {
-                    if (source === 'merged') return 3;
-                    if (source === 'strava' || source === 'strength') return 2;
-                    return 1;
+                // Priority: merged > server strava > manual legacy strava > strength > manual
+                const getPriority = (i: typeof item) => {
+                    if (i.source === 'merged') return 4;
+                    if (i.source === 'strava') return 3;
+                    if (i.externalId && i.source === 'manual') return 2; // Legacy local
+                    if (i.source === 'strength') return 1;
+                    return 0; // standard manual
                 };
-                if (getPriority(item.source) > getPriority(existing.source)) {
+                
+                if (getPriority(item) > getPriority(existing)) {
                     finalMap.set(item.id, item);
+                    if (extId) finalMap.set(extId, item);
+                    // Cleanup old mapping if IDs differ
+                    if (existing.id !== item.id) finalMap.delete(existing.id);
                 }
             }
         });
 
-        return Array.from(finalMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+        const uniqueValues = Array.from(new Set(Array.from(finalMap.values())));
+        const finalSorted = uniqueValues.sort((a, b) => b.date.localeCompare(a.date));
+
+        // DEBUG TRIPLICATES
+        const debugDates = ['2024-12-23', '2025-01-23', '2025-02-23', '2025-03-23', '2025-03-02', '2025-02-02'];
+        const suspicious = finalSorted.filter(a => debugDates.some(d => a.date.startsWith(d)));
+        if (suspicious.length > 0) {
+            console.log("🚀 SUSPICIOUS DATES TRIPLICATE CHECK 🚀");
+            suspicious.forEach(a => {
+                console.log(`Date: ${a.date} | Title: ${a.title} | Source: ${a.source} | Duration: ${a.durationMinutes}m | Dist: ${a.distance} | ID: ${a.id} | ExtID: ${a.externalId}`);
+            });
+        }
+
+        return finalSorted;
     }, [universalActivities, exerciseEntries, strengthSessions]);
 
     // ============================================

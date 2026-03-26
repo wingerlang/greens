@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run -A npm:vite@^6.0.0",
+    "dev": "deno run -A --v8-flags=--max-old-space-size=4096 npm:vite@^6.0.0",
     "go": "deno run -A --unstable-kv scripts/guardian/runner.ts",
     "server": "DEBUG_MODE=true deno run -A --unstable-kv --watch --env src/api/main.ts",
     "build": "deno run -A npm:vite@^6.0.0 build",

@@ -234,3 +234,41 @@ export function calculateExerciseCalories(
     const met = METS[type][intensity];
     return Math.round(met * weight * (duration / 60));
 }
+
+export function calculateHeartRateCalories(
+    heartRate: number,
+    weight: number,
+    age: number,
+    gender: 'male' | 'female' | 'other'
+): { kcalPerMin: number; formula: string } {
+    let kjPerMin = 0;
+    let formula = "";
+    
+    if (gender === 'male') {
+        kjPerMin = -55.0969 + (0.6309 * heartRate) + (0.1988 * weight) + (0.2017 * age);
+        formula = "Keytel et al. (Male): -55.0969 + (0.6309 * HR) + (0.1988 * W) + (0.2017 * A)";
+    } else {
+        kjPerMin = -20.4022 + (0.4472 * heartRate) - (0.1263 * weight) + (0.0740 * age);
+        formula = "Keytel et al. (Female): -20.4022 + (0.4472 * HR) - (0.1263 * W) + (0.0740 * A)";
+    }
+
+    return { 
+        kcalPerMin: Math.max(0, kjPerMin / 4.184), 
+        formula 
+    };
+}
+
+export function calculateStrengthCaloriesMET(
+    heartRate: number,
+    weight: number
+): { kcalPerMin: number; met: number } {
+    let met = 3.5;
+    if (heartRate > 140) met = 5.0;
+    else if (heartRate > 120) met = 4.5;
+    else if (heartRate > 100) met = 4.0;
+
+    return { 
+        kcalPerMin: (met * weight) / 60, 
+        met 
+    };
+}

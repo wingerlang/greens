@@ -113,7 +113,8 @@ async function bootstrap() {
         env: {
             "GUARDIAN_MODE": "true",
             "VITE_PORT": String(CONFIG.ports.internalFrontend),
-            "HOST": "127.0.0.1"
+            "HOST": "127.0.0.1",
+            "NODE_OPTIONS": "--max-old-space-size=4096"
         },
         autoRestart: true,
         port: CONFIG.ports.internalFrontend

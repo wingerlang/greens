@@ -112,6 +112,32 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
     const [selectedDistance, setSelectedDistance] = React.useState<'capacity5k' | 'capacity10k' | 'capacity21k' | 'capacity42k' | 'all'>('capacity10k');
     const [selectedDp, setSelectedDp] = React.useState<FitnessDatapoint | null>(null);
 
+    const maxUserHR = useMemo(() => {
+        const threeYearsAgo = new Date();
+        threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+        const threeYearsAgoStr = threeYearsAgo.toISOString().split('T')[0];
+
+        const recentRuns = allRuns.filter(r => r.date >= threeYearsAgoStr && r.heartRateMax);
+        if (recentRuns.length === 0) return { value: 190, sourceTitle: 'Standard' };
+
+        const sortedByHr = [...recentRuns].sort((a, b) => (b.heartRateMax || 0) - (a.heartRateMax || 0));
+        const bestHrRun = sortedByHr[0];
+        
+        if (!bestHrRun.heartRateMax) return { value: 190, sourceTitle: 'Standard' };
+
+        const runDate = new Date(bestHrRun.date);
+        const now = new Date();
+        const yearsPassed = (now.getTime() - runDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+        const adjustedMax = Math.round(bestHrRun.heartRateMax + 1.5 - yearsPassed);
+        return {
+            value: adjustedMax,
+            sourceDate: bestHrRun.date,
+            sourceTitle: bestHrRun.title || 'Okänt pass',
+            peakMeasured: bestHrRun.heartRateMax,
+            yearsPassed: Math.round(yearsPassed * 10) / 10
+        };
+    }, [allRuns]);
+
     React.useEffect(() => {
         if (selectedDp) {
             setTimeout(() => {
@@ -144,14 +170,36 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                 estimateSecs = calculateRiegelTime(run.durationMinutes * 60, run.distance!, 10);
             }
 
+
+
+
             if (run.distance! >= 1 && run.heartRateAvg && run.heartRateAvg > 80 && run.durationMinutes >= 15) {
                 const minPerKm = run.durationMinutes / run.distance!;
                 const speedMetersPerMin = 1000 / minPerKm;
-                const maxUserHR = run.heartRateMax || (allRuns.find(r => r.heartRateMax)?.heartRateMax) || 190;
-                const percentHRMax = run.heartRateAvg / maxUserHR;
+
+                const maxHRValue = typeof maxUserHR === 'object' && 'value' in maxUserHR ? (maxUserHR as any).value : 190;
+                const percentHRMax = run.heartRateAvg / maxHRValue;
 
                 if (percentHRMax >= 0.65) {
-                    const estMaxSpeed = speedMetersPerMin / (0.5 + (0.5 * percentHRMax));
+                    // Effort Ceiling relative to distance
+                    // 100% up to 2km, 92.8% at 10k, 88% at 21k, 84% at 42k
+                    const getEffortCeiling = (d) => {
+                        if (d <= 2) return 1.0;
+                        if (d <= 10) return 1.0 - (d - 2) * 0.009; 
+                        if (d <= 21) return 0.928 - (d - 10) * 0.004; 
+                        return 0.88 - (d - 21) * 0.002; 
+                    };
+                    const effortCeiling = getEffortCeiling(run.distance || 10);
+                    const relativeEffort = Math.min(1.0, percentHRMax / effortCeiling);
+
+                    let estMaxSpeed = speedMetersPerMin / (0.5 + (0.5 * relativeEffort));
+                    
+                    // Interval Boost: 3.5% lift to offset recovery jogs drag
+                    const isInterval = run.subType === 'interval' || run.title?.toLowerCase().includes('intervall') || run.title?.toLowerCase().includes('x');
+                    if (isInterval) {
+                        estMaxSpeed *= 1.035;
+                    }
+
                     extrapolated10kSecs = (10000 / estMaxSpeed) * 60;
                     isExtrapolatedEligible = true;
                 }
@@ -684,7 +732,20 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                                     </div>
                                 )}
                             </div>
-                        </div>
+
+                        {typeof maxUserHR === 'object' && 'sourceTitle' in maxUserHR && (
+                            <div className="bg-slate-800/30 border border-white/5 rounded-xl p-3 mt-2 space-y-1">
+                                <p className="font-black text-slate-500 uppercase flex items-center gap-1 text-[10px]">
+                                    🫀 Max-puls källa
+                                </p>
+                                <p className="text-[10px] text-slate-300 leading-tight">
+                                    Hämtad från <span className="text-white font-medium">{maxUserHR.sourceTitle}</span> ({maxUserHR.sourceDate}) där du nådde {maxUserHR.peakMeasured} bpm.
+                                </p>
+                                <p className="text-[10px] text-slate-400 leading-tight">
+                                    Justering: +1.5 bpm - {maxUserHR.yearsPassed} bpm (ålder) = <span className="text-emerald-400 font-bold">{maxUserHR.value} bpm</span>
+                                </p>
+                            </div>
+                        )}
 
                         {sidebarDp.actualDistance && sidebarDp.actualDurationMinutes && sidebarDp.percentHRMax && (
                             <div className="bg-white/5 border border-white/[0.05] rounded-xl p-3 text-xs opacity-90 space-y-2">
@@ -732,6 +793,7 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 )}
             </div>

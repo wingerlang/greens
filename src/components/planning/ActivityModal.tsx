@@ -204,8 +204,8 @@ export function ActivityModal({
 
     // Auto-calculate duration from distance and pace
     useEffect(() => {
-        // Only trigger if pace or distance was changed by user, or if it's a RUN
-        if (formType === 'RUN' && formDistance && formPace && lastChanged.current !== 'duration') {
+        // Only trigger if pace, distance or preset was changed by user, or if it's a RUN
+        if (formType === 'RUN' && formDistance && formPace && (lastChanged.current === 'pace' || lastChanged.current === 'distance' || lastChanged.current === 'preset' || lastChanged.current === null)) {
             const distKm = parseFloat(formDistance.replace(',', '.'));
             if (isNaN(distKm) || distKm <= 0) return;
             const paceParts = formPace.split(':');
@@ -224,8 +224,8 @@ export function ActivityModal({
 
     // Auto-calculate pace from distance and duration
     useEffect(() => {
-        // Only trigger if duration or distance was changed by user
-        if (formType === 'RUN' && formDistance && formDuration && lastChanged.current !== 'pace') {
+        // Only trigger if duration was changed explicitly by the user
+        if (formType === 'RUN' && formDistance && formDuration && lastChanged.current === 'duration') {
             const distKm = parseFloat(formDistance.replace(',', '.'));
             if (isNaN(distKm) || distKm <= 0) return;
             const [hours, minutes] = formDuration.split(':').map(Number);
@@ -367,7 +367,7 @@ export function ActivityModal({
             category: finalCategory as PlannedActivity['category'],
             title: title,
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
-            estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
+            estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
 
             // Hyrox & Strength
             tonnage: (formType === 'STRENGTH' || formType === 'HYROX') && formTonnage ? parseInt(formTonnage) : undefined,

@@ -135,7 +135,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             };
         });
 
-        const cardioTags = ['running', 'löpning', 'run', 'löp', 'cycling', 'cykling', 'cycle', 'cyk', 'swimming', 'simning', 'swim', 'sim', 'hyrox'];
+        const cardioTags = ['running', 'löpning', 'run', 'löp'];
         const strengthTags = ['strength', 'styrka', 'gym', 'styrk'];
 
         // Pre-filter exercises by year to avoid unnecessary processing
@@ -240,6 +240,12 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
         const pMin = Math.floor(paceDec);
         const pSec = Math.round((paceDec % 1) * 60);
         return `${pMin}:${pSec.toString().padStart(2, '0')} min/km`;
+    };
+
+    const fmtSpeed = (dist: number, min: number) => {
+        if (dist <= 0 || min <= 0) return '-';
+        const speed = dist / (min / 60);
+        return `${speed.toFixed(1).replace('.', ',')} km/h`;
     };
 
     const fmtTon = (ton: number) => ton > 0 ? (ton / 1000).toFixed(1).replace('.', ',') + ' ton' : '-';
@@ -417,7 +423,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                             <>
                                 <div className="p-2 text-right">Distans</div>
                                 <div className="p-2 text-right">Tid</div>
-                                <div className="p-2 text-right">Tempo</div>
+                                <div className="p-2 text-right">{activeTab === 'cycling' ? 'Snittfart' : 'Tempo'}</div>
                                 <div className="p-2 text-right">HR</div>
                                 <div className="p-2 text-right">Pass</div>
                                 <div className="p-2 text-right">Km/Pass</div>
@@ -634,7 +640,11 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <>
                                                     <div className="p-3 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
                                                     <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-3 text-right text-emerald-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration).replace(' min/km', '')}</div>
+                                                    <div className="p-3 text-right text-emerald-400 font-mono">
+                                                        {activeTab === 'cycling' 
+                                                            ? fmtSpeed(row.selected.distance, row.selected.duration).replace(' km/h', '')
+                                                            : fmtPace(row.selected.distance, row.selected.duration).replace(' min/km', '')}
+                                                    </div>
                                                     <div className="p-3 text-right text-red-400 font-mono">{row.selected.hrCount > 0 ? Math.round(row.selected.hrSum / row.selected.hrCount) + ' bpm' : '-'}</div>
                                                     <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
                                                     <div className="p-3 text-right text-slate-400 font-mono">

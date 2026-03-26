@@ -116,8 +116,8 @@ export function TrainingPlanningPage() {
         // All completed sessions from unifiedActivities
         const weekCompleted = unifiedActivities.filter((a: any) => a.date >= startStr && a.date <= endStr);
 
-        // Running stats (Running + any other cardio that isn't strength)
-        const runningActivities = weekCompleted.filter((a: any) => a.type === 'running' || ['cycling', 'walking', 'swimming'].includes(a.type));
+        // Running stats
+        const runningActivities = weekCompleted.filter((a: any) => a.type === 'running');
         const runningSessions = runningActivities.length;
         const runningKm = runningActivities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0);
         const runningTime = runningActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
@@ -135,7 +135,7 @@ export function TrainingPlanningPage() {
         const plannedRunning = plannedThisWeek.filter((p: any) =>
             p.title?.toLowerCase().includes('löpning') ||
             p.category === 'EASY' || p.category === 'INTERVALS' || p.category === 'TEMPO' ||
-            p.category === 'LONG_RUN' || p.category === 'RECOVERY'
+            p.category === 'LONG_RUN' || p.category === 'RECOVERY' || p.category === 'RACE' || p.isRace
         );
         const plannedStrength = plannedThisWeek.filter((p: any) =>
             p.title?.toLowerCase().includes('styrka') || p.category === 'STRENGTH'
@@ -165,6 +165,18 @@ export function TrainingPlanningPage() {
     };
 
     const weeklyStats = useMemo(() => calculateWeeklyStats(currentWeekStart), [currentWeekStart, unifiedActivities, plannedActivities]);
+
+    const sortedRaces = useMemo(() => {
+        return plannedActivities
+            .filter((p: any) => p.isRace || p.title?.toLowerCase().includes('tävling'))
+            .sort((a: any, b: any) => a.date.localeCompare(b.date));
+    }, [plannedActivities]);
+
+    const getDaysBetween = (d1: string, d2: string) => {
+        const date1 = new Date(d1);
+        const date2 = new Date(d2);
+        return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+    };
 
     const lastWeeklyStats = useMemo(() => {
         const lastWeekStart = new Date(currentWeekStart);
@@ -553,6 +565,12 @@ export function TrainingPlanningPage() {
                                 data: a
                             }))
                     ].sort((a, b) => {
+                        const aIsLogged = a.type === 'actual' || (a.type === 'planned' && a.data.status === 'COMPLETED');
+                        const bIsLogged = b.type === 'actual' || (b.type === 'planned' && b.data.status === 'COMPLETED');
+                        
+                        if (aIsLogged && !bIsLogged) return -1;
+                        if (!aIsLogged && bIsLogged) return 1;
+
                         const timeA = a.time || '23:59';
                         const timeB = b.time || '23:59';
                         return timeA.localeCompare(timeB);
@@ -612,7 +630,12 @@ export function TrainingPlanningPage() {
                                     }
                                 }}
                             >
-                                {allEvents.map(event => {
+                                {allEvents.map((event, index) => {
+                                    const isLogged = event.type === 'actual' || (event.type === 'planned' && event.data.status === 'COMPLETED');
+                                    const prevEvent = index > 0 ? allEvents[index - 1] : null;
+                                    const prevIsLogged = prevEvent ? (prevEvent.type === 'actual' || (prevEvent.type === 'planned' && prevEvent.data.status === 'COMPLETED')) : false;
+                                    const showSeparator = index > 0 && !isLogged && prevIsLogged;
+
                                     if (event.type === 'planned') {
                                         const act = event.data;
                                         const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
@@ -622,9 +645,14 @@ export function TrainingPlanningPage() {
                                         const isChanged = act.status === 'CHANGED';
 
                                         return (
-                                            <div
-                                                key={act.id}
-                                                draggable={!isCompleted}
+                                            <React.Fragment key={act.id}>
+                                                {showSeparator && (
+                                                    <div className="w-full flex items-center justify-center py-1 opacity-60">
+                                                        <div className="w-full border-t-2 border-dashed border-slate-300 dark:border-slate-700"></div>
+                                                    </div>
+                                                )}
+                                                <div
+                                                    draggable={!isCompleted}
                                                 onDragStart={(e) => {
                                                     if (isCompleted) return;
                                                     e.dataTransfer.setData('activityId', act.id);
@@ -702,7 +730,30 @@ export function TrainingPlanningPage() {
                                                     </div>
                                                 </div>
                                                 <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                    {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
+                                                    {isRace && act.title && (() => {
+                                                        const idx = sortedRaces.findIndex((r: any) => r.id === act.id);
+                                                        const prev = idx > 0 ? sortedRaces[idx - 1] : null;
+                                                        const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
+                                                        const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
+                                                        const daysNext = next ? getDaysBetween(act.date, next.date) : null;
+
+                                                        return (
+                                                            <span className="font-bold block mb-0.5">
+                                                                {act.title} 
+                                                                {act.estimatedDistance > 0 && (
+                                                                    <span className="text-amber-600 dark:text-amber-400 ml-1">
+                                                                        ({act.estimatedDistance.toFixed(1)} km)
+                                                                    </span>
+                                                                )}
+                                                                {(daysPrev !== null || daysNext !== null) && (
+                                                                    <span className="flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">
+                                                                        {daysPrev !== null && <span>⏮️ {daysPrev} dgr sen förra</span>}
+                                                                        {daysNext !== null && <span>⏭️ {daysNext} dgr till nästa</span>}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                     {act.description || (isCompleted ? (act.reconciliation?.matchReason?.includes('Liknande') ? 'Loggat pass' : 'Pass genomfört') : isSkipped ? 'Passet blev aldrig av' : '')}
                                                 </p>
 
@@ -776,6 +827,7 @@ export function TrainingPlanningPage() {
                                                     )}
                                                 </div>
                                             </div>
+                                            </React.Fragment>
                                         );
                                     } else {
                                         // Actual Activity (Unmatched)
@@ -828,7 +880,7 @@ export function TrainingPlanningPage() {
 
 
                                 {allEvents.length === 0 && (
-                                    <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none">
+                                    <div className="py-8 flex flex-col items-center justify-center opacity-20 pointer-events-none border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
                                         <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2">
                                             <Activity size={20} className="text-slate-400" />
                                         </div>

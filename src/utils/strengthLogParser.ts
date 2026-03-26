@@ -98,6 +98,22 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
     const [month, day, year] = datePart.split('-');
     const isoDate = `${year}-${month}-${day}`; // YYYY-MM-DD
 
+    // Extract duration if possible
+    let durationMins: number | undefined;
+    if (durationLine) {
+        const match = durationLine.match(/(\d+)\s*m/i);
+        if (match) durationMins = parseInt(match[1]);
+    } else {
+        const timeMatch = dateLine.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        if (timeMatch) {
+            const [_, start, end] = timeMatch;
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            durationMins = (eh * 60 + em) - (sh * 60 + sm);
+            if (durationMins < 0) durationMins += 24 * 60;
+        }
+    }
+
     // Create Workout
     // If user provides just one workout in text, we treat it as one. 
     // Usually "Copy as Text" is single workout.
@@ -115,6 +131,7 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
         totalSets: 0,
         totalReps: 0,
         uniqueExercises: 0,
+        duration: durationMins,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
@@ -418,6 +435,16 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
             // 1. Identify Workout Group (by start timestamp + name)
             const workoutName = val(idx.workout) || 'Unknown Workout';
             const startTimeStr = val(idx.start);
+            const endTimeStr = val(idx.end);
+            
+            let durationMinutes: number | undefined;
+            if (startTimeStr && endTimeStr) {
+                const elapsedMs = parseInt(endTimeStr) - parseInt(startTimeStr);
+                if (elapsedMs > 0) {
+                    durationMinutes = Math.round(elapsedMs / 60000);
+                }
+            }
+
             const startDate = new Date(parseInt(startTimeStr));
             const dateStr = startDate.toISOString().split('T')[0];
             const workoutIdKey = `${startTimeStr}-${workoutName}`;
@@ -439,7 +466,8 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
                     updatedAt: new Date().toISOString(),
                     notes: val(idx.workoutComment),
                     sleep: parseFloat(val(idx.sleep)) || undefined,
-                    stress: parseFloat(val(idx.stress)) || undefined
+                    stress: parseFloat(val(idx.stress)) || undefined,
+                    duration: durationMinutes
                 };
                 workoutMap.set(workoutIdKey, workout);
             }
@@ -992,6 +1020,18 @@ function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
             const dateStr = startDate.toISOString().split('T')[0];
             const workoutIdKey = `${startTimeStr}-${workoutName}`;
 
+            const endTimeStr = val(idx.end_time);
+            let durationMinutes: number | undefined;
+            if (startTimeStr && endTimeStr) {
+                const endDt = new Date(endTimeStr.replace(',', ''));
+                if (!isNaN(endDt.getTime())) {
+                    const elapsedMs = endDt.getTime() - startDate.getTime();
+                    if (elapsedMs > 0) {
+                        durationMinutes = Math.round(elapsedMs / 60000);
+                    }
+                }
+            }
+
             let workout = workoutMap.get(workoutIdKey);
             if (!workout) {
                 workout = {
@@ -1007,6 +1047,7 @@ function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
                     uniqueExercises: 0,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
+                    duration: durationMinutes
                 };
                 workoutMap.set(workoutIdKey, workout);
             }

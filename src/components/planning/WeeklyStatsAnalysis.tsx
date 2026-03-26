@@ -22,7 +22,7 @@ export function WeeklyStatsAnalysis({
         end.setDate(end.getDate() + 6);
         const endStr = end.toISOString().split('T')[0];
 
-        const weekActivities = exerciseEntries.filter(e =>
+        const weekActivities = unifiedActivities.filter(e =>
             e.date >= weekStart && e.date <= endStr &&
             (e.type === 'running' || e.type === 'cycling')
         );
@@ -73,7 +73,7 @@ export function WeeklyStatsAnalysis({
         const fourWeeksAgo = new Date(weekStart);
         fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
-        const recentRuns = exerciseEntries.filter(e =>
+        const recentRuns = unifiedActivities.filter(e =>
             e.type === 'running' &&
             new Date(e.date) >= fourWeeksAgo &&
             new Date(e.date) < new Date(weekStart)

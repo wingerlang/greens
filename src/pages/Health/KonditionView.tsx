@@ -13,8 +13,8 @@ interface KonditionViewProps {
 }
 
 export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries, universalActivities }: KonditionViewProps) {
-    // Filter cardio-related exercises
-    const cardioTypes = ['running', 'cycling', 'swimming', 'walking', 'hiking', 'cardio', 'löpning', 'cykling', 'simning', 'promenad', 'run', 'ride', 'swim', 'walk', 'hike'];
+    // The user requested that "Kondition" strictly means Running.
+    const cardioTypes = ['running', 'löpning', 'run', 'löp'];
 
     // Combine exerciseEntries (manual) with universalActivities (Strava)
     const allEntries = useMemo(() => {

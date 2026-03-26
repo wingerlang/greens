@@ -105,19 +105,24 @@ export function DashboardPage() {
 
     // Handle file import
     const handleImport = async (file: File, source: 'strengthlog' | 'hevy') => {
-        if (!file || !token) return;
-
+        console.log('[DashboardPage] handleImport', { file: !!file, token: !!token, source });
+        if (!file) {
+            console.warn('[DashboardPage] Early return from handleImport: missing file');
+            return;
+        }
         setImporting(true);
         setImportResult(null);
 
         try {
             const text = await file.text();
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch('/api/strength/import', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({ csv: text, source })
             });
 

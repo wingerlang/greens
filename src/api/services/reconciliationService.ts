@@ -254,6 +254,8 @@ export class ReconciliationService {
     private async emitStravaFeedEvent(userId: string, activity: StravaActivity, user: any) {
         const privacy = user?.privacy;
         const userSettings = user?.settings;
+        const userData = await getUserData(userId) as any;
+        const latestWeight = userData?.weightEntries?.[0]?.weight;
         // Only emit if recent (last 3 days)
         const date = new Date(activity.start_date_local);
         const now = new Date();

@@ -210,8 +210,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
 
     return (
         <nav className="sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
-            <div className="max-w-7xl mx-auto px-4 md:px-8">
-                <div className="flex items-center justify-between h-16">
+            <div className="max-w-7xl mx-auto px-4 md:px-4">
+                <div className="flex items-center justify-between h-8">
                     {/* Brand */}
                     <div className="flex-shrink-0">
                         <NavLink to="/" className="flex items-center gap-2 group">

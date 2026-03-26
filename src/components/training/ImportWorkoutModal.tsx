@@ -56,7 +56,7 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting, imp
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-start">
                     <div>
                         <h2 className="text-xl font-black text-white">Importera Pass</h2>
@@ -120,7 +120,10 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting, imp
                                     }`}
                             >
                                 <span className="text-2xl">🏋️</span>
-                                <span className="font-bold text-sm">Hevy</span>
+                                <div className="flex flex-col items-center">
+                                    <span className="font-bold text-sm">Hevy</span>
+                                    <span className="text-[9px] text-slate-400">Ja, det stavas så!</span>
+                                </div>
                             </button>
                         </div>
 

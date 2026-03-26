@@ -4,6 +4,7 @@ import {
     ActivitySource,
     UserSettings
 } from '../models/types.ts';
+import { calculateHeartRateCalories, calculateStrengthCaloriesMET } from '../utils/analytics.ts';
 
 // Environment variables (set these in your deployment)
 // @ts-ignore: Deno is polyfilled
@@ -311,7 +312,7 @@ export async function getStravaActivityDetail(activityId: number, accessToken: s
 // Data Mapping
 // ==========================================
 
-type ExerciseType = 'running' | 'cycling' | 'swimming' | 'strength' | 'yoga' | 'walking' | 'climbing' | 'football' | 'other';
+type ExerciseType = 'running' | 'cycling' | 'swimming' | 'strength' | 'yoga' | 'walking' | 'climbing' | 'football' | 'cardio' | 'other';
 type ExerciseIntensity = 'low' | 'moderate' | 'high';
 
 /**
@@ -348,6 +349,7 @@ export function mapStravaType(stravaType: string, name?: string): ExerciseType {
         if (lowerName.includes('cycl') || lowerName.includes('cyk') || lowerName.includes('bike') || lowerName.includes('ride')) return 'cycling';
         if (lowerName.includes('run') || lowerName.includes('löp')) return 'running';
         if (lowerName.includes('walk') || lowerName.includes('gång')) return 'walking';
+        if (lowerName.includes('cardio') || lowerName.includes('cross') || lowerName.includes('elliptical') || lowerName.includes('trainer') || lowerName.includes('rowing')) return 'cardio';
     }
 
     return type;
@@ -421,6 +423,7 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
         yoga: { min: 1.5, max: 4 },
         climbing: { min: 4, max: 10 },
         football: { min: 5, max: 12 },
+        cardio: { min: 4, max: 11 },
         other: { min: 3, max: 10 }
     };
 
@@ -456,17 +459,7 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
             return { calories: Math.max(total, 0), breakdown };
         }
 
-        let kjPerMin = 0;
-        let formula = "";
-        if (gender === 'male') {
-            kjPerMin = -55.0969 + (0.6309 * hr) + (0.1988 * weight) + (0.2017 * age);
-            formula = "Keytel et al. (Male): -55.0969 + (0.6309 * HR) + (0.1988 * W) + (0.2017 * A)";
-        } else {
-            kjPerMin = -20.4022 + (0.4472 * hr) - (0.1263 * weight) + (0.0740 * age);
-            formula = "Keytel et al. (Female): -20.4022 + (0.4472 * HR) - (0.1263 * W) + (0.0740 * A)";
-        }
-
-        let kcalPerMin = kjPerMin / 4.184;
+        let { kcalPerMin, formula } = calculateHeartRateCalories(hr, weight, age, gender as any);
         const originalKcalPerMin = kcalPerMin;
 
         // Apply sanity limits
@@ -565,7 +558,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             externalId: activity.id.toString(),
             importedAt: new Date().toISOString()
         },
-        distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
+        distanceKm: mapStravaType(activity.type, activity.name) !== 'strength' && activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
         durationMinutes: (userSettings?.stravaTimePreference === 'elapsed' ? activity.elapsed_time : (activity.moving_time || activity.elapsed_time)) / 60,
         elapsedTimeSeconds: activity.elapsed_time,
         calories: calorieData.calories,
@@ -577,7 +570,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
 
         averageWatts: activity.average_watts,
         maxWatts: activity.max_watts,
-        averageSpeed: activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
+        averageSpeed: mapStravaType(activity.type, activity.name) !== 'strength' && activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
         maxSpeed: activity.max_speed ? activity.max_speed * 3.6 : 0, // m/s to km/h
         kilojoules: activity.kilojoules,
         prCount: activity.pr_count,
@@ -589,7 +582,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         notes: activity.name,
         subType: mapStravaSubType(activity.type, activity.workout_type),
         excludeFromStats: activity.excludeFromStats,
-        splits: activity.splits_metric?.map(s => ({
+        splits: mapStravaType(activity.type, activity.name) !== 'strength' ? activity.splits_metric?.map(s => ({
             split: s.split,
             distance: s.distance,
             elapsedTime: s.elapsed_time,
@@ -597,8 +590,8 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             elevationDiff: s.elevation_difference,
             averageSpeed: s.average_speed,
             averageHeartrate: s.average_heartrate
-        })),
-        laps: activity.laps?.map(l => ({
+        })) : undefined,
+        laps: mapStravaType(activity.type, activity.name) !== 'strength' ? activity.laps?.map(l => ({
             name: l.name,
             elapsedTime: l.elapsed_time,
             movingTime: l.moving_time,
@@ -607,7 +600,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             averageHeartrate: l.average_heartrate,
             lapIndex: l.lap_index,
             split: l.split
-        }))
+        })) : undefined
     };
 }
 

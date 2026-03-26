@@ -816,7 +816,13 @@ export function ActivityDetailModal({
                 ? (activity as any).laps 
                 : [];
 
-        const isStrength = activity.type?.toLowerCase().includes('strength') || activity.type?.toLowerCase().includes('styrka') || activity.type?.toLowerCase() === 'weighttraining';
+        const isStrengthLike = 
+            activity.type?.toLowerCase() === 'strength' || 
+            activity.type?.toLowerCase() === 'weighttraining' || 
+            activity.type?.toLowerCase() === 'workout' ||
+            activity.type?.toLowerCase().includes('styrka') ||
+            source === 'merged' ||
+            activity._mergeData?.strengthWorkout != null;
         
         // We trigger fetch only if BOTH splits and laps are completely missing
         // This avoids infinite loop fetches if an activity genuinely has zero laps on Strava.
@@ -824,7 +830,7 @@ export function ActivityDetailModal({
 
         // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
         // but it's good practice to log if it's there. The backend handles the cookie.
-        if (effectivelyStrava && !isStrength && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
+        if (effectivelyStrava && !isStrengthLike && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -1655,34 +1661,45 @@ export function ActivityDetailModal({
 
                                 {/* Title Row */}
                                 <div className="flex items-center gap-3">
-                                    <h2 className="text-3xl sm:text-4xl font-black text-white italic tracking-tight capitalize truncate" title={displayTitle}>
+                                    <h2 className="text-3xl sm:text-4xl font-black text-white italic tracking-tight capitalize break-words flex-1 leading-tight" title={displayTitle}>
                                         {displayTitle}
                                     </h2>
-                                    {!isMerged && (
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={handleCopyJson}
-                                                className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
-                                                title="Kopiera till JSON"
-                                            >
-                                                📋
-                                            </button>
-                                            <button
-                                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
-                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm shrink-0 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white'}`}
-                                                title="Visa rådata"
-                                            >
-                                                📄
-                                            </button>
-                                            <button
-                                                onClick={() => setIsEditing(true)}
-                                                className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
-                                                title="Redigera aktivitet"
-                                            >
-                                                ✎
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleCopyJson}
+                                            className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                            title="Kopiera till JSON"
+                                        >
+                                            📋
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm shrink-0 ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white'}`}
+                                            title="Visa rådata"
+                                        >
+                                            📄
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const [y, m, d] = activity.date.split('T')[0].split('-');
+                                                const monthNames = ['januari','februari','mars','april','maj','juni','juli','augusti','september','oktober','november','december'];
+                                                const monthName = monthNames[parseInt(m) - 1];
+                                                onClose();
+                                                navigate(`/träning/${y}/${monthName}/${parseInt(d)}`);
+                                            }}
+                                            className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                            title="Gå till dag i kalendern"
+                                        >
+                                            📅
+                                        </button>
+                                        <button
+                                            onClick={() => setIsEditing(true)}
+                                            className="w-8 h-8 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-sm shrink-0"
+                                            title="Redigera aktivitet"
+                                        >
+                                            ✎
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Hyrox Specific Header Data */}
@@ -2150,6 +2167,21 @@ export function ActivityDetailModal({
                                         )}
                                     </div>
                                 )}
+
+                                {/* Exercises from StrengthLog (if merged/strength) - MOVED HERE FOR PRECEDENCE */}
+                                {strengthWorkout?.exercises && strengthWorkout.exercises.length > 0 && (
+                                    <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-4 mb-4">
+                                        <h3 className="text-xs font-bold text-purple-400 uppercase mb-3">💪 Övningar {isMerged && <span className="text-slate-500">(från StrengthLog)</span>}</h3>
+                                        <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                                            {strengthWorkout.exercises
+                                                .filter((ex: any) => ex.totalVolume > 0 || ex.sets.length > 0)
+                                                .map((ex: any, i: number) => (
+                                                    <ExpandableExercise key={i} exercise={ex} />
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
                                 {showStravaCard ? (
                                     <div className="space-y-4">
@@ -2186,7 +2218,7 @@ export function ActivityDetailModal({
 
                                             {/* Hero Stats */}
                                             <div className="grid grid-cols-3 gap-4 border-b border-[#FC4C02]/10 pb-5">
-                                                {(activity.distance || 0) > 0 && (
+                                                {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Distans</span>
                                                         <div className="flex items-baseline gap-1">
@@ -2206,7 +2238,7 @@ export function ActivityDetailModal({
                                                     </div>
                                                 </div>
 
-                                                {(activity.distance || 0) > 0 && (
+                                                {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">{activity.type === 'cycling' ? 'Snittfart' : 'Snittempo'}</span>
                                                         <div className="flex items-baseline gap-1">
@@ -2253,7 +2285,7 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 {/* GAP */}
-                                                {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) && (
+                                                {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) && activity.type !== 'strength' && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effektivt Tempo (GAP)</span>
                                                         <div className="flex items-baseline gap-1">
@@ -2486,20 +2518,6 @@ export function ActivityDetailModal({
                                                     <span className="text-xs text-slate-400 ml-1">max bpm</span>
                                                 </div>
                                             )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Exercises from StrengthLog (if merged/strength) */}
-                                {strengthWorkout?.exercises && strengthWorkout.exercises.length > 0 && (
-                                    <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-4">
-                                        <h3 className="text-xs font-bold text-purple-400 uppercase mb-3">💪 Övningar {isMerged && <span className="text-slate-500">(från StrengthLog)</span>}</h3>
-                                        <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                                            {strengthWorkout.exercises
-                                                .filter((ex: any) => ex.totalVolume > 0 || ex.sets.length > 0)
-                                                .map((ex: any, i: number) => (
-                                                    <ExpandableExercise key={i} exercise={ex} />
-                                                ))}
                                         </div>
                                     </div>
                                 )}
