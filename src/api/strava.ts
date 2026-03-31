@@ -86,6 +86,14 @@ export interface StravaActivity {
         split: number;
         pace_zone: number;
     }>;
+    best_efforts?: Array<{
+        name: string;
+        distance: number;
+        elapsed_time: number;
+        moving_time: number;
+        start_date: string;
+        pr_rank?: number;
+    }>;
 }
 
 export interface StravaAthlete {
@@ -600,7 +608,15 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             averageHeartrate: l.average_heartrate,
             lapIndex: l.lap_index,
             split: l.split
-        })) : undefined
+        })) : undefined,
+        bestEfforts: activity.best_efforts?.map(be => ({
+            name: be.name,
+            distance: be.distance,
+            elapsedTime: be.elapsed_time,
+            movingTime: be.moving_time,
+            startDate: be.start_date,
+            prRank: be.pr_rank
+        }))
     };
 }
 

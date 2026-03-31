@@ -19,7 +19,9 @@ import {
     generateId,
     getISODate,
     type RaceDefinition,
-    type RaceIgnoreRule
+    type RaceIgnoreRule,
+    type Tour,
+    type TourFormData
 } from '../../models/types.ts';
 import { storageService } from '../../services/storage.ts';
 import type { FeedEventType } from '../../models/feedTypes.ts';
@@ -56,6 +58,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Race Definitions
     const [raceDefinitions, setRaceDefinitions] = useState<RaceDefinition[]>([]);
     const [raceIgnoreRules, setRaceIgnoreRules] = useState<RaceIgnoreRule[]>([]);
+    const [tours, setTours] = useState<Tour[]>([]);
 
     // Pre-seed Race Data (One-off or load from storage later)
     useEffect(() => {
@@ -318,8 +321,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     } : ua.plan,
                     performance: {
                         ...ua.performance,
-                        subType: updates.subType || ua.performance?.subType
+                        subType: updates.subType || ua.performance?.subType,
+                        splits: updates.splits || ua.performance?.splits,
+                        laps: updates.laps || ua.performance?.laps
                     }
+
                 } as UniversalActivity;
             }
             return ua;
@@ -1288,6 +1294,38 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         storageService.deleteRaceIgnoreRule(id).catch(e => console.error("Failed to delete ignore rule", e));
     }, [skipAutoSave]);
 
+    // Tours
+    const addTour = useCallback((data: TourFormData): Tour => {
+        const newTour: Tour = {
+            ...data,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        setTours(prev => [...prev, newTour]);
+        skipAutoSave.current = true;
+        storageService.saveTour(newTour).catch(e => console.error("Failed to save tour", e));
+        return newTour;
+    }, [skipAutoSave]);
+
+    const updateTour = useCallback((id: string, updates: Partial<Tour>) => {
+        setTours(prev => {
+            const next = prev.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t);
+            const updated = next.find(t => t.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.saveTour(updated).catch(e => console.error("Failed to update tour", e));
+            }
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const deleteTour = useCallback((id: string) => {
+        setTours(prev => prev.filter(t => t.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteTour(id).catch(e => console.error("Failed to delete tour", e));
+    }, [skipAutoSave]);
+
     return {
         // State
         exerciseEntries,
@@ -1354,5 +1392,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         deleteRaceIgnoreRule,
         setRaceDefinitions, // Exposed for loading
         setRaceIgnoreRules, // Exposed for loading
+        // Tours
+        tours,
+        addTour,
+        updateTour,
+        deleteTour,
+        setTours,
     };
 }

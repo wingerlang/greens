@@ -102,6 +102,7 @@ export interface UserSettings {
     longRunThreshold?: number; // km
     pinnedPaths?: string[]; // Custom navbar pins
     stravaTimePreference?: 'moving' | 'elapsed';
+    lastActiveRaceTab?: 'timeline' | 'series' | 'tours';
 }
 
 /** Weekly Stats Interface */
@@ -709,6 +710,7 @@ export interface ExerciseEntry {
     distance?: number;  // km
     startTime?: string; // HH:mm format local start time
     createdAt: string;
+    tags?: string[];
     source?: string;
     location?: string; // Optional location string (e.g. "Båstad", "Göteborg")
     // Integration fields (Strava/Garmin)
@@ -777,6 +779,8 @@ export interface RaceDefinition {
     distance?: number; // Canonical distance in km
     location?: string;
     website?: string;
+    matches?: string[];
+    isCup?: boolean;
 }
 
 /**
@@ -786,6 +790,19 @@ export interface RaceIgnoreRule {
     id: string;
     pattern: string; // Regex or string match
     matchType: 'exact' | 'contains' | 'regex';
+}
+
+/**
+ * Tour / Cup - Curated collection of races (RaceDefinitions)
+ */
+export interface Tour {
+    id: string;
+    name: string;
+    date: string; // Reference date for the tour season (e.g. 2026-03-01)
+    raceDefinitionIds: string[]; // List of IDs from RaceDefinition
+    selectedActivityIds?: Record<string, string>; // Map of RaceDefinition.id -> Activity.id (Planned or Universal)
+    createdAt: string;
+    updatedAt: string;
 }
 
 /**
@@ -1257,8 +1274,22 @@ export interface ActivityPerformanceSection {
         lapIndex?: number;
         split?: number;
     }>;
+    bestEfforts?: BestEffort[];
     prCount?: number;
     isHiddenInCalendar?: boolean;
+}
+
+/**
+ * Best Effort (Best Move) from Strava/Third-parties
+ * e.g. "5k", "10k", "1 mile"
+ */
+export interface BestEffort {
+    name: string;
+    distance: number;
+    elapsedTime: number;
+    movingTime: number;
+    startDate: string;
+    prRank?: number; // 1, 2, 3... (e.g. 1st best, 2nd best)
 }
 
 /**
@@ -1359,8 +1390,9 @@ export interface PlannedActivity {
     id: string;
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
-    type: 'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'OTHER';
-    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST' | 'RACE';
+    type: 'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'CARDIO' | 'OTHER';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST' | 'RACE' | 'CARDIO' | 'OTHER';
+    subType?: 'cycling' | 'cross-trainer' | 'rowing' | 'stair-master' | 'skierg' | 'other';
     title: string;
     description: string;
     structure: {
@@ -1407,6 +1439,8 @@ export interface RaceDetails {
     isRegistered?: boolean;
     isVirtual?: boolean; // Manually flag as virtual race (overrides location in UI)
     isTrail?: boolean;   // Manually flag as trail race
+    seriesName?: string;
+    cupName?: string;
     goals?: {
         a?: string; // Dream goal (e.g., "Sub 3:00")
         b?: string; // Realistic goal (e.g., "Sub 3:15")
@@ -1492,6 +1526,7 @@ export interface RecipeWithNutrition extends Recipe {
 export type FoodItemFormData = Omit<FoodItem, 'id' | 'createdAt' | 'updatedAt'>;
 export type RecipeFormData = Omit<Recipe, 'id' | 'createdAt' | 'updatedAt'>;
 export type MealEntryFormData = Omit<MealEntry, 'id' | 'createdAt'>;
+export type TourFormData = Omit<Tour, 'id' | 'createdAt' | 'updatedAt'>;
 
 // ============================================
 // Utility Types
@@ -1529,6 +1564,8 @@ export interface Competition {
     pieces?: number; // How many of this snabbval were consumed (default 1)
     creatorId?: string;
     createdAt: string;
+    raceDefinitions?: RaceDefinition[];
+    raceIgnoreRules?: RaceIgnoreRule[];
 }
 
 /** Storage structure for LocalStorage persistence */
@@ -1572,6 +1609,11 @@ export interface AppData {
 
     // Activity Log
     databaseActions?: DatabaseAction[];
+
+    // Phase 15: Tours (Cups)
+    tours?: Tour[];
+    raceDefinitions?: RaceDefinition[];
+    raceIgnoreRules?: RaceIgnoreRule[];
 }
 
 // ============================================
@@ -1595,6 +1637,7 @@ export type DatabaseEntityType =
     | 'goal'
     | 'period'
     | 'body_measurement'
+    | 'tour'
     | 'other';
 
 export interface DatabaseAction {

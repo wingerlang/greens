@@ -129,11 +129,23 @@ export function ActivityModal({
             ? recentRuns.reduce((sum, r) => sum + r.distance, 0) / recentRuns.length
             : null;
 
+        // Find average "INTERVAL" and "TEMPO" pace
+        const intervalRuns = allRuns.filter(r => r.category === 'INTERVALS' && r.durationMinutes > 0 && r.distance > 0);
+        const avgIntervalPace = intervalRuns.length > 0
+            ? intervalRuns.reduce((sum, r) => sum + (r.durationMinutes / r.distance), 0) / intervalRuns.length
+            : 4.5; // Default faster
+
+        const tempoRuns = allRuns.filter(r => r.category === 'TEMPO' && r.durationMinutes > 0 && r.distance > 0);
+        const avgTempoPace = tempoRuns.length > 0
+            ? tempoRuns.reduce((sum, r) => sum + (r.durationMinutes / r.distance), 0) / tempoRuns.length
+            : 4.75; // Default
+
         // Find average "EASY" pace
         const easyRuns = allRuns.filter(r => r.category === 'EASY' && r.durationMinutes > 0 && r.distance > 0);
         const avgEasyPace = easyRuns.length > 0
             ? easyRuns.reduce((sum, r) => sum + (r.durationMinutes / r.distance), 0) / easyRuns.length
             : 5.5; // Default
+
 
         // Bucketing for presets
         const distanceBuckets: Record<string, { count: number, paceCount: number, totalPace: number }> = {};
@@ -183,7 +195,7 @@ export function ActivityModal({
                 { distance: 21.1, count: 0, avgPace: 6.0, label: 'Halvmaraton', isDefault: true },
             ];
 
-        return { allRuns, avgDistance, frequentPresets, avgEasyPace };
+        return { allRuns, avgDistance, frequentPresets, avgEasyPace, avgIntervalPace, avgTempoPace };
     }, [exerciseEntries, universalActivities]);
 
     // Smart Note Logic: Update "X km" in notes when distance changes
@@ -210,13 +222,20 @@ export function ActivityModal({
             if (isNaN(distKm) || distKm <= 0) return;
             const paceParts = formPace.split(':');
             if (paceParts.length !== 2) return;
-            const paceMinutes = parseInt(paceParts[0]) + parseInt(paceParts[1]) / 60;
-            if (isNaN(paceMinutes) || paceMinutes <= 0) return;
+            const pm = parseInt(paceParts[0]);
+            const ps = parseInt(paceParts[1]);
+            if (isNaN(pm)) return;
+            
+            const paceMinutes = pm + (isNaN(ps) ? 0 : ps / 60);
+            if (paceMinutes <= 0) return;
             const totalMinutes = Math.round(distKm * paceMinutes);
+            
+            if (isNaN(totalMinutes)) return;
+
             const hours = Math.floor(totalMinutes / 60);
             const mins = totalMinutes % 60;
             const newDuration = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-            if (newDuration !== formDuration) {
+            if (newDuration !== formDuration && !newDuration.includes('NaN')) {
                 setFormDuration(newDuration);
             }
         }
@@ -231,7 +250,10 @@ export function ActivityModal({
             const [hours, minutes] = formDuration.split(':').map(Number);
             const totalMinutes = (hours * 60) + minutes;
             if (isNaN(totalMinutes) || totalMinutes <= 0) return;
+            
             const paceDecimal = totalMinutes / distKm;
+            if (isNaN(paceDecimal) || paceDecimal === Infinity) return;
+
             const paceMins = Math.floor(paceDecimal);
             const paceSecs = Math.round((paceDecimal - paceMins) * 60);
             const newPace = `${paceMins.toString().padStart(2, '0')}:${paceSecs.toString().padStart(2, '0')}`;
@@ -292,24 +314,26 @@ export function ActivityModal({
     const handleRunSubCategoryClick = (sub: 'EASY' | 'LONG_RUN' | 'INTERVALS' | 'RECOVERY') => {
         lastChanged.current = 'pace'; // Treat sub-category click as pace change for recovery
         setRunSubCategory(sub);
+        
+        // Auto-update pace based on sub-category and history
+        let targetPaceDecimal = runStats.avgEasyPace;
         if (sub === 'RECOVERY') {
             setFormIntensity('low');
-            let basePaceDecimal = runStats.avgEasyPace;
-            if (formPace) {
-                const parts = formPace.split(':');
-                if (parts.length === 2) {
-                    basePaceDecimal = parseInt(parts[0]) + parseInt(parts[1]) / 60;
-                }
-            }
-            const recoveryPaceDecimal = basePaceDecimal + 0.5;
-            const mins = Math.floor(recoveryPaceDecimal);
-            const secs = Math.round((recoveryPaceDecimal - mins) * 60);
-            setFormPace(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+            targetPaceDecimal = runStats.avgEasyPace + 0.5;
         } else if (sub === 'INTERVALS') {
             setFormIntensity('high');
+            targetPaceDecimal = runStats.avgIntervalPace || 4.5;
+        } else if (sub === 'LONG_RUN') {
+            setFormIntensity('moderate');
+            targetPaceDecimal = runStats.avgEasyPace + 0.25;
         } else {
             setFormIntensity('moderate');
+            targetPaceDecimal = runStats.avgEasyPace;
         }
+
+        const mins = Math.floor(targetPaceDecimal);
+        const secs = Math.round((targetPaceDecimal - mins) * 60);
+        setFormPace(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
     };
 
     // Toggle Muscle Group Helper
@@ -352,6 +376,14 @@ export function ActivityModal({
             else title = 'Löpning';
         } else if (formType === 'STRENGTH') {
             title = 'Styrka';
+            // Determine if it matches a preset
+            const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
+            const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
+            const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
+            
+            if (isPush) title = 'Styrka: Push';
+            else if (isPull) title = 'Styrka: Pull';
+            else if (isLegs) title = 'Styrka: Ben';
         } else if (formType === 'HYROX') {
             title = 'Hyrox';
         } else if (formType === 'REST') {
@@ -754,8 +786,11 @@ export function ActivityModal({
                                                     onKeyDown={(e) => {
                                                         // Parse mm:ss into total seconds
                                                         const parts = formPace.split(':');
-                                                        const totalSeconds = parts.length === 2
-                                                            ? parseInt(parts[0]) * 60 + parseInt(parts[1])
+                                                        const pm = parseInt(parts[0]);
+                                                        const ps = parts.length === 2 ? parseInt(parts[1]) : 0;
+                                                        
+                                                        const totalSeconds = (!isNaN(pm))
+                                                            ? pm * 60 + (isNaN(ps) ? 0 : ps)
                                                             : 330; // Default 5:30
                                                         const step = 5; // 5 second increments
 
@@ -833,7 +868,12 @@ export function ActivityModal({
                                             ].map(preset => (
                                                 <button
                                                     key={preset.label}
-                                                    onClick={() => setFormMuscleGroups(preset.muscles)}
+                                                    onClick={() => {
+                                                        setFormMuscleGroups(preset.muscles);
+                                                        // Automatically set a good title if the current title is "Styrka"
+                                                        // In the modal, we don't have a specific title field always visible, 
+                                                        // but handleSave will use this logic.
+                                                    }}
                                                     className="flex-1 py-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg text-[10px] font-black text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
                                                 >
                                                     {preset.label}

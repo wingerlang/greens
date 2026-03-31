@@ -162,7 +162,10 @@ export function DataProvider({ children }: DataProviderProps) {
         addCoachGoal, activateCoachGoal, deleteCoachGoal,
         // Race Defs
         raceDefinitions, addRaceDefinition, updateRaceDefinition, deleteRaceDefinition,
-        raceIgnoreRules, addRaceIgnoreRule, deleteRaceIgnoreRule
+        raceIgnoreRules, addRaceIgnoreRule, deleteRaceIgnoreRule,
+        setRaceDefinitions, setRaceIgnoreRules,
+        // Tours
+        tours, addTour, updateTour, deleteTour, setTours
     } = useActivityContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, getLatestWeight, isLoaded });
 
     // ============================================
@@ -334,6 +337,11 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.plannedActivities) setPlannedActivities(data.plannedActivities || []);
         if (data.universalActivities) setUniversalActivities(data.universalActivities || []);
 
+        // Race & Tours
+        if (data.raceDefinitions) setRaceDefinitions(data.raceDefinitions || []);
+        if (data.raceIgnoreRules) setRaceIgnoreRules(data.raceIgnoreRules || []);
+        if (data.tours) setTours(data.tours || []);
+
         // Body
         if (data.weightEntries) {
             const normalizedWeights = (data.weightEntries || []).map((w: any) => {
@@ -406,7 +414,11 @@ export function DataProvider({ children }: DataProviderProps) {
                 bodyMeasurements,
                 quickMeals: storedQuickMeals,
                 foodAliases,
-                exercises
+                exercises,
+                // PERSIST: Race Definitions & Tours
+                raceDefinitions,
+                raceIgnoreRules,
+                tours
             }, { skipApi: true });
         }
     }, [
@@ -417,7 +429,9 @@ export function DataProvider({ children }: DataProviderProps) {
         sleepSessions, intakeLogs, universalActivities,
         injuryLogs, recoveryMetrics,
         bodyMeasurements,
-        storedQuickMeals, foodAliases, exercises
+        storedQuickMeals, foodAliases, exercises,
+        // DEPENDENCIES: Race Definitions & Tours
+        raceDefinitions, raceIgnoreRules, tours
     ]);
 
     // ============================================
@@ -626,7 +640,13 @@ export function DataProvider({ children }: DataProviderProps) {
         addRaceIgnoreRule,
         deleteRaceIgnoreRule,
         exercises,
-        permissionConfig
+        permissionConfig,
+
+        // Tours
+        tours,
+        addTour,
+        updateTour,
+        deleteTour,
     };
 
     return (

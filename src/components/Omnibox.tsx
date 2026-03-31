@@ -13,6 +13,7 @@ import {
     BodyMeasurementType,
     QuickMeal,
     MealItem,
+    PlannedActivity,
 } from '../models/types.ts';
 import {
     Search,
@@ -26,7 +27,8 @@ import {
     MapPin,
     Heart,
     Info,
-    Calculator
+    Calculator,
+    Calendar
 } from 'lucide-react';
 import { NutritionLabel } from './shared/NutritionLabel.tsx';
 
@@ -263,7 +265,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         selectedDate,
         quickMeals,
         addQuickMeal,
-        calculateRecipeNutrition
+        calculateRecipeNutrition,
+        savePlannedActivities
     } = useData();
     const { logEvent, visitStats } = useAnalytics();
 
@@ -591,6 +594,53 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         return recents;
     }, [mealEntries, foodItems, foodUsageStats]);
 
+    // Popular foods for the current meal type
+    const popularFoods = useMemo(() => {
+        const lowerInput = input.trim().toLowerCase();
+        const MEAL_KEYWORDS: Record<string, MealType> = {
+            'frukost': 'breakfast',
+            'lunch': 'lunch',
+            'middag': 'dinner',
+            'mellanmål': 'snack',
+            'snack': 'snack'
+        };
+        
+        const hour = new Date().getHours();
+        let mealType: MealType = MEAL_KEYWORDS[lowerInput] || 'snack';
+        
+        if (!MEAL_KEYWORDS[lowerInput]) {
+            if (hour >= 5 && hour < 10) mealType = 'breakfast';
+            else if (hour >= 10 && hour < 14) mealType = 'lunch';
+            else if (hour >= 17 && hour < 21) mealType = 'dinner';
+        }
+
+        const counts: Record<string, number> = {};
+        const recentIds = new Set(recentFoods.map(f => f.id));
+        
+        mealEntries.forEach(entry => {
+            if (entry.mealType === mealType) {
+                entry.items.forEach(item => {
+                    if (item.type === 'foodItem') {
+                        counts[item.referenceId] = (counts[item.referenceId] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        return Object.entries(counts)
+            .filter(([id]) => !recentIds.has(id)) // Deduplicate against recent
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([id]) => {
+                const foodItem = foodItems.find(f => f.id === id);
+                return foodItem ? {
+                    ...foodItem,
+                    usageStats: foodUsageStats[id]
+                } : null;
+            })
+            .filter(Boolean) as Array<FoodItem & { usageStats: { count: number; lastUsed: string; avgGrams: number } }>;
+    }, [mealEntries, foodItems, foodUsageStats, recentFoods]);
+
     // Food search results with usage stats
     const foodResults = useMemo(() => {
         // Don't search if we have a locked food
@@ -834,22 +884,32 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
         if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
 
+        const isMealKeyword = ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase());
+        const is2ColMode = !input || isMealKeyword;
+
         const items: any[] = [];
         if (frequentCombos.length > 0) items.push(...frequentCombos);
         if (savedEstimates.length > 0) items.push(...savedEstimates);
         if (standardQuickMeals.length > 0) items.push(...standardQuickMeals);
         if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
         if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
-        if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
+        if (is2ColMode && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
+        if (is2ColMode && popularFoods.length > 0) items.push(...popularFoods.map(f => ({ itemType: 'popular' as const, ...f })));
 
         return items;
-    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, lockedFood]);
+    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood]);
 
 
-    // Reset selection when results change
+    // Reset selection when results change or input changes
     useEffect(() => {
-        setSelectedIndex(0);
-    }, [selectableItems.length]);
+        const isMealKeyword = ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase());
+        if (isMealKeyword && recentFoods.length > 0) {
+            // Default select the first item in the popular (right) column
+            setSelectedIndex(recentFoods.length);
+        } else {
+            setSelectedIndex(0);
+        }
+    }, [selectableItems.length, input]);
 
     useEffect(() => {
         if (showFeedback) {
@@ -882,10 +942,30 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 e.preventDefault();
                 setSelectedIndex(prev => (prev - 1 + selectableItems.length) % selectableItems.length);
             }
+
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                const isMealKeyword = ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase());
+                const is2ColMode = !input || isMealKeyword;
+                
+                if (is2ColMode && recentFoods.length > 0) {
+                    e.preventDefault();
+                    const leftCount = recentFoods.length;
+                    
+                    if (e.key === 'ArrowRight' && selectedIndex < leftCount) {
+                        // Move to popular column (same vertical index if possible)
+                        const nextIndex = Math.min(selectedIndex + leftCount, selectableItems.length - 1);
+                        setSelectedIndex(nextIndex);
+                    } else if (e.key === 'ArrowLeft' && selectedIndex >= leftCount) {
+                        // Move to recent column (same vertical index)
+                        const nextIndex = selectedIndex - leftCount;
+                        setSelectedIndex(nextIndex);
+                    }
+                }
+            }
         };
         globalThis.addEventListener('keydown', handleKeyDown);
         return () => globalThis.removeEventListener('keydown', handleKeyDown);
-    }, [onClose, selectableItems.length]);
+    }, [onClose, selectableItems.length, selectedIndex, input, recentFoods.length]);
 
     // Scroll selected item into view
     useEffect(() => {
@@ -1221,6 +1301,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         onClose();
     };
 
+    const handleExecutePlanning = (activity: Partial<PlannedActivity>) => {
+        if (!activity.title || !activity.date) return;
+        
+        savePlannedActivities([{
+            ...activity,
+            id: crypto.randomUUID(),
+            status: 'PLANNED',
+            structure: activity.structure || { warmupKm: 0, mainSet: [], cooldownKm: 0 }
+        } as PlannedActivity]);
+
+        setShowFeedback(true);
+        setInput('');
+    };
+
     const handleExecute = () => {
         // Handle locked food first
         if (lockedFood) {
@@ -1275,7 +1369,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         }
 
         // Handle food selection - lock it instead of immediately logging
-        if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent')) {
+        if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent' || selectableItems[selectedIndex]?.itemType === 'popular')) {
             const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number; count: number; lastUsed: string } };
             if (selectedFood) {
                 lockFood(selectedFood);
@@ -1304,6 +1398,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         } else if (intent.type === 'food' && intent.data.query) {
             navigate(`/calories?search=${encodeURIComponent(intent.data.query)}`);
             onClose();
+        } else if (intent.type === 'planera') {
+            handleExecutePlanning(intent.data);
         }
         setInput('');
     };
@@ -1782,6 +1878,70 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                         </div>
                     )}
 
+                    {/* PLANNING MODULE */}
+                    {!isSlashMode && !lockedFood && !lockedQuickMeal && intent.type === 'planera' && (
+                        <div className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                             <div className="px-3 py-2 bg-indigo-500/10 border-l-4 border-indigo-500 rounded-r-lg flex items-center gap-2">
+                                <Calendar size={16} className="text-indigo-500" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Planera Träning</span>
+                            </div>
+
+                            <div className="bg-slate-800/50 rounded-2xl p-6 border border-white/5 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Calendar size={64} />
+                                </div>
+                                <div className="space-y-4 relative z-10">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-2xl shadow-inner">
+                                            {intent.data.type === 'RUN' ? '🏃' : 
+                                             intent.data.type === 'STRENGTH' ? '🏋️' : 
+                                             intent.data.type === 'CARDIO' ? '🚴' : '✨'}
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">
+                                                {intent.data.date === new Date().toISOString().split('T')[0] ? 'Idag' : 
+                                                 intent.data.date === new Date(Date.now() + 86400000).toISOString().split('T')[0] ? 'Imorgon' : intent.data.date}
+                                                {intent.data.startTime ? ` • ${intent.data.startTime}` : ''}
+                                            </div>
+                                            <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">
+                                                {intent.data.title}
+                                            </h3>
+                                        </div>
+                                    </div>
+
+                                    {intent.data.description && (
+                                        <p className="text-sm text-slate-400 font-medium leading-relaxed italic border-l-2 border-indigo-500/30 pl-3 py-1">
+                                            {intent.data.description}
+                                        </p>
+                                    )}
+
+                                    <div className="flex items-center gap-2 pt-2">
+                                        <div className="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/20 text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                                            {intent.data.category}
+                                        </div>
+                                        {intent.data.subType && (
+                                            <div className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                {intent.data.subType}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                className="w-full py-4 bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-xs"
+                                onClick={() => handleExecutePlanning(intent.data)}
+                            >
+                                <span>Schemalägg Pass</span>
+                                <ArrowRight size={16} />
+                            </button>
+
+                            <div className="text-center text-[10px] text-slate-500">
+                                💡 Tryck Enter för att spara planeringen
+                            </div>
+                        </div>
+                    )}
+
                     {/* EXERCISE MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'exercise' && (
                         <div className="p-4 space-y-4">
@@ -2251,53 +2411,88 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                         </div>
                     )}
 
-                    {/* Empty state - show recents + tips */}
-                    {!input && (
+                    {/* Empty state or Meal Keyword - show recents + popular/specific meal */}
+                    {(!input || ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase())) && (
                         <div className="px-2 py-2">
-                            {recentFoods.length > 0 && (
-                                <div className="mb-4">
-                                    <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                        <span>🕐</span> Senast loggade
-                                    </div>
-                                    {recentFoods.map((item, idx) => {
-                                        const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'recent' && sel.id === item.id);
-                                        return (
-                                            <div
-                                                key={item.id}
-                                                id={`omnibox-item-${globalIdx}`}
-                                                onClick={() => lockFood(item)}
-                                                className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                                    : 'hover:bg-white/5 text-white'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
-                                                        {getCategoryEmoji(item.category)}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-medium">{item.name}</div>
-                                                        <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                                            <span className="text-emerald-500/70">{item.usageStats.count}x loggad</span>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span>{formatRelativeDate(item.usageStats.lastUsed)}</span>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span>~{Math.round(item.usageStats.avgGrams)}g</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                            <span>🕐</span> Senast loggade
+                                        </div>
+                                        {recentFoods.map((item, idx) => {
+                                            const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'recent' && sel.id === item.id);
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    id={`omnibox-item-${globalIdx}`}
+                                                    onClick={() => lockFood(item)}
+                                                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                                        : 'hover:bg-white/5 text-white'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-xs flex-shrink-0">
+                                                            {getCategoryEmoji(item.category)}
                                                         </div>
+                                                        <div className="truncate font-medium text-xs">{item.name}</div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 flex-shrink-0">
+                                                        {Math.round(item.calories * item.usageStats.avgGrams / 100)} <span className="opacity-50">kcal</span>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="font-bold text-sm">{Math.round(item.calories * item.usageStats.avgGrams / 100)} kcal</div>
-                                                    <div className="text-[10px] text-slate-500">för {Math.round(item.usageStats.avgGrams)}g</div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        {popularFoods.length > 0 && (
+                                            <>
+                                                <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                                    <span>🔥</span> Populärt {(() => {
+                                                        const lower = input.trim().toLowerCase();
+                                                        if (lower === 'frukost') return 'Frukost';
+                                                        if (lower === 'lunch') return 'Lunch';
+                                                        if (lower === 'middag') return 'Middag';
+                                                        if (lower === 'mellanmål' || lower === 'snack') return 'Mellanmål';
+                                                        
+                                                        const hour = new Date().getHours();
+                                                        return (hour >= 5 && hour < 10) ? 'Frukost' : 
+                                                               (hour >= 10 && hour < 14) ? 'Lunch' : 
+                                                               (hour >= 17 && hour < 21) ? 'Middag' : 'Mellanmål';
+                                                    })()}
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                    <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
-                                        ↑↓ navigera • Enter för att logga • eller börja skriva
+                                                {popularFoods.map((item, idx) => {
+                                                    const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'popular' && sel.id === item.id);
+                                                    return (
+                                                        <div
+                                                            key={item.id}
+                                                            id={`omnibox-item-${globalIdx}`}
+                                                            onClick={() => lockFood(item)}
+                                                            className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                                ? 'bg-indigo-500/20 text-indigo-400'
+                                                                : 'hover:bg-white/5 text-white'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-xs flex-shrink-0">
+                                                                    {getCategoryEmoji(item.category)}
+                                                                </div>
+                                                                <div className="truncate font-medium text-xs">{item.name}</div>
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500 flex-shrink-0">
+                                                                {item.usageStats.count}x
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                            )}
+                                <div className="px-2 py-1 text-[10px] text-slate-600 text-center mt-2 border-t border-white/5 pt-2">
+                                    ↑↓ navigera • Enter för att logga
+                                </div>
 
                             <div className="p-4 text-center text-slate-500 text-xs space-y-1 border-t border-white/5">
                                 <p>🍎 Sök råvaror: "kyckling", "havregryn", "ägg"</p>

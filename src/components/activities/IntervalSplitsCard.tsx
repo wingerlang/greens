@@ -1,7 +1,9 @@
-import React from 'react';
 import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts';
+import { getBestEffortsForActivity } from '../../utils/performanceEngine.ts';
+import { UniversalActivity } from '../../models/types.ts';
 
 interface IntervalSplitsCardProps {
+    activity: UniversalActivity;
     segmented: SegmentedSplits;
     highlightRange?: { start: number; end: number };
 }
@@ -142,53 +144,8 @@ function SectionCard({
     );
 }
 
-// Beräknar "Snabbaste X km" med ett rullande fönster
-function getBestEfforts(splits: ClassifiedSplit[]) {
-    const targets = [1, 2, 3, 5, 10, 21]; // KM-mål
-    const efforts: { distance: number; time: number; pace: number }[] = [];
 
-    for (const n of targets) {
-        const targetM = n * 1000;
-        let bestTime = Infinity;
-        let bestPace = Infinity;
-
-        // Rullande fönster baserat på faktisk distans
-        for (let i = 0; i < splits.length; i++) {
-            let distAcc = 0;
-            let timeAcc = 0;
-            let j = i;
-
-            while (j < splits.length && distAcc < targetM) {
-                distAcc += splits[j].distance;
-                timeAcc += splits[j].movingTime;
-                j++;
-            }
-
-            if (distAcc >= targetM) {
-                const overshootM = distAcc - targetM;
-                const lastSplit = splits[j - 1];
-                
-                // Uppskatta tid för exakt targetM genom linjär interpolation av sista spliten
-                const lastSplitPace = lastSplit.movingTime / Math.max(lastSplit.distance, 1);
-                const correctedTime = timeAcc - (overshootM * lastSplitPace);
-                const pace = correctedTime / (targetM / 1000);
-
-                // Tillåt max 100m överskjutning per km (för att inte extrapolera för brett över viloperioder etc)
-                if (correctedTime < bestTime) {
-                    bestTime = correctedTime;
-                    bestPace = pace;
-                }
-            }
-        }
-
-        if (bestTime !== Infinity) {
-            efforts.push({ distance: n, time: bestTime, pace: bestPace });
-        }
-    }
-    return efforts;
-}
-
-export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplitsCardProps) {
+export function IntervalSplitsCard({ activity, segmented, highlightRange }: IntervalSplitsCardProps) {
     const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
     const isSustained = type === 'sustained';
 
@@ -207,7 +164,7 @@ export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplits
         ? cooldownSplits.reduce((acc, s) => acc + s.movingTime / (Math.max(s.distance, 1) / 1000), 0) / cooldownSplits.length
         : 0;
 
-    const bestEfforts = getBestEfforts(classified);
+    const bestEfforts = getBestEffortsForActivity(activity);
 
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -216,8 +173,9 @@ export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplits
                     {isSustained ? 'Tempoanalys (Strava laps)' : 'Intervallanalys (Strava laps)'}
                 </h3>
                 <span className="text-[9px] bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20 font-black uppercase tracking-widest">
-                    {isSustained ? 'Sustained' : `${intervalGroups.length} block`}
+                    {isSustained ? 'Sammanhängande' : `${intervalGroups.length} block`}
                 </span>
+
             </div>
 
             <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-slate-800">
@@ -267,9 +225,11 @@ export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplits
                     <div className="p-3 grid grid-cols-3 md:grid-cols-6 gap-2">
                         {bestEfforts.map(effort => (
                             <div key={effort.distance} className="bg-slate-800/50 rounded-lg p-2 text-center border border-white/5">
-                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">{effort.distance} km</div>
-                                <div className="text-sm font-black text-white">{formatDuration(effort.time)}</div>
-                                <div className="text-[10px] text-indigo-300/80 font-mono mt-0.5">{formatPaceSec(effort.pace)}/km</div>
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                                    {effort.distance >= 1000 ? `${effort.distance / 1000} km` : `${effort.distance} m`}
+                                </div>
+                                <div className="text-sm font-black text-white">{formatDuration(effort.movingTime)}</div>
+                                <div className="text-[10px] text-indigo-300/80 font-mono mt-0.5">{formatPaceSec(effort.movingTime / (effort.distance / 1000))}/km</div>
                             </div>
                         ))}
                     </div>
@@ -291,8 +251,9 @@ export function IntervalSplitsCard({ segmented, highlightRange }: IntervalSplits
                     <div key={group.number} className="bg-slate-900/50 rounded-2xl border border-amber-500/20 overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/15">
                             <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                                {isSustained ? 'Huvuddel' : `Intervallblock ${group.number}`}
+                                {isSustained ? 'Effort: Huvuddel' : `Intervallblock ${group.number}`}
                             </div>
+
                             <div className="text-[10px] font-semibold text-slate-200">
                                 {formatPaceSec(group.avgPace)}/km
                                 {group.avgHR ? ` • ${Math.round(group.avgHR)} bpm` : ''}

@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity, type QuickMeal, type RaceDefinition, type RaceIgnoreRule } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity, type QuickMeal, type RaceDefinition, type RaceIgnoreRule, type Tour } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 import { notificationService } from './notificationService.ts';
 
@@ -56,6 +56,9 @@ export interface StorageService {
     deleteRaceDefinition(id: string): Promise<void>;
     saveRaceIgnoreRule(rule: RaceIgnoreRule): Promise<void>;
     deleteRaceIgnoreRule(id: string): Promise<void>;
+    // Tours
+    saveTour(tour: Tour): Promise<void>;
+    deleteTour(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -88,7 +91,8 @@ const getDefaultData = (): AppData => ({
     universalActivities: [],
     bodyMeasurements: [],
     quickMeals: [],
-    foodAliases: {}
+    foodAliases: {},
+    tours: []
 });
 
 // Helper to get token (if any)
@@ -213,6 +217,9 @@ export class LocalStorageService implements StorageService {
             if (!data.universalActivities) data.universalActivities = [];
             if (!data.quickMeals) data.quickMeals = [];
             if (!data.foodAliases) data.foodAliases = {};
+            if (!data.tours) data.tours = [];
+            if (!data.raceDefinitions) data.raceDefinitions = [];
+            if (!data.raceIgnoreRules) data.raceIgnoreRules = [];
         }
 
         return data;
@@ -1097,6 +1104,39 @@ export class LocalStorageService implements StorageService {
                 notificationService.notify('success', 'Snabbval borttaget');
             } catch (e) {
                 console.error('[Storage] QuickMeal delete failed:', e);
+            }
+        }
+    }
+
+    // Tours
+    async saveTour(tour: Tour): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch('/api/tours', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(tour)
+                });
+            } catch (e) {
+                console.error('[Storage] Tour sync failed:', e);
+            }
+        }
+    }
+
+    async deleteTour(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/tours?id=${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Tour delete failed:', e);
             }
         }
     }

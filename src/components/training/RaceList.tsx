@@ -5,6 +5,7 @@ import { formatActivityDuration } from '../../utils/formatters.ts';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
 import { RaceSeriesDetailModal } from './RaceSeriesDetailModal.tsx';
 import { RaceSeriesManager } from './RaceSeriesManager.tsx';
+import { TourManager } from './TourManager.tsx';
 import {
     BarChart,
     Bar,
@@ -74,7 +75,7 @@ export function RaceList({
     subTab,
     seriesId
 }: RaceListProps) {
-    const { plannedActivities, savePlannedActivities, deletePlannedActivity } = useData();
+    const { plannedActivities, savePlannedActivities, deletePlannedActivity, currentUser, updateCurrentUser } = useData();
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
@@ -82,20 +83,53 @@ export function RaceList({
     const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
     const [editingRace, setEditingRace] = useState<PlannedActivity | null>(null);
 
-    // Initialize view mode based on subTab
-    const [viewMode, setViewMode] = useState<'timeline' | 'series'>('timeline');
+    // Initialize view mode based on URL, Props, or Settings
+    const [viewMode, setViewMode] = useState<'timeline' | 'series' | 'tours'>(() => {
+        // 1. Check URL
+        const params = new URLSearchParams(window.location.search);
+        const urlTab = params.get('tab');
+        if (urlTab === 'series' || urlTab === 'serier') return 'series';
+        if (urlTab === 'tours' || urlTab === 'tourer') return 'tours';
+        if (urlTab === 'timeline' || urlTab === 'lopp') return 'timeline';
+
+        // 2. Check settings
+        if (currentUser?.settings?.lastActiveRaceTab) {
+            return currentUser.settings.lastActiveRaceTab;
+        }
+
+        return 'timeline';
+    });
     const [upcomingViewMode, setUpcomingViewMode] = useState<'cozy' | 'compact' | 'list'>('cozy');
     const [selectedSeries, setSelectedSeries] = useState<{ name: string, races: ExerciseEntry[] } | null>(null);
     const [seriesSort, setSeriesSort] = useState<'count' | 'name' | 'latest'>('count');
 
-    // Sync Props to State
+    // Sync Props to State (if explicitly passed)
     useEffect(() => {
-        if (subTab === 'serier' || subTab === 'series') {
-            setViewMode('series');
-        } else {
-            setViewMode('timeline');
-        }
+        if (!subTab) return;
+        if (subTab === 'serier' || subTab === 'series') setViewMode('series');
+        else if (subTab === 'tours' || subTab === 'tourer') setViewMode('tours');
+        else setViewMode('timeline');
     }, [subTab]);
+
+    // Handle View Mode changes (Persist to URL & Settings)
+    const handleViewModeChange = (mode: 'timeline' | 'series' | 'tours') => {
+        setViewMode(mode);
+
+        // Update URL
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', mode);
+        window.history.replaceState({}, '', url.toString());
+
+        // Update Settings
+        if (currentUser && updateCurrentUser) {
+            updateCurrentUser({
+                settings: {
+                    ...currentUser.settings,
+                    lastActiveRaceTab: mode
+                }
+            });
+        }
+    };
 
 
     // --- Planned Races ---
@@ -610,22 +644,28 @@ export function RaceList({
                 <div className="flex flex-col md:flex-row gap-4 border-b border-white/5 mb-6 justify-between items-end">
                     <div className="flex gap-4">
                         <button
-                            onClick={() => setViewMode('timeline')}
+                            onClick={() => handleViewModeChange('timeline')}
                             className={`pb-3 text-sm font-bold transition-all ${viewMode === 'timeline' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-500 hover:text-white'}`}
                         >
                             Tidslinje
                         </button>
                         <button
-                            onClick={() => setViewMode('series')}
+                            onClick={() => handleViewModeChange('series')}
                             className={`pb-3 text-sm font-bold transition-all ${viewMode === 'series' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-500 hover:text-white'}`}
                         >
                             Tävlingsserier
                         </button>
+                        <button
+                            onClick={() => handleViewModeChange('tours')}
+                            className={`pb-3 text-sm font-bold transition-all ${viewMode === 'tours' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-500 hover:text-white'}`}
+                        >
+                            Tourer (Cups)
+                        </button>
                     </div>
 
-                    {viewMode === 'series' && (
+                    {(viewMode === 'series' || viewMode === 'tours') && (
                         <div className="flex bg-slate-950/50 p-1 rounded-lg border border-white/5 mb-2">
-                            <button
+                             <button
                                 onClick={() => setSeriesSort('count')}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${seriesSort === 'count' ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
                             >
@@ -654,195 +694,37 @@ export function RaceList({
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-xl border border-white/5 shadow-2xl shadow-black/20">
-                            <table className="w-full text-sm">
-                                <thead className="bg-slate-950 text-[10px] uppercase font-bold text-slate-500 border-b border-white/5">
-                                    <tr>
-                                        <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('date')}>Datum <SortIcon colKey="date" /></th>
-                                        <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('notes')}>Tävling <SortIcon colKey="notes" /></th>
-                                        <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('location')}>Plats <SortIcon colKey="location" /></th>
-                                        <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('distance')}>Distans <SortIcon colKey="distance" /></th>
-                                        <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('durationMinutes')}>Tid <SortIcon colKey="durationMinutes" /></th>
-                                        <th className="px-3 py-1.5 text-right">Tempo</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5 bg-slate-900/50">
-                                    {/* MAPPED UPCOMING RACES IN HISTORY (GREEN DASHED) */}
-                                    {upcomingRaces.map(race => {
-                                        const diff = new Date(race.date).getTime() - new Date().getTime();
-                                        const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
-                                        const isTrail = isTrailRace(race.title);
-                                        const isUltra = isUltraRace(race.title, race.estimatedDistance);
-                                        const distStyle = getDistanceStyle(race.estimatedDistance);
-                                        const isVirtual = race.raceDetails?.isVirtual;
-
-                                        return (
-                                            <tr
-                                                key={`planned-${race.id}`}
-                                                className="hover:bg-emerald-500/5 transition-colors cursor-pointer group bg-emerald-950/20"
-                                                onClick={() => handleEditClick(race)}
-                                            >
-                                                <td className="px-3 py-1.5 border-l-2 border-l-emerald-500/50 group-hover:border-l-emerald-400 whitespace-nowrap">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="font-mono text-xs font-bold text-emerald-400">{formatRaceDateCompact(race.date)}</span>
-                                                        <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                    <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1.5 flex-wrap text-xs">
-                                                        <Target size={12} className="text-emerald-500 shrink-0" />
-                                                        <span className="truncate max-w-[200px]">{race.title} <span className="text-slate-500 font-normal text-[10px]">(Planerad)</span></span>
-                                                        {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
-                                                        {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
-                                                        <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-black text-[9px] whitespace-nowrap">{daysLeft} dagar</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[150px]">
-                                                    {isVirtual ? <span className="text-[9px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Virtuellt</span> : (race.raceDetails?.logistics?.location || '-')}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right">
-                                                    {race.estimatedDistance > 0 ? (
-                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
-                                                            {race.estimatedDistance.toFixed(1)} km
-                                                        </span>
-                                                    ) : '-'}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
-                                            </tr>
-                                        );
-                                    })}
-
-                                    {races.map(race => {
-                                        // Helper to resolve the best display title
-                                        const getRaceTitle = (r: ExerciseEntry) => {
-                                            if (r.title && !r.title.startsWith('Merged')) return r.title;
-
-                                            const ua = universalActivities.find(u => u.id === r.id);
-                                            if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
-                                                const components = universalActivities.filter(u => ua.mergeInfo!.originalActivityIds!.includes(u.id));
-                                                // Prefer Strava title
-                                                const stravaComp = components.find(c => c.performance?.source?.source === 'strava');
-                                                if (stravaComp?.plan?.title) return stravaComp.plan.title;
-
-                                                // Or any component with a non-merged title
-                                                const bestComp = components.find(c => c.plan?.title && !c.plan.title.startsWith('Merged'));
-                                                if (bestComp) return bestComp.plan?.title;
-                                            }
-
-                                            return r.notes || r.type || 'Okänd Aktivitet';
-                                        };
-
-                                        const resolvedTitle = getRaceTitle(race) || '';
-                                        // No explicit raceDetails available on historical generic exercise entries, rely on naming/location tagging
-                                        const hasVirtualTag = (race.tags || []).includes('virtual') || resolvedTitle.toLowerCase().includes('virtual') || (race.location || '').toLowerCase().includes('virtuellt');
-                                        const isTrail = (race.tags || []).includes('trail') || isTrailRace(resolvedTitle);
-                                        const isVirtual = hasVirtualTag;
-                                        const isUltra = isUltraRace(resolvedTitle, race.distance);
-                                        const distStyle = getDistanceStyle(race.distance);
-
-                                        return (
-                                            <tr
-                                                key={race.id}
-                                                className="hover:bg-amber-500/5 transition-colors cursor-pointer group border-l-2 border-transparent hover:border-l-amber-500/50"
-                                                onClick={() => setSelectedActivity(race)}
-                                            >
-                                                <td className="px-3 py-1.5 whitespace-nowrap">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="font-mono text-xs font-bold text-slate-300">{formatRaceDateCompact(race.date)}</span>
-                                                        <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                    <div className="font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5 flex-wrap text-xs">
-                                                        <span className="truncate max-w-[200px]">{resolvedTitle}</span>
-                                                        {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
-                                                        {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1 py-0 rounded border border-emerald-500/20 uppercase font-black tracking-widest">Trail</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[150px]">
-                                                    {isVirtual ? <span className="text-[9px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Virtuellt</span> : (race.location || '-')}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right">
-                                                    {race.distance ? (
-                                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${distStyle} whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity`}>
-                                                            {race.distance.toFixed(1)} km
-                                                        </span>
-                                                    ) : '-'}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-amber-300 text-xs">
-                                                    {formatActivityDuration(race.durationMinutes)}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-slate-400 text-xs">
-                                                    {calcPace(race.distance, race.durationMinutes)}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                            <TimelineTable 
+                                races={races} 
+                                upcomingRaces={upcomingRaces} 
+                                handleEditClick={handleEditClick} 
+                                setSelectedActivity={setSelectedActivity} 
+                                universalActivities={universalActivities}
+                                sortConfig={sortConfig}
+                                handleSort={handleSort}
+                                formatRaceDateCompact={formatRaceDateCompact}
+                                isTrailRace={isTrailRace}
+                                isUltraRace={isUltraRace}
+                                getDistanceStyle={getDistanceStyle}
+                                formatActivityDuration={formatActivityDuration}
+                                calcPace={calcPace}
+                            />
                         </div>
                     )
-                ) : (
+                ) : viewMode === 'series' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {raceSeries.map(series => (
-                            <div
-                                key={series.name}
-                                onClick={() => setSelectedSeries({ name: series.name, races: series.races })}
-                                className="bg-slate-900 border border-white/10 rounded-3xl p-6 hover:border-amber-500/30 transition-all flex flex-col h-full shadow-xl cursor-pointer group hover:bg-slate-800/50"
-                            >
-                                <div className="flex justify-between items-start mb-6">
-                                    <h4 className="text-xl font-black text-white group-hover:text-amber-500 transition-colors">{series.name}</h4>
-                                    <div className="bg-amber-500/10 text-amber-500 px-2 py-1 rounded-lg text-xs font-black uppercase">
-                                        {series.races.length} lopp
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold text-center mb-1">Personbästa</div>
-                                        <div className="text-lg font-black text-white text-center font-mono">
-                                            {formatActivityDuration(series.stats.pb.durationMinutes)}
-                                        </div>
-                                        <div className="text-[9px] text-slate-500 text-center font-bold mt-1">
-                                            {series.stats.pb.date.substring(0, 4)}
-                                        </div>
-                                    </div>
-                                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold text-center mb-1">Medeltid</div>
-                                        <div className="text-lg font-bold text-slate-400 text-center font-mono">
-                                            {formatActivityDuration(series.stats.avgDuration)}
-                                        </div>
-                                        <div className="text-[9px] text-slate-500 text-center font-bold mt-1">
-                                            {series.stats.pb.distance ? `~${series.stats.pb.distance.toFixed(1)} km` : '-'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1 flex-1">
-                                    <div className="flex justify-between text-[10px] text-slate-500 uppercase font-bold px-2 py-1">
-                                        <span>År / Datum</span>
-                                        <span>Tid</span>
-                                    </div>
-                                    {series.races.sort((a, b) => b.date.localeCompare(a.date)).map(r => {
-                                        const isPb = r.id === series.stats.pb.id;
-                                        return (
-                                            <button
-                                                key={r.id}
-                                                onClick={() => setSelectedActivity(r)}
-                                                className={`w-full flex justify-between items-center p-2 rounded-lg text-sm transition-colors ${isPb ? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20' : 'text-slate-300 hover:bg-white/5'}`}
-                                            >
-                                                <span className="font-mono">{r.date.substring(0, 10)}</span>
-                                                <div className="flex items-center gap-2">
-                                                    {isPb && <Trophy size={10} className="text-amber-500" />}
-                                                    <span className="font-bold font-mono">{formatActivityDuration(r.durationMinutes)}</span>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <SeriesCard 
+                                key={series.name} 
+                                series={series} 
+                                onSelect={() => setSelectedSeries({ name: series.name, races: series.races })} 
+                                setSelectedActivity={setSelectedActivity}
+                                formatActivityDuration={formatActivityDuration}
+                            />
                         ))}
                     </div>
+                ) : (
+                    <TourManager />
                 )}
             </div>
 
@@ -1181,10 +1063,10 @@ function AddRaceModal({
         isRegistered: true,
         isVirtual: false,
         isTrail: false,
-        goalA: '',
-        goalB: '',
         goalC: '',
-        description: ''
+        description: '',
+        type: 'RUN' as PlannedActivity['type'],
+        subType: '' as string
     });
 
     // Watch title for historic matches
@@ -1217,7 +1099,9 @@ function AddRaceModal({
                 goalA: activityToEdit.raceDetails?.goals?.a || '',
                 goalB: activityToEdit.raceDetails?.goals?.b || '',
                 goalC: activityToEdit.raceDetails?.goals?.c || '',
-                description: activityToEdit.description || ''
+                description: activityToEdit.description || '',
+                type: activityToEdit.type || 'RUN',
+                subType: activityToEdit.subType || ''
             });
         }
     }, [activityToEdit]);
@@ -1239,9 +1123,10 @@ function AddRaceModal({
             title: form.title,
             date: form.date,
             startTime: form.startTime,
-            type: 'RUN',
-            category: 'RACE',
-            isRace: true,
+            type: form.type,
+            category: form.type === 'RUN' ? 'RACE' : form.type === 'STRENGTH' ? 'STRENGTH' : 'CARDIO',
+            subType: form.subType as any || undefined,
+            isRace: form.type === 'RUN',
             raceUrl: form.url,
             description: form.description,
             estimatedDistance: parseFloat(form.distance) || 0,
@@ -1278,8 +1163,8 @@ function AddRaceModal({
             <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-950">
                     <h3 className="text-xl font-black text-white flex items-center gap-2">
-                        <Trophy className="text-amber-500" />
-                        {activityToEdit ? 'Redigera Tävling' : 'Planera Ny Tävling'}
+                        {form.type === 'RUN' ? <Trophy className="text-amber-500" /> : <Calendar className="text-indigo-500" />}
+                        {activityToEdit ? 'Redigera' : 'Planera'} {form.type === 'RUN' ? 'Tävling' : 'Aktivitet'}
                     </h3>
                     <button onClick={onClose} className="rounded-full p-1 hover:bg-white/10 transition-colors">
                         <X size={20} className="text-slate-400" />
@@ -1325,6 +1210,50 @@ function AddRaceModal({
                                     </div>
                                 )}
                             </div>
+
+                            {/* Type Selector */}
+                            <div className="grid grid-cols-3 gap-3">
+                                {[
+                                    { id: 'RUN', label: 'Löpning', icon: '🏃' },
+                                    { id: 'STRENGTH', label: 'Styrka', icon: '🏋️' },
+                                    { id: 'CARDIO', label: 'Cardio', icon: '🚴' }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => setForm({ ...form, type: t.id as any, subType: '' })}
+                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${form.type === t.id ? 'bg-amber-500/20 border-amber-500 text-white' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:border-white/10'}`}
+                                    >
+                                        <span className="text-xl">{t.icon}</span>
+                                        <span className="text-[10px] font-bold uppercase">{t.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* SubType Selector for Cardio */}
+                            {form.type === 'CARDIO' && (
+                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase">Välj Maskin/Typ</label>
+                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                                        {[
+                                            { id: 'cycling', label: 'Cykel', icon: '🚴' },
+                                            { id: 'cross-trainer', label: 'Crosstrainer', icon: '⛷️' },
+                                            { id: 'rowing', label: 'Rodd', icon: '🚣' },
+                                            { id: 'stair-master', label: 'Trappa', icon: '🪜' },
+                                            { id: 'skierg', label: 'SkiErg', icon: '🎿' }
+                                        ].map(st => (
+                                            <button
+                                                key={st.id}
+                                                onClick={() => setForm({ ...form, subType: st.id })}
+                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all whitespace-nowrap ${form.subType === st.id ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:border-white/10'}`}
+                                            >
+                                                <span>{st.icon}</span>
+                                                <span className="text-[10px] font-bold uppercase">{st.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Datum</label>
@@ -1805,6 +1734,213 @@ function BulkAddRaceModal({
                         </button>
                     )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function TimelineTable({ 
+    races, 
+    upcomingRaces, 
+    handleEditClick, 
+    setSelectedActivity, 
+    universalActivities,
+    sortConfig,
+    handleSort,
+    formatRaceDateCompact,
+    isTrailRace,
+    isUltraRace,
+    getDistanceStyle,
+    formatActivityDuration,
+    calcPace
+}: any) {
+    const SortIcon = ({ colKey }: { colKey: string }) => {
+        if (sortConfig.key !== colKey) return <span className="opacity-20 ml-1">⇅</span>;
+        return <span className="text-emerald-400 ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    return (
+        <table className="w-full text-sm">
+            <thead className="bg-slate-950 text-[10px] uppercase font-bold text-slate-500 border-b border-white/5">
+                <tr>
+                    <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('date')}>Datum <SortIcon colKey="date" /></th>
+                    <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('notes')}>Tävling <SortIcon colKey="notes" /></th>
+                    <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('location')}>Plats <SortIcon colKey="location" /></th>
+                    <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('distance')}>Distans <SortIcon colKey="distance" /></th>
+                    <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('durationMinutes')}>Tid <SortIcon colKey="durationMinutes" /></th>
+                    <th className="px-3 py-1.5 text-right">Tempo</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 bg-slate-900/50">
+                {/* UPCOMING */}
+                {upcomingRaces.map((race: any) => {
+                    const diff = new Date(race.date).getTime() - new Date().getTime();
+                    const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                    const isTrail = isTrailRace(race.title);
+                    const isUltra = isUltraRace(race.title, race.estimatedDistance);
+                    const distStyle = getDistanceStyle(race.estimatedDistance);
+                    const isVirtual = race.raceDetails?.isVirtual;
+
+                    return (
+                        <tr
+                            key={`planned-${race.id}`}
+                            className="hover:bg-emerald-500/5 transition-colors cursor-pointer group bg-emerald-950/20"
+                            onClick={() => handleEditClick(race)}
+                        >
+                            <td className="px-3 py-1.5 border-l-2 border-l-emerald-500/50 group-hover:border-l-emerald-400 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs font-bold text-emerald-400">{formatRaceDateCompact(race.date)}</span>
+                                    <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
+                                </div>
+                            </td>
+                            <td className="px-3 py-1.5">
+                                <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1.5 flex-wrap text-xs">
+                                    <Target size={12} className="text-emerald-500 shrink-0" />
+                                    <span className="truncate max-w-[200px]">{race.title} <span className="text-slate-500 font-normal text-[10px]">(Planerad)</span></span>
+                                    {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                    {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
+                                    <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-black text-[9px] whitespace-nowrap">{daysLeft} dagar</span>
+                                </div>
+                            </td>
+                            <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[150px]">
+                                {isVirtual ? <span className="text-[9px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Virtuellt</span> : (race.raceDetails?.logistics?.location || '-')}
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                                {race.estimatedDistance > 0 ? (
+                                    <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
+                                        {race.estimatedDistance.toFixed(1)} km
+                                    </span>
+                                ) : '-'}
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
+                        </tr>
+                    );
+                })}
+
+                {/* HISTORY */}
+                {races.map((race: any) => {
+                    const getRaceTitle = (r: ExerciseEntry) => {
+                        if (r.title && !r.title.startsWith('Merged')) return r.title;
+                        const ua = universalActivities.find(u => u.id === r.id);
+                        if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
+                            const components = universalActivities.filter(u => ua.mergeInfo!.originalActivityIds!.includes(u.id));
+                            const stravaComp = components.find(c => c.performance?.source?.source === 'strava');
+                            if (stravaComp?.plan?.title) return stravaComp.plan.title;
+                            const bestComp = components.find(c => c.plan?.title && !c.plan.title.startsWith('Merged'));
+                            if (bestComp) return bestComp.plan?.title;
+                        }
+                        return r.notes || r.type || 'Okänd Aktivitet';
+                    };
+
+                    const resolvedTitle = getRaceTitle(race) || '';
+                    const hasVirtualTag = (race.tags || []).includes('virtual') || resolvedTitle.toLowerCase().includes('virtual') || (race.location || '').toLowerCase().includes('virtuellt');
+                    const isTrail = (race.tags || []).includes('trail') || isTrailRace(resolvedTitle);
+                    const isVirtual = hasVirtualTag;
+                    const isUltra = isUltraRace(resolvedTitle, race.distance);
+                    const distStyle = getDistanceStyle(race.distance);
+
+                    return (
+                        <tr
+                            key={race.id}
+                            className="hover:bg-amber-500/5 transition-colors cursor-pointer group border-l-2 border-transparent hover:border-l-amber-500/50"
+                            onClick={() => setSelectedActivity(race)}
+                        >
+                            <td className="px-3 py-1.5 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs font-bold text-slate-300">{formatRaceDateCompact(race.date)}</span>
+                                    <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
+                                </div>
+                            </td>
+                            <td className="px-3 py-1.5">
+                                <div className="font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5 flex-wrap text-xs">
+                                    <span className="truncate max-w-[200px]">{resolvedTitle}</span>
+                                    {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
+                                    {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1 py-0 rounded border border-emerald-500/20 uppercase font-black tracking-widest">Trail</span>}
+                                </div>
+                            </td>
+                            <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[150px]">
+                                {isVirtual ? <span className="text-[9px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Virtuellt</span> : (race.location || '-')}
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                                {race.distance ? (
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${distStyle} whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity`}>
+                                        {race.distance.toFixed(1)} km
+                                    </span>
+                                ) : '-'}
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-mono text-amber-300 text-xs">
+                                {formatActivityDuration(race.durationMinutes)}
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-mono text-slate-400 text-xs">
+                                {calcPace(race.distance, race.durationMinutes)}
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    );
+}
+
+function SeriesCard({ series, onSelect, setSelectedActivity, formatActivityDuration }: any) {
+    return (
+        <div
+            onClick={onSelect}
+            className="bg-slate-900 border border-white/10 rounded-3xl p-6 hover:border-amber-500/30 transition-all flex flex-col h-full shadow-xl cursor-pointer group hover:bg-slate-800/50"
+        >
+            <div className="flex justify-between items-start mb-6">
+                <h4 className="text-xl font-black text-white group-hover:text-amber-500 transition-colors">{series.name}</h4>
+                <div className="bg-amber-500/10 text-amber-500 px-2 py-1 rounded-lg text-xs font-black uppercase">
+                    {series.races.length} lopp
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold text-center mb-1">Personbästa</div>
+                    <div className="text-lg font-black text-white text-center font-mono">
+                        {formatActivityDuration(series.stats.pb.durationMinutes)}
+                    </div>
+                    <div className="text-[9px] text-slate-500 text-center font-bold mt-1">
+                        {series.stats.pb.date.substring(0, 4)}
+                    </div>
+                </div>
+                <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold text-center mb-1">Medeltid</div>
+                    <div className="text-lg font-bold text-slate-400 text-center font-mono">
+                        {formatActivityDuration(series.stats.avgDuration)}
+                    </div>
+                    <div className="text-[9px] text-slate-500 text-center font-bold mt-1">
+                        {series.stats.pb.distance ? `~${series.stats.pb.distance.toFixed(1)} km` : '-'}
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-1 flex-1">
+                <div className="flex justify-between text-[10px] text-slate-500 uppercase font-bold px-2 py-1">
+                    <span>År / Datum</span>
+                    <span>Tid</span>
+                </div>
+                {series.races.sort((a: any, b: any) => b.date.localeCompare(a.date)).map((r: any) => {
+                    const isPb = r.id === series.stats.pb.id;
+                    return (
+                        <button
+                            key={r.id}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedActivity(r);
+                            }}
+                            className={`w-full flex justify-between items-center p-2 rounded-lg text-sm transition-colors ${isPb ? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20' : 'text-slate-300 hover:bg-white/5'}`}
+                        >
+                            <span className="font-mono">{r.date.substring(0, 10)}</span>
+                            <div className="flex items-center gap-2">
+                                {isPb && <Trophy size={10} className="text-amber-500" />}
+                                <span className="font-bold font-mono">{formatActivityDuration(r.durationMinutes)}</span>
+                            </div>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

@@ -336,5 +336,45 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
         }
     }
 
+    // GET /api/tours/:id/standings - Get cross-user standings for a tour
+    if (url.pathname.startsWith("/api/tours/") && url.pathname.endsWith("/standings") && method === "GET") {
+        try {
+            const tourId = url.pathname.split('/')[3];
+            const data = await getUserData(userId);
+            const tour = data?.tours?.find(t => t.id === tourId);
+
+            if (!tour) {
+                return new Response(JSON.stringify({ error: "Tour not found" }), { status: 404, headers });
+            }
+
+            // Get all race definitions for this tour
+            const tourRaces = (data?.raceDefinitions || []).filter(rd => tour.raceDefinitionIds.includes(rd.id));
+            const raceNames = tourRaces.flatMap(rd => [rd.name, ...(rd.aliases || [])]);
+            const tourYear = tour.date.split('-')[0];
+
+            // Find all matching activities from ALL users
+            const activities = await activityRepo.findActivitiesForRaces(raceNames, tourYear);
+
+            // Group activities by race name (id) and user
+            const standings = activities.map(a => ({
+                userId: a.userId,
+                activityId: a.id,
+                date: a.date,
+                title: a.plan?.title || a.performance?.notes || '',
+                distanceKm: a.performance?.distanceKm || 0,
+                durationMinutes: a.performance?.durationMinutes || 0,
+                // Match back to race definition ID
+                raceDefinitionId: tourRaces.find(rd => 
+                    (a.plan?.title || '').toLowerCase().includes(rd.name.toLowerCase()) ||
+                    (rd.aliases || []).some(alias => (a.plan?.title || '').toLowerCase().includes(alias.toLowerCase()))
+                )?.id
+            })).filter(s => s.raceDefinitionId);
+
+            return new Response(JSON.stringify({ standings }), { headers });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }

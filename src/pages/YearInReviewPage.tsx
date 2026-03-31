@@ -93,8 +93,9 @@ export function YearInReviewPage() {
     const [durationInterval, setDurationInterval] = useState<'1d' | '1w' | '2w' | '1m' | '3m'>('2w');
 
     const durationLabel = (minutes: number) => {
-        const h = Math.floor(minutes / 60);
-        const m = Math.round(minutes % 60);
+        const totalMinutes = Math.round(minutes);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
         if (h > 0) return `${h}h ${m}min`;
         return `${m}min`;
     };

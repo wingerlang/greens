@@ -1,4 +1,5 @@
-import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType, type BodyMeasurementType } from '../models/types.ts';
+import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType, type BodyMeasurementType, type PlannedActivity } from '../models/types.ts';
+import { parsePlanningInput } from './planningParser.ts';
 
 export type OmniboxIntent =
     | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number; heartRateAvg?: number; heartRateMax?: number }; date?: string }
@@ -7,7 +8,8 @@ export type OmniboxIntent =
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps'; amount: number; caffeine?: number }; date?: string }
     | { type: 'measurement'; data: { measurementType?: BodyMeasurementType; value?: number }; date?: string }
     | { type: 'navigate'; data: { path: string }; date?: string }
-    | { type: 'search'; data: { query: string }; date?: string };
+    | { type: 'search'; data: { query: string }; date?: string }
+    | { type: 'planera'; data: Partial<PlannedActivity>; rawInput: string; date?: string };
 
 /**
  * Calculate calories burned for an exercise.
@@ -53,6 +55,12 @@ export function parseTrainingString(input: string): { type: ExerciseType; durati
 export function parseOmniboxInput(input: string): OmniboxIntent {
     const rawLower = input.toLowerCase().trim();
     if (!rawLower) return { type: 'search', data: { query: '' } };
+
+    // 0. Planning Check (e.g. "planera push imorgon")
+    if (rawLower.startsWith('planera')) {
+        const planIntent = parsePlanningInput(input);
+        if (planIntent) return planIntent;
+    }
 
     // 1. Extract Date
     const { date, remaining: afterDate } = parseDate(rawLower);

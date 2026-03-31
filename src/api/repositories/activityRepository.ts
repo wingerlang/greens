@@ -133,6 +133,29 @@ export class ActivityRepository {
 
         await atomic.commit();
     }
+
+    /**
+     * Search ALL activities from ALL users to find matches for a set of race definitions
+     * within a specific year.
+     */
+    async findActivitiesForRaces(raceNames: string[], year: string): Promise<UniversalActivity[]> {
+        const iter = kv.list<UniversalActivity>({ prefix: ['activities'] });
+        const matches: UniversalActivity[] = [];
+        const lowerNames = raceNames.map(n => n.toLowerCase());
+
+        for await (const entry of iter) {
+            const act = entry.value;
+            if (!act.date.startsWith(year)) continue;
+            
+            const title = (act.plan?.title || act.performance?.notes || '').toLowerCase();
+            const isMatch = lowerNames.some(ln => title.includes(ln));
+            
+            if (isMatch) {
+                matches.push(act);
+            }
+        }
+        return matches;
+    }
 }
 
 export const activityRepo = new ActivityRepository();

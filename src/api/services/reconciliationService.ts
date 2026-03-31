@@ -1,6 +1,14 @@
 import { UniversalActivity } from '../../models/types.ts';
 import { activityRepo } from '../repositories/activityRepository.ts';
-import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity, getAllStravaActivities, calculateStravaCalories } from '../strava.ts';
+import { 
+    createUniversalFromStrava, 
+    mapStravaToPerformance, 
+    StravaActivity, 
+    getAllStravaActivities, 
+    calculateStravaCalories, 
+    getStravaActivityDetail,
+    mapStravaType
+} from '../strava.ts';
 import { FeedRepository } from '../repositories/feedRepository.ts';
 import { getUserById } from '../db/user.ts';
 import { getUserData } from '../db/data.ts';
@@ -83,7 +91,7 @@ export class ReconciliationService {
     async syncActivities(
         userId: string,
         activitiesToSync: StravaActivity[],
-        options: { forceUpdate?: boolean } = {}
+        options: { forceUpdate?: boolean, accessToken?: string } = {}
     ): Promise<{ created: number; updated: number; failed: number }> {
         let created = 0;
         let updated = 0;
@@ -99,39 +107,43 @@ export class ReconciliationService {
 
                 if (!existing) {
                     // CREATE NEW
-                    // Try to match with Plan first (Legacy logic)
-                    const dateISO = stravaActivity.start_date_local.split('T')[0];
+                    // FETCH DETAIL IF RUN (for best_efforts & splits)
+                    let detailedActivity = stravaActivity;
+                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name);
+                    if (options.accessToken && activityType === 'running' && !stravaActivity.best_efforts) {
+                        const detail = await getStravaActivityDetail(stravaActivity.id, options.accessToken);
+                        if (detail) detailedActivity = detail;
+                    }
+
+                    const dateISO = detailedActivity.start_date_local.split('T')[0];
                     const candidates = await activityRepo.getActivitiesByDateRange(userId, dateISO, dateISO);
-                    const planMatch = this.findBestMatch(stravaActivity, candidates.filter(c => c.status === 'PLANNED'));
+                    const planMatch = this.findBestMatch(detailedActivity, candidates.filter(c => c.status === 'PLANNED'));
 
                     if (planMatch) {
-                        await this.mergeActivity(planMatch, stravaActivity, user?.settings);
-                        created++; // Count as created/synced
+                        await this.mergeActivity(planMatch, detailedActivity, user?.settings);
+                        created++;
                     } else {
-                        const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings, latestWeight);
+                        const newActivity = createUniversalFromStrava(detailedActivity, userId, user?.settings, latestWeight);
                         await activityRepo.saveActivity(newActivity);
                         created++;
                     }
                     // Emit feed event for new stuff
-                    await this.emitStravaFeedEvent(userId, stravaActivity, user?.privacy);
+                    await this.emitStravaFeedEvent(userId, detailedActivity, user?.privacy);
 
                 } else if (options.forceUpdate) {
                     // UPDATE EXISTING
-                    // Protect Merge Info?
-                    // If activity is merged (has `mergeInfo`), we verify if we should touch it.
-                    // Actually, if we update performance data from Strava, the merge is still valid (Planned + Strava Perf).
-                    // We just update the `performance` section.
+                    let detailedActivity = stravaActivity;
+                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name);
+                    if (options.accessToken && activityType === 'running' && !stravaActivity.best_efforts) {
+                        const detail = await getStravaActivityDetail(stravaActivity.id, options.accessToken);
+                        if (detail) detailedActivity = detail;
+                    }
 
-                    // Update performance data
-                    const freshPerformance = mapStravaToPerformance(stravaActivity, user?.settings, latestWeight);
-
-                    // Maintain existing sub-fields if needed? 
-                    // Usually fresh mapped data is better.
+                    const freshPerformance = mapStravaToPerformance(detailedActivity, user?.settings, latestWeight);
 
                     existing.performance = {
                         ...existing.performance,
                         ...freshPerformance,
-                        // Preserve manually added notes, subtypes, and exclusion flags
                         notes: existing.performance?.notes || freshPerformance.notes,
                         subType: existing.performance?.subType || freshPerformance.subType,
                         excludeFromStats: existing.performance?.excludeFromStats
@@ -303,6 +315,59 @@ export class ReconciliationService {
                 { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings, latestWeight).calories), unit: 'kcal', icon: '🔥' }
             ]
         });
+    }
+
+    /**
+     * Backfill missing best efforts for running activities
+     */
+    async backfillBestEfforts(userId: string, accessToken: string, year: string): Promise<{ updated: number; skipped: number; failed: number }> {
+        const activities = await activityRepo.getAllActivities(userId);
+        const toBackfill = activities.filter(a => 
+            a.date.startsWith(year) && 
+            a.performance?.activityType === 'running' && 
+            (!a.performance?.bestEfforts || a.performance.bestEfforts.length === 0) &&
+            a.performance?.source?.source === 'strava'
+        );
+
+        let updated = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (const activity of toBackfill) {
+            try {
+                const stravaId = parseInt(activity.performance?.source?.externalId || '', 10);
+                if (isNaN(stravaId)) {
+                    skipped++;
+                    continue;
+                }
+
+                const detail = await getStravaActivityDetail(stravaId, accessToken);
+                if (detail && detail.best_efforts) {
+                    const freshPerformance = mapStravaToPerformance(detail);
+                    activity.performance = {
+                        ...activity.performance,
+                        ...freshPerformance,
+                        // Preserve overrides
+                        notes: activity.performance?.notes || freshPerformance.notes,
+                        subType: activity.performance?.subType || freshPerformance.subType,
+                        excludeFromStats: activity.performance?.excludeFromStats
+                    } as any;
+                    activity.updatedAt = new Date().toISOString();
+                    await activityRepo.saveActivity(activity);
+                    updated++;
+                } else {
+                    skipped++;
+                }
+                
+                // Rate limit protection
+                await new Promise(r => setTimeout(r, 200));
+            } catch (err) {
+                console.error(`Backfill failed for activity ${activity.id}`, err);
+                failed++;
+            }
+        }
+
+        return { updated, skipped, failed };
     }
 }
 

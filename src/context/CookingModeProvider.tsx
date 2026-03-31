@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { type Recipe } from '../models/types.ts';
-import { useData } from './DataContext.tsx';
+import { useData } from './DataShared.ts';
 import { useCookingSession, type IngredientCustomizations } from '../hooks/useCookingSession.ts';
 import { useTimer } from '../hooks/useTimer.ts';
 import { RecipeDetailModal } from '../components/cooking/RecipeDetailModal.tsx';

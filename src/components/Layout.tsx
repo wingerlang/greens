@@ -5,7 +5,7 @@ import { GlobalExerciseModal } from './training/GlobalExerciseModal.tsx';
 import { NoccoOClock } from './NoccoOClock.tsx';
 import { ExerciseType } from '../models/types.ts';
 import { NutritionBreakdownModal } from './calories/NutritionBreakdownModal.tsx';
-import { useData } from '../context/DataContext.tsx';
+import { useData } from '../context/DataShared.ts';
 import { useRef } from 'react';
 import { GlobalNotification } from './common/GlobalNotification.tsx';
 import { useNavigate, useLocation } from 'react-router-dom';

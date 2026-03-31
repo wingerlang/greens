@@ -141,6 +141,12 @@ export function TrainingPlanningPage() {
             p.title?.toLowerCase().includes('styrka') || p.category === 'STRENGTH'
         );
 
+        // Other Cardio stats (not running or strength)
+        const otherActivities = weekCompleted.filter((a: any) => a.type !== 'running' && a.type !== 'strength' && a.type !== 'REST');
+        const otherSessions = otherActivities.length;
+        const otherTime = otherActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
+
+
         const forecastRunningSessions = runningSessions + plannedRunning.length;
         const forecastRunningKm = runningKm + plannedRunning.reduce((sum: number, p: any) => sum + (p.estimatedDistance || 0), 0);
         const forecastStrengthSessions = strengthSessionCount + plannedStrength.length;
@@ -155,6 +161,10 @@ export function TrainingPlanningPage() {
                 sessions: strengthSessionCount,
                 time: strengthTime,
                 tonnage: strengthTonnage
+            },
+            other: {
+                sessions: otherSessions,
+                time: otherTime
             },
             forecast: {
                 runningSessions: forecastRunningSessions,
@@ -311,8 +321,9 @@ export function TrainingPlanningPage() {
     // UI Helper: Format duration as hh:mm
     const formatDurationHHMM = (minutes: number) => {
         if (!minutes) return '00:00';
-        const h = Math.floor(minutes / 60);
-        const m = Math.round(minutes % 60);
+        const totalMinutes = Math.round(minutes);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     };
 
@@ -370,33 +381,47 @@ export function TrainingPlanningPage() {
                         <Clock size={16} className="text-slate-400" />
                         <span className="text-xs font-black uppercase tracking-wider text-slate-500">Föregående Vecka</span>
                     </div>
-                    <div className="flex items-start gap-4">
-                        <div className="flex flex-col flex-1">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">🏃 Löpning</div>
+                    <div className="flex items-start gap-4 overflow-x-auto pb-1 scrollbar-none">
+                        <div className="flex flex-col flex-1 min-w-[70px]">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">🏃 Löpning</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
+                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
                                     {lastWeeklyStats.running.km.toFixed(1)}
                                     <span className="text-sm font-bold text-slate-400 ml-1">km</span>
                                 </span>
                             </div>
-                            <div className="text-xs font-medium text-slate-500">
-                                {lastWeeklyStats.running.sessions} pass • {formatDuration(lastWeeklyStats.running.time * 60)}
+                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                                {lastWeeklyStats.running.sessions} pass
                             </div>
                         </div>
 
-                        {/* Divider */}
-                        <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch"></div>
+                        <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
 
-                        <div className="flex flex-col flex-1">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">💪 Styrka</div>
+                        <div className="flex flex-col flex-1 min-w-[70px]">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">💪 Styrka</div>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-xl font-black text-slate-700 dark:text-slate-300">
                                     {lastWeeklyStats.strength.sessions}
                                     <span className="text-sm font-bold text-slate-400 ml-1">pass</span>
                                 </span>
                             </div>
-                            <div className="text-xs font-medium text-slate-500">
-                                {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton • {formatDuration(lastWeeklyStats.strength.time * 60)}
+                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                                {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton
+                            </div>
+                        </div>
+
+                        <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
+
+                        <div className="flex flex-col flex-1 min-w-[70px]">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">🚴 Cardio</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
+                                    {lastWeeklyStats.other.sessions}
+                                    <span className="text-sm font-bold text-slate-400 ml-1">pass</span>
+                                </span>
+                            </div>
+                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                                {formatDurationHHMM(lastWeeklyStats.other.time)}
                             </div>
                         </div>
                     </div>

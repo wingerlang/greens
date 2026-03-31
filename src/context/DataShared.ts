@@ -39,7 +39,9 @@ import {
     type RaceDefinition,
     type RaceIgnoreRule,
     type ExerciseDefinition,
-    type PermissionConfig
+    type PermissionConfig,
+    type Tour,
+    type TourFormData
 } from '../models/types.ts';
 
 export interface DataContextType {
@@ -216,6 +218,12 @@ export interface DataContextType {
     databaseActions: DatabaseAction[];
     exercises: ExerciseDefinition[];
     permissionConfig: PermissionConfig;
+
+    // Tours
+    tours: Tour[];
+    addTour: (data: TourFormData) => Tour;
+    updateTour: (id: string, updates: Partial<Tour>) => void;
+    deleteTour: (id: string) => void;
 }
 
 export const DataContext = createContext<DataContextType | null>(null);

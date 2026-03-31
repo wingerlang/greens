@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { isCompetition, formatTime } from '../../utils/activityUtils.ts';
+import { getBestEffortsForActivity, PERFORMANCE_TARGETS } from '../../utils/performanceEngine.ts';
 import { ActivityDetailModal } from '../../components/activities/ActivityDetailModal.tsx';
 import { PBAnalysisModal } from '../../components/training/PBAnalysisModal.tsx';
 import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, ArrowRight, BarChart3 } from 'lucide-react';
@@ -163,19 +164,18 @@ export function RunningStatsView({
         let fastestPaceRun: ExerciseEntry | null = null;
 
         // Process in chronological order to find PB breakers
-        // We use runningActivities (all time) for PB tracking
         runningActivities.forEach(run => {
             const dist = run.distance || 0;
             const durationSec = run.durationMinutes * 60;
             const paceSec = durationSec / dist;
 
-            // Smart Stats Calculations
+            // 1. Basic Stats (Full Activity)
             if (dist > maxDistance) {
                 maxDistance = dist;
                 longestRun = run;
             }
 
-            if (run.durationMinutes > 5) { // Exclude extreme outliers / short sprints
+            if (run.durationMinutes > 5) {
                 totalPaceSum += paceSec;
                 paceCount++;
                 if (paceSec < fastestPaceSecPerKm) {
@@ -184,25 +184,39 @@ export function RunningStatsView({
                 }
             }
 
-            // Bucket Processing
-            RUNNING_BUCKETS.forEach(bucket => {
-                if (dist >= bucket.min && dist <= bucket.max) {
-                    lists[bucket.key].push(run);
+            // 2. Performance Engine Analysis (Sub-segments)
+            // We need to find the UniversalActivity corresponding to this ExerciseEntry
+            const ua = universalActivities.find(u => u.id === run.id);
+            if (!ua) return;
 
-                    if (durationSec < currentPBs[bucket.key]) {
-                        // Found a new PB!
+            const bestEfforts = getBestEffortsForActivity(ua);
+
+            // We match best efforts to our UI buckets
+            RUNNING_BUCKETS.forEach(bucket => {
+                // Try to find a matching best effort from the engine
+                // We match by name (e.g. '5k') or by distance within range
+                const effort = bestEfforts.find(be => 
+                    be.name.toLowerCase() === bucket.key.toLowerCase() ||
+                    (be.distance >= bucket.min * 1000 && be.distance <= bucket.max * 1000)
+                );
+
+                if (effort) {
+                    const effortDuration = effort.movingTime;
+
+                    if (effortDuration < currentPBs[bucket.key]) {
+                        // Found a new PB! (May be a sub-segment)
                         const pbEvent: PBEvent = {
                             id: run.id,
                             date: run.date,
-                            distance: dist,
-                            durationSeconds: durationSec,
-                            durationFormatted: formatTime(durationSec),
+                            distance: effort.distance / 1000,
+                            durationSeconds: effortDuration,
+                            durationFormatted: formatTime(effortDuration),
                             bucketLabel: bucket.label,
                             isRace: isCompetition(run),
                             activity: run
                         };
 
-                        // Check for same-day PB replacement (e.g. duplicate synced activities or overlapping segments of same race)
+                        // Check for same-day PB replacement
                         let lastPBIndex = -1;
                         for (let i = timeline.length - 1; i >= 0; i--) {
                             if (timeline[i].bucketLabel === bucket.label) {
@@ -213,22 +227,38 @@ export function RunningStatsView({
 
                         const runDateStr = run.date.split('T')[0];
                         if (lastPBIndex !== -1 && timeline[lastPBIndex].date.split('T')[0] === runDateStr) {
-                            // Update existing node instead of adding a new one
                             const prevPB = timeline[lastPBIndex];
                             if (prevPB.previousDurationSeconds) {
                                 pbEvent.previousDurationSeconds = prevPB.previousDurationSeconds;
-                                pbEvent.improvementSeconds = prevPB.previousDurationSeconds - durationSec;
+                                pbEvent.improvementSeconds = prevPB.previousDurationSeconds - effortDuration;
                             }
                             timeline[lastPBIndex] = pbEvent;
                         } else {
-                            // Normal new node
                             if (currentPBs[bucket.key] !== Infinity) {
                                 pbEvent.previousDurationSeconds = currentPBs[bucket.key];
-                                pbEvent.improvementSeconds = currentPBs[bucket.key] - durationSec;
+                                pbEvent.improvementSeconds = currentPBs[bucket.key] - effortDuration;
                             }
                             timeline.push(pbEvent);
                         }
 
+                        currentPBs[bucket.key] = effortDuration;
+                    }
+
+                    // Add to the list for "Topp 10" calculation
+                    // We store a clone of the run but with the duration overridden for this specific list
+                    const runClone = { ...run, durationMinutes: effortDuration / 60, distance: effort.distance / 1000 };
+                    lists[bucket.key].push(runClone);
+                } else if (dist >= bucket.min && dist <= bucket.max) {
+                    // Fallback for activities without splits (if any)
+                    lists[bucket.key].push(run);
+                    
+                    if (durationSec < currentPBs[bucket.key]) {
+                        const pbEvent: PBEvent = {
+                            id: run.id, date: run.date, distance: dist,
+                            durationSeconds: durationSec, durationFormatted: formatTime(durationSec),
+                            bucketLabel: bucket.label, isRace: isCompetition(run), activity: run
+                        };
+                        timeline.push(pbEvent);
                         currentPBs[bucket.key] = durationSec;
                     }
                 }

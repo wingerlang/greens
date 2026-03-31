@@ -45,16 +45,22 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     if (!splits || splits.length < 3) return null;
 
     const lowerTitle = (title || '').toLowerCase();
+    
+    // Explicit exclusions for any analysis
     const isExplicitlyDistance = lowerTitle.includes('distans') || lowerTitle.includes('zone 2') || lowerTitle.includes('z2') || lowerTitle.includes('lugnt') || lowerTitle.includes('återhämtning') || lowerTitle.includes('recovery');
-    const isExplicitlyInterval = lowerTitle.includes('intervall') || lowerTitle.includes('reps') || lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || (parsed && parsed.suggestedSubType === 'interval');
+    
+    // Keywords that imply separate work/rest repeats
+    const isExplicitlyInterval = lowerTitle.includes('intervall') || lowerTitle.includes('reps') || lowerTitle.includes('tusingar') || lowerTitle.includes('backe') || (parsed && parsed.suggestedSubType === 'interval');
+    
+    // Keywords that imply a single hard effort block
+    const isExplicitlySustained = lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || lowerTitle.includes('max') || lowerTitle.includes('test') || lowerTitle.includes('race') || lowerTitle.includes('lopp') || lowerTitle.includes('pb') || lowerTitle.includes('rekord') || lowerTitle.includes('tävling');
 
     if (isExplicitlyDistance && !isExplicitlyInterval) {
         return null; // Skip interval clustering for explicit distance/recovery runs
     }
 
-    // 1. Beräkna tempo (sekunder per km)
+    // 1. Calculate pace (seconds per km)
     const paces = splits.map(s => s.movingTime / (Math.max(s.distance, 1) / 1000));
-
     const classified: ClassifiedSplit[] = splits.map(s => ({ ...s, role: 'unknown' as const }));
 
     // --- Pre-check: Title-Driven sequence matching ---
@@ -89,13 +95,13 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
                 bestStart = i;
             }
         }
-        // At least 75% items match, and matched items count has to be reasonable
         if (bestMatchCount >= Math.ceil(expectedSequence.length * 0.75) && bestStart !== -1) {
             isTitleMatched = true;
         }
     }
 
     if (isTitleMatched && bestStart !== -1) {
+        // ... (title matching logic remains the same)
         for (let i = 0; i < bestStart; i++) classified[i].role = 'warmup';
         for (let i = bestStart + expectedSequence.length; i < classified.length; i++) classified[i].role = 'cooldown';
         
@@ -113,11 +119,10 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
             }
         }
     } else {
-        // 2. K-Means Klustring (k=3) för att dynamiskt hitta tempogränser
-        // Use unique paces to prevent extreme lap count ratios from skewing centers
+        // 2. K-Means Clustering (k=3)
         const uniquePaces = [...new Set(paces)].sort((a, b) => a - b);
-        let c1 = uniquePaces[0]; // Snabbast (Intervall)
-        let c3 = uniquePaces[uniquePaces.length - 1]; // Långsammast (Uppjogg/Nerjogg)
+        let c1 = uniquePaces[0]; // Fast
+        let c3 = uniquePaces[uniquePaces.length - 1]; // Slow
         let c2 = uniquePaces.length >= 3 ? uniquePaces[Math.floor(uniquePaces.length / 2)] : (c1 + c3) / 2;
 
         for (let iter = 0; iter < 5; iter++) {
@@ -135,19 +140,19 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
             if (g3.length) c3 = g3.reduce((a, b) => a + b, 0) / g3.length;
         }
 
-        // --- Robusthets-checkar ---
+        // --- Robustness Checks ---
         const maxPace = Math.max(...paces);
         const minPace = Math.min(...paces);
         const paceRange = maxPace - minPace;
-        const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
 
-        const minRequiredRange = isExplicitlyInterval ? 15 : 35;
-        if (paceRange < minRequiredRange && !isExplicitlyInterval) return null;
-        if (isExplicitlyDistance && paceRange < 50) return null;
+        // Requirement: Range must be significant for non-explicit sessions
+        const minRequiredRange = isExplicitlyInterval ? 15 : 45; 
+        if (paceRange < minRequiredRange && !isExplicitlyInterval && !isExplicitlySustained) return null;
 
+        // Determine if clustering is valid (Fast vs Medium gap)
         const clusterDiff = Math.abs(c1 - c2);
-        const minClusterDiff = isExplicitlyInterval ? 10 : 25;
-        if (clusterDiff < minClusterDiff && !isExplicitlyInterval) return null;
+        const minClusterDiff = isExplicitlyInterval ? 12 : 25;
+        if (clusterDiff < minClusterDiff && !isExplicitlyInterval && !isExplicitlySustained) return null;
 
         const threshold = (c1 + c2) / 2;
         const isFast = paces.map(p => p < threshold);
@@ -157,7 +162,7 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
 
         if (firstFastIdx === -1) return null;
 
-        // 3. Applicera roller enbart baserat på faktisk data
+        // 3. Apply roles
         for (let i = 0; i < firstFastIdx; i++) classified[i].role = 'warmup';
         for (let i = lastFastIdx + 1; i < classified.length; i++) classified[i].role = 'cooldown';
 
@@ -180,7 +185,7 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
         }
     }
 
-    // 4. Bygg IntervalGroups för UI:t
+    // 4. Build IntervalGroups
     const intervalGroups: SegmentedSplits['intervalGroups'] = [];
     let currentGroup: { number: number; intervalSplits: ClassifiedSplit[]; recoverySplits: ClassifiedSplit[] } | null = null;
 
@@ -212,24 +217,72 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
         });
     }
 
-    // 5. Sammanställ summary
-    const warmupSplits = classified.filter(s => s.role === 'warmup');
-    const cooldownSplits = classified.filter(s => s.role === 'cooldown');
+    // 5. Sustained Effort Refinement & Logic
     const allIntervalSplits = classified.filter(s => s.role === 'interval');
     const allRecoverySplits = classified.filter(s => s.role === 'recovery');
-
-    const totalIntervalKm = allIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0);
-    const totalRecoveryKm = allRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0);
-
+    
     const avgIntervalPace = allIntervalSplits.length > 0
         ? allIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allIntervalSplits.length : 0;
     const avgRecoveryPace = allRecoverySplits.length > 0
         ? allRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / allRecoverySplits.length : 0;
-    const intervalPaces = allIntervalSplits.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
 
-    // Detect if this is a sustained effort (tempo/test run)
-    // We consider it sustained if it's one block and little to no recovery between warmup/cooldown
-    const type = (intervalGroups.length === 1 && totalRecoveryKm < 0.1) ? 'sustained' : 'intervals';
+    const paceRatio = avgIntervalPace > 0 ? avgRecoveryPace / avgIntervalPace : 0;
+    
+    // Heuristic: If "recovery" is less than 18% slower than "intervals", it's likely a sustained run.
+    const isVeryClosePace = paceRatio > 0 && paceRatio < 1.18;
+
+    let type: 'intervals' | 'sustained' = (intervalGroups.length === 1 && allRecoverySplits.length === 0) ? 'sustained' : 'intervals';
+    
+    if (isExplicitlySustained || isVeryClosePace) {
+        type = 'sustained';
+        
+        // COLLAPSE LOGIC: If sustained, we merge all interval blocks into one if segments between them are short/fast
+        // or just treat the entire range from first interval to last as one block if it makes sense.
+        if (intervalGroups.length > 1) {
+            // Find first interval split and last interval split
+            const firstIntervalIdx = classified.findIndex(s => s.role === 'interval');
+            const lastIntervalIdx = classified.lastIndexOf(classified.findLast(s => s.role === 'interval')!);
+            
+            if (firstIntervalIdx !== -1 && lastIntervalIdx !== -1) {
+                for (let i = firstIntervalIdx; i <= lastIntervalIdx; i++) {
+                    classified[i].role = 'interval';
+                    classified[i].intervalNumber = 1;
+                }
+                
+                // Rebuild groups with new collapsed state
+                intervalGroups.length = 0;
+                const collapsedSplits = classified.filter(s => s.role === 'interval');
+                intervalGroups.push({
+                    number: 1,
+                    intervalSplits: collapsedSplits,
+                    recoverySplits: [],
+                    avgPace: collapsedSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / collapsedSplits.length,
+                    avgHR: collapsedSplits.some(sp => sp.averageHeartrate) ?
+                        collapsedSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / collapsedSplits.filter(sp => sp.averageHeartrate).length : undefined
+                });
+            }
+        }
+    }
+
+    // Final exclusion for accidental noisy sustained runs
+    if (type === 'sustained' && !isExplicitlySustained && !isExplicitlyInterval) {
+        // If it's a "sustained" run by heuristic, but the pace is very close to warmup/cooldown, ignore it
+        const warmupPace = classified.filter(s => s.role === 'warmup').reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / classified.filter(s => s.role === 'warmup').length;
+        if (avgIntervalPace / warmupPace > 0.95) {
+             // Too close to warmup pace to be a meaningful "effort" block
+             // (unless user explicitly named it Tempo/Max)
+             return null;
+        }
+    }
+
+    const warmupSplits = classified.filter(s => s.role === 'warmup');
+    const cooldownSplits = classified.filter(s => s.role === 'cooldown');
+    const finalIntervalSplits = classified.filter(s => s.role === 'interval');
+    const finalRecoverySplits = classified.filter(s => s.role === 'recovery');
+
+    const totalIntervalKm = finalIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    const totalRecoveryKm = finalRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    const intervalPaces = finalIntervalSplits.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
 
     return {
         type,
@@ -242,10 +295,11 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
             cooldownKm: cooldownSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
             totalIntervalKm,
             totalRecoveryKm,
-            avgIntervalPace,
-            avgRecoveryPace,
+            avgIntervalPace: finalIntervalSplits.length > 0 ? finalIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalIntervalSplits.length : 0,
+            avgRecoveryPace: finalRecoverySplits.length > 0 ? finalRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalRecoverySplits.length : 0,
             fastestIntervalPace: intervalPaces.length > 0 ? Math.min(...intervalPaces) : 0,
             slowestIntervalPace: intervalPaces.length > 0 ? Math.max(...intervalPaces) : 0,
         }
     };
 }
+

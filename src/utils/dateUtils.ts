@@ -20,8 +20,13 @@ export function getRelativeTime(dateStr: string): string {
     if (diffDays === 0) return 'Idag';
     if (diffDays === 1) return 'Igår';
     if (diffDays < 7) return `${diffDays} dagar sedan`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} veckor sedan`;
-    return `${Math.floor(diffDays / 30)} månader sedan`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} vecka/or sedan`;
+    if (diffDays < 365) {
+        const months = Math.floor(diffDays / 30);
+        return `${months} månad${months !== 1 ? 'er' : ''} sedan`;
+    }
+    const years = Math.floor(diffDays / 365);
+    return `${years} år sedan`;
 }
 
 /**
@@ -64,9 +69,10 @@ export function parseTimeToSeconds(timeStr: string): number {
  * Format seconds to HH:MM:SS or MM:SS string
  */
 export function formatSecondsToTime(totalSeconds: number): string {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
+    const rounded = Math.round(totalSeconds);
+    const h = Math.floor(rounded / 3600);
+    const m = Math.floor((rounded % 3600) / 60);
+    const s = rounded % 60;
 
     if (h > 0) {
         return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;

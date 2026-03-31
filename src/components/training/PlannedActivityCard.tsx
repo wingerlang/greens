@@ -105,10 +105,14 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                         <div className="flex items-center gap-3 mb-2">
                             <span className={`px-2 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider border ${activity.category === 'LONG_RUN' ? 'bg-amber-500/20 text-amber-300 border-amber-500/20' :
                                 activity.category === 'INTERVALS' ? 'bg-rose-500/20 text-rose-300 border-rose-500/20' :
-                                    'bg-indigo-500/20 text-indigo-300 border-indigo-500/20'
+                                activity.category === 'STRENGTH' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/20' :
+                                activity.category === 'CARDIO' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/20' :
+                                    'bg-slate-500/20 text-slate-300 border-slate-500/20'
                                 }`}>
                                 {activity.category === 'LONG_RUN' ? '🚀 Långpass' :
                                     activity.category === 'EASY' ? '🍃 Distans' :
+                                    activity.category === 'STRENGTH' ? '🏋️ Styrka' :
+                                    activity.category === 'CARDIO' ? '🚴 Cardio' :
                                         activity.category}
                             </span>
                             <div className="flex items-center gap-2">

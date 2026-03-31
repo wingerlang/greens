@@ -3,6 +3,8 @@ import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { CapacityChart } from './fitness/CapacityChart.tsx';
 import { PaceEfficiencyChart } from './fitness/PaceEfficiencyChart.tsx';
+import { YearlyBestList } from './fitness/YearlyBestList.tsx';
+import { RefreshCw } from 'lucide-react';
 
 interface CurrentFitnessViewProps {
     exerciseEntries: ExerciseEntry[];
@@ -20,6 +22,27 @@ export function CurrentFitnessView({
     onOpenActivity
 }: CurrentFitnessViewProps) {
     const [calculationWindowDays, setCalculationWindowDays] = useState<number>(60);
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    const handleSyncBestEfforts = async () => {
+        setIsSyncing(true);
+        try {
+            const year = new Date().getFullYear();
+            const res = await fetch('/api/strava/backfill-best-efforts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: year.toString() })
+            });
+            const data = await res.json();
+            alert(`Synk klar! Uppdaterade ${data.updated} pass.`);
+            window.location.reload();
+        } catch (e) {
+            console.error("Sync failed", e);
+            alert("Synk misslyckades. Kontrollera din anslutning.");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const allRuns = useMemo(() => {
         const legacy = exerciseEntries || [];
@@ -59,10 +82,26 @@ export function CurrentFitnessView({
 
     return (
         <div className="space-y-6">
+            <div className="flex justify-end">
+                <button
+                    onClick={handleSyncBestEfforts}
+                    disabled={isSyncing}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-white/10 rounded-xl text-slate-400 hover:text-white hover:border-amber-400/50 transition-all text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                >
+                    <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                    {isSyncing ? 'Synkar...' : 'Synka kilometertider'}
+                </button>
+            </div>
+
             <CapacityChart
                 allRuns={allRuns}
                 calculationWindowDays={calculationWindowDays}
                 setCalculationWindowDays={setCalculationWindowDays}
+                onOpenActivity={onOpenActivity}
+            />
+
+            <YearlyBestList 
+                activities={universalActivities}
                 onOpenActivity={onOpenActivity}
             />
 

@@ -6,7 +6,8 @@ import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed, formatSecondsToTime } from '../../utils/dateUtils.ts';
-import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
+import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown, getBestEffortsForActivity, getFastestSince } from '../../utils/performanceEngine.ts';
+
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea } from 'recharts';
 
@@ -174,8 +175,9 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
         <div className="bg-violet-500/5 border border-violet-500/10 rounded-2xl p-4 mt-2 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
-                    {isSustained ? 'Passutvärdering' : 'Intervallsammanfattning'}
+                    {isSustained ? 'Analys: Sammanhängande försök' : 'Intervallsammanfattning'}
                 </h4>
+
                 <div className="text-[10px] font-bold text-slate-400">
                     {summary.totalIntervalKm.toFixed(1)}km
                 </div>
@@ -222,8 +224,89 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
         </div>
     );
 });
+// Helper Component: Best Effort Performance (Fastest Since)
+const BestEffortPerformanceCard = React.memo(({ 
+    activity, 
+    allActivities,
+    setSelectedActivityId
+}: { 
+    activity: UniversalActivity; 
+    allActivities: UniversalActivity[];
+    setSelectedActivityId?: (id: string | null) => void;
+}) => {
+    const efforts = getBestEffortsForActivity(activity);
+    if (!efforts || efforts.length === 0) return null;
+
+    // Filter to common distances for a cleaner view
+    const relevantEfforts = efforts.filter(e => 
+        [1, 2, 3, 5, 10, 21.1, 42.2].some(d => Math.abs(e.distance / 1000 - d) < 0.2) || 
+        e.name.includes('mile')
+    ).sort((a, b) => b.distance - a.distance);
+
+    if (relevantEfforts.length === 0) return null;
+
+    return (
+        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 space-y-4 shadow-xl shadow-indigo-500/5 mt-4">
+            <div className="flex items-center justify-between mb-1">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                    <Trophy size={14} className="text-amber-400" /> Bästa tider i passet
+                </h4>
+                <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded-full uppercase">
+                        Jämfört med historik
+                    </span>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {relevantEfforts.map((effort, idx) => {
+                    const result = getFastestSince(activity, effort.distance, effort.movingTime, allActivities);
+                    const isPB = result === 'PB';
+                    
+                    return (
+                        <div key={idx} className="bg-slate-800/40 rounded-xl p-3 border border-white/5 flex flex-col gap-2 group hover:bg-slate-800/60 transition-all">
+                            <div className="flex justify-between items-start">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-black text-white italic tracking-tight">{effort.name}</span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                        {(effort as any).startKm ? `Km ${(effort as any).startKm}-${((effort as any).startKm) + Math.floor(effort.distance / 1000)}` : ''}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-base font-black text-indigo-400 font-mono">
+                                        {formatSecondsToTime(effort.movingTime)}
+                                    </div>
+                                    <div className="text-[9px] text-slate-500 font-mono">
+                                        {formatPace(effort.movingTime / (Math.max(effort.distance, 1) / 1000)).replace('/km', '')}/km
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className={`mt-1 py-1.5 px-2 rounded-lg flex items-center justify-between ${isPB ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/5 border border-indigo-500/10'}`}>
+                                <span className={`text-[10px] font-black uppercase tracking-tighter ${isPB ? 'text-amber-400' : 'text-slate-500'}`}>
+                                    {isPB ? '🏆 PERSONBÄSTA!' : 'Snabbast sedan'}
+                                </span>
+                                {!isPB && result && (
+                                    <span className="text-[10px] font-bold text-indigo-300">
+                                        {getRelativeTime(result)}
+                                    </span>
+                                )}
+                                {!isPB && !result && (
+                                    <span className="text-[10px] font-bold text-slate-500 italic">
+                                        längesedan
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+});
+
 
 export interface ActivityDetailModalProps {
+
     activity: ExerciseEntry & { source: string; _mergeData?: any };
     universalActivity?: UniversalActivity;
     onClose: () => void;
@@ -527,54 +610,29 @@ export function ActivityDetailModal({
     // Smart Extraction Detection (Performance Markers)
     const smartExtractInfo = React.useMemo(() => {
         if (activity.extractedFromId) return null; // Don't suggest extracts from extracts
-        const text = ((activity.title || '') + ' ' + (activity.notes || '')).toLowerCase();
+        if (activity.performance?.activityType !== 'running') return null;
 
-        let distance = 0;
-        let title = '';
-        if (text.includes('5k max') || text.includes('5km max') || text.includes('5 k max') || text.includes('snabb 5k')) {
-            distance = 5.0; title = '5k Max';
-        } else if (text.includes('10k max') || text.includes('10km max') || text.includes('10 k max') || text.includes('snabb 10k')) {
-            distance = 10.0; title = '10k Max';
-        } else {
-            const distMatch = text.match(/(\d+(?:[.,]\d+)?)\s*km/);
-            if (distMatch) distance = parseFloat(distMatch[1].replace(',', '.'));
-        }
+        const bestEfforts = getBestEffortsForActivity(activity);
+        
+        // We look for common distances to suggest extraction
+        const suggestions = bestEfforts
+            .filter(be => [1, 2, 3, 5, 10].includes(be.distance / 1000) || be.name.includes('mile'))
+            .sort((a, b) => b.distance - a.distance) // Prioritize longer distances
+            .slice(0, 3);
 
-        if (distance > 0) {
-            let efforts: { time: number; startKm: number }[] = [];
-            const n = Math.floor(distance);
-
-            if (existingSplits && existingSplits.length >= n) {
-                for (let i = 0; i <= existingSplits.length - n; i++) {
-                    let timeAcc = 0;
-                    for (let j = 0; j < n; j++) {
-                        timeAcc += existingSplits[i + j].movingTime;
-                    }
-                    efforts.push({ time: timeAcc, startKm: Math.max(0, existingSplits[i].split - 1) });
-                }
-            }
-
-            // Sort by time ascending (fastest first)
-            efforts.sort((a, b) => a.time - b.time);
-            
-            // Take top 3
-            const top3 = efforts.slice(0, 3);
-
-            if (top3.length > 0) {
-                return {
-                    distance,
-                    title: title || `${distance}km Max`,
-                    topEfforts: top3.map(e => ({
-                        startKm: e.startKm,
-                        durationSeconds: e.time,
-                        title: `${title || `${distance}km Max`} (${e.startKm}-${e.startKm + n} km)`
-                    }))
-                };
-            }
-            return null;
+        if (suggestions.length > 0) {
+            return {
+                distance: suggestions[0].distance / 1000,
+                title: suggestions[0].name,
+                topEfforts: suggestions.map(e => ({
+                    startKm: (e as any).startKm || 0,
+                    durationSeconds: e.movingTime,
+                    title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
+                }))
+            };
         }
         return null;
-    }, [activity.id, activity.title, activity.notes, existingSplits]);
+    }, [activity.id, activity.performance]);
 
     const activeHighlightRange = React.useMemo(() => {
         if (hoveredExtractEffort) {
@@ -1620,6 +1678,14 @@ export function ActivityDetailModal({
                                         );
                                     })()}
 
+                                    {/* Date and Time Since Label */}
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/40 text-slate-400 rounded-full border border-white/5 text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                        <span>📅</span> {formatSwedishDate(activity.date)}
+                                    </div>
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                        <span>⏱️</span> {getRelativeTime(activity.date)}
+                                    </div>
+
                                     {/* Subtype Label for Intervals */}
                                     {activity.subType === 'interval' && (
                                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
@@ -2484,7 +2550,18 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
 
-                                {/* Heart Rate Zone Visualization (for cardio with HR data) */}
+                                 {/* Best Efforts / Fastest Since */}
+                                 {(activity.type?.toLowerCase() === 'running' || activity.type?.toLowerCase() === 'trail run') && (currentUniversal) && (
+                                     <BestEffortPerformanceCard 
+                                         activity={currentUniversal} 
+                                         allActivities={universalActivities}
+                                         setSelectedActivityId={setSelectedActivityId}
+                                     />
+                                 )}
+
+
+                                 {/* Heart Rate Zone Visualization (for cardio with HR data) */}
+
                                 {(() => {
                                     const effectiveAvgHr = perf?.avgHeartRate || activity.heartRateAvg || (activity.extractedFromId && parentUniversal?.performance?.avgHeartRate ? Math.round(parentUniversal.performance.avgHeartRate) : 0);
                                     const effectiveMaxHr = perf?.maxHeartRate || activity.heartRateMax || (activity.extractedFromId && parentUniversal?.performance?.maxHeartRate ? Math.round(parentUniversal.performance.maxHeartRate) : undefined);
@@ -2578,7 +2655,7 @@ export function ActivityDetailModal({
 
 
                                 {segmentedSplits && (
-                                    <IntervalSplitsCard segmented={segmentedSplits} />
+                                    <IntervalSplitsCard activity={activity} segmented={segmentedSplits} />
                                 )}
 
                                 {/* Splits / Laps Table (fallback when segmentation is unavailable) */}

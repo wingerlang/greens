@@ -1,4 +1,4 @@
-import { UserSettings, ExerciseEntry } from '../models/types.ts';
+import { UserSettings, ExerciseEntry, UniversalActivity, BestEffort } from '../models/types.ts';
 
 export interface AdaptiveGoals {
     calories: number;
@@ -330,4 +330,152 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
     }
 
     return { totalScore: 0, type: 'unknown', components: [], summary: 'Okänd aktivitetstyp.', isPersonalBest: false };
+}
+
+/**
+ * Target distances for best effort analysis (in km).
+ */
+export const PERFORMANCE_TARGETS = [
+    { name: 'Marathon', km: 42.195, stravaName: 'Marathon' },
+    { name: '30k', km: 30.0, stravaName: '30k' },
+    { name: 'Halvmarathon', km: 21.0975, stravaName: 'Half-Marathon' },
+    { name: '15k', km: 15.0, stravaName: '15k' },
+    { name: '10k', km: 10.0, stravaName: '10k' },
+    { name: '5k', km: 5.0, stravaName: '5k' },
+    { name: '3k', km: 3.0, stravaName: '3k' },
+    { name: '2k', km: 2.0, stravaName: '2k' },
+    { name: '1 mile', km: 1.60934, stravaName: '1 mile' },
+    { name: '1k', km: 1.0, stravaName: '1k' },
+    { name: '800m', km: 0.8, stravaName: '800m' },
+    { name: '400m', km: 0.4, stravaName: '400m' }
+];
+
+/**
+ * Returns all identified best efforts for an activity.
+ * Combines Strava's native best efforts (if available) with 
+ * a sliding-window analysis of splits/laps with linear interpolation.
+ */
+export function getBestEffortsForActivity(activity: UniversalActivity): BestEffort[] {
+    const perf = activity.performance;
+    if (!perf || (perf.activityType !== 'running' && !['run', 'trail'].some(t => (activity.plan?.activityType || '').toLowerCase().includes(t)))) {
+        return [];
+    }
+
+    const results: Record<string, BestEffort> = {};
+
+    // 1. Start with Strava's best efforts if available
+    if (perf.bestEfforts && perf.bestEfforts.length > 0) {
+        perf.bestEfforts.forEach(be => {
+            results[be.name] = { ...be };
+        });
+    }
+
+    // 2. Scan splits/laps for potentially better efforts or missing distances
+    // We prioritize 'splits' (usually 1km) but fallback to 'laps' 
+    const segments = (perf.splits && perf.splits.length > 1) ? perf.splits : (perf.laps || []);
+    
+    if (segments.length > 0) {
+        for (const target of PERFORMANCE_TARGETS) {
+            const targetM = target.km * 1000;
+            let bestTime = Infinity;
+            let startKm = 0;
+
+            // Sliding window over segments
+            for (let i = 0; i < segments.length; i++) {
+                let distAcc = 0;
+                let timeAcc = 0;
+                let j = i;
+
+                while (j < segments.length && distAcc < targetM) {
+                    distAcc += segments[j].distance;
+                    timeAcc += segments[j].movingTime;
+                    j++;
+                }
+
+                if (distAcc >= targetM) {
+                    const overshootM = distAcc - targetM;
+                    const lastSegment = segments[j - 1];
+                    const pace = lastSegment.movingTime / Math.max(lastSegment.distance, 1);
+                    const correctedTime = timeAcc - (overshootM * pace);
+
+                    if (correctedTime < bestTime) {
+                        bestTime = correctedTime;
+                        // Use split number or index + 1
+                        startKm = (segments[i] as any).split || (i + 1);
+                    }
+                }
+            }
+
+            if (bestTime !== Infinity) {
+                const current = results[target.stravaName] || results[target.name];
+                
+                // If we found a faster time (or Strava didn't identify it), update
+                if (!current || bestTime < current.movingTime) {
+                    results[target.name] = {
+                        name: target.name,
+                        distance: targetM,
+                        movingTime: bestTime,
+                        elapsedTime: bestTime, // We use moving time for PRs unless otherwise specified
+                        startDate: perf.startTimeLocal || activity.date,
+                        startKm: startKm // Custom property for UI
+                    } as any;
+                }
+            }
+        }
+    }
+
+    return Object.values(results);
+}
+/**
+ * Returns the date of the last time a faster performance was achieved for a given distance.
+ */
+export function getFastestSince(
+    currentActivity: UniversalActivity,
+    targetDistanceM: number,
+    targetTimeSec: number,
+    allActivities: UniversalActivity[]
+): string | 'PB' | null {
+    if (!allActivities || allActivities.length === 0) return null;
+
+    const currentDate = new Date(currentActivity.date).getTime();
+    
+    // Sort activities by date descending to find the MOST RECENT better one first
+    const historical = allActivities
+        .filter(a => 
+            a.id !== currentActivity.id && 
+            new Date(a.date).getTime() < currentDate &&
+            !((a as any).excludeFromStats || a.performance?.excludeFromStats)
+        )
+
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (historical.length === 0) return 'PB'; // No previous data at all, so this is a PB
+
+    let foundBetter = false;
+    let betterDate: string | null = null;
+    let isAllTimePB = true;
+
+    for (const activity of historical) {
+        // First check pre-calculated best efforts if they exist
+        const efforts = getBestEffortsForActivity(activity);
+        const relevantEffort = efforts.find(e => 
+            Math.abs(e.distance - targetDistanceM) < 2 // Handle small floating point diffs
+        );
+
+        if (relevantEffort) {
+            if (relevantEffort.movingTime < targetTimeSec) {
+                if (!foundBetter) {
+                    foundBetter = true;
+                    betterDate = activity.date;
+                }
+                isAllTimePB = false;
+                break; // Found the most recent better one
+            }
+        }
+    }
+
+    if (foundBetter) return betterDate;
+    if (isAllTimePB) return 'PB';
+    
+    return null;
 }

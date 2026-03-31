@@ -187,7 +187,10 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 return new Response(JSON.stringify({ error: "Invalid activities payload" }), { status: 400, headers });
             }
 
-            const result = await reconciliationService.syncActivities(user.id, activities, { forceUpdate });
+            const result = await reconciliationService.syncActivities(user.id, activities, { 
+                forceUpdate, 
+                accessToken: stravaTokens.accessToken 
+            });
 
             // Update last sync time? Maybe only if we synced new stuff.
             if (result.created > 0 || result.updated > 0) {
@@ -299,6 +302,32 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
 
         } catch (e) {
             console.error("Migrate start times failed", e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
+        }
+    }
+
+    // NEW: Backfill Best Efforts
+    if (url.pathname === "/api/strava/backfill-best-efforts" && method === "POST") {
+        try {
+            const stravaTokens = await getStravaTokens(user.id);
+            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                accessToken = refreshed.accessToken;
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
+            }
+
+            const body = await req.json().catch(() => ({}));
+            const year = body.year || new Date().getFullYear().toString();
+
+            const result = await reconciliationService.backfillBestEfforts(user.id, accessToken, year);
+            return new Response(JSON.stringify(result), { headers });
+
+        } catch (e) {
+            console.error("Backfill failed", e);
             return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
         }
     }
