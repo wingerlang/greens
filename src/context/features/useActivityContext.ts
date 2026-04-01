@@ -581,7 +581,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             return {
                 id: w.id,
                 date: w.date,
-                type: finalType,
+                type: finalType.toLowerCase() as any, // FIXED: Force lowercase to match Strava types for the merging logic
                 durationMinutes: totalDurationMinutes,
                 intensity: 'moderate' as const,
                 caloriesBurned: calculateExerciseCalories(finalType, totalDurationMinutes, 'moderate'),
@@ -611,7 +611,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         rawStrengthEntries.forEach(se => {
             const dateKey = se.date.split('T')[0];
             // Key: date-tonnage-approxDuration (10 min buckets)
-            const durationBucket = Math.round(se.durationMinutes / 10) * 10;
+            const durationBucket = Math.round((se.durationMinutes || 0) / 10) * 10;
             const contentKey = `${dateKey}-${se.tonnage}-${durationBucket}`;
 
             if (!seenCombined.has(contentKey)) {
@@ -641,7 +641,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             stravaActivitiesByDate.get(d)!.push(e);
         });
 
-        const isTypeCompatible = (slType: ExerciseType, stravaType: string): boolean => {
+        const isTypeCompatible = (slType: string, stravaType: string): boolean => {
             const sType = stravaType.toLowerCase();
             if (sType === 'cardio' || sType.includes('cardio')) return true;
 
@@ -649,7 +649,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 return sType.includes('weight') || sType.includes('styrka') || sType.includes('strength') || sType === 'other' || sType.includes('workout');
             }
             if (slType === 'cycling') {
-                return sType.includes('ride') || sType.includes('bike') || sType.includes('cycl') || sType.includes('cykel') || sType === 'other';
+                return sType.includes('ride') || sType.includes('bike') || sType.includes('cycl') || sType.includes('cykel') || sType.includes('cykling') || sType === 'other';
             }
             if (slType === 'running') {
                 return sType.includes('run') || sType.includes('löp') || sType === 'other';
@@ -657,7 +657,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             if (slType === 'walking') {
                 return sType.includes('walk') || sType.includes('gång') || sType === 'other';
             }
-            if (slType === 'cardio') {
+            if (slType === 'cardio' || slType === 'workout') {
                 return sType.includes('strength') || sType.includes('cardio') || sType.includes('run') || sType.includes('ride') || sType.includes('cycl') || sType.includes('walk') || sType.includes('swim') || sType.includes('row') || sType.includes('elliptical') || sType === 'other' || sType.includes('workout');
             }
             if (slType === 'hybrid') {
@@ -698,12 +698,20 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 const availableCandidates = compatibleCandidates.filter(c => !mergedStravaIds.has(c.id));
 
                 // Find best match among available compatible candidates
-                // 1. By approximate duration (within 10 mins) - moving time
-                match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
+                // 1. "Tight" match: By approximate duration (within 15 mins) - moving time
+                match = availableCandidates.find(c => Math.abs((c.durationMinutes || 0) - (se.durationMinutes || 0)) <= 15);
 
-                // 2. By approximate duration (within 45 mins) - a bit looser
+                // 2. "Loose" match: By approximate duration (within 45 mins) - BUT ONLY if it's a very good type match
+                // Generic Styrka vs "Cardio" is okay to be loose. Styrka vs "Cycling" is NOT okay to be loose.
                 if (!match) {
-                    match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 45);
+                    match = availableCandidates.find(c => {
+                        const isDurationOkay = Math.abs((c.durationMinutes || 0) - (se.durationMinutes || 0)) <= 45;
+                        const cTypeStr = (c.type || '').toLowerCase();
+                        const isGenericStrava = cTypeStr === 'cardio' || cTypeStr === 'workout' || cTypeStr === 'other';
+                        const isExactTypeMatch = c.type === se.type;
+                        
+                        return isDurationOkay && (isGenericStrava || isExactTypeMatch);
+                    });
                 }
 
                 // 3. Also compare against elapsed time (Strava rest periods can inflate the gap)
@@ -713,13 +721,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         const elapsedSec = (c as any)._mergeData?.universalActivity?.performance?.elapsedTimeSeconds;
                         if (!elapsedSec) return false;
                         const elapsedMin = elapsedSec / 60;
-                        return Math.abs(elapsedMin - se.durationMinutes) <= 20; // 20m tolerance on elapsed
+                        return Math.abs(elapsedMin - (se.durationMinutes || 0)) <= 20; // 20m tolerance on elapsed
                     });
-                }
-
-                // 4. If no match, just take the first available one IF there's only one compatible candidate left for this day
-                if (!match && availableCandidates.length === 1) {
-                    match = availableCandidates[0];
                 }
             }
 
@@ -768,15 +771,18 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         // 🚀 SMART MERGE FILTERING: 
         // If an activity (local or strava) was merged into a virtual parent in the backend,
         // it must be completely hidden from the unified list.
+        const normalizeExtId = (extId: string | undefined): string | null => {
+            if (!extId) return null;
+            return extId.replace('strava_', '').replace('strava-', '');
+        };
+
         const allMergedChildIds = new Set<string>();
         universalActivities.forEach(u => {
             if (u.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
                 u.mergeInfo.originalActivityIds.forEach(id => {
                     allMergedChildIds.add(id);
-                    // Also strip the source prefix if it exists (e.g. strava-123 -> 123)
-                    if (id.includes('-')) {
-                        allMergedChildIds.add(id.split('-').slice(1).join('-'));
-                    }
+                    const clean = normalizeExtId(id);
+                    if (clean) allMergedChildIds.add(clean);
                 });
             }
             if (u.mergedIntoId) {
@@ -786,58 +792,75 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
         initialResult = initialResult.filter(e => {
             if (allMergedChildIds.has(e.id)) return false;
-            if (e.externalId) {
-                const cleanExtId = e.externalId.replace('strava_', '').replace('strava-', '');
-                if (allMergedChildIds.has(cleanExtId) || allMergedChildIds.has(`strava-${cleanExtId}`) || allMergedChildIds.has(`strava_${cleanExtId}`)) {
-                    return false;
-                }
+            const cleanExt = normalizeExtId(e.externalId);
+            if (cleanExt && (
+                allMergedChildIds.has(cleanExt) || 
+                allMergedChildIds.has(`strava-${cleanExt}`) || 
+                allMergedChildIds.has(`strava_${cleanExt}`)
+            )) {
+                return false;
             }
             return true;
         });
+
+        // DEBUG TRIPLICATES - LOG INITIAL RESULT
+        const debugDates = ['2026-03-23', '2026-03-24', '2025-12-23', '2025-01-23'];
+        const initialSuspicious = initialResult.filter(a => debugDates.some(d => a.date.startsWith(d)));
+        if (initialSuspicious.length > 0) {
+            console.log("🔍 [DataContext] INITIAL SUSPICIOUS ITEMS (Pre-Deduplication) 🔍");
+            initialSuspicious.forEach(a => {
+                console.log(`Date: ${a.date} | Title: ${a.title} | Source: ${a.source} | ID: ${a.id} | ExtID: ${a.externalId} | Type: ${a.type}`);
+            });
+        }
 
         // Final De-duplication: Ensure only one entry per unique ID or External ID (Defense in Depth)
         const finalMap = new Map<string, typeof initialResult[0]>();
         
         initialResult.forEach(item => {
-            // Check both local id and (if present) externalId
-            const extId = item.externalId ? `ext_${item.externalId.replace('strava_', '')}` : null;
-            const existingById = finalMap.get(item.id);
-            const existingByExt = extId ? finalMap.get(extId) : undefined;
+            const cleanExt = normalizeExtId(item.externalId);
+            const extLookupKey = cleanExt ? `ext_${cleanExt}` : null;
             
+            const existingById = finalMap.get(item.id);
+            const existingByExt = extLookupKey ? finalMap.get(extLookupKey) : undefined;
+            
+            // If we have duplicates that were already in the map (e.g. two items sharing extId but with different ids),
+            // we should find ALL of them.
             const existing = existingById || existingByExt;
+
+            const getPriority = (i: typeof item) => {
+                if (i.source === 'merged') return 4;
+                if (i.source === 'strava') return 3;
+                if (i.externalId && i.source === 'manual') return 2; // Legacy local
+                if (i.source === 'strength') return 1;
+                return 0; // standard manual
+            };
 
             if (!existing) {
                 finalMap.set(item.id, item);
-                if (extId) finalMap.set(extId, item);
-            } else {
-                // Priority: merged > server strava > manual legacy strava > strength > manual
-                const getPriority = (i: typeof item) => {
-                    if (i.source === 'merged') return 4;
-                    if (i.source === 'strava') return 3;
-                    if (i.externalId && i.source === 'manual') return 2; // Legacy local
-                    if (i.source === 'strength') return 1;
-                    return 0; // standard manual
-                };
-                
-                if (getPriority(item) > getPriority(existing)) {
-                    finalMap.set(item.id, item);
-                    if (extId) finalMap.set(extId, item);
-                    // Cleanup old mapping if IDs differ
-                    if (existing.id !== item.id) finalMap.delete(existing.id);
+                if (extLookupKey) finalMap.set(extLookupKey, item);
+            } else if (getPriority(item) > getPriority(existing)) {
+                if (debugDates.some(d => item.date.startsWith(d))) {
+                    console.log(`[DataContext] Overwriting duplicate: ${existing.source} -> ${item.source} (${item.date})`);
                 }
+                // Remove old references
+                finalMap.delete(existing.id);
+                const oldCleanExt = normalizeExtId(existing.externalId);
+                if (oldCleanExt) finalMap.delete(`ext_${oldCleanExt}`);
+                
+                // Set new references
+                finalMap.set(item.id, item);
+                if (extLookupKey) finalMap.set(extLookupKey, item);
             }
         });
 
         const uniqueValues = Array.from(new Set(Array.from(finalMap.values())));
         const finalSorted = uniqueValues.sort((a, b) => b.date.localeCompare(a.date));
 
-        // DEBUG TRIPLICATES
-        const debugDates = ['2024-12-23', '2025-01-23', '2025-02-23', '2025-03-23', '2025-03-02', '2025-02-02'];
         const suspicious = finalSorted.filter(a => debugDates.some(d => a.date.startsWith(d)));
         if (suspicious.length > 0) {
-            console.log("🚀 SUSPICIOUS DATES TRIPLICATE CHECK 🚀");
+            console.log("✅ [DataContext] FINAL SUSPICIOUS ITEMS (Post-Deduplication) ✅");
             suspicious.forEach(a => {
-                console.log(`Date: ${a.date} | Title: ${a.title} | Source: ${a.source} | Duration: ${a.durationMinutes}m | Dist: ${a.distance} | ID: ${a.id} | ExtID: ${a.externalId}`);
+                console.log(`Date: ${a.date} | Title: ${a.title} | Source: ${a.source} | ID: ${a.id} | ExtID: ${a.externalId}`);
             });
         }
 
@@ -1326,6 +1349,76 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         storageService.deleteTour(id).catch(e => console.error("Failed to delete tour", e));
     }, [skipAutoSave]);
 
+    // Manual Reordering
+    const reorderActivity = useCallback((id: string, direction: 'up' | 'down') => {
+        // 1. Find the target activity in all possible sources
+        const target = exerciseEntries.find(e => e.id === id) || 
+                       plannedActivities.find(p => p.id === id) ||
+                       strengthSessions.find(s => s.id === id) ||
+                       universalActivities.find(u => u.id === id);
+
+        if (!target) return;
+
+        const date = target.date.split('T')[0];
+
+        // 2. Get ALL relevant activities for this day to determine neighbors
+        const dayCombined = [
+            ...unifiedActivities.filter(a => a.date.split('T')[0] === date),
+            ...plannedActivities.filter(p => p.date.split('T')[0] === date)
+        ].filter((item, index, self) => 
+            index === self.findIndex((t) => t.id === item.id)
+        ).sort((a, b) => {
+            const orderA = a.order ?? 999;
+            const orderB = b.order ?? 999;
+            if (orderA !== orderB) return orderA - orderB;
+            
+            const timeA = (a as any).startTime || (a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : '23:59');
+            const timeB = (b as any).startTime || (b.date.includes('T') ? b.date.split('T')[1].substring(0, 5) : '23:59');
+            return timeA.localeCompare(timeB);
+        });
+
+        const currentIndex = dayCombined.findIndex(a => a.id === id);
+        if (currentIndex === -1) return;
+
+        const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (swapIndex < 0 || swapIndex >= dayCombined.length) return;
+
+        const other = dayCombined[swapIndex];
+
+        // 3. Update orders (ensure both have an explicit order now)
+        // If they don't have orders, we'll assign them based on current position
+        const getOrder = (item: any, index: number) => item.order ?? (index * 10);
+        
+        // Swap logic: if moving UP, target gets other's old order (minus a bit), OR we just swap them
+        const oldTargetOrder = getOrder(target, currentIndex);
+        const oldOtherOrder = getOrder(other, swapIndex);
+
+        // Simple swap
+        let newTargetOrder = oldOtherOrder;
+        let newOtherOrder = oldTargetOrder;
+
+        // Small safety: if they are equal, nudge them
+        if (newTargetOrder === newOtherOrder) {
+            if (direction === 'up') newTargetOrder -= 1;
+            else newTargetOrder += 1;
+        }
+
+        // 4. Persistence call
+        const persistUpdate = (itemId: string, orderVal: number) => {
+            if (exerciseEntries.some(e => e.id === itemId)) {
+                updateExercise(itemId, { order: orderVal });
+            } else if (plannedActivities.some(p => p.id === itemId)) {
+                updatePlannedActivity(itemId, { order: orderVal });
+            } else if (strengthSessions.some(s => s.id === itemId)) {
+                updateStrengthSession(itemId, { order: orderVal } as any);
+            }
+        };
+
+        persistUpdate(target.id, newTargetOrder);
+        persistUpdate(other.id, newOtherOrder);
+
+    }, [exerciseEntries, plannedActivities, strengthSessions, unifiedActivities, updateExercise, updatePlannedActivity, updateStrengthSession]);
+
     return {
         // State
         exerciseEntries,
@@ -1382,6 +1475,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         addCoachGoal,
         activateCoachGoal,
         deleteCoachGoal,
+        reorderActivity,
         // Race Defs
         raceDefinitions,
         raceIgnoreRules,
