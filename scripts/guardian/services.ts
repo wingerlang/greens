@@ -1,5 +1,6 @@
 import { ServiceConfig, ServiceStats, LogEntry } from "./types.ts";
 import { persistLog, updateServiceStat, saveMetric, getKv, recordUptime } from "./logger.ts";
+import { clearPort } from "./utils.ts";
 
 const RESTART_DELAY_MS = 3000;
 const MAX_LOGS = 2000;

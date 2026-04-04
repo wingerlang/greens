@@ -146,7 +146,7 @@ export function CreateRaceSeriesModal({ onClose, editingDefinition, defaultIsCup
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-emerald-500 to-amber-500" />
 
                 {/* Header */}
-                <div className="p-8 border-b border-white/5 flex justify-between items-start">
+                <div className="p-5 sm:p-8 border-b border-white/5 flex justify-between items-start">
                     <div>
                         <div className="flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-widest mb-2">
                             <Trophy size={14} /> Tävlingshantering
@@ -163,7 +163,7 @@ export function CreateRaceSeriesModal({ onClose, editingDefinition, defaultIsCup
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar">
                     
                     {/* Basic Info */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -199,17 +199,17 @@ export function CreateRaceSeriesModal({ onClose, editingDefinition, defaultIsCup
                         </div>
 
                         <div>
-                            <label className="text-[10px] uppercase font-black text-slate-500 mb-2 block tracking-widest">Typ</label>
+                            <label className="text-[10px] uppercase font-black text-slate-500 mb-1 block tracking-widest">Typ</label>
                             <div className="flex gap-2">
                                 <button 
                                     onClick={() => setIsCup(false)}
-                                    className={`flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all border ${!isCup ? 'bg-amber-500 border-amber-500 text-slate-950' : 'bg-slate-950 border-white/10 text-slate-500'}`}
+                                    className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase transition-all border ${!isCup ? 'bg-amber-500 border-amber-500 text-slate-950' : 'bg-slate-950 border-white/10 text-slate-500'}`}
                                 >
                                     Serie
                                 </button>
                                 <button 
                                     onClick={() => setIsCup(true)}
-                                    className={`flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all border ${isCup ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'bg-slate-950 border-white/10 text-slate-500'}`}
+                                    className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase transition-all border ${isCup ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'bg-slate-950 border-white/10 text-slate-500'}`}
                                 >
                                     Cup
                                 </button>
@@ -239,7 +239,7 @@ export function CreateRaceSeriesModal({ onClose, editingDefinition, defaultIsCup
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
                             {filteredActivities.map(activity => {
                                 const isSelected = selectedTitles.has(activity.title);
                                 const isDuplicateEligible = activity.type === 'past' && isOld(activity.date) && !duplicatedTitles.has(activity.title); return (
@@ -286,7 +286,7 @@ export function CreateRaceSeriesModal({ onClose, editingDefinition, defaultIsCup
                 </div>
 
                 {/* Footer */}
-                <div className="p-8 border-t border-white/5 bg-slate-950/50 flex justify-end gap-4">
+                <div className="p-5 sm:p-8 border-t border-white/5 bg-slate-950/50 flex justify-end gap-4">
                     <button 
                         onClick={onClose}
                         className="px-6 py-3 text-slate-400 hover:text-white font-bold transition-colors"

@@ -10,24 +10,7 @@ import {
     WEEKDAYS,
     Weekday
 } from '../models/types.ts';
-import {
-    ChevronLeft,
-    ChevronRight,
-    Calendar,
-    Plus,
-    Dumbbell,
-    Activity,
-    Zap,
-    X,
-    Check,
-    Target,
-    TrendingUp,
-    Clock,
-    Trophy,
-    AlertTriangle,
-    RefreshCcw,
-    MinusCircle
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
@@ -48,7 +31,8 @@ export function TrainingPlanningPage() {
         updatePlannedActivity,
         universalActivities = [],
         unifiedActivities = [],
-        currentUser
+        currentUser,
+        reorderActivity
     } = useData();
 
     const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
@@ -147,9 +131,14 @@ export function TrainingPlanningPage() {
         const otherTime = otherActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
 
 
+        const plannedOther = plannedThisWeek.filter((p: any) =>
+            !plannedRunning.includes(p) && !plannedStrength.includes(p) && p.type !== 'REST' && p.category !== 'REST'
+        );
+
         const forecastRunningSessions = runningSessions + plannedRunning.length;
         const forecastRunningKm = runningKm + plannedRunning.reduce((sum: number, p: any) => sum + (p.estimatedDistance || 0), 0);
         const forecastStrengthSessions = strengthSessionCount + plannedStrength.length;
+        const forecastOtherSessions = otherSessions + plannedOther.length;
 
         return {
             running: {
@@ -169,7 +158,8 @@ export function TrainingPlanningPage() {
             forecast: {
                 runningSessions: forecastRunningSessions,
                 runningKm: forecastRunningKm,
-                strengthSessions: forecastStrengthSessions
+                strengthSessions: forecastStrengthSessions,
+                otherSessions: forecastOtherSessions
             }
         };
     };
@@ -343,12 +333,12 @@ export function TrainingPlanningPage() {
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-white">
-            <div className="max-w-6xl mx-auto mb-6">
+            <div className="max-w-[1400px] mx-auto mb-6">
                 <TrainingPeriodBanner />
             </div>
 
             {/* Header */}
-            <div className="max-w-6xl mx-auto flex items-center justify-between mb-8">
+            <div className="max-w-[1400px] mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
                         <ChevronLeft />
@@ -374,23 +364,23 @@ export function TrainingPlanningPage() {
             </div>
 
             {/* Weekly Summary & Goals Widget */}
-            <div className="max-w-6xl mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="max-w-[1400px] mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 0. Föregående Vecka (Historical) */}
                 <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm opacity-80">
                     <div className="flex items-center gap-2 mb-3">
                         <Clock size={16} className="text-slate-400" />
-                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Föregående Vecka</span>
+                        <span className="text-sm font-black uppercase tracking-wider text-slate-500">Föregående Vecka</span>
                     </div>
                     <div className="flex items-start gap-4 overflow-x-auto pb-1 scrollbar-none">
                         <div className="flex flex-col flex-1 min-w-[70px]">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">🏃 Löpning</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">🏃 Löpning</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
+                                <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
                                     {lastWeeklyStats.running.km.toFixed(1)}
-                                    <span className="text-sm font-bold text-slate-400 ml-1">km</span>
+                                    <span className="text-base font-bold text-slate-400 ml-1">km</span>
                                 </span>
                             </div>
-                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
                                 {lastWeeklyStats.running.sessions} pass
                             </div>
                         </div>
@@ -398,14 +388,14 @@ export function TrainingPlanningPage() {
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
 
                         <div className="flex flex-col flex-1 min-w-[70px]">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">💪 Styrka</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">💪 Styrka</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
+                                <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
                                     {lastWeeklyStats.strength.sessions}
-                                    <span className="text-sm font-bold text-slate-400 ml-1">pass</span>
+                                    <span className="text-base font-bold text-slate-400 ml-1">pass</span>
                                 </span>
                             </div>
-                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
                                 {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton
                             </div>
                         </div>
@@ -413,14 +403,14 @@ export function TrainingPlanningPage() {
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
 
                         <div className="flex flex-col flex-1 min-w-[70px]">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5 whitespace-nowrap">🚴 Cardio</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">🚴 Cardio</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
+                                <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
                                     {lastWeeklyStats.other.sessions}
-                                    <span className="text-sm font-bold text-slate-400 ml-1">pass</span>
+                                    <span className="text-base font-bold text-slate-400 ml-1">pass</span>
                                 </span>
                             </div>
-                            <div className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
                                 {formatDurationHHMM(lastWeeklyStats.other.time)}
                             </div>
                         </div>
@@ -431,18 +421,18 @@ export function TrainingPlanningPage() {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                         <TrendingUp size={16} className="text-emerald-500" />
-                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
+                        <span className="text-sm font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
                     </div>
                     <div className="flex items-start gap-4">
                         <div className="flex flex-col flex-1">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">🏃 Löpning</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-black text-slate-900 dark:text-white">
+                                <span className="text-3xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.running.km.toFixed(1)}
-                                    <span className="text-xs font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
+                                    <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
                                 </span>
                             </div>
-                            <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
+                            <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
                                 <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
                             </div>
                         </div>
@@ -451,15 +441,31 @@ export function TrainingPlanningPage() {
                         <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
 
                         <div className="flex flex-col flex-1">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">💪 Styrka</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">💪 Styrka</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-black text-slate-900 dark:text-white">
+                                <span className="text-3xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.strength.sessions}
-                                    <span className="text-xs font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.strengthSessions} pass</span>
+                                    <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.strengthSessions} pass</span>
                                 </span>
                             </div>
-                            <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
-                                <span>{(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton</span>
+                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                                {(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton
+                            </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
+
+                        <div className="flex flex-col flex-1">
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">🚴 Cardio</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-3xl font-black text-slate-900 dark:text-white">
+                                    {weeklyStats.other.sessions}
+                                    <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.otherSessions} pass</span>
+                                </span>
+                            </div>
+                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                                {formatDurationHHMM(weeklyStats.other.time)}
                             </div>
                         </div>
                     </div>
@@ -470,10 +476,10 @@ export function TrainingPlanningPage() {
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <Target size={16} className="text-indigo-500" />
-                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Mål & Prognos</span>
+                            <span className="text-sm font-black uppercase tracking-wider text-slate-500">Mål & Prognos</span>
                         </div>
                         {/* Forecast Mini-Summary */}
-                        <div className="flex gap-2 text-[10px] uppercase font-black text-slate-400">
+                        <div className="flex gap-2 text-xs uppercase font-black text-slate-400">
                             <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500 fill-amber-500" /> {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
                         </div>
                     </div>
@@ -495,7 +501,7 @@ export function TrainingPlanningPage() {
 
                                 return (
                                     <div key={goal.id}>
-                                        <div className="flex justify-between text-[10px] font-black uppercase mb-1">
+                                        <div className="flex justify-between text-xs font-black uppercase mb-1">
                                             <span className="text-slate-500 dark:text-slate-400 truncate pr-2 flex items-center gap-1.5">
                                                 {goal.name}
                                                 {isActuallyMet ? (
@@ -509,7 +515,7 @@ export function TrainingPlanningPage() {
                                                 {isOverPerforming ? (
                                                     <span className="flex items-center gap-1">
                                                         <span>{goal.target} {goal.unit}</span>
-                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[9px]">+{(goal.current - goal.target).toFixed(1)}</span>
+                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[10px]">+{(goal.current - goal.target).toFixed(1)}</span>
                                                     </span>
                                                 ) : (
                                                     <>
@@ -518,7 +524,6 @@ export function TrainingPlanningPage() {
                                                         {goal.target} {goal.unit}
                                                     </>
                                                 )}
-
                                                 {goal.planned > 0 && !isActuallyMet && (
                                                     <span className="text-slate-400 ml-1 italic font-medium">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
                                                 )}
@@ -558,7 +563,7 @@ export function TrainingPlanningPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
+            <div className="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
                 {weekDates.map((day) => {
                     // 1. Get all planned activities for this day
                     const dayPlanned = plannedActivities.filter(a => a.date.split('T')[0] === day.date);
@@ -590,6 +595,11 @@ export function TrainingPlanningPage() {
                                 data: a
                             }))
                     ].sort((a, b) => {
+                        const aOrder = a.data.order !== undefined ? a.data.order : 999;
+                        const bOrder = b.data.order !== undefined ? b.data.order : 999;
+                        
+                        if (aOrder !== bOrder) return aOrder - bOrder;
+
                         const aIsLogged = a.type === 'actual' || (a.type === 'planned' && a.data.status === 'COMPLETED');
                         const bIsLogged = b.type === 'actual' || (b.type === 'planned' && b.data.status === 'COMPLETED');
                         
@@ -700,19 +710,23 @@ export function TrainingPlanningPage() {
                                                                     : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
                                                     }`}
                                             >
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' :
+                                                <div className="relative mb-1">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-full ${isRace ? 'text-amber-600 dark:text-amber-400' :
                                                         act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
                                                             act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
                                                                 act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
                                                                     'text-emerald-600 dark:text-emerald-400'
                                                         }`}>
-                                                        {isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}
-                                                        {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
-                                                            act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                                (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                        <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
+                                                        <span className="leading-tight">
+                                                            {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
+                                                                act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
+                                                                    (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                        </span>
                                                     </span>
-                                                    <div className="flex items-center gap-2">
+
+                                                    {/* Actions Overlay: Visible on Hover */}
+                                                    <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
                                                         {!isCompleted && (
                                                             <>
                                                                 <button
@@ -724,7 +738,7 @@ export function TrainingPlanningPage() {
                                                                         updatePlannedActivity(act.id, { date: prevDateStr });
                                                                         notificationService.notify('success', `Passet flyttat till igår (${prevDateStr})`);
                                                                     }}
-                                                                    className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                                    className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
                                                                     title="Flytta till igår"
                                                                 >
                                                                     <ChevronLeft size={12} />
@@ -738,7 +752,7 @@ export function TrainingPlanningPage() {
                                                                         updatePlannedActivity(act.id, { date: nextDateStr });
                                                                         notificationService.notify('success', `Passet flyttat till imorgon (${nextDateStr})`);
                                                                     }}
-                                                                    className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                                    className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
                                                                     title="Flytta till imorgon"
                                                                 >
                                                                     <ChevronRight size={12} />
@@ -746,8 +760,22 @@ export function TrainingPlanningPage() {
                                                             </>
                                                         )}
                                                         <button
+                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'up'); }}
+                                                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                                                            title="Flytta upp"
+                                                        >
+                                                            <LucideChevronUp size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'down'); }}
+                                                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                                                            title="Flytta ner"
+                                                        >
+                                                            <LucideChevronDown size={12} />
+                                                        </button>
+                                                        <button
                                                             onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                            className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                            className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
                                                             title="Ta bort"
                                                         >
                                                             <X size={12} />
@@ -942,8 +970,9 @@ export function TrainingPlanningPage() {
                 onSave={handleSaveActivity}
                 onDelete={(id) => {
                     deletePlannedActivity(id);
-                    notificationService.notify('info', 'Aktiviteten raderad från databasen.');
+                    notificationService.notify('info', 'Aktiviteten raderad.');
                     setIsModalOpen(false);
+                    setEditingActivity(null);
                 }}
                 weeklyStats={weeklyStats}
                 goalProgress={goalProgress}

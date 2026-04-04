@@ -22,6 +22,7 @@ const ZONES = [
 
 export function HeartRateZones({ avgHeartRate, maxHeartRate, duration, age = 30 }: HeartRateZonesProps) {
     // Calculate max HR if not provided (220 - age formula)
+    const isEstimated = !maxHeartRate;
     const calculatedMaxHR = maxHeartRate || (220 - age);
 
     // Determine which zone the average HR falls into
@@ -127,9 +128,15 @@ export function HeartRateZones({ avgHeartRate, maxHeartRate, duration, age = 30 
             </div>
 
             {/* Max HR Info */}
-            <div className="text-[10px] text-slate-600 flex items-center gap-1">
-                <span>📊</span>
-                <span>Beräknad max HR: {calculatedMaxHR} bpm (220 - ålder)</span>
+            <div className="text-[10px] text-slate-600 flex items-center justify-between border-t border-white/5 pt-2 mt-2">
+                <div className="flex items-center gap-1">
+                    <span>📊</span>
+                    <span>Maxpulskälla:</span>
+                    <span className={isEstimated ? "text-amber-500/80 font-medium" : "text-emerald-500/80 font-medium"}>
+                        {isEstimated ? "Estimerad (220 - ålder)" : "Manuellt angiven / Profil"}
+                    </span>
+                </div>
+                <div className="font-mono">{calculatedMaxHR} bpm</div>
             </div>
         </div>
     );

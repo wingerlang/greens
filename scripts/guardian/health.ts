@@ -25,7 +25,7 @@ async function checkService(name: string, port: number) {
 
     try {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 2000);
+        const id = setTimeout(() => controller.abort(), 10000);
 
         // Use 127.0.0.1 to avoid IPv6 issues on local dev
         const res = await fetch(`http://127.0.0.1:${port}/`, {

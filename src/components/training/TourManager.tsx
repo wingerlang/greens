@@ -109,7 +109,7 @@ export function TourManager() {
             );
         }
 
-        // 2. Fallback to name-based matching within the tour year if no specific instance found/selected
+        // 2. Fallback to name-based matching within the tour's timeframe if no specific instance found/selected
         if (!planned && !completed) {
             const matchStrings = [def.name.toLowerCase(), ...(def.aliases || []).map(a => a.toLowerCase())];
             const isMatch = (title: string) => {
@@ -117,13 +117,17 @@ export function TourManager() {
                 return matchStrings.some(ms => t.includes(ms));
             };
 
+            // Look for year mentions in the tour name (e.g., "Cup 2025")
+            const tourNameYear = tour.name.match(/\d{4}/)?.[0];
+            const yearsToSearch = new Set([tourYear, tourNameYear].filter(Boolean));
+
             planned = plannedActivities.find(p => 
-                p.date.startsWith(tourYear) && 
+                Array.from(yearsToSearch).some(y => p.date.startsWith(y!)) && 
                 isMatch(p.title)
             );
 
             completed = unifiedActivities
-                .filter(a => a.date.startsWith(tourYear) && isMatch(a.title || ''))
+                .filter(a => Array.from(yearsToSearch).some(y => a.date.startsWith(y!)) && isMatch(a.title || ''))
                 .sort((a, b) => b.date.localeCompare(a.date))[0];
         }
 
@@ -185,7 +189,7 @@ export function TourManager() {
                             <div className="flex justify-between items-start mb-6">
                                 <div>
                                     <div className="flex items-center gap-2 text-[10px] font-black uppercase text-emerald-500 tracking-[0.2em] mb-2">
-                                        <TrendingUp size={12} /> Season {tour.date.substring(0, 4)}
+                                        <TrendingUp size={12} /> Season {tour.name.match(/\d{4}/)?.[0] || tour.date.substring(0, 4)}
                                     </div>
                                     <h4 className="text-3xl font-black text-white tracking-tight">{tour.name}</h4>
                                 </div>
@@ -233,64 +237,84 @@ export function TourManager() {
                                 </div>
                             </div>
 
-                             {/* Race List / Standings Toggle */}
-                            {!viewingStandings[tour.id] ? (
-                                <div className="space-y-3 flex-1">
-                                    {tour.raceDefinitionIds.slice(0, 8).map(id => {
-                                        const def = raceDefinitions.find(d => d.id === id);
-                                        const status = getRaceStatus(id, tour);
-                                        if (!def) return null;
-
-                                        const isTrail = def.name.toLowerCase().includes('trail') || status.plannedInstance?.raceDetails?.isTrail;
-                                        const isUltra = (status.displayDistance || 0) > 45;
-
-                                        return (
-                                            <button 
-                                                key={id} 
-                                                onClick={() => {
-                                                    if (status.completedInstance) setSelectedRaceActivity(status.completedInstance);
-                                                }}
-                                                className={`w-full flex items-center justify-between p-4 bg-slate-950/30 rounded-2xl border transition-all text-left ${status.completed ? 'border-emerald-500/10 hover:border-emerald-500/30 group/race' : 'border-white/5 hover:border-white/10'}`}
-                                            >
-                                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                    <div className={`transition-all duration-500 shrink-0 ${status.completed ? 'text-emerald-500' : 'text-slate-700'}`}>
-                                                        {status.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2 mb-0.5">
-                                                            <div className={`text-sm font-black truncate ${status.completed ? 'text-white' : 'text-slate-500'}`}>{def.name}</div>
-                                                            {isUltra && <span className="shrink-0 text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0.5 rounded border border-fuchsia-500/30 uppercase font-black">Ultra</span>}
-                                                            {isTrail && !isUltra && <span className="shrink-0 text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded border border-emerald-500/20 uppercase font-black">Trail</span>}
+                             {/* Race List Section */}
+                            {!viewingStandings[tour.id] && (
+                                <div className="mt-4 flex-1 flex flex-col min-h-0">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2">
+                                            <Layers size={12} /> Ingående Lopp ({tour.raceDefinitionIds.length})
+                                        </h5>
+                                        {stats.completed > 0 && (
+                                            <div className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                                {stats.completed} Slutförda
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar max-h-[320px] pb-4">
+                                        {tour.raceDefinitionIds.map(id => {
+                                            const def = raceDefinitions.find(d => d.id === id);
+                                            const status = getRaceStatus(id, tour);
+                                            
+                                            // Handle missing definitions (sync delay or virtual IDs)
+                                            if (!def) {
+                                                const activityId = tour.selectedActivityIds?.[id];
+                                                const activity = unifiedActivities.find(a => a.id === activityId) || 
+                                                               plannedActivities.find(p => p.id === activityId);
+                                                
+                                                return (
+                                                    <div key={id} className="w-full flex items-center justify-between p-3 bg-slate-950/20 rounded-xl border border-dashed border-white/5 opacity-50">
+                                                        <div className="flex items-center gap-3">
+                                                            <Circle size={16} className="text-slate-800" />
+                                                            <div className="text-[10px] font-black text-slate-400 uppercase italic">
+                                                                {activity?.title || "Okänt lopp / Laddar..."}
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-tight">
-                                                            {status.displayDate && <span className="flex items-center gap-1"><Calendar size={10} /> {status.displayDate}</span>}
-                                                            {status.displayLocation && <span className="flex items-center gap-1 hidden sm:flex"><MapPin size={10} /> {status.displayLocation}</span>}
-                                                            {!status.completed && status.plannedInstance && <span className="text-emerald-500/70 italic text-[9px]">(Planerad)</span>}
+                                                    </div>
+                                                );
+                                            }
+
+                                            const isTrail = def.name.toLowerCase().includes('trail') || status.plannedInstance?.raceDetails?.isTrail;
+                                            const isUltra = (status.displayDistance || 0) > 45;
+
+                                            return (
+                                                <button 
+                                                    key={id} 
+                                                    onClick={() => {
+                                                        if (status.completedInstance) setSelectedRaceActivity(status.completedInstance);
+                                                    }}
+                                                    className={`w-full flex items-center justify-between p-3 bg-slate-950/30 rounded-xl border transition-all text-left ${status.completed ? 'border-emerald-500/20 bg-emerald-500/[0.02] hover:border-emerald-500/40' : 'border-white/5 hover:border-white/10'}`}
+                                                >
+                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        <div className={`transition-all duration-500 shrink-0 ${status.completed ? 'text-emerald-500' : 'text-slate-800'}`}>
+                                                            {status.completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 mb-0.5">
+                                                                <div className={`text-xs font-bold truncate ${status.completed ? 'text-white' : 'text-slate-500'}`}>{def.name}</div>
+                                                                {isUltra && <span className="shrink-0 text-[7px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0.5 rounded border border-fuchsia-500/30 uppercase font-black tracking-tighter">Ultra</span>}
+                                                                {isTrail && !isUltra && <span className="shrink-0 text-[7px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded border border-emerald-500/20 uppercase font-black tracking-tighter">Trail</span>}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-[9px] text-slate-500 font-bold uppercase tracking-tight">
+                                                                {status.displayDate && <span className="flex items-center gap-1 shrink-0"><Calendar size={8} /> {status.displayDate}</span>}
+                                                                {status.displayLocation && <span className="truncate hidden sm:inline-block max-w-[100px]">• {status.displayLocation}</span>}
+                                                                {!status.completed && status.plannedInstance && <span className="text-emerald-500/50 italic text-[8px]">(Planerad)</span>}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-4 text-right shrink-0">
-                                                    {status.displayDistance && <div className="text-[10px] text-slate-400 font-black uppercase tracking-tighter"><Layers size={10} className="inline mr-1" /> {status.displayDistance} km</div>}
-                                                    {(status.completedInstance as any)?.performance?.durationMinutes && (
-                                                        <div className="text-[10px] text-emerald-500 font-black tabular-nums">{(status.completedInstance as any).performance.durationMinutes}m</div>
-                                                    )}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                    {tour.raceDefinitionIds.length > 8 && (
-                                        <button 
-                                            onClick={() => {
-                                                setEditingTour(tour);
-                                                setIsCreateModalOpen(true);
-                                            }}
-                                            className="w-full text-center py-3 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 rounded-xl border border-dashed border-white/10 transition-all"
-                                        >
-                                            + {tour.raceDefinitionIds.length - 8} fler lopp
-                                        </button>
-                                    )}
+                                                    <div className="flex items-center gap-3 text-right shrink-0">
+                                                        {status.displayDistance && <div className="text-[9px] text-slate-500 font-black tabular-nums">{status.displayDistance}k</div>}
+                                                        {(status.completedInstance as any)?.performance?.durationMinutes && (
+                                                            <div className="text-[10px] text-emerald-500 font-black tabular-nums">{(status.completedInstance as any).performance.durationMinutes}m</div>
+                                                        )}
+                                                        <ChevronRight size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${status.completed ? 'text-emerald-500' : 'text-slate-700'}`} />
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            ) : (
+                            )}
                                 <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
                                     {isLoadingStandings[tour.id] ? (
                                         <div className="flex-1 flex flex-col items-center justify-center py-12 text-slate-500 gap-3">
@@ -357,16 +381,14 @@ export function TourManager() {
                                         </div>
                                     )}
                                 </div>
-                            )}
-
-                            <button 
+                                <button 
                                 onClick={() => {
                                     setEditingTour(tour);
                                     setIsCreateModalOpen(true);
                                 }}
-                                className="mt-8 w-full py-4 bg-slate-950/50 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/50 rounded-2xl text-slate-400 hover:text-emerald-400 font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 group/btn"
+                                className="mt-4 w-full py-3 bg-slate-950/50 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/50 rounded-xl text-slate-400 hover:text-emerald-400 font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 group/btn"
                             >
-                                Detaljer & Hantera <ChevronRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                REDIGERA CUP & DETALJER <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
                             </button>
                         </div>
                     );

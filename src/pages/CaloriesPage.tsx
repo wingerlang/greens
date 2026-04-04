@@ -113,6 +113,9 @@ export function CaloriesPage() {
     // Bulk selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+    // Tracking for smart suggestions
+    const [lastAddedId, setLastAddedId] = useState<{ type: 'recipe' | 'foodItem', id: string } | null>(null);
+
     const dailyEntries = useMemo(
         () => getMealEntriesForDate(selectedDate),
         [getMealEntriesForDate, selectedDate]
@@ -272,6 +275,55 @@ export function CaloriesPage() {
             });
     }, [mealEntries, recipes, foodItems]);
 
+    const recommendations = useMemo(() => {
+        if (!lastAddedId) return [];
+
+        const associations: Record<string, number> = {};
+        const targetKey = `${lastAddedId.type}-${lastAddedId.id}`;
+
+        mealEntries.forEach(entry => {
+            const keys = entry.items
+                .filter(i => i.type !== 'estimate')
+                .map(i => `${i.type}-${i.referenceId}`);
+
+            if (keys.includes(targetKey)) {
+                keys.forEach(k => {
+                    if (k !== targetKey) {
+                        associations[k] = (associations[k] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        // Filter out items already in today's meal
+        const currentMealItems = dailyEntries
+            .filter(e => e.mealType === mealType)
+            .flatMap(e => e.items.map(i => `${i.type}-${i.referenceId}`));
+
+        return Object.entries(associations)
+            .filter(([key]) => !currentMealItems.includes(key))
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([key]) => {
+                const [type, id] = key.split('-');
+                if (type === 'recipe') {
+                    const r = recipes.find(rec => rec.id === id);
+                    return { type: 'recipe' as const, id, name: r?.name || 'Okänt recept', subtitle: 'Rekommenderat' };
+                } else {
+                    const f = foodItems.find(fi => fi.id === id);
+                    return {
+                        type: 'foodItem' as const,
+                        id,
+                        name: f?.name || 'Okänd råvara',
+                        subtitle: 'Rekommenderat',
+                        defaultPortion: f?.defaultPortionGrams,
+                        yieldFactor: f?.yieldFactor,
+                        isCooked: f?.isCooked
+                    };
+                }
+            });
+    }, [lastAddedId, mealEntries, recipes, foodItems, dailyEntries, mealType]);
+
     const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string, durationMs?: number | null) => {
         let servingsValue = quickAddServings;
 
@@ -312,6 +364,7 @@ export function CaloriesPage() {
 
         setSearchQuery('');
         setQuickAddServings(1);
+        setLastAddedId({ type, id });
     };
 
     const handleDeleteEntry = (id: string) => {
@@ -519,6 +572,13 @@ export function CaloriesPage() {
             pieces: pieceCount || 1 // Store the count
         } as any);
         setIsFormOpen(false);
+        // Track the first item of the quick meal as the last added for suggestions
+        if (qm.items.length > 0) {
+            const first = qm.items[0];
+            if (first.type === 'recipe' || first.type === 'foodItem') {
+                setLastAddedId({ type: first.type, id: first.referenceId });
+            }
+        }
     };
 
     const handleSaveEstimate = (details: any) => {
@@ -888,6 +948,8 @@ export function CaloriesPage() {
                 onLogQuickMeal={handleLogQuickMeal}
                 getItemName={getItemName}
                 getItemNutrition={getItemNutrition}
+                recommendations={recommendations}
+                lastAddedItemName={lastAddedId ? (lastAddedId.type === 'foodItem' ? foodItems.find(f => f.id === lastAddedId.id)?.name : recipes.find(r => r.id === lastAddedId.id)?.name) : undefined}
             />
 
             <CreateQuickMealModal

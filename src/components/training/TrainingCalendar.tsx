@@ -1,8 +1,9 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown, Flame, Scale, HeartPulse } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
+import { useData } from '../../context/DataContext.tsx';
 
 interface TrainingCalendarProps {
     monthIndex: number; // 0-11
@@ -28,6 +29,7 @@ const MONTHS = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', '
 
 export function TrainingCalendar({ monthIndex, year, exercises: allExercises, initialDay, onExerciseClick }: TrainingCalendarProps) {
     const navigate = useNavigate();
+    const { reorderActivity } = useData();
 
     const [selectedDate, setSelectedDate] = useState<string | null>(() => {
         if (initialDay) return new Date(year, monthIndex, initialDay, 12).toISOString().split('T')[0];
@@ -142,7 +144,16 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
         for (let i = 1; i <= daysInMonth; i++) {
             const date = new Date(year, monthIndex, i, 12);
             const dateStr = formatLocalDate(date);
-            days.push({ day: i, exercises: monthData.filter(e => e.date === dateStr), dateStr, isCurrentMonth: true });
+            const dayExercises = monthData.filter(e => e.date === dateStr).sort((a, b) => {
+                const orderA = a.order ?? 999;
+                const orderB = b.order ?? 999;
+                if (orderA !== orderB) return orderA - orderB;
+                
+                const timeA = a.startTime || (a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : '23:59');
+                const timeB = b.startTime || (b.date.includes('T') ? b.date.split('T')[1].substring(0, 5) : '23:59');
+                return timeA.localeCompare(timeB);
+            });
+            days.push({ day: i, exercises: dayExercises, dateStr, isCurrentMonth: true });
         }
 
         let nextDayCounter = 1;
@@ -235,7 +246,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                     className={`flex items-center gap-1 text-xl sm:text-2xl font-black capitalize transition-colors ${isMonthDropdownOpen ? 'text-sky-400' : 'text-white hover:text-sky-300'}`}
                                 >
                                     {monthName}
-                                    <ChevronDown className={`w-4 h-4 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+                                    <LucideChevronDown className={`w-4 h-4 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {isMonthDropdownOpen && (
@@ -264,7 +275,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                     className={`flex items-center gap-1 text-base sm:text-lg font-bold transition-colors border px-2 py-0.5 rounded-lg ${isYearDropdownOpen ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
                                 >
                                     {year}
-                                    <ChevronDown className={`w-3 h-3 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} />
+                                    <LucideChevronDown className={`w-3 h-3 transition-transform ${isYearDropdownOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {isYearDropdownOpen && (
@@ -478,6 +489,20 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 <div className="flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 ml-auto whitespace-nowrap">
                                                                     {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
                                                                     {ex.distance !== undefined && ex.distance > 0 && <span className="opacity-30">•</span>}
+                                                                    <div className="hidden group-hover/ex:flex items-center gap-0.5 ml-1">
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'up'); }}
+                                                                            className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                                                                        >
+                                                                            <LucideChevronUp size={10} />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'down'); }}
+                                                                            className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                                                                        >
+                                                                            <LucideChevronDown size={10} />
+                                                                        </button>
+                                                                    </div>
                                                                     <span>{Math.round(ex.durationMinutes)}m</span>
                                                                 </div>
 
@@ -513,6 +538,22 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[9px] text-emerald-500/80 uppercase font-black tracking-widest">Distans</span>
                                                                                     <span className="font-mono text-emerald-400 font-bold">{ex.distance.toFixed(2)} km</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[9px] text-sky-500/80 uppercase font-black tracking-widest">Tempo</span>
+                                                                                    <span className="font-mono text-sky-400 font-bold">
+                                                                                        {(() => {
+                                                                                            const paceDecimal = ex.durationMinutes / ex.distance;
+                                                                                            const mins = Math.floor(paceDecimal);
+                                                                                            const secs = Math.round((paceDecimal - mins) * 60);
+                                                                                            const finalSecs = secs === 60 ? 0 : secs;
+                                                                                            const finalMins = secs === 60 ? mins + 1 : mins;
+                                                                                            return `${finalMins}:${finalSecs.toString().padStart(2, '0')}`;
+                                                                                        })()}
+                                                                                        <span className="text-[8px] ml-0.5 opacity-70">min/km</span>
+                                                                                    </span>
                                                                                 </div>
                                                                             )}
                                                                             {ex.tonnage !== undefined && ex.tonnage > 0 && (

@@ -86,8 +86,9 @@ export function performSmartSearch<T>(
         categoryFn?: (item: T) => string | undefined; // Category for fallback search
         usageCountFn?: (item: T) => number; // Return usage count
         limit?: number;
+        includeScore?: boolean;
     }
-): T[] {
+): any[] {
     const rawQuery = query.toLowerCase().trim();
     if (!rawQuery) return [];
 
@@ -226,10 +227,13 @@ export function performSmartSearch<T>(
     });
 
     // Filter and Sort
-    const result = ranked
+    const filtered = ranked
         .filter(r => r.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map(r => r.item);
+        .sort((a, b) => b.score - a.score);
+
+    const result = options.includeScore 
+        ? filtered 
+        : filtered.map(r => r.item);
 
     return options.limit ? result.slice(0, options.limit) : result;
 }

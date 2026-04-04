@@ -7,12 +7,10 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed, formatSecondsToTime } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown, getBestEffortsForActivity, getFastestSince } from '../../utils/performanceEngine.ts';
-
+import { useHRZones } from '../profile/hooks/useHRZones.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea } from 'recharts';
-
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
-
 import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
 import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
@@ -203,12 +201,19 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
                 </div>
                 <div className="text-center group flex flex-col items-center">
                     <div className="text-[7px] text-slate-500 uppercase font-black mb-1 group-hover:text-amber-400 transition-colors">
-                        {isSustained ? 'Huvudpass' : 'Intervaller'}
+                        {isSustained ? 'Huvuddel' : 'Intervaller'}
                     </div>
                     <div className="text-[11px] font-black text-amber-300">{summary.totalIntervalKm.toFixed(1)}k</div>
-                    {summary.avgIntervalPace > 0 && (
-                        <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{formatPace(summary.avgIntervalPace).replace('/km', '')}/km</div>
-                    )}
+                    <div className="flex gap-2 items-center mt-0.5">
+                        {summary.avgIntervalPace > 0 && (
+                            <div className="text-[9px] text-amber-400/80 font-mono italic">{formatPace(summary.avgIntervalPace).replace('/km', '')}/km</div>
+                        )}
+                        {summary.avgIntervalHR && (
+                            <div className="text-[9px] text-rose-400 font-mono flex items-center gap-0.5">
+                                <HeartPulse size={8} /> {summary.avgIntervalHR}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 {(!isSustained || summary.totalRecoveryKm > 0) && (
                     <div className="text-center group">
@@ -257,44 +262,88 @@ const BestEffortPerformanceCard = React.memo(({
                     </span>
                 </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-2">
                 {relevantEfforts.map((effort, idx) => {
                     const result = getFastestSince(activity, effort.distance, effort.movingTime, allActivities);
                     const isPB = result === 'PB';
                     
                     return (
                         <div key={idx} className="bg-slate-800/40 rounded-xl p-3 border border-white/5 flex flex-col gap-2 group hover:bg-slate-800/60 transition-all">
-                            <div className="flex justify-between items-start">
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-black text-white italic tracking-tight">{effort.name}</span>
-                                    <span className="text-[10px] text-slate-500 font-mono">
-                                        {(effort as any).startKm ? `Km ${(effort as any).startKm}-${((effort as any).startKm) + Math.floor(effort.distance / 1000)}` : ''}
-                                    </span>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-base font-black text-indigo-400 font-mono">
-                                        {formatSecondsToTime(effort.movingTime)}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                {/* Left: Distance & Km range */}
+                                <div className="flex items-center gap-4 min-w-[120px]">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-black text-white italic tracking-tight uppercase">{effort.name}</span>
+                                        <span className="text-[10px] text-slate-500 font-mono">
+                                            {(effort as any).startKm ? `Km ${(effort as any).startKm}-${Math.floor(((effort as any).startKm) + (effort.distance / 1000))}` : ''}
+                                        </span>
                                     </div>
-                                    <div className="text-[9px] text-slate-500 font-mono">
-                                        {formatPace(effort.movingTime / (Math.max(effort.distance, 1) / 1000)).replace('/km', '')}/km
-                                    </div>
+                                    
+                                    {isPB && (
+                                        <div className="bg-amber-500/20 text-amber-400 text-[8px] font-black px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 uppercase animate-pulse">
+                                            <Trophy size={10} /> PB
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                            
-                            <div className={`mt-1 py-1.5 px-2 rounded-lg flex items-center justify-between ${isPB ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/5 border border-indigo-500/10'}`}>
-                                <span className={`text-[10px] font-black uppercase tracking-tighter ${isPB ? 'text-amber-400' : 'text-slate-500'}`}>
-                                    {isPB ? '🏆 PERSONBÄSTA!' : 'Snabbast sedan'}
-                                </span>
-                                {!isPB && result && (
-                                    <span className="text-[10px] font-bold text-indigo-300">
-                                        {getRelativeTime(result)}
-                                    </span>
-                                )}
-                                {!isPB && !result && (
-                                    <span className="text-[10px] font-bold text-slate-500 italic">
-                                        längesedan
-                                    </span>
-                                )}
+
+                                {/* Center: Time, Pace, HR */}
+                                <div className="flex-1 flex flex-wrap items-center gap-x-6 gap-y-1">
+                                    <div className="flex flex-col">
+                                        <div className="text-base font-black text-indigo-300 font-mono leading-none">
+                                            {formatSecondsToTime(effort.movingTime)}
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 font-mono tracking-tighter mt-0.5 uppercase">Totaltid</div>
+                                    </div>
+
+                                    <div className="flex flex-col border-l border-white/5 pl-4">
+                                        <div className="text-[14px] font-black text-slate-200 font-mono leading-none">
+                                            {formatPace(effort.movingTime / (Math.max(effort.distance, 1) / 1000)).replace('/km', '')}
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 font-mono tracking-tighter mt-0.5 uppercase">Snitt-tempo</div>
+                                    </div>
+
+                                    {effort.avgHeartRate && (
+                                        <div className="flex flex-col border-l border-white/5 pl-4">
+                                            <div className="text-[14px] font-black text-rose-400 font-mono leading-none flex items-center gap-1">
+                                                <HeartPulse size={12} className="opacity-80" /> {effort.avgHeartRate}
+                                            </div>
+                                            <div className="text-[9px] text-slate-500 font-mono tracking-tighter mt-0.5 uppercase">Snittpuls</div>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Right: Comparison */}
+                                <div className="min-w-[180px] sm:text-right border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 sm:pl-4">
+                                    {!isPB && result && typeof result === 'object' && (
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedActivityId?.(result.id);
+                                            }}
+                                            className="flex flex-col items-start sm:items-end group/link hover:opacity-80 transition-all text-left"
+                                        >
+                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Snabbast sedan</span>
+                                            <span className="text-[10px] font-bold text-indigo-400 group-hover/link:underline truncate max-w-[180px]">
+                                                {result.title}
+                                            </span>
+                                            <span className="text-[8px] font-mono text-slate-500 mt-0.5 bg-white/5 px-1.5 rounded-full">
+                                                {getRelativeTime(result.date).toUpperCase()}
+                                            </span>
+                                        </button>
+                                    )}
+                                    {!isPB && !result && (
+                                        <div className="flex flex-col items-start sm:items-end">
+                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Historik</span>
+                                            <span className="text-[10px] font-bold text-slate-600 italic uppercase">Längesedan sist</span>
+                                        </div>
+                                    )}
+                                    {isPB && (
+                                        <div className="flex flex-col items-start sm:items-end">
+                                            <span className="text-[9px] font-black text-amber-500/80 uppercase tracking-widest mb-0.5">NYTT PERSONBÄSTA!</span>
+                                            <span className="text-[10px] font-bold text-slate-400 italic">Grymt jobbat idag!</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );
@@ -326,6 +375,7 @@ export function ActivityDetailModal({
 }: ActivityDetailModalProps) {
     const navigate = useNavigate();
     const { 
+        currentUser,
         exerciseEntries, 
         universalActivities, 
         updateExercise, 
@@ -334,6 +384,7 @@ export function ActivityDetailModal({
         calculateExerciseCalories 
     } = useData();
     const { user, token } = useAuth();
+    const { savedZones, detectedZones } = useHRZones();
 
     // Support finding the latest version of this activity from current context
     const currentActivity = exerciseEntries.find(e => e.id === activity.id) || activity;
@@ -2560,17 +2611,26 @@ export function ActivityDetailModal({
                                  )}
 
 
-                                 {/* Heart Rate Zone Visualization (for cardio with HR data) */}
-
+                                  {/* Heart Rate Zone Visualization (for cardio with HR data) */}
                                 {(() => {
                                     const effectiveAvgHr = perf?.avgHeartRate || activity.heartRateAvg || (activity.extractedFromId && parentUniversal?.performance?.avgHeartRate ? Math.round(parentUniversal.performance.avgHeartRate) : 0);
-                                    const effectiveMaxHr = perf?.maxHeartRate || activity.heartRateMax || (activity.extractedFromId && parentUniversal?.performance?.maxHeartRate ? Math.round(parentUniversal.performance.maxHeartRate) : undefined);
+                                    
+                                    // 1. Prioritize profile saved max HR
+                                    // 2. Then detected max HR from history
+                                    // 3. Then age-based estimate
+                                    // 4. Finally session peak as a last-resort fallback
+                                    const profileMaxHr = savedZones?.maxHR || detectedZones?.maxHR;
+                                    const birthYear = currentUser?.settings?.birthYear;
+                                    const age = birthYear ? new Date().getFullYear() - birthYear : 30;
+                                    
+                                    const effectiveMaxHr = profileMaxHr || undefined;
                                     
                                     if (effectiveAvgHr > 0 && activity.type?.toLowerCase() !== 'strength') {
                                         return (
                                             <HeartRateZones
                                                 avgHeartRate={effectiveAvgHr}
                                                 maxHeartRate={effectiveMaxHr || undefined}
+                                                age={age}
                                                 duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
                                             />
                                         );

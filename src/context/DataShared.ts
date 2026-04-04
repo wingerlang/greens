@@ -168,6 +168,7 @@ export interface DataContextType {
     addCoachGoal: (goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
     activateCoachGoal: (goalId: string) => void;
     deleteCoachGoal: (goalId: string) => void;
+    reorderActivity: (id: string, direction: 'up' | 'down') => void;
 
     // Data Integration
     sleepSessions: SleepSession[];

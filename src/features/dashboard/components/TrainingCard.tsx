@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, X, ChevronRight } from 'lucide-react';
+import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity } from 'lucide-react';
 import { DashboardCardWrapper } from '../../../components/dashboard/DashboardCardWrapper.tsx';
 import { EXERCISE_TYPES } from '../../../components/training/ExerciseModal.tsx';
-import { ExerciseEntry, PlannedActivity } from '../../../models/types.ts';
+import { ExerciseEntry, PlannedActivity, ExerciseType } from '../../../models/types.ts';
+
+export type DashboardTrainingCategory = 'running' | 'strength' | 'cardio' | 'all';
 
 interface TrainingCardProps {
     isDone: boolean;
@@ -14,20 +16,83 @@ interface TrainingCardProps {
     deleteExercise: (id: string) => void;
     isHoveringTraining: boolean;
     settings: { dailyTrainingGoal?: number };
+    category?: DashboardTrainingCategory;
 }
+
+const getCategoryForType = (type: string): DashboardTrainingCategory => {
+    const t = type.toUpperCase();
+    if (t === 'RUN' || t === 'RUNNING') return 'running';
+    if (['STRENGTH', 'HYROX', 'HYBRID'].includes(t)) return 'strength';
+    return 'cardio';
+};
 
 export const TrainingCard: React.FC<TrainingCardProps> = ({
     isDone,
     onToggle,
     density,
-    completedTraining,
-    todaysPlan,
+    completedTraining: allCompleted,
+    todaysPlan: allPlans,
     deleteExercise,
     isHoveringTraining,
-    settings
+    settings,
+    category = 'all'
 }) => {
     const navigate = useNavigate();
+
+    // Filter based on category
+    const completedTraining = allCompleted.filter(act => 
+        category === 'all' || getCategoryForType(act.type) === category
+    );
+
+    const todaysPlan = allPlans && (category === 'all' || getCategoryForType(allPlans.type) === category)
+        ? allPlans
+        : undefined;
+
     const totalCalories = completedTraining.reduce((sum, act) => sum + act.caloriesBurned, 0);
+
+    const getCategoryConfig = () => {
+        switch (category) {
+            case 'running':
+                return {
+                    icon: Zap,
+                    label: 'Löpning',
+                    color: 'text-blue-500',
+                    bgColor: 'bg-blue-50 dark:bg-blue-900/30',
+                    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
+                    hoverColor: 'group-hover:bg-blue-600'
+                };
+            case 'strength':
+                return {
+                    icon: Dumbbell,
+                    label: 'Styrka',
+                    color: 'text-emerald-500',
+                    bgColor: 'bg-emerald-50 dark:bg-emerald-900/10',
+                    iconBg: 'bg-[#DCFCE7] dark:bg-emerald-900/30',
+                    hoverColor: 'group-hover:bg-emerald-600'
+                };
+            case 'cardio':
+                return {
+                    icon: Activity,
+                    label: 'Cardio',
+                    color: 'text-rose-500',
+                    bgColor: 'bg-rose-50 dark:bg-rose-900/10',
+                    iconBg: 'bg-rose-100 dark:bg-rose-900/30',
+                    hoverColor: 'group-hover:bg-rose-600'
+                };
+            default:
+                return {
+                    icon: Dumbbell,
+                    label: 'Träning',
+                    color: 'text-emerald-500',
+                    bgColor: 'bg-emerald-50 dark:bg-emerald-900/10',
+                    iconBg: 'bg-[#DCFCE7] dark:bg-emerald-900/30',
+                    hoverColor: 'group-hover:bg-emerald-600'
+                };
+        }
+    };
+
+    const config = getCategoryConfig();
+    const CategoryIcon = config.icon;
 
     // Determine content
     let trainingContent;
@@ -43,7 +108,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         trainingContent = (
             <div className={`flex flex-col ${density === 'compact' ? 'gap-0.5 w-full p-1' : density === 'slim' ? 'gap-1.5 w-full p-2' : 'gap-2 w-full p-3'} rounded-2xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
-                    <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
+                    <div className="text-[9px] font-bold uppercase text-slate-400">Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                         <span className="font-bold text-slate-900 dark:text-white whitespace-nowrap">{Math.round(totalDuration)} min</span>
                         <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
@@ -179,7 +244,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         let icon = '📅';
         let label = todaysPlan.type as string;
 
-        if (todaysPlan.type === 'RUN') {
+        if (todaysPlan.type === 'RUN' || (todaysPlan.type as string) === 'running') {
             const runDef = EXERCISE_TYPES.find(t => t.type === 'running');
             icon = runDef?.icon || '🏃';
             label = 'Löpning';
@@ -201,30 +266,30 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         trainingContent = (
             <div>
                 <div className="font-bold text-slate-900 dark:text-white">Vila</div>
-                <div className="text-xs text-slate-500">Ingen planerad träning</div>
+                <div className="text-xs text-slate-500">Ingen {category !== 'all' ? config.label.toLowerCase() : 'planerad träning'}</div>
             </div>
         );
     }
 
     return (
         <DashboardCardWrapper
-            id="training"
+            id={`training-${category}`}
             isDone={isDone}
             onToggle={onToggle}
-            className="md:col-span-12 xl:col-span-6 h-full"
+            className={`md:col-span-12 ${category === 'all' ? 'xl:col-span-6' : 'xl:col-span-4'} h-full`}
         >
             <div
                 onClick={() => navigate('/planera')}
                 className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
             >
-                <Dumbbell className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-500/5 dark:text-emerald-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
+                <CategoryIcon className={`absolute -bottom-4 -right-4 w-24 h-24 ${config.color} opacity-[0.03] dark:opacity-[0.07] pointer-events-none transform -rotate-12 transition-all group-hover:scale-110`} />
 
-                <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0 z-10`}>
-                    <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
+                <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} ${config.iconBg} rounded-full flex items-center justify-center ${config.color} group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-slate-800 transition-colors shrink-0 z-10`}>
+                    <CategoryIcon className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
                 </div>
                 <div className="flex-1 min-w-0 text-left z-10">
                     <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1 flex items-center justify-between`}>
-                        <span>Dagens träning</span>
+                        <span>{config.label}</span>
                         {totalCalories > 0 && (
                             <span className="text-rose-500 font-black animate-in fade-in slide-in-from-right-2">
                                 -{totalCalories} kcal
@@ -237,3 +302,4 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         </DashboardCardWrapper>
     );
 };
+

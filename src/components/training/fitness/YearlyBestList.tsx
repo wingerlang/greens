@@ -13,6 +13,22 @@ interface YearlyBestListProps {
 export function YearlyBestList({ activities, onOpenActivity }: YearlyBestListProps) {
     const currentYear = new Date().getFullYear().toString();
 
+    const formatTime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const formatPace = (seconds: number, distanceM: number) => {
+        if (!distanceM) return '—';
+        const paceSeconds = (seconds / distanceM) * 1000;
+        const m = Math.floor(paceSeconds / 60);
+        const s = Math.floor(paceSeconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}/km`;
+    };
+
     const yearlyBests = useMemo(() => {
         // 1. Get all running activities from this year
         const runningActivities = activities.filter(a => 
@@ -23,8 +39,7 @@ export function YearlyBestList({ activities, onOpenActivity }: YearlyBestListPro
 
         if (runningActivities.length === 0) return [];
 
-        const usedActivityIds = new Set<string>();
-        const results: Array<{ distance: string, effort: BestEffort, activityId: string }> = [];
+        const results: Array<{ distance: string, effort: BestEffort, activityId: string, activityTitle?: string, avgHeartRate?: number }> = [];
 
         // 2. Iterate through target distances from longest to shortest
         for (const target of PERFORMANCE_TARGETS) {
@@ -48,16 +63,18 @@ export function YearlyBestList({ activities, onOpenActivity }: YearlyBestListPro
             // Sort by moving time (fastest first)
             effortsForDistance.sort((a, b) => a.effort.movingTime - b.effort.movingTime);
 
-            // Find the fastest activity that hasn't been used yet
-            const bestAvailable = effortsForDistance.find(e => !usedActivityIds.has(e.activityId));
+            // Pick the absolute best for this distance
+            const bestAvailable = effortsForDistance[0];
 
             if (bestAvailable) {
+                const parentActivity = runningActivities.find(a => a.id === bestAvailable.activityId);
                 results.push({
                     distance: target.name,
                     effort: bestAvailable.effort,
-                    activityId: bestAvailable.activityId
+                    activityId: bestAvailable.activityId,
+                    activityTitle: parentActivity?.plan?.title || parentActivity?.performance?.notes || parentActivity?.performance?.activityType || 'Aktivitet',
+                    avgHeartRate: parentActivity?.performance?.avgHeartRate
                 });
-                usedActivityIds.add(bestAvailable.activityId);
             }
         }
 
@@ -86,7 +103,7 @@ export function YearlyBestList({ activities, onOpenActivity }: YearlyBestListPro
                         <Trophy className="text-amber-400" size={20} />
                         Årsbästa {currentYear}
                     </h3>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Dina snabbaste kilometertider (Max ett per pass)</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Dina absoluta rekordtider på varje distans under {currentYear}</p>
                 </div>
                 <div className="px-3 py-1 bg-amber-400/10 border border-amber-400/20 rounded-full">
                     <span className="text-[10px] font-black text-amber-400 uppercase">{yearlyBests.length} REKORD</span>
@@ -105,11 +122,45 @@ export function YearlyBestList({ activities, onOpenActivity }: YearlyBestListPro
                                 <Timer size={20} />
                             </div>
                             <div>
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tighter mb-0.5">
-                                    {item.distance}
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tighter mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="whitespace-nowrap">{item.distance}</span>
+                                        <span className="text-[8px] font-bold text-slate-600 normal-case tracking-normal truncate max-w-[80px]">
+                                            • {item.activityTitle}
+                                        </span>
+                                    </div>
+                                    
+                                    {item.effort.segmentDistance && item.effort.segmentDistance > (item.effort.distance + 20) && (
+                                        <span className="text-[7.5px] font-black text-indigo-400/90 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/10 whitespace-nowrap">
+                                            i {Math.round(item.effort.segmentDistance)}m {item.effort.source === 'laps' ? 'intervaller' : 'splits'}
+                                        </span>
+                                    )}
+
+                                    {item.effort.source && (
+                                        <span className={`text-[7px] font-black px-1 py-0.5 rounded uppercase tracking-widest ${
+                                            item.effort.source === 'laps' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/20' : 
+                                            item.effort.source === 'strava' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' : 
+                                            'bg-slate-800 text-slate-500 border border-white/5'
+                                        }`}>
+                                            {item.effort.source === 'laps' ? 'Laps' : item.effort.source === 'strava' ? 'Strava' : 'Splits'}
+                                        </span>
+                                    )}
                                 </div>
-                                <div className="text-xl font-black text-white tracking-tight tabular-nums">
-                                    {formatActivityDuration(item.effort.movingTime / 60)}
+                                <div className="flex items-baseline gap-3">
+                                    <div className="text-2xl font-black text-white tracking-tight tabular-nums leading-none">
+                                        {formatTime(item.effort.movingTime)}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400">
+                                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded-md border border-white/5">
+                                            <Zap size={8} className="text-amber-400" />
+                                            {formatPace(item.effort.movingTime, item.effort.distance)}
+                                        </div>
+                                        {(item.effort.avgHeartRate || item.avgHeartRate) && (
+                                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-rose-500/5 rounded-md border border-rose-500/10 text-rose-300">
+                                                ❤️ {item.effort.avgHeartRate || item.avgHeartRate} bpm
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

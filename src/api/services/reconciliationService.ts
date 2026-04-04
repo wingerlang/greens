@@ -227,27 +227,84 @@ export class ReconciliationService {
         if (candidates.length === 0) return null;
 
         const stravaDistKm = stravaActivity.distance / 1000;
-        const stravaType = stravaActivity.type?.toLowerCase();
+        const stravaDurationMin = (stravaActivity.moving_time || stravaActivity.elapsed_time) / 60;
+        const stravaType = mapStravaType(stravaActivity.type, stravaActivity.name);
+        const stravaTitleLower = (stravaActivity.name || '').toLowerCase();
 
         const scored = candidates.map(c => {
             let score = 0;
             const planType = c.plan?.activityType;
-            if (planType === 'running' && (stravaType === 'run' || stravaType === 'trailrun')) score += 10;
-            else if (planType === 'cycling' && (stravaType === 'ride' || stravaType === 'virtualride')) score += 10;
-            else return { candidate: c, score: -100 };
+            const planTitleLower = (c.plan?.title || '').toLowerCase();
 
-            if (c.plan?.distanceKm) {
+            // 1. TYPE MATCH (Base score)
+            if (planType === stravaType) {
+                score += 15;
+            } else if (
+                (planType === 'running' && (stravaType === 'running' || stravaType === 'walking')) ||
+                (planType === 'cardio' && (stravaType === 'running' || stravaType === 'cycling' || stravaType === 'other')) ||
+                (planType === 'strength' && (stravaType === 'other'))
+            ) {
+                // Approximate type match
+                score += 5;
+            } else {
+                // Type mismatch penalty, but not fatal if titles match
+                score -= 5;
+            }
+
+            // 2. TITLE SIMILARITY (High signal)
+            const titleMatchScore = this.calculateTitleSimilarity(stravaTitleLower, planTitleLower);
+            score += titleMatchScore * 25; // Significant boost for title matches
+
+            // 3. DURATION MATCH (Important for non-distance activities)
+            if (c.plan?.durationMinutes && stravaDurationMin > 0) {
+                const diffMin = Math.abs(c.plan.durationMinutes - stravaDurationMin);
+                const diffPercent = diffMin / c.plan.durationMinutes;
+                
+                if (diffPercent < 0.10) score += 10;
+                else if (diffPercent < 0.25) score += 5;
+                else if (diffPercent > 0.50) score -= 10;
+            }
+
+            // 4. DISTANCE MATCH (For running/cycling)
+            if (c.plan?.distanceKm && stravaDistKm > 0) {
                 const diffKm = Math.abs(c.plan.distanceKm - stravaDistKm);
                 const diffPercent = diffKm / c.plan.distanceKm;
-                if (diffPercent < 0.10) score += 5;
-                else if (diffPercent < 0.25) score += 2;
+
+                if (diffPercent < 0.10) score += 10;
+                else if (diffPercent < 0.25) score += 4;
+                else if (diffPercent > 0.50) score -= 10;
             }
+
             return { candidate: c, score };
         });
 
         scored.sort((a, b) => b.score - a.score);
-        if (scored[0].score > 0) return scored[0].candidate;
+        
+        // Debug
+        // console.log(`Matching Strava "${stravaActivity.name}" (${stravaType}):`, scored.map(s => `[${s.score}] ${s.candidate.plan?.title}`));
+
+        // Set a reasonable threshold for auto-matching
+        if (scored[0].score >= 20) return scored[0].candidate;
         return null;
+    }
+
+    /**
+     * Helper to calculate similarity between two titles using word overlap
+     */
+    private calculateTitleSimilarity(titleA: string, titleB: string): number {
+        if (!titleA || !titleB) return 0;
+        
+        const wordsA = new Set(titleA.split(/[\s:,\-_()]+/).filter(w => w.length > 2));
+        const wordsB = new Set(titleB.split(/[\s:,\-_()]+/).filter(w => w.length > 2));
+        
+        if (wordsA.size === 0 || wordsB.size === 0) return 0;
+        
+        let matches = 0;
+        wordsA.forEach(w => {
+            if (wordsB.has(w)) matches++;
+        });
+        
+        return matches / Math.max(wordsA.size, wordsB.size);
     }
 
     /**

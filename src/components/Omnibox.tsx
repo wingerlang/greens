@@ -659,11 +659,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             textFn: (item) => `${item.name} ${item.brand || ''}`,
             categoryFn: (item) => item.category,
             usageCountFn: (item) => foodUsageStats[item.id]?.count || 0,
-            limit: 6
-        }).map(item => ({
-            ...item,
+            limit: 10,
+            includeScore: true
+        }).map(r => ({
+            ...r.item,
             type: 'food' as const,
-            usageStats: foodUsageStats[item.id] || null
+            usageStats: foodUsageStats[r.item.id] || null,
+            searchScore: r.score
         }));
     }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
 
@@ -743,20 +745,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         const standardMatches = performSmartSearch(input, sourceQuickMeals, {
             textFn: (item) => item.name,
             usageCountFn: (item) => snabbvalUsageStats[item.id]?.count || 0,
-            limit: 5
+            limit: 5,
+            includeScore: true
         });
 
         const estimateMatches = performSmartSearch(input, sourceEstimates, {
             textFn: (item) => item.name,
             usageCountFn: (item) => snabbvalUsageStats[item.id]?.count || 0,
-            limit: 3
+            limit: 3,
+            includeScore: true
         });
 
-
-
         return {
-            standardQuickMeals: standardMatches.map(m => processItem(m, 'quickMeal')),
-            savedEstimates: estimateMatches.map(m => processItem(m, 'savedEstimate'))
+            standardQuickMeals: standardMatches.map(r => ({ ...processItem(r.item, 'quickMeal'), searchScore: r.score })),
+            savedEstimates: estimateMatches.map(r => ({ ...processItem(r.item, 'savedEstimate'), searchScore: r.score }))
         };
     }, [input, quickMeals, isSlashMode, intent, foodItems, recipes, snabbvalUsageStats]);
 
@@ -888,16 +890,24 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         const is2ColMode = !input || isMealKeyword;
 
         const items: any[] = [];
-        if (frequentCombos.length > 0) items.push(...frequentCombos);
-        if (savedEstimates.length > 0) items.push(...savedEstimates);
-        if (standardQuickMeals.length > 0) items.push(...standardQuickMeals);
+        if (frequentCombos.length > 0) items.push(...frequentCombos.map(c => ({ ...c, searchScore: (c as any).searchScore || 50 })));
+        
+        // Merge food, quick meals and estimates and sort by search score
+        const mergedResults = [
+            ...savedEstimates.map(e => ({ ...e, itemType: 'savedEstimate' as const })),
+            ...standardQuickMeals.map(q => ({ ...q, itemType: 'quickMeal' as const })),
+            ...foodResults.map(f => ({ ...f, itemType: 'food' as const }))
+        ].sort((a, b) => (b.searchScore || 0) - (a.searchScore || 0));
+
+        items.push(...mergedResults);
+
         if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
-        if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
+        
         if (is2ColMode && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
         if (is2ColMode && popularFoods.length > 0) items.push(...popularFoods.map(f => ({ itemType: 'popular' as const, ...f })));
 
         return items;
-    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood]);
+    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood, frequentCombos]);
 
 
     // Reset selection when results change or input changes
@@ -2163,7 +2173,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                                     <div
                                         key={user.id}
                                         id={`omnibox-item-${globalIdx}`}
-                                        onClick={() => { navigate(`/u/${user.handle || user.username}`); onClose(); }}
+                                        onClick={() => { 
+                                            const path = `/u/${user.handle || user.username}`;
+                                            logEvent('omnibox_nav', `Navigated to user ${user.name}`, 'omnibox', { path });
+                                            navigate(path); 
+                                            onClose(); 
+                                        }}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-indigo-500/20 text-indigo-400'
                                             : 'hover:bg-white/5 text-white'
@@ -2192,123 +2207,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                         </div>
                     )}
 
-                    {/* Saved Estimates Results */}
-                    {!isSlashMode && !lockedFood && savedEstimates.length > 0 && (
+                    {/* Mixed Search Results */}
+                    {!isSlashMode && !lockedFood && !lockedQuickMeal && (foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0) && (
                         <div className="px-2 py-2">
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>🧮</span> Estimeringar ({savedEstimates.length})
-                            </div>
-                            {savedEstimates.map((meal, idx) => {
-                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'savedEstimate' && i.id === meal.id);
-                                return (
-                                    <div
-                                        key={meal.id}
-                                        id={`omnibox-item-${globalIdx}`}
-                                        onClick={() => lockQuickMeal(meal)}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                            ? 'bg-purple-500/20 text-purple-400'
-                                            : 'hover:bg-white/5 text-white'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400">
-                                                <Calculator size={16} />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="font-medium">{meal.name}</div>
-                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                                        <span className="font-bold text-slate-400">{Math.round((meal as any).totals.calories)} kcal</span>
-                                                        {(meal as any).totals.protein > 0 && <span className="text-slate-600">• P: {Math.round((meal as any).totals.protein)}g</span>}
-                                                        {(meal as any).totals.carbs > 0 && <span className="text-slate-600">• K: {Math.round((meal as any).totals.carbs)}g</span>}
-                                                        {(meal as any).totals.fat > 0 && <span className="text-slate-600">• F: {Math.round((meal as any).totals.fat)}g</span>}
-                                                    </div>
-                                                </div>
-                                                {meal.items[0].estimateDetails?.caloriesMin && (
-                                                    <div className="text-[9px] text-slate-600">
-                                                        Range: {meal.items[0].estimateDetails.caloriesMin}-{meal.items[0].estimateDetails.caloriesMax} kcal
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onOpenNutrition?.({
-                                                        type: 'estimate',
-                                                        referenceId: meal.id,
-                                                        servings: 1,
-                                                        estimateDetails: meal.items[0].estimateDetails
-                                                    });
-                                                    onClose();
-                                                }}
-                                            >
-                                                <Info size={14} />
-                                            </button>
-                                            <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
-                                                Enter = Log
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Quick Meal Results (Updated to use standardQuickMeals) */}
-                    {!isSlashMode && !lockedFood && standardQuickMeals.length > 0 && (
-                        <div className="px-2 py-2">
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>⚡</span> Snabbval ({standardQuickMeals.length})
-                            </div>
-                            {standardQuickMeals.map((meal, idx) => {
-                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'quickMeal' && i.id === meal.id);
-                                return (
-                                    <div
-                                        key={meal.id}
-                                        id={`omnibox-item-${globalIdx}`}
-                                        onClick={() => lockQuickMeal(meal)}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                            ? 'bg-amber-500/20 text-amber-400'
-                                            : 'hover:bg-white/5 text-white'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm font-bold text-amber-400">
-                                                ⚡
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="font-medium">{meal.name}</div>
-                                                    <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                        {Math.round((meal as any).totals.calories)} kcal
-                                                    </span>
-                                                    {(meal as any).usageStats?.count > 0 && (
-                                                        <span className="text-[9px] bg-amber-500/10 text-amber-500/80 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                            ⚡ {(meal as any).usageStats.count}x
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{(meal as any).summary}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
-                                            Enter = Logga
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Food Search Results */}
-
-                    {!isSlashMode && foodResults.length > 0 && (
-                        <div className="px-2 py-2">
-                            {/* Parsed Intent Preview */}
-                            {intent.type === 'food' && (intent.data.quantity !== 100 || intent.data.mealType || intent.date) && (
+                             {/* Parsed Intent Preview for Food */}
+                             {intent.type === 'food' && (intent.data.quantity !== 100 || intent.data.mealType || intent.date) && (
                                 <div className="px-3 py-2 mb-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                                     <div className="flex items-center gap-2 text-emerald-400 text-sm">
                                         <span>🎯</span>
@@ -2332,73 +2235,130 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                             )}
 
                             <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>🍎</span> Råvaror ({foodResults.length})
+                                <span>🔍</span> Sökresultat ({foodResults.length + standardQuickMeals.length + savedEstimates.length})
                             </div>
-                            {foodResults.map((item, idx) => {
-                                // Use parsed quantity from intent, or default portion, or user's typical amount, or 100g
-                                const logQuantity = (intent.type === 'food' && intent.data.quantity)
-                                    ? intent.data.quantity
-                                    : (item.defaultPortionGrams || item.usageStats?.avgGrams || 100);
-                                const displayKcal = Math.round(item.calories * logQuantity / 100);
-                                const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'food' && sel.id === item.id);
 
-                                return (
-                                    <div
-                                        key={item.id}
-                                        id={`omnibox-item-${globalIdx}`}
-                                        onClick={() => logFoodItem(item, logQuantity)}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                            ? 'bg-emerald-500/20 text-emerald-400'
-                                            : 'hover:bg-white/5 text-white'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
-                                                {getCategoryEmoji(item.category)}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="font-medium">{item.name}</div>
-                                                    {item.brand && (
-                                                        <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
-                                                            {item.brand}
-                                                        </span>
-                                                    )}
-                                                    {visitStats.paths[`/database?id=${item.id}`] > 0 && (
-                                                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                            👁️ {visitStats.paths[`/database?id=${item.id}`]}
-                                                        </span>
-                                                    )}
+                            {selectableItems.map((item, globalIdx) => {
+                                // 1. Render Food Item
+                                if (item.itemType === 'food') {
+                                    const logQuantity = (intent.type === 'food' && intent.data.quantity)
+                                        ? intent.data.quantity
+                                        : (item.defaultPortionGrams || item.usageStats?.avgGrams || 100);
+                                    const displayKcal = Math.round(item.calories * logQuantity / 100);
+                                    
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            id={`omnibox-item-${globalIdx}`}
+                                            onClick={() => logFoodItem(item, logQuantity)}
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : 'hover:bg-white/5 text-white'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm flex-shrink-0">
+                                                    {getCategoryEmoji(item.category)}
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                                    <span className="uppercase tracking-wide">{item.category || 'Övrigt'}</span>
-                                                    {item.brand && (
-                                                        <>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span className="text-slate-400">{item.brand}</span>
-                                                        </>
-                                                    )}
-                                                    <span className="text-slate-600">•</span>
-                                                    <span className="text-slate-400">{Math.round(item.protein)}g protein</span>
-                                                    {item.usageStats && (
-                                                        <>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span className="text-emerald-500/70">{item.usageStats.count}x</span>
-                                                        </>
-                                                    )}
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-medium truncate">{item.name}</div>
+                                                        {item.brand && (
+                                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide flex-shrink-0">
+                                                                {item.brand}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                                        <span className="uppercase tracking-wide">{item.category || 'Övrigt'}</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className="text-slate-400">{displayKcal} kcal</span>
+                                                        {item.usageStats && (
+                                                            <>
+                                                                <span className="text-slate-600">•</span>
+                                                                <span className="text-emerald-500/70">{item.usageStats.count}x</span>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="font-bold text-sm">{displayKcal} kcal</div>
-                                            <div className="text-[10px] text-slate-500">
-                                                {Math.round(logQuantity)}g • {Math.round(item.protein)}g prot/100g
+                                            <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded ml-2 flex-shrink-0">
+                                                Råvara
                                             </div>
                                         </div>
-                                    </div>
-                                );
+                                    );
+                                }
+
+                                // 2. Render Quick Meal / Combo
+                                if (item.itemType === 'quickMeal' || (item.id && item.id.startsWith('combo-'))) {
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            id={`omnibox-item-${globalIdx}`}
+                                            onClick={() => lockQuickMeal(item)}
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                ? 'bg-amber-500/20 text-amber-400'
+                                                : 'hover:bg-white/5 text-white'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm font-bold text-amber-400 flex-shrink-0">
+                                                    {item.id.startsWith('combo-') ? '💡' : '⚡'}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-medium truncate">{item.name}</div>
+                                                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
+                                                            {Math.round((item as any).totals.calories)} kcal
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-[10px] uppercase font-bold text-amber-500/60 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 ml-2 flex-shrink-0">
+                                                Snabbval
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // 3. Render Saved Estimate
+                                if (item.itemType === 'savedEstimate') {
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            id={`omnibox-item-${globalIdx}`}
+                                            onClick={() => lockQuickMeal(item)}
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                ? 'bg-purple-500/20 text-purple-400'
+                                                : 'hover:bg-white/5 text-white'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                                                    <Calculator size={16} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-medium truncate">{item.name}</div>
+                                                        <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-shrink-0">
+                                                            <span className="font-bold text-slate-400">{Math.round((item as any).totals.calories)} kcal</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-[10px] uppercase font-bold text-purple-400/60 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 ml-2 flex-shrink-0">
+                                                Estimering
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return null;
                             })}
-                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
+
+                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center mt-2 border-t border-white/5 pt-2">
                                 ↑↓ navigera • Enter för att logga
                             </div>
                         </div>

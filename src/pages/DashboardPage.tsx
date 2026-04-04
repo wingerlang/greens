@@ -464,7 +464,9 @@ export function DashboardPage() {
     };
 
     const isIntakeDone = completedCards.includes('intake');
-    const isTrainingDone = completedCards.includes('training');
+    const isTrainingRunDone = completedCards.includes('training-running');
+    const isTrainingStrDone = completedCards.includes('training-strength');
+    const isTrainingCardioDone = completedCards.includes('training-cardio');
     const isSleepDone = completedCards.includes('sleep');
     const isWaterDone = completedCards.includes('water');
     const isCaffeineDone = completedCards.includes('caffeine');
@@ -472,7 +474,9 @@ export function DashboardPage() {
 
     const cardOrder = [
         { id: 'intake', isDone: isIntakeDone },
-        { id: 'training', isDone: isTrainingDone },
+        { id: 'training-running', isDone: isTrainingRunDone },
+        { id: 'training-strength', isDone: isTrainingStrDone },
+        { id: 'training-cardio', isDone: isTrainingCardioDone },
         { id: 'sleep', isDone: isSleepDone },
         { id: 'water', isDone: isWaterDone },
         { id: 'alcohol', isDone: isAlcoholDone },
@@ -576,10 +580,12 @@ export function DashboardPage() {
                                 />
                             );
                         }
-                        if (card.id === 'training') {
+                        if (card.id === 'training-running' || card.id === 'training-strength' || card.id === 'training-cardio') {
+                            const category = card.id.replace('training-', '') as any;
                             return (
                                 <TrainingCard
-                                    key="training"
+                                    key={card.id}
+                                    category={category}
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
                                     density={density}

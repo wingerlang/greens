@@ -160,6 +160,8 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         performanceGoals, // Exclude from blob
         weeklyPlans,      // Exclude from blob
         quickMeals,       // Exclude from blob
+        recipes,          // Exclude from blob
+        foodItems,        // Exclude from blob
         ...userSpecificData
     } = data;
 

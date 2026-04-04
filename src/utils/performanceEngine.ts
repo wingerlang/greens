@@ -366,29 +366,42 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
     // 1. Start with Strava's best efforts if available
     if (perf.bestEfforts && perf.bestEfforts.length > 0) {
         perf.bestEfforts.forEach(be => {
-            results[be.name] = { ...be };
+            results[be.name] = { ...be, source: 'strava' };
         });
     }
 
-    // 2. Scan splits/laps for potentially better efforts or missing distances
-    // We prioritize 'splits' (usually 1km) but fallback to 'laps' 
-    const segments = (perf.splits && perf.splits.length > 1) ? perf.splits : (perf.laps || []);
+    // 2. Scan splits AND laps for potentially better efforts or missing distances
+    const segmentSets = [
+        { data: perf.splits || [], type: 'splits' as const },
+        { data: perf.laps || [], type: 'laps' as const }
+    ].filter(s => s.data.length > 0);
     
-    if (segments.length > 0) {
+    for (const { data: segments, type: segmentType } of segmentSets) {
         for (const target of PERFORMANCE_TARGETS) {
             const targetM = target.km * 1000;
             let bestTime = Infinity;
+            let bestHr = 0;
             let startKm = 0;
+            let bestSegmentName = '';
+            let bestSegmentDist = 0;
 
             // Sliding window over segments
             for (let i = 0; i < segments.length; i++) {
                 let distAcc = 0;
                 let timeAcc = 0;
+                let hrSum = 0;
+                let hrTimeAcc = 0;
                 let j = i;
 
                 while (j < segments.length && distAcc < targetM) {
-                    distAcc += segments[j].distance;
-                    timeAcc += segments[j].movingTime;
+                    const seg = segments[j];
+                    distAcc += seg.distance;
+                    timeAcc += seg.movingTime;
+                    
+                    if (seg.averageHeartrate) {
+                        hrSum += seg.averageHeartrate * seg.movingTime;
+                        hrTimeAcc += seg.movingTime;
+                    }
                     j++;
                 }
 
@@ -400,8 +413,10 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
 
                     if (correctedTime < bestTime) {
                         bestTime = correctedTime;
-                        // Use split number or index + 1
+                        bestHr = hrTimeAcc > 0 ? Math.round(hrSum / hrTimeAcc) : 0;
                         startKm = (segments[i] as any).split || (i + 1);
+                        bestSegmentName = (segments[i] as any).name || '';
+                        bestSegmentDist = segments[i].distance;
                     }
                 }
             }
@@ -415,9 +430,13 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
                         name: target.name,
                         distance: targetM,
                         movingTime: bestTime,
-                        elapsedTime: bestTime, // We use moving time for PRs unless otherwise specified
+                        elapsedTime: bestTime,
                         startDate: perf.startTimeLocal || activity.date,
-                        startKm: startKm // Custom property for UI
+                        startKm: startKm,
+                        avgHeartRate: bestHr > 0 ? bestHr : undefined,
+                        source: segmentType,
+                        segmentName: bestSegmentName,
+                        segmentDistance: bestSegmentDist
                     } as any;
                 }
             }
@@ -434,7 +453,7 @@ export function getFastestSince(
     targetDistanceM: number,
     targetTimeSec: number,
     allActivities: UniversalActivity[]
-): string | 'PB' | null {
+): { id: string; date: string; title: string } | 'PB' | null {
     if (!allActivities || allActivities.length === 0) return null;
 
     const currentDate = new Date(currentActivity.date).getTime();
@@ -446,27 +465,29 @@ export function getFastestSince(
             new Date(a.date).getTime() < currentDate &&
             !((a as any).excludeFromStats || a.performance?.excludeFromStats)
         )
-
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    if (historical.length === 0) return 'PB'; // No previous data at all, so this is a PB
+    if (historical.length === 0) return 'PB';
 
     let foundBetter = false;
-    let betterDate: string | null = null;
+    let betterActivity: { id: string; date: string; title: string } | null = null;
     let isAllTimePB = true;
 
     for (const activity of historical) {
-        // First check pre-calculated best efforts if they exist
         const efforts = getBestEffortsForActivity(activity);
         const relevantEffort = efforts.find(e => 
-            Math.abs(e.distance - targetDistanceM) < 2 // Handle small floating point diffs
+            Math.abs(e.distance - targetDistanceM) < 2
         );
 
         if (relevantEffort) {
             if (relevantEffort.movingTime < targetTimeSec) {
                 if (!foundBetter) {
                     foundBetter = true;
-                    betterDate = activity.date;
+                    betterActivity = {
+                        id: activity.id,
+                        date: activity.date,
+                        title: activity.plan?.title || activity.performance?.notes || activity.performance?.activityType || 'Aktivitet'
+                    };
                 }
                 isAllTimePB = false;
                 break; // Found the most recent better one
@@ -474,7 +495,7 @@ export function getFastestSince(
         }
     }
 
-    if (foundBetter) return betterDate;
+    if (foundBetter) return betterActivity;
     if (isAllTimePB) return 'PB';
     
     return null;

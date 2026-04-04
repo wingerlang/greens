@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
-import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer } from 'lucide-react';
+import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer, Bike, Activity, Wind, Waves, Disc, TrendingUp } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -30,9 +30,11 @@ export function ActivityModal({
 
 
     // Internal Form State
-    const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST'>('RUN');
+    const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'CARDIO' | 'OTHER'>('RUN');
     // New: Sub-category state for UI chips (only for RUN)
     const [runSubCategory, setRunSubCategory] = useState<'EASY' | 'LONG_RUN' | 'INTERVALS' | 'RECOVERY'>('EASY');
+    // New: Sub-type state for CARDIO
+    const [formSubType, setFormSubType] = useState<'cycling' | 'cross-trainer' | 'rowing' | 'stair-master' | 'skierg' | 'cardio' | 'other'>('cardio');
 
     const [formDuration, setFormDuration] = useState('00:45');
     const [formDistance, setFormDistance] = useState('');
@@ -268,10 +270,17 @@ export function ActivityModal({
         if (isOpen && selectedDate) {
             lastChanged.current = null; // Reset on open to allow initial auto-calculations if needed
             if (editingActivity) {
-                setFormType(editingActivity.type === 'REST' ? 'REST' :
-                    (editingActivity.category === 'STRENGTH' ? 'STRENGTH' :
-                        (editingActivity.title.toLowerCase().includes('hyrox') ? 'HYROX' :
-                            (editingActivity.type === 'BIKE' ? 'BIKE' : 'RUN'))));
+                // Robust mapping to handle lowercase types from ExerciseEntry and uppercase from PlannedActivity
+                const rawType = (editingActivity.type as string).toUpperCase();
+                if (rawType === 'RUNNING' || rawType === 'RUN') setFormType('RUN');
+                else if (rawType === 'STRENGTH') setFormType('STRENGTH');
+                else if (rawType === 'HYROX') setFormType('HYROX');
+                else if (rawType === 'CYCLING' || rawType === 'BIKE') setFormType('BIKE');
+                else if (rawType === 'REST') setFormType('REST');
+                else if (rawType === 'CARDIO') setFormType('CARDIO');
+                else setFormType('OTHER');
+
+                if (editingActivity.subType) setFormSubType(editingActivity.subType as any);
 
                 if (editingActivity.category === 'LONG_RUN') setRunSubCategory('LONG_RUN');
                 else if (editingActivity.category === 'INTERVALS' || editingActivity.category === 'TEMPO') setRunSubCategory('INTERVALS');
@@ -395,8 +404,9 @@ export function ActivityModal({
         const activityData: PlannedActivity = {
             id: editingActivity?.id || generateId(),
             date: formDate,
-            type: (formType === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
-            category: finalCategory as PlannedActivity['category'],
+            type: formType,
+            category: (formType === 'STRENGTH' ? 'STRENGTH' : formType === 'REST' ? 'REST' : (formType === 'CARDIO' || formType === 'BIKE') ? 'CARDIO' : 'RUN') as any,
+            subType: (formType === 'CARDIO' || formType === 'BIKE') ? (formType === 'BIKE' ? 'cycling' : formSubType) : undefined,
             title: title,
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
             estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
@@ -645,7 +655,7 @@ export function ActivityModal({
                                     Styrka
                                 </button>
                             )}
-                            {(settings.trainingInterests?.hyrox ?? true) && (
+                            {settings.trainingInterests?.hyrox && (
                                 <button
                                     onClick={() => setFormType('HYROX')}
                                     className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
@@ -654,12 +664,51 @@ export function ActivityModal({
                                 </button>
                             )}
                             <button
+                                onClick={() => setFormType('CARDIO')}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'CARDIO' || formType === 'BIKE' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Cardio
+                            </button>
+                            <button
                                 onClick={() => setFormType('REST')}
                                 className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
                             >
                                 Vila
                             </button>
                         </div>
+
+                        {/* Cardio Sub-Type Selector */}
+                        {(formType === 'CARDIO' || formType === 'BIKE') && (
+                            <div className="flex flex-wrap gap-1.5 pb-2">
+                                {[
+                                    { id: 'cycling', label: 'Cykling', icon: <Bike size={14} />, color: 'emerald' },
+                                    { id: 'cross-trainer', label: 'Cross trainer', icon: <Disc size={14} />, color: 'teal' },
+                                    { id: 'rowing', label: 'Rodd', icon: <Waves size={14} />, color: 'blue' },
+                                    { id: 'stair-master', label: 'Trappmaskin', icon: <TrendingUp size={14} />, color: 'indigo' },
+                                    { id: 'skierg', label: 'Skierg', icon: <Wind size={14} />, color: 'sky' },
+                                    { id: 'cardio', label: 'Allmän Cardio', icon: <Activity size={14} />, color: 'slate' },
+                                ].map((sub) => (
+                                    <button
+                                        key={sub.id}
+                                        onClick={() => {
+                                            if (sub.id === 'cycling') setFormType('BIKE');
+                                            else {
+                                                setFormType('CARDIO');
+                                                setFormSubType(sub.id as any);
+                                            }
+                                        }}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${
+                                            (formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id)
+                                                ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md`
+                                                : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300'
+                                        }`}
+                                    >
+                                        {sub.icon}
+                                        {sub.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Run Sub-Category Selector */}
                         {formType === 'RUN' && (
@@ -1048,6 +1097,20 @@ export function ActivityModal({
                                 placeholder="Beskriv passet..."
                             />
                         </div>
+
+                        {editingActivity && (
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    if (confirm('Är du säker på att du vill ta bort detta pass?')) {
+                                        onDelete?.(editingActivity.id);
+                                    }
+                                }}
+                                className="w-full py-3 text-rose-500 font-black uppercase tracking-widest rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all border border-rose-100 dark:border-rose-900/30 text-xs"
+                            >
+                                Ta bort pass
+                            </button>
+                        )}
 
                         <button
                             onClick={handleSave}

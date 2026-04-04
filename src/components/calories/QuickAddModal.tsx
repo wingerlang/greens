@@ -182,6 +182,9 @@ interface QuickAddModalProps {
     onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void;
     getItemName: (item: any) => string;
     getItemNutrition: (item: any) => { calories: number; protein: number; carbs: number; fat?: number };
+    // Smart Recommendations
+    recommendations?: SearchResult[];
+    lastAddedItemName?: string;
 }
 
 
@@ -202,7 +205,10 @@ export function QuickAddModal({
     onLogQuickMeal,
     getItemName,
     getItemNutrition,
+    recommendations = [],
+    lastAddedItemName
 }: QuickAddModalProps) {
+    const [activeTab, setActiveTab] = useState<'search' | 'proposals' | 'recommended'>('search');
     // Track which items are toggled to "cooked" mode
     const [cookedItems, setCookedItems] = useState<Set<string>>(new Set());
     // Track selected variant for base items
@@ -258,6 +264,12 @@ export function QuickAddModal({
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
+            // Tab shortcuts (Alt + 1/2/3)
+            if (e.altKey) {
+                if (e.key === '1') setActiveTab('search');
+                if (e.key === '2') setActiveTab('proposals');
+                if (e.key === '3') setActiveTab('recommended');
+            }
         };
         if (isOpen) {
             window.addEventListener('keydown', handleKeyDown);
@@ -269,11 +281,22 @@ export function QuickAddModal({
     useEffect(() => {
         if (isOpen) {
             setOpenTimestamp(Date.now());
+            // Default to search, unless we just opened because of an add (will be handled by recommendations effect)
+            if (!searchQuery) {
+                setActiveTab('search');
+            }
         } else {
             setCookedItems(new Set());
             setOpenTimestamp(null);
         }
     }, [isOpen]);
+
+    // Auto-switch to recommendations when they become available (e.g. after adding something)
+    useEffect(() => {
+        if (recommendations.length > 0) {
+            setActiveTab('recommended');
+        }
+    }, [recommendations.length]); // Specifically watch length changes or identity if it's new
 
     const filteredQuickMeals = useMemo(() => {
         if (!quickMeals) return [];
@@ -394,7 +417,30 @@ export function QuickAddModal({
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal quick-add-modal" onClick={(e) => e.stopPropagation()}>
-                <h2>🔍 Sök och lägg till</h2>
+                {/* Tab Navigation */}
+                <div className="flex items-center gap-1 mb-6 p-1 bg-slate-900/50 rounded-2xl border border-white/5">
+                    <button
+                        onClick={() => setActiveTab('search')}
+                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'search' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        🔍 Sök
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('proposals')}
+                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'proposals' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        🕒 Förslag
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('recommended')}
+                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'recommended' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'} ${recommendations.length === 0 ? 'opacity-30 grayscale cursor-not-allowed' : 'relative animate-pulse-subtle'}`}
+                        disabled={recommendations.length === 0}
+                    >
+                        ✨ Smart{recommendations.length > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border-2 border-slate-900 animate-bounce"></span>}
+                    </button>
+                </div>
+
+                <h2>{activeTab === 'search' ? 'Sök och lägg till' : activeTab === 'proposals' ? 'Ofta använda' : 'Smarta förslag'}</h2>
 
                 {/* Date indicator - prominent when not today */}
                 {selectedDate && (
@@ -438,60 +484,105 @@ export function QuickAddModal({
                     </div>
                 </div>
 
-                {/* Unified Search */}
-                <div className="form-group">
-                    <label>Sök recept eller råvara</label>
-                    <input
-                        type="text"
-                        placeholder="Skriv för att söka..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        autoFocus
-                    />
+                {/* Unified Search - only show in Sök tab */}
+                {activeTab === 'search' && (
+                    <div className="form-group">
+                        <label>Sök recept eller råvara</label>
+                        <input
+                            type="text"
+                            placeholder="Skriv för att söka..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                )}
+
+                {/* Tab Content Rendering */}
+                <div className="min-h-[300px] max-h-[50vh] overflow-y-auto custom-scrollbar pr-1 -mr-1">
+                    {/* RECOMMENDED TAB */}
+                    {activeTab === 'recommended' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {lastAddedItemName && (
+                                <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                                    <div className="text-[10px] text-emerald-500 uppercase font-black tracking-widest mb-1 opacity-70">Baserat på senast tillagda</div>
+                                    <div className="text-sm font-bold text-white flex items-center gap-2">
+                                        <span className="text-lg">✨</span> {lastAddedItemName}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="search-results">
+                                {recommendations.map((result) => renderResultItem(result, 'rec'))}
+                            </div>
+                            {recommendations.length === 0 && (
+                                <div className="py-12 text-center">
+                                    <div className="text-4xl mb-4 opacity-20">✨</div>
+                                    <p className="text-xs text-slate-500 font-medium">Inga smarta förslag ännu.<br />Logga något först för att se vad som brukar passa!</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* SEARCH TAB */}
+                    {activeTab === 'search' && (
+                        <div className="animate-in fade-in duration-300">
+                            {/* Quick Meals Section */}
+                            {filteredQuickMeals.length > 0 && (
+                                <div className="search-results proposals-results mb-4">
+                                    <p className="text-[10px] text-emerald-500 uppercase font-bold mb-2 tracking-wider">
+                                        {searchQuery ? '⚡ Snabbval Träffar' : '⚡ Mina Snabbval'}
+                                    </p>
+                                    {filteredQuickMeals.map(qm => (
+                                        <QuickMealRow
+                                            key={qm.id}
+                                            qm={qm}
+                                            onLogQuickMeal={onLogQuickMeal}
+                                            getItemName={getItemName}
+                                            getItemNutrition={getItemNutrition}
+                                            highlightedIndex={hoveredSnabbvalId === qm.id ? hoveredIngredientIndex : null}
+                                            onHoverIngredient={(idx) => {
+                                                setHoveredSnabbvalId(idx === null ? null : qm.id);
+                                                setHoveredIngredientIndex(idx);
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Search Results */}
+                            {searchQuery && searchResults.length > 0 && (
+                                <div className="search-results">
+                                    {searchResults.map((result) => renderResultItem(result, 'search'))}
+                                </div>
+                            )}
+
+                            {searchQuery && searchResults.length === 0 && (
+                                <p className="no-results py-8 text-center text-slate-500 italic">Inga resultat för "{searchQuery}"</p>
+                            )}
+
+                            {!searchQuery && filteredQuickMeals.length === 0 && (
+                                <div className="py-12 text-center">
+                                    <div className="text-4xl mb-4 opacity-20">🔍</div>
+                                    <p className="text-xs text-slate-500 font-medium italic">Sök efter något att äta...</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* PROPOSALS TAB */}
+                    {activeTab === 'proposals' && (
+                        <div className="animate-in fade-in duration-300">
+                            {proposals.length > 0 ? (
+                                <div className="search-results proposals-results">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 tracking-wider italic">Mest och senast använda</p>
+                                    {proposals.map((result) => renderResultItem(result, 'prop'))}
+                                </div>
+                            ) : (
+                                <p className="text-center py-12 text-slate-500 italic text-xs">Ingen historik ännu.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
-
-                {/* Quick Meals Section */}
-                {filteredQuickMeals.length > 0 && (
-                    <div className="search-results proposals-results mb-4">
-                        <p className="text-[10px] text-emerald-500 uppercase font-bold mb-2 tracking-wider">
-                            {searchQuery ? '⚡ Snabbval Träffar' : '⚡ Mina Snabbval'}
-                        </p>
-                        {filteredQuickMeals.map(qm => (
-                            <QuickMealRow
-                                key={qm.id}
-                                qm={qm}
-                                onLogQuickMeal={onLogQuickMeal}
-                                getItemName={getItemName}
-                                getItemNutrition={getItemNutrition}
-                                highlightedIndex={hoveredSnabbvalId === qm.id ? hoveredIngredientIndex : null}
-                                onHoverIngredient={(idx) => {
-                                    setHoveredSnabbvalId(idx === null ? null : qm.id);
-                                    setHoveredIngredientIndex(idx);
-                                }}
-                            />
-                        ))}
-                    </div>
-                )}
-
-
-                {/* Proposals (Most/Recently Used) */}
-                {!searchQuery && proposals.length > 0 && (
-                    <div className="search-results proposals-results">
-                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 tracking-wider">Ofta använda</p>
-                        {proposals.map((result) => renderResultItem(result, 'prop'))}
-                    </div>
-                )}
-
-                {/* Search Results */}
-                {searchQuery && searchResults.length > 0 && (
-                    <div className="search-results">
-                        {searchResults.map((result) => renderResultItem(result, 'search'))}
-                    </div>
-                )}
-
-                {searchQuery && searchResults.length === 0 && (
-                    <p className="no-results">Inga resultat för "{searchQuery}"</p>
-                )}
 
                 <div className="form-actions">
                     <button type="button" className="btn btn-secondary" onClick={onClose}>

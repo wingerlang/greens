@@ -185,7 +185,7 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
             response = await handleStravaRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/social")) {
             response = await handleSocialRoutes(req, url, headers, ctx);
-        } else if (url.pathname.startsWith("/api/activities")) {
+        } else if (url.pathname.startsWith("/api/activities") || url.pathname.startsWith("/api/tours")) {
             response = await handleActivityRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/admin/kv")) {
             response = await handleAdminKvRoutes(req, url, headers);

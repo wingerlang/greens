@@ -413,9 +413,12 @@ export const analyticsRepository = {
         const contextualNavMap = new Map<string, Map<string, number>>();
         const hourlyDistribution = new Array(24).fill(0);
 
-        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
+        // Efficient scan: Start from the cutoff date
+        for await (const entry of kv.list<InteractionEvent>({ 
+            prefix: [KEY_PREFIX.EVENT], 
+            start: [KEY_PREFIX.EVENT, cutoffStr] 
+        })) {
             const e = entry.value;
-            if (e.timestamp < cutoffStr) continue;
 
             // Track Omnibox events
             if (e.type === 'omnibox_search' && e.metadata?.query) {

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { formatSwedishDate, formatDuration } from '../../utils/dateUtils.ts';
 import {
     Activity,
+    Flame,
     Calendar,
     Clock,
     Zap,
@@ -170,6 +171,14 @@ export const SummaryVsCard: React.FC<SummaryVsCardProps> = ({
                     </div>
                     <ComparisonRow label="Tid" current={Math.round(stats.totalTime)} previous={Math.round(prevStats.totalTime)} isTime icon={Clock} colorClass="emerald" />
                     <ComparisonRow label="Pass" current={stats.totalSessions} previous={prevStats.totalSessions} unit="st" icon={Zap} colorClass="amber" />
+                    <ComparisonRow
+                        label="Aktiva Dagar"
+                        current={stats.activeDays}
+                        previous={prevStats.activeDays}
+                        unit={`${Math.round((stats.activeDays / stats.totalDays) * 100)}%`}
+                        icon={Flame}
+                        colorClass="orange"
+                    />
                     <ComparisonRow
                         label="Pass/dag"
                         current={Number((stats.totalSessions / Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))).toFixed(2))}

@@ -36,9 +36,30 @@ export interface SegmentedSplits {
         totalRecoveryKm: number;
         avgIntervalPace: number;
         avgRecoveryPace: number;
+        avgIntervalHR?: number;
+        avgRecoveryHR?: number;
         fastestIntervalPace: number;
         slowestIntervalPace: number;
     };
+}
+
+function getDistanceInTitle(title: string): number | null {
+    // Look for 5km, 10km, 21.1km, 42.2km, 5k, 10k, 1/2 marathon, halvmarathon, mil, etc.
+    const normalized = title.toLowerCase();
+    
+    // Check for "mil" (Swedish for 10km)
+    if (normalized.includes('milen') || (normalized.match(/(?:\s|^)mil(?:\s|$)/) && !normalized.match(/\d/))) return 10;
+    
+    const milMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*mil/);
+    if (milMatch) return parseFloat(milMatch[1].replace(',', '.')) * 10;
+
+    const kmMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*(?:km|k\b)/);
+    if (kmMatch) return parseFloat(kmMatch[1].replace(',', '.'));
+
+    if (normalized.includes('halvmarathon') || normalized.includes('half marathon') || normalized.includes('halvmarata')) return 21.1;
+    if (normalized.includes('marathon') || normalized.includes('marata')) return 42.195;
+
+    return null;
 }
 
 export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?: string): SegmentedSplits | null {
@@ -53,9 +74,11 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     const isExplicitlyInterval = lowerTitle.includes('intervall') || lowerTitle.includes('reps') || lowerTitle.includes('tusingar') || lowerTitle.includes('backe') || (parsed && parsed.suggestedSubType === 'interval');
     
     // Keywords that imply a single hard effort block
-    const isExplicitlySustained = lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || lowerTitle.includes('max') || lowerTitle.includes('test') || lowerTitle.includes('race') || lowerTitle.includes('lopp') || lowerTitle.includes('pb') || lowerTitle.includes('rekord') || lowerTitle.includes('tävling');
+    const distInTitle = getDistanceInTitle(lowerTitle);
+    const hasDistKeyword = distInTitle !== null;
+    const isExplicitlySustained = lowerTitle.includes('tempo') || lowerTitle.includes('tröskel') || lowerTitle.includes('max') || lowerTitle.includes('test') || lowerTitle.includes('race') || lowerTitle.includes('lopp') || lowerTitle.includes('pb') || lowerTitle.includes('rekord') || lowerTitle.includes('tävling') || hasDistKeyword;
 
-    if (isExplicitlyDistance && !isExplicitlyInterval) {
+    if (isExplicitlyDistance && !isExplicitlyInterval && !hasDistKeyword) {
         return null; // Skip interval clustering for explicit distance/recovery runs
     }
 
@@ -236,31 +259,55 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     if (isExplicitlySustained || isVeryClosePace) {
         type = 'sustained';
         
-        // COLLAPSE LOGIC: If sustained, we merge all interval blocks into one if segments between them are short/fast
-        // or just treat the entire range from first interval to last as one block if it makes sense.
-        if (intervalGroups.length > 1) {
-            // Find first interval split and last interval split
-            const firstIntervalIdx = classified.findIndex(s => s.role === 'interval');
-            const lastIntervalIdx = classified.lastIndexOf(classified.findLast(s => s.role === 'interval')!);
-            
-            if (firstIntervalIdx !== -1 && lastIntervalIdx !== -1) {
-                for (let i = firstIntervalIdx; i <= lastIntervalIdx; i++) {
-                    classified[i].role = 'interval';
-                    classified[i].intervalNumber = 1;
+        // COLLAPSE & EXPAND LOGIC: If sustained, we merge all interval blocks into one
+        const firstIntervalIdx = classified.findIndex(s => s.role === 'interval');
+        let lastIntervalIdx = classified.lastIndexOf(classified.findLast(s => s.role === 'interval')!);
+        
+        if (firstIntervalIdx !== -1) {
+            // STRATEGY 1: Title-based extension
+            // If the title says "10km" and we only found 3km, check if we can extend to 10km if the pace is decent
+            if (distInTitle && lastIntervalIdx - firstIntervalIdx < distInTitle - 1) {
+                const targetIdx = firstIntervalIdx + Math.round(distInTitle) - 1;
+                // Extend if we have the laps and the pace isn't extremely slow (e.g. > 30% slower than interval)
+                for (let i = lastIntervalIdx + 1; i <= Math.min(targetIdx, classified.length - 1); i++) {
+                    const lapPace = paces[i];
+                    if (lapPace < avgIntervalPace * 1.35) { // 35% margin for "fading" in a race
+                        classified[i].role = 'interval';
+                        lastIntervalIdx = i;
+                    } else {
+                        break; // Too slow, stop extending
+                    }
                 }
-                
-                // Rebuild groups with new collapsed state
-                intervalGroups.length = 0;
-                const collapsedSplits = classified.filter(s => s.role === 'interval');
-                intervalGroups.push({
-                    number: 1,
-                    intervalSplits: collapsedSplits,
-                    recoverySplits: [],
-                    avgPace: collapsedSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / collapsedSplits.length,
-                    avgHR: collapsedSplits.some(sp => sp.averageHeartrate) ?
-                        collapsedSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / collapsedSplits.filter(sp => sp.averageHeartrate).length : undefined
-                });
             }
+
+            // STRATEGY 2: Dynamic extension (re-classify cooldown if still somewhat fast)
+            // If we are in "sustained" mode and the "cooldown" is still fast (e.g. within 20% of effort), it belongs to effort
+            for (let i = lastIntervalIdx + 1; i < classified.length; i++) {
+                if (classified[i].role === 'cooldown' && paces[i] < avgIntervalPace * 1.25) {
+                    classified[i].role = 'interval';
+                    lastIntervalIdx = i;
+                } else {
+                    break;
+                }
+            }
+
+            // Perform the vertical collapse
+            for (let i = firstIntervalIdx; i <= lastIntervalIdx; i++) {
+                classified[i].role = 'interval';
+                classified[i].intervalNumber = 1;
+            }
+            
+            // Rebuild groups with new collapsed state
+            intervalGroups.length = 0;
+            const collapsedSplits = classified.filter(s => s.role === 'interval');
+            intervalGroups.push({
+                number: 1,
+                intervalSplits: collapsedSplits,
+                recoverySplits: [],
+                avgPace: collapsedSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / collapsedSplits.length,
+                avgHR: collapsedSplits.some(sp => sp.averageHeartrate) ?
+                    collapsedSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / collapsedSplits.filter(sp => sp.averageHeartrate).length : undefined
+            });
         }
     }
 
@@ -297,6 +344,10 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
             totalRecoveryKm,
             avgIntervalPace: finalIntervalSplits.length > 0 ? finalIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalIntervalSplits.length : 0,
             avgRecoveryPace: finalRecoverySplits.length > 0 ? finalRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalRecoverySplits.length : 0,
+            avgIntervalHR: finalIntervalSplits.some(s => s.averageHeartrate) ? 
+                Math.round(finalIntervalSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / finalIntervalSplits.filter(s => s.averageHeartrate).length) : undefined,
+            avgRecoveryHR: finalRecoverySplits.some(s => s.averageHeartrate) ?
+                Math.round(finalRecoverySplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / finalRecoverySplits.filter(s => s.averageHeartrate).length) : undefined,
             fastestIntervalPace: intervalPaces.length > 0 ? Math.min(...intervalPaces) : 0,
             slowestIntervalPace: intervalPaces.length > 0 ? Math.max(...intervalPaces) : 0,
         }

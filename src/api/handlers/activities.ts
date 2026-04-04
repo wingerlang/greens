@@ -7,6 +7,8 @@ import { sanitizeObject } from "../utils/sanitize.ts";
 import { logAudit } from "../utils/audit.ts";
 import { ActivitySchema } from "../utils/schemas.ts";
 import { AuthContext } from "../middleware.ts";
+import { getUserData, saveUserData } from "../db/data.ts";
+import { Tour } from "../../models/types.ts";
 
 export async function handleActivityRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     const method = req.method;
@@ -331,6 +333,53 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             await activityRepo.deleteActivity(activity);
             await logAudit({ actorId: userId, action: "DELETE_ACTIVITY", targetId: activityId });
             return new Response(JSON.stringify({ success: true }), { status: 200, headers });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+        }
+    }
+
+    // POST /api/tours - Create or update a tour
+    if (url.pathname === "/api/tours" && method === "POST") {
+        try {
+            const body = await req.json() as Tour;
+            if (!body.id || !body.name || !body.date) {
+                return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers });
+            }
+
+            const data = await getUserData(userId);
+            const currentData = data || {};
+            const currentTours = currentData.tours || [];
+
+            const existingIndex = currentTours.findIndex(t => t.id === body.id);
+            if (existingIndex >= 0) {
+                currentTours[existingIndex] = body;
+            } else {
+                currentTours.push(body);
+            }
+
+            await saveUserData(userId, { ...currentData, tours: currentTours } as any);
+
+            return new Response(JSON.stringify({ success: true, tour: body }), { headers });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+        }
+    }
+
+    // DELETE /api/tours - Delete a tour
+    if (url.pathname === "/api/tours" && method === "DELETE") {
+        try {
+            const id = url.searchParams.get("id");
+            if (!id) return new Response(JSON.stringify({ error: "Missing id" }), { status: 400, headers });
+
+            const data = await getUserData(userId);
+            if (!data || !data.tours) {
+                return new Response(JSON.stringify({ success: true }), { headers });
+            }
+
+            const currentTours = data.tours.filter(t => t.id !== id);
+            await saveUserData(userId, { ...data, tours: currentTours } as any);
+
+            return new Response(JSON.stringify({ success: true }), { headers });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
         }

@@ -112,8 +112,13 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                                 {activity.category === 'LONG_RUN' ? '🚀 Långpass' :
                                     activity.category === 'EASY' ? '🍃 Distans' :
                                     activity.category === 'STRENGTH' ? '🏋️ Styrka' :
-                                    activity.category === 'CARDIO' ? '🚴 Cardio' :
-                                        activity.category}
+                                    activity.category === 'CARDIO' ? (
+                                        activity.subType === 'cycling' ? '🚴 Cykling' :
+                                        activity.subType === 'cross-trainer' ? '🕺 Cross trainer' :
+                                        activity.subType === 'rowing' ? '🚣 Rodd' :
+                                        activity.subType === 'stair-master' ? '🧗 Trappmaskin' :
+                                        activity.subType === 'skierg' ? '🎿 Skierg' : '⚡ Cardio'
+                                    ) : activity.category}
                             </span>
                             <div className="flex items-center gap-2">
                                 <input

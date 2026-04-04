@@ -696,6 +696,7 @@ export interface ExerciseEntry {
     calorieBreakdown?: string;
     notes?: string;
     excludeFromStats?: boolean;
+    order?: number;
     isHiddenInCalendar?: boolean;
     elapsedTimeSeconds?: number;
     subType?: ExerciseSubType;
@@ -778,6 +779,7 @@ export interface RaceDefinition {
     aliases: string[]; // Fuzzy match strings (e.g. "Gbg varvet", "Göteborgs Varvet")
     distance?: number; // Canonical distance in km
     location?: string;
+    description?: string;
     website?: string;
     matches?: string[];
     isCup?: boolean;
@@ -1290,6 +1292,10 @@ export interface BestEffort {
     movingTime: number;
     startDate: string;
     prRank?: number; // 1, 2, 3... (e.g. 1st best, 2nd best)
+    avgHeartRate?: number;
+    source?: 'strava' | 'splits' | 'laps';
+    segmentName?: string;
+    segmentDistance?: number;
 }
 
 /**
@@ -1388,11 +1394,13 @@ export interface AICoachTip {
 
 export interface PlannedActivity {
     id: string;
+    userId?: string;
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
     type: 'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'CARDIO' | 'OTHER';
+    order?: number;
     category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST' | 'RACE' | 'CARDIO' | 'OTHER';
-    subType?: 'cycling' | 'cross-trainer' | 'rowing' | 'stair-master' | 'skierg' | 'other';
+    subType?: 'cycling' | 'cross-trainer' | 'rowing' | 'stair-master' | 'skierg' | 'cardio' | 'other';
     title: string;
     description: string;
     structure: {
@@ -1422,6 +1430,7 @@ export interface PlannedActivity {
 
     hyroxFocus?: 'hybrid' | 'strength' | 'cardio';
     startTime?: string; // HH:mm
+    createdAt?: string; // ISO Date
     includesRunning?: boolean;
 
     reconciliation?: {
