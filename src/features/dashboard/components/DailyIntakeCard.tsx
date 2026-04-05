@@ -56,7 +56,7 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
             id="intake"
             isDone={isDone}
             onToggle={onToggle}
-            className="md:col-span-12 xl:col-span-12 h-full flex"
+            className="md:col-span-12 xl:col-span-6 h-full flex"
         >
             <div
                 onClick={() => navigate(`/calories?date=${selectedDate}`)}

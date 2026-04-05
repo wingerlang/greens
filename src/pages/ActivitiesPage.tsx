@@ -306,7 +306,7 @@ const ActivityRow = ({
 };
 
 export function ActivitiesPage() {
-    const { unifiedActivities: allActivities, universalActivities, strengthSessions, addStrengthSession, deleteStrengthSession } = useData();
+    const { unifiedActivities: allActivities, universalActivities, strengthSessions, addStrengthSession, deleteStrengthSession, isLoading } = useData();
     const { token } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -650,6 +650,15 @@ export function ActivitiesPage() {
 
     // Get selected activities for preview
     const selectedActivitiesForMerge = processedActivities.filter(a => selectedForMerge.has(a.id));
+
+    if (isLoading && allActivities.length === 0) {
+        return (
+            <div className="min-h-[50vh] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                <div className="text-slate-500 font-bold uppercase tracking-widest text-xs">Laddar aktiviteter...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">

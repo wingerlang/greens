@@ -464,9 +464,7 @@ export function DashboardPage() {
     };
 
     const isIntakeDone = completedCards.includes('intake');
-    const isTrainingRunDone = completedCards.includes('training-running');
-    const isTrainingStrDone = completedCards.includes('training-strength');
-    const isTrainingCardioDone = completedCards.includes('training-cardio');
+    const isTrainingDone = completedCards.includes('training');
     const isSleepDone = completedCards.includes('sleep');
     const isWaterDone = completedCards.includes('water');
     const isCaffeineDone = completedCards.includes('caffeine');
@@ -474,9 +472,7 @@ export function DashboardPage() {
 
     const cardOrder = [
         { id: 'intake', isDone: isIntakeDone },
-        { id: 'training-running', isDone: isTrainingRunDone },
-        { id: 'training-strength', isDone: isTrainingStrDone },
-        { id: 'training-cardio', isDone: isTrainingCardioDone },
+        { id: 'training', isDone: isTrainingDone },
         { id: 'sleep', isDone: isSleepDone },
         { id: 'water', isDone: isWaterDone },
         { id: 'alcohol', isDone: isAlcoholDone },
@@ -514,8 +510,8 @@ export function DashboardPage() {
             )}
 
             {/* Sticky Date Header */}
-            <div className={`fixed top-16 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all ${selectedDate !== today ? 'py-2' : 'py-2'}`}>
-                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4">
+            <div className={`fixed top-12 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all`}>
+                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4 py-2">
                     <button onClick={() => changeDate(-1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft size={18} /></button>
                     <div onClick={() => setSelectedDate(today)} className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${selectedDate !== today ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700' : 'text-slate-900 dark:text-white'}`}>{selectedDate === today ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}{selectedDate !== today && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}</div>
                     <button onClick={() => changeDate(1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronRight size={18} /></button>
@@ -580,12 +576,11 @@ export function DashboardPage() {
                                 />
                             );
                         }
-                        if (card.id === 'training-running' || card.id === 'training-strength' || card.id === 'training-cardio') {
-                            const category = card.id.replace('training-', '') as any;
+                        if (card.id === 'training') {
                             return (
                                 <TrainingCard
                                     key={card.id}
-                                    category={category}
+                                    category="all"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
                                     density={density}
@@ -821,7 +816,6 @@ export function DashboardPage() {
             />
             {isCreatePostModalOpen && (
                 <CreatePostModal
-                    isOpen={isCreatePostModalOpen}
                     onClose={() => setIsCreatePostModalOpen(false)}
                     onPostCreated={() => {
                         setIsCreatePostModalOpen(false);

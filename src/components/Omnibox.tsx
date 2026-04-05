@@ -32,12 +32,35 @@ import {
 } from 'lucide-react';
 import { NutritionLabel } from './shared/NutritionLabel.tsx';
 
-// Helper to check if a QuickMeal is an estimate
-const isSavedEstimate = (qm: QuickMeal) => {
-    return qm.items.length === 1 && qm.items[0].type === 'estimate';
-};
+import { 
+    isSavedEstimate, 
+    NAVIGATION_ROUTES, 
+    EXERCISE_TYPES, 
+    INTENSITIES, 
+    VITALS_INFO, 
+    ACTION_COMMANDS, 
+    MEASUREMENT_INFO, 
+    getCategoryEmoji, 
+    DEFAULT_YIELD_FACTORS, 
+    canLogAsCooked, 
+    getSavedMealTypePreference, 
+    saveMealTypePreference 
+} from './omnibox/OmniboxConstants.ts';
 
-interface OmniboxProps {
+import { LockedFoodModule } from './omnibox/modules/LockedFoodModule.tsx';
+import { LockedQuickMealModule } from './omnibox/modules/LockedQuickMealModule.tsx';
+import { PlanningModule } from './omnibox/modules/PlanningModule.tsx';
+import { ExerciseModule } from './omnibox/modules/ExerciseModule.tsx';
+import { MeasurementModule } from './omnibox/modules/MeasurementModule.tsx';
+import { VitalsModule } from './omnibox/modules/VitalsModule.tsx';
+import { WeightModule } from './omnibox/modules/WeightModule.tsx';
+import { UserResultsModule } from './omnibox/modules/UserResultsModule.tsx';
+import { EmptyStateModule } from './omnibox/modules/EmptyStateModule.tsx';
+import { MixedSearchResultsModule } from './omnibox/modules/MixedSearchResultsModule.tsx';
+import { NavSuggestionsModule } from './omnibox/modules/NavSuggestionsModule.tsx';
+import { ActionSuggestionsModule } from './omnibox/modules/ActionSuggestionsModule.tsx';
+
+export interface OmniboxProps {
     isOpen: boolean;
     onClose: () => void;
     onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
@@ -45,200 +68,6 @@ interface OmniboxProps {
     onCreatePost?: () => void;
     onOpenEstimate?: () => void;
 }
-
-
-
-
-// Navigation routes for slash commands
-const NAVIGATION_ROUTES = [
-    // Core
-    { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
-    { path: '/matplanera', label: 'Veckoplanering (Mat)', aliases: ['matplanera', 'plan', 'vecka', 'weekly', 'food'], icon: '🍽️' },
-    { path: '/planera', label: 'Träningsplanering', aliases: ['planera', 'traning', 'training', 'race', 'tavling'], icon: '📅' },
-    { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
-
-    // Tools
-    { path: '/tools', label: 'Verktyg & Kalkylatorer', aliases: ['tools', 'verktyg', 'kalkylator', 'calculators'], icon: '🛠️' },
-    { path: '/tools/1rm', label: '1RM & Lastning', aliases: ['1rm', 'max', 'lastning', 'plate', 'loading', 'bänkpress', 'knäböj', 'marklyft', 'bench', 'squat', 'deadlift'], icon: '🏋️' },
-    { path: '/tools/race', label: 'Race Predictor', aliases: ['race', 'predictor', 'vdot', 'riegel', 'prognos', 'tävlingstid'], icon: '🏃' },
-    { path: '/tools/race-planner', label: 'Race Planner', aliases: ['raceplan', 'planner', 'lopp', 'marathon', 'halvmarathon', 'lidingö', 'vasaloppet'], icon: '📝' },
-    { path: '/tools/pace', label: 'Pace Converter', aliases: ['pace', 'tempo', 'km/min', 'min/km', 'konvertera', 'hastighet'], icon: '⏱️' },
-    { path: '/tools/cooper', label: 'Coopers Test', aliases: ['cooper', 'vo2max', '12min', 'konditionstest'], icon: '👟' },
-    { path: '/tools/hr', label: 'Pulszoner', aliases: ['puls', 'hr', 'heartrate', 'zoner', 'zones', 'karvonen'], icon: '💓' },
-    { path: '/tools/power', label: 'Energiberäknare', aliases: ['power', 'watt', 'cykling', 'energi', 'kaloriförbrukning'], icon: '⚡' },
-    { path: '/tools/hyrox', label: 'Hyrox Predictor', aliases: ['hyrox', 'roxzone', 'wallballs', 'burpees', 'skierg', 'row'], icon: '👊' },
-    { path: '/tools/health', label: 'Hälsokalkylator', aliases: ['hälsa', 'bmi', 'bmr', 'tdee', 'vikt', 'kroppsfett'], icon: '⚕️' },
-    { path: '/tools/macros', label: 'Makrofördelning', aliases: ['makro', 'macros', 'protein', 'kolhydrater', 'fett', 'fördelning'], icon: '🥩' },
-    { path: '/tools/standards', label: 'Styrkestandard', aliases: ['standard', 'wilks', 'ipf', 'dots', 'nivå', 'ranking', 'jämför'], icon: '📊' },
-    { path: '/tools/olympic', label: 'Tyngdlyftning', aliases: ['olympic', 'ol', 'tyngdlyftning', 'ryck', 'stöt', 'snatch', 'clean', 'jerk', 'sinclair'], icon: '🏋️‍♀️' },
-    { path: '/tools/replay', label: 'Replay Mode', aliases: ['replay', 'återblick', 'tidslinje', 'historik', 'animation'], icon: '⏪' },
-
-    // Main Sections
-    { path: '/logg', label: 'Loggbok', aliases: ['logg', 'log', 'dagbok', 'activities', 'aktiviteter', 'historik'], icon: '📒' },
-    { path: '/styrka', label: 'Styrketräning', aliases: ['styrka', 'strength', 'lyft', 'övningar', 'exercises', 'pr', 'pb'], icon: '💪' },
-    { path: '/pass', label: 'Pass / Workouts', aliases: ['pass', 'workouts', 'rutiner', 'programmering', 'builder', 'bygg'], icon: '📝' },
-    { path: '/statistik', label: 'Statistik', aliases: ['statistik', 'stats', 'analys', 'data', 'charts', 'grafer'], icon: '📈' },
-    { path: '/mal', label: 'Mål', aliases: ['mål', 'goals', 'targets', 'målsättning'], icon: '🎯' },
-    { path: '/tävling', label: 'Tävling', aliases: ['tävling', 'competition', 'comp', 'event'], icon: '🏆' },
-    { path: '/community', label: 'Community', aliases: ['community', 'vänner', 'friends', 'social', 'users', 'användare'], icon: '👥' },
-    { path: '/feed', label: 'Feed', aliases: ['feed', 'flöde', 'lifestream', 'socialt', 'nyheter'], icon: '📱' },
-    { path: '/matchup', label: 'Matchup', aliases: ['matchup', 'jämför', 'kamrat', 'vs', 'duell'], icon: '⚔️' },
-    { path: '/exercises', label: 'Övningsbank', aliases: ['övningsbank', 'bank', 'bibliotek', 'library', 'övning'], icon: '📚' },
-    { path: '/review', label: 'Årssammanfattning', aliases: ['review', 'år', 'year', 'sammanfattning', 'recap'], icon: '📅' },
-    { path: '/docs', label: 'Dokumentation', aliases: ['docs', 'hjälp', 'regler', 'rules', 'manual', 'info'], icon: '📄' },
-
-    // Nutrition
-    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories', 'dagbok'], icon: '◎' },
-    { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe', 'matlagning'], icon: '📖' },
-    { path: '/pantry', label: 'Skafferi', aliases: ['skafferi', 'pantry', 'förråd', 'lager'], icon: '🗄️' },
-    { path: '/database', label: 'Databas', aliases: ['databas', 'database', 'db', 'livsmedel', 'sök'], icon: '🔍' },
-
-    // Health & System
-    { path: '/health', label: 'Hälsa / Mått', aliases: ['hälsa', 'health', 'halsa', 'mått', 'mät', 'body', 'measurements', 'vikt', 'weight', 'sömn', 'sleep'], icon: '📏' },
-    { path: '/admin', label: 'Admin', aliases: ['admin', 'administration', 'root', 'backend'], icon: '🔒' },
-    { path: '/api', label: 'API', aliases: ['api', 'utvecklare', 'developer', 'endpoints', 'docs'], icon: '🤖' },
-    { path: '/garmin', label: 'Garmin Sync', aliases: ['garmin', 'connect', 'sync', 'klocka', 'import'], icon: '⌚' },
-    { path: '/sync', label: 'Integrationer', aliases: ['integrationer', 'strava', 'polar', 'suunto', 'coros', 'export'], icon: '🔄' },
-];
-
-// Exercise types
-const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
-    { type: 'running', icon: '🏃', label: 'Löpning' },
-    { type: 'cycling', icon: '🚴', label: 'Cykling' },
-    { type: 'strength', icon: '🏋️', label: 'Styrka' },
-    { type: 'walking', icon: '🚶', label: 'Promenad' },
-    { type: 'swimming', icon: '🏊', label: 'Simning' },
-    { type: 'yoga', icon: '🧘', label: 'Yoga' },
-    { type: 'climbing', icon: '🧗‍♂️', label: 'Klättring' },
-    { type: 'football', icon: '⚽', label: 'Fotboll' },
-    { type: 'other', icon: '✨', label: 'Annat' },
-];
-
-const INTENSITIES: { value: ExerciseIntensity; label: string }[] = [
-    { value: 'low', label: 'Låg' },
-    { value: 'moderate', label: 'Medel' },
-    { value: 'high', label: 'Hög' },
-    { value: 'ultra', label: 'Max' },
-];
-
-// Vitals category info
-const VITALS_INFO: Record<string, { icon: any; label: string; unit: string; bg: string; text: string }> = {
-    sleep: { icon: Moon, label: 'Sömn', unit: 'timmar', bg: 'bg-indigo-500/20', text: 'text-indigo-400' },
-    water: { icon: Droplets, label: 'Vatten', unit: 'glas', bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-    coffee: { icon: Coffee, label: 'Kaffe', unit: 'st', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-    nocco: { icon: Zap, label: 'Nocco', unit: 'st', bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-    energy: { icon: Zap, label: 'Energidryck', unit: 'st', bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-    steps: { icon: Search, label: 'Steg', unit: 'steg', bg: 'bg-green-500/20', text: 'text-green-400' },
-};
-
-// Action commands for system tasks
-const ACTION_COMMANDS = [
-    { id: 'post', label: 'Skriv Inlägg', command: '!post', icon: '✏️', description: 'Skapa ett nytt inlägg i flödet' },
-    { id: 'estimate', label: 'Estimera Måltid', command: '!estimate', icon: '🤷', description: 'Snabbregistrera en estimering (t.ex. utelunch)' },
-    { id: 'backup', label: 'Backup System', command: '!backup', icon: '💾', description: 'Exportera databas till JSON' },
-    { id: 'recalc', label: 'Recalculate Calories', command: '!recalc', icon: '🔄', description: 'Beräkna om alla dagstotaler' },
-    { id: 'debug', label: 'Toggle Debug Mode', command: '!debug', icon: '🐞', description: 'Visa/Dölj system-debug' },
-    { id: 'clear', label: 'Clear Cache', command: '!clear', icon: '🧹', description: 'Rensa lokala webbläsar-cache' },
-    { id: 'add-food', label: 'Lägg till Råvara', command: '! lägg till råvara', icon: '➕', description: 'Öppna formulär för ny mat' },
-];
-
-const MEASUREMENT_INFO: Record<BodyMeasurementType, { label: string; icon: string }> = {
-    waist: { label: 'Midja', icon: '📏' },
-    hips: { label: 'Höft', icon: '🍑' },
-    chest: { label: 'Bröst', icon: '👕' },
-    arm_left: { label: 'V. Överarm', icon: '💪' },
-    arm_right: { label: 'H. Överarm', icon: '💪' },
-    thigh_left: { label: 'V. Lår', icon: '🦵' },
-    thigh_right: { label: 'H. Lår', icon: '🦵' },
-    calf_left: { label: 'V. Vad', icon: '🦵' },
-    calf_right: { label: 'H. Vad', icon: '🦵' },
-    neck: { label: 'Nacke', icon: '🧣' },
-    shoulders: { label: 'Axlar', icon: '👔' },
-    forearm_left: { label: 'V. Underarm', icon: '💪' },
-    forearm_right: { label: 'H. Underarm', icon: '💪' },
-};
-
-// Category emoji mapping
-const getCategoryEmoji = (category?: string): string => {
-    switch (category) {
-        case 'protein': return '🌱';
-        case 'vegetables': return '🥦';
-        case 'fruits': return '🍎';
-        case 'dairy-alt': return '🥛';
-        case 'grains': return '🌾';
-        case 'fats': return '🥑';
-        case 'legumes': return '🫘';
-        case 'nuts-seeds': return '🥜';
-        case 'beverages': return '🍵';
-        case 'spices': return '🌿';
-        case 'condiments': return '🫙';
-        case 'sauces': return '🥫';
-        case 'sweeteners': return '🍯';
-        case 'baking': return '🥧';
-        default: return '🍽️';
-    }
-};
-
-// Default yield factors for common cookable categories
-const DEFAULT_YIELD_FACTORS: Record<string, number> = {
-    'ris': 2.5,
-    'pasta': 2.2,
-    'quinoa': 3.0,
-    'bulgur': 2.5,
-    'couscous': 2.0,
-    'havregryn': 3.0,
-    'linser': 2.0,
-    'bönpasta': 2.0,
-};
-
-// Check if a food item can be logged as cooked
-const canLogAsCooked = (item: FoodItem): { canCook: boolean; effectiveYieldFactor: number } => {
-    // Already cooked = no toggle
-    if (item.isCooked) {
-        return { canCook: false, effectiveYieldFactor: 1 };
-    }
-
-    // Has explicit yieldFactor? Use it
-    if (item.yieldFactor && item.yieldFactor > 1) {
-        return { canCook: true, effectiveYieldFactor: item.yieldFactor };
-    }
-
-    // Smart detection: check if name matches a cookable item type
-    const lowerName = item.name.toLowerCase();
-    for (const [key, value] of Object.entries(DEFAULT_YIELD_FACTORS)) {
-        if (lowerName.includes(key)) {
-            // If name contains "kokt" or similar, it's probably already cooked
-            if (lowerName.includes('kokt') || lowerName.includes('tillagad') || lowerName.includes('stekt')) {
-                return { canCook: false, effectiveYieldFactor: 1 };
-            }
-            return { canCook: true, effectiveYieldFactor: value };
-        }
-    }
-
-    return { canCook: false, effectiveYieldFactor: 1 };
-};
-
-// Helper for remembering meal type preference
-const getSavedMealTypePreference = (): MealType | null => {
-    try {
-        const saved = localStorage.getItem('last_meal_type_preference');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            // Valid for 2 hours
-            if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
-                return parsed.mealType;
-            }
-        }
-    } catch {}
-    return null;
-};
-
-const saveMealTypePreference = (mealType: MealType) => {
-    localStorage.setItem('last_meal_type_preference', JSON.stringify({
-        mealType,
-        timestamp: Date.now()
-    }));
-};
 
 export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCreatePost, onOpenEstimate }: OmniboxProps) {
     const navigate = useNavigate();
@@ -504,7 +333,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 // Pass down reasoning for UI
                 sortReason: contextCount > 0
                     ? `${contextCount} ggr härifrån`
-                    : `${globalOmniCount} besök via omnibox`,
+                    : globalOmniCount > 0 
+                        ? `${globalOmniCount} besök via omnibox`
+                        : null,
                 contextCount,
                 globalOmniCount,
                 globalTotalCount
@@ -1509,859 +1340,144 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 <div className="bg-slate-950/50 max-h-[60vh] overflow-y-auto">
                     {/* Slash Navigation Mode */}
                     {isSlashMode && (
-                        <div className="px-2 py-2">
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>🧭</span> Navigera ({navSuggestions.length})
-                            </div>
-                            {navSuggestions.map((route: any, idx) => (
-                                <div
-                                    key={route.path}
-                                    id={`omnibox-item-${idx}`}
-                                    onClick={() => { 
-                                        logEvent('omnibox_nav', `Navigated to ${route.label}`, 'omnibox', { path: route.path });
-                                        navigate(route.path); 
-                                        onClose(); 
-                                    }}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
-                                        ? 'bg-cyan-500/20 text-cyan-400'
-                                        : 'hover:bg-white/5 text-white'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
-                                            {route.icon}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="font-medium">{route.label}</div>
-                                                <div className="flex items-center gap-1">
-                                                    {route.sortReason && (
-                                                        <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase transition-all" title="Varför denna visas först">
-                                                            🧭 {route.sortReason}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="text-[10px] text-slate-500">{route.path}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
-                                ↑↓ navigera • Enter för att öppna
-                            </div>
-                        </div>
+                        <NavSuggestionsModule
+                            navSuggestions={navSuggestions}
+                            selectedIndex={selectedIndex}
+                            navigate={navigate}
+                            onClose={onClose}
+                            logEvent={logEvent}
+                        />
                     )}
 
                     {/* Action Mode */}
                     {isActionMode && (
-                        <div className="px-2 py-2">
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>⚡</span> Systemåtgärder ({actionSuggestions.length})
-                            </div>
-                            {actionSuggestions.map((action, idx) => (
-                                <div
-                                    key={action.id}
-                                    id={`omnibox-item-${idx}`}
-                                    onClick={() => { setSelectedIndex(idx); handleExecuteAction(action); }}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
-                                        ? 'bg-amber-500/20 text-amber-400'
-                                        : 'hover:bg-white/5 text-white'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
-                                            {action.icon}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="font-medium">{action.label}</div>
-                                                {actionUsage[action.id] > 0 && (
-                                                    <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                        ⚡ {actionUsage[action.id]}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-[10px] text-slate-500">{action.description}</div>
-                                        </div>
-                                    </div>
-                                    <div className="text-[10px] font-mono text-slate-600">{action.command}</div>
-                                </div>
-                            ))}
-                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
-                                ↑↓ navigera • Enter för att köra
-                            </div>
-                        </div>
+                        <ActionSuggestionsModule
+                            actionSuggestions={actionSuggestions}
+                            actionUsage={actionUsage}
+                            selectedIndex={selectedIndex}
+                            setSelectedIndex={setSelectedIndex}
+                            handleExecuteAction={handleExecuteAction}
+                        />
                     )}
 
                     {/* LOCKED FOOD MODULE - Shows when a food is matched/locked */}
                     {!isSlashMode && lockedFood && (
-                        <div className="p-4 space-y-4">
-                            <div className="px-3 py-2 bg-emerald-500/10 border-l-4 border-emerald-500 rounded-r-lg flex items-center gap-2">
-                                <span className="text-lg">{getCategoryEmoji(lockedFood.category)}</span>
-                                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Logga Mat</span>
-                                <button
-                                    onClick={() => { setLockedFood(null); setDraftFoodQuantity(null); setDraftFoodMealType(null); setDraftFoodDate(null); }}
-                                    className="ml-auto text-[10px] uppercase font-bold text-slate-400 hover:text-white bg-white/10 px-2 py-0.5 rounded-full"
-                                >
-                                    ✕ Ångra
-                                </button>
-                            </div>
-
-                            {/* Food Item Display */}
-                            <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
-                                <div className="w-16 h-16 rounded-xl bg-emerald-500/20 flex items-center justify-center text-3xl">
-                                    {getCategoryEmoji(lockedFood.category)}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
-                                        {lockedFood.brand && (
-                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
-                                                {lockedFood.brand}
-                                            </span>
-                                        )}
-                                        <button
-                                            className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 ml-1"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (onOpenNutrition) {
-                                                    onOpenNutrition({
-                                                        type: 'foodItem',
-                                                        referenceId: lockedFood.id,
-                                                        servings: draftFoodQuantity || 100 // Use draft quantity if set
-                                                    });
-                                                } else {
-                                                    navigate(`/calories?date=${new Date().toISOString().split('T')[0]}&breakdown=${lockedFood.id}`);
-                                                }
-                                                onClose();
-                                            }}
-                                            title="Mer info"
-                                        >
-                                            <Info size={16} />
-                                        </button>
-                                    </div>
-                                    <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
-                                        <span className="uppercase">{lockedFood.category || 'Livsmedel'}</span>
-                                        {lockedFood.usageStats && (
-                                            <>
-                                                <span className="text-slate-600">•</span>
-                                                <span className="text-emerald-500/70">{lockedFood.usageStats.count}x loggad</span>
-                                                <span className="text-slate-600">•</span>
-                                                <span>snitt {Math.round(lockedFood.usageStats.avgGrams)}g</span>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Editable Fields Row */}
-                            <div className="grid grid-cols-3 gap-3">
-                                {/* Quantity */}
-                                <div className="bg-slate-800/50 rounded-xl p-3">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Mängd</label>
-                                    <div className="flex items-baseline gap-1">
-                                        <input
-                                            type="number"
-                                            value={draftFoodQuantity || ''}
-                                            onChange={(e) => setDraftFoodQuantity(parseFloat(e.target.value) || 0)}
-                                            className="w-full text-2xl font-black bg-transparent border-b-2 border-slate-600 focus:border-emerald-500 outline-none text-white"
-                                            placeholder={String(lockedFood.usageStats?.avgGrams || 100)}
-                                        />
-                                        <span className="text-sm font-bold text-slate-400">g</span>
-                                    </div>
-                                </div>
-
-                                {/* Meal Type */}
-                                <div className="bg-slate-800/50 rounded-xl p-3">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Måltid</label>
-                                    <select
-                                        value={draftFoodMealType || ''}
-                                        onChange={(e) => setDraftFoodMealType(e.target.value as MealType)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
-                                    >
-                                        <option value="">Auto</option>
-                                        <option value="breakfast">🌅 Frukost</option>
-                                        <option value="lunch">☀️ Lunch</option>
-                                        <option value="dinner">🌙 Middag</option>
-                                        <option value="snack">🍎 Mellanmål</option>
-                                        <option value="beverage">🥤 Dryck</option>
-                                    </select>
-                                </div>
-
-                                {/* Date */}
-                                <div className="bg-slate-800/50 rounded-xl p-3">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Datum</label>
-                                    <select
-                                        value={draftFoodDate || ''}
-                                        onChange={(e) => setDraftFoodDate(e.target.value || null)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
-                                    >
-                                        <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
-                                        <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
-                                        <option value={new Date(Date.now() + 86400000).toISOString().split('T')[0]}>⏩ Imorgon</option>
-                                        {draftFoodDate &&
-                                            draftFoodDate !== new Date().toISOString().split('T')[0] &&
-                                            draftFoodDate !== new Date(Date.now() - 86400000).toISOString().split('T')[0] &&
-                                            draftFoodDate !== new Date(Date.now() + 86400000).toISOString().split('T')[0] && (
-                                                <option value={draftFoodDate}>📅 {draftFoodDate}</option>
-                                            )}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Cooked Toggle - only show for cookable items */}
-                            {canLogAsCooked(lockedFood).canCook && (
-                                <button
-                                    type="button"
-                                    onClick={() => setDraftLogAsCooked(!draftLogAsCooked)}
-                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all ${draftLogAsCooked
-                                        ? 'bg-amber-500/20 text-amber-400 border-2 border-amber-500/50'
-                                        : 'bg-slate-800/50 text-slate-400 border-2 border-transparent hover:bg-slate-700/50'
-                                        }`}
-                                >
-                                    <span className="text-2xl">🍳</span>
-                                    <span>{draftLogAsCooked ? 'Loggas som kokt vikt' : 'Logga som kokt?'}</span>
-                                    {draftLogAsCooked && (
-                                        <span className="text-xs bg-amber-500/30 px-2 py-0.5 rounded-full">
-                                            kcal ÷ {canLogAsCooked(lockedFood).effectiveYieldFactor}
-                                        </span>
-                                    )}
-                                </button>
-                            )}
-
-                            {/* Calculated Nutrients Preview */}
-                            {(() => {
-                                const qty = draftFoodQuantity || 100;
-                                const { canCook, effectiveYieldFactor } = canLogAsCooked(lockedFood);
-                                const isCooked = draftLogAsCooked && canCook;
-                                const multiplier = isCooked ? 1 / effectiveYieldFactor : 1;
-                                return (
-                                    <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
-                                        <NutritionLabel
-                                            calories={lockedFood.calories * qty / 100 * multiplier}
-                                            protein={lockedFood.protein * qty / 100 * multiplier}
-                                            carbs={(lockedFood.carbs || 0) * qty / 100 * multiplier}
-                                            variant="compact"
-                                            size="md"
-                                        />
-                                        <div className="text-xs text-slate-500">
-                                            {isCooked ? `för ${qty}g kokt` : `för ${qty}g`}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-
-                            {/* Action Button */}
-                            <button
-                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
-                                onClick={handleLockedFoodAction}
-                            >
-                                <span>Logga {lockedFood.name}</span>
-                                <ArrowRight size={16} />
-                            </button>
-
-                            {/* View Details & History Link */}
-                            <button
-                                onClick={() => {
-                                    navigate(`/database?id=${lockedFood.id}`);
-                                    onClose();
-                                }}
-                                className="w-full py-2 text-center text-slate-400 hover:text-white text-xs underline underline-offset-4"
-                            >
-                                📋 Visa alla detaljer & logghistorik →
-                            </button>
-
-                            {/* Hint for continuing to type */}
-                            <div className="text-center text-[10px] text-slate-500">
-                                💡 Fortsätt skriva för att ändra mängd, måltid eller datum (t.ex. "120g mellanmål igår")
-                            </div>
-                        </div>
+                        <LockedFoodModule
+                            lockedFood={lockedFood}
+                            draftFoodQuantity={draftFoodQuantity}
+                            draftFoodMealType={draftFoodMealType}
+                            draftFoodDate={draftFoodDate}
+                            draftLogAsCooked={draftLogAsCooked}
+                            setDraftFoodQuantity={setDraftFoodQuantity}
+                            setDraftFoodMealType={setDraftFoodMealType}
+                            setDraftFoodDate={setDraftFoodDate}
+                            setDraftLogAsCooked={setDraftLogAsCooked}
+                            setLockedFood={setLockedFood}
+                            handleLockedFoodAction={handleLockedFoodAction}
+                            onOpenNutrition={onOpenNutrition}
+                            onClose={onClose}
+                            navigate={navigate}
+                        />
                     )}
 
                     {/* LOCKED QUICK MEAL MODULE - Shows when a quick meal is selected */}
                     {!isSlashMode && !lockedFood && lockedQuickMeal && (
-                        <div className="p-4 space-y-4">
-                            <div className="px-3 py-2 bg-amber-500/10 border-l-4 border-amber-500 rounded-r-lg flex items-center gap-2">
-                                <span className="text-lg">{lockedQuickMeal.itemType === 'savedEstimate' ? '🧮' : '⚡'}</span>
-                                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Logga {lockedQuickMeal.itemType === 'savedEstimate' ? 'Estimering' : 'Snabbval'}</span>
-                                <button
-                                    onClick={() => { setLockedQuickMeal(null); setDraftQuickMealMealType(null); setDraftQuickMealDate(null); }}
-                                    className="ml-auto text-[10px] uppercase font-bold text-slate-400 hover:text-white bg-white/10 px-2 py-0.5 rounded-full"
-                                >
-                                    ✕ Ångra
-                                </button>
-                            </div>
-
-                            {/* Quick Meal Display */}
-                            <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
-                                <div className="w-16 h-16 rounded-xl bg-amber-500/20 flex items-center justify-center text-3xl">
-                                    {lockedQuickMeal.itemType === 'savedEstimate' ? '🧮' : '⚡'}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-xl font-bold text-white">{lockedQuickMeal.name}</h3>
-                                    </div>
-                                    <div className="text-xs text-slate-400 mt-1 truncate max-w-[200px] sm:max-w-xs">{lockedQuickMeal.summary}</div>
-                                </div>
-                            </div>
-
-                            {/* Editable Fields Row */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* Meal Type */}
-                                <div className="bg-slate-800/50 rounded-xl p-3">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Måltid</label>
-                                    <select
-                                        value={draftQuickMealMealType || ''}
-                                        onChange={(e) => setDraftQuickMealMealType(e.target.value as MealType)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
-                                    >
-                                        <option value="">Auto</option>
-                                        <option value="breakfast">🌅 Frukost</option>
-                                        <option value="lunch">☀️ Lunch</option>
-                                        <option value="dinner">🌙 Middag</option>
-                                        <option value="snack">🍎 Mellanmål</option>
-                                        <option value="beverage">🥤 Dryck</option>
-                                    </select>
-                                </div>
-
-                                {/* Date */}
-                                <div className="bg-slate-800/50 rounded-xl p-3">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Datum</label>
-                                    <select
-                                        value={draftQuickMealDate || ''}
-                                        onChange={(e) => setDraftQuickMealDate(e.target.value || null)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
-                                    >
-                                        <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
-                                        <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
-                                        <option value={new Date(Date.now() + 86400000).toISOString().split('T')[0]}>⏩ Imorgon</option>
-                                        {draftQuickMealDate &&
-                                            draftQuickMealDate !== new Date().toISOString().split('T')[0] &&
-                                            draftQuickMealDate !== new Date(Date.now() - 86400000).toISOString().split('T')[0] &&
-                                            draftQuickMealDate !== new Date(Date.now() + 86400000).toISOString().split('T')[0] && (
-                                                <option value={draftQuickMealDate}>📅 {draftQuickMealDate}</option>
-                                            )}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Calculated Nutrients Preview */}
-                            {lockedQuickMeal.totals && (
-                                <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
-                                    <NutritionLabel
-                                        calories={lockedQuickMeal.totals.calories}
-                                        protein={lockedQuickMeal.totals.protein}
-                                        carbs={lockedQuickMeal.totals.carbs || 0}
-                                        fat={lockedQuickMeal.totals.fat || 0}
-                                        variant="compact"
-                                        size="md"
-                                    />
-                                    <div className="text-xs text-slate-500">
-                                        Totalt
-                                    </div>
-                                </div>
-                            )}
-
-                            {lockedQuickMeal.id.startsWith('combo-') && (
-                                <button
-                                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-xl border border-amber-500/30 flex items-center justify-center gap-2 mb-2 transition-colors text-sm"
-                                    onClick={() => handleSaveComboAsQuickMeal(lockedQuickMeal)}
-                                >
-                                    <span>💾 Spara som snabbmål</span>
-                                </button>
-                            )}
-
-                            {/* Action Button */}
-                            <button
-                                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
-                                onClick={handleLockedQuickMealAction}
-                            >
-                                <span>Logga {lockedQuickMeal.itemType === 'savedEstimate' ? 'Estimering' : 'Snabbval'}</span>
-                                <ArrowRight size={16} />
-                            </button>
-
-                            {/* Hint for continuing to type */}
-                            <div className="text-center text-[10px] text-slate-500 mt-2">
-                                💡 Fortsätt skriva för att byta måltid (t.ex. "frukost igår")
-                            </div>
-                        </div>
+                        <LockedQuickMealModule
+                            lockedQuickMeal={lockedQuickMeal}
+                            draftQuickMealMealType={draftQuickMealMealType}
+                            draftQuickMealDate={draftQuickMealDate}
+                            setDraftQuickMealMealType={setDraftQuickMealMealType}
+                            setDraftQuickMealDate={setDraftQuickMealDate}
+                            setLockedQuickMeal={setLockedQuickMeal}
+                            handleSaveComboAsQuickMeal={handleSaveComboAsQuickMeal}
+                            handleLockedQuickMealAction={handleLockedQuickMealAction}
+                        />
                     )}
 
                     {/* PLANNING MODULE */}
                     {!isSlashMode && !lockedFood && !lockedQuickMeal && intent.type === 'planera' && (
-                        <div className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
-                             <div className="px-3 py-2 bg-indigo-500/10 border-l-4 border-indigo-500 rounded-r-lg flex items-center gap-2">
-                                <Calendar size={16} className="text-indigo-500" />
-                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Planera Träning</span>
-                            </div>
-
-                            <div className="bg-slate-800/50 rounded-2xl p-6 border border-white/5 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <Calendar size={64} />
-                                </div>
-                                <div className="space-y-4 relative z-10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-2xl shadow-inner">
-                                            {intent.data.type === 'RUN' ? '🏃' : 
-                                             intent.data.type === 'STRENGTH' ? '🏋️' : 
-                                             intent.data.type === 'CARDIO' ? '🚴' : '✨'}
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">
-                                                {intent.data.date === new Date().toISOString().split('T')[0] ? 'Idag' : 
-                                                 intent.data.date === new Date(Date.now() + 86400000).toISOString().split('T')[0] ? 'Imorgon' : intent.data.date}
-                                                {intent.data.startTime ? ` • ${intent.data.startTime}` : ''}
-                                            </div>
-                                            <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">
-                                                {intent.data.title}
-                                            </h3>
-                                        </div>
-                                    </div>
-
-                                    {intent.data.description && (
-                                        <p className="text-sm text-slate-400 font-medium leading-relaxed italic border-l-2 border-indigo-500/30 pl-3 py-1">
-                                            {intent.data.description}
-                                        </p>
-                                    )}
-
-                                    <div className="flex items-center gap-2 pt-2">
-                                        <div className="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/20 text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                                            {intent.data.category}
-                                        </div>
-                                        {intent.data.subType && (
-                                            <div className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                {intent.data.subType}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                className="w-full py-4 bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-xs"
-                                onClick={() => handleExecutePlanning(intent.data)}
-                            >
-                                <span>Schemalägg Pass</span>
-                                <ArrowRight size={16} />
-                            </button>
-
-                            <div className="text-center text-[10px] text-slate-500">
-                                💡 Tryck Enter för att spara planeringen
-                            </div>
-                        </div>
+                        <PlanningModule
+                            intent={intent}
+                            handleExecutePlanning={handleExecutePlanning}
+                        />
                     )}
 
                     {/* EXERCISE MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'exercise' && (
-                        <div className="p-4 space-y-4">
-                            <div className="px-3 py-2 bg-orange-500/10 border-l-4 border-orange-500 rounded-r-lg flex items-center gap-2">
-                                <Dumbbell size={16} className="text-orange-500" />
-                                <span className="text-xs font-bold uppercase tracking-wider text-orange-400">Träning</span>
-                                {isManual && <span className="ml-auto text-[10px] uppercase font-bold text-slate-400 bg-white/10 px-2 py-0.5 rounded-full">Manuellt ändrad</span>}
-                            </div>
-
-                            {/* Exercise Type Selector */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                                {EXERCISE_TYPES.map(t => (
-                                    <button
-                                        key={t.type}
-                                        onClick={() => { setDraftType(t.type); setIsManual(true); }}
-                                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all min-w-[70px] ${(draftType || intent.data.exerciseType) === t.type
-                                            ? 'border-orange-500 bg-orange-500/20'
-                                            : 'border-transparent hover:bg-white/5'
-                                            }`}
-                                    >
-                                        <span className="text-2xl">{t.icon}</span>
-                                        <span className="text-[10px] font-bold text-slate-400">{t.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Duration & Intensity */}
-                            <div className="flex items-center gap-6 p-4 bg-slate-800/50 rounded-xl relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                                    <Flame size={64} />
-                                </div>
-
-                                <div className="flex-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Tid (min)</label>
-                                    <input
-                                        type="number"
-                                        value={draftDuration || intent.data.duration || ''}
-                                        onChange={(e) => { setDraftDuration(parseFloat(e.target.value)); setIsManual(true); }}
-                                        className="w-full text-3xl font-black bg-transparent border-b-2 border-slate-600 focus:border-orange-500 outline-none text-white"
-                                        placeholder="30"
-                                    />
-
-                                    {/* Extra Details Row */}
-                                    <div className="flex flex-wrap gap-3 mt-3">
-                                        {intent.data.distance && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/20 rounded-lg text-blue-300">
-                                                <MapPin size={12} />
-                                                <span className="text-xs font-bold">{intent.data.distance} km</span>
-                                            </div>
-                                        )}
-                                        {intent.data.tonnage && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/20 rounded-lg text-purple-300">
-                                                <Dumbbell size={12} />
-                                                <span className="text-xs font-bold">{Math.round(intent.data.tonnage / 1000)} ton</span>
-                                            </div>
-                                        )}
-                                        {intent.data.heartRateAvg && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-500/20 rounded-lg text-rose-300">
-                                                <Heart size={12} />
-                                                <span className="text-xs font-bold">{intent.data.heartRateAvg} bpm</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 border-l border-slate-700 pl-6">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Intensitet</label>
-                                    <div className="flex flex-col gap-1">
-                                        {INTENSITIES.map(i => (
-                                            <button
-                                                key={i.value}
-                                                onClick={() => { setDraftIntensity(i.value); setIsManual(true); }}
-                                                className={`text-xs font-bold text-left px-2 py-1 rounded ${(draftIntensity || intent.data.intensity) === i.value
-                                                    ? 'bg-orange-500/30 text-orange-400'
-                                                    : 'text-slate-400 hover:text-slate-200'
-                                                    }`}
-                                            >
-                                                {i.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
-                                onClick={handleExerciseAction}
-                            >
-                                <span>Logga Träning</span>
-                                <ArrowRight size={16} />
-                            </button>
-                        </div>
+                        <ExerciseModule
+                            intent={intent}
+                            draftType={draftType}
+                            draftDuration={draftDuration}
+                            draftIntensity={draftIntensity}
+                            isManual={isManual}
+                            setDraftType={setDraftType}
+                            setDraftDuration={setDraftDuration}
+                            setDraftIntensity={setDraftIntensity}
+                            setIsManual={setIsManual}
+                            handleExerciseAction={handleExerciseAction}
+                        />
                     )}
 
                     {/* MEASUREMENT MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'measurement' && (
-                        <div className="p-4 space-y-4">
-                            <div className="px-3 py-2 bg-fuchsia-500/10 border-l-4 border-fuchsia-500 rounded-r-lg flex items-center gap-2">
-                                <Search size={16} className="text-fuchsia-500" />
-                                <span className="text-xs font-bold uppercase tracking-wider text-fuchsia-400">Kroppsmått</span>
-                                {isManual && <span className="ml-auto text-[10px] uppercase font-bold text-slate-400 bg-white/10 px-2 py-0.5 rounded-full">Manuellt ändrad</span>}
-                            </div>
-
-                            {/* Measurement Type Selector */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                                {Object.entries(MEASUREMENT_INFO).map(([type, info]) => (
-                                    <button
-                                        key={type}
-                                        onClick={() => { setDraftMeasurementType(type as BodyMeasurementType); setIsManual(true); }}
-                                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all min-w-[80px] ${(draftMeasurementType || intent.data.measurementType) === type
-                                            ? 'border-fuchsia-500 bg-fuchsia-500/20'
-                                            : 'border-transparent hover:bg-white/5'
-                                            }`}
-                                    >
-                                        <span className="text-2xl">{info.icon}</span>
-                                        <span className="text-[10px] font-bold text-slate-400 text-center">{info.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Value Input */}
-                            <div className="bg-slate-800/50 rounded-xl p-6 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                                    <span className="text-6xl">📏</span>
-                                </div>
-                                <div className="flex justify-between items-start mb-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400">Mått (cm)</label>
-                                    <span className="text-[10px] font-bold uppercase text-fuchsia-400">
-                                        📅 {draftMeasurementDate || intent.date || 'Idag'}
-                                    </span>
-                                </div>
-                                <div className="flex items-baseline gap-2">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={draftMeasurementValue || intent.data.value || ''}
-                                        onChange={(e) => { setDraftMeasurementValue(parseFloat(e.target.value)); setIsManual(true); }}
-                                        className="w-full text-5xl font-black bg-transparent border-b-2 border-slate-600 focus:border-fuchsia-500 outline-none text-white"
-                                        placeholder="0.0"
-                                    />
-                                    <span className="text-2xl font-bold text-slate-500">cm</span>
-                                </div>
-                            </div>
-
-                            <button
-                                className={`w-full py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all ${(draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value)
-                                    ? 'bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-fuchsia-500/20'
-                                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                    }`}
-                                onClick={handleMeasurementAction}
-                                disabled={!((draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value))}
-                            >
-                                <span>Spara mått</span>
-                                <ArrowRight size={16} />
-                            </button>
-                        </div>
+                        <MeasurementModule
+                            intent={intent}
+                            draftMeasurementType={draftMeasurementType}
+                            draftMeasurementValue={draftMeasurementValue}
+                            draftMeasurementDate={draftMeasurementDate}
+                            isManual={isManual}
+                            setDraftMeasurementType={setDraftMeasurementType}
+                            setDraftMeasurementValue={setDraftMeasurementValue}
+                            setIsManual={setIsManual}
+                            handleMeasurementAction={handleMeasurementAction}
+                        />
                     )}
 
                     {/* VITALS MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'vitals' && vitalInfo && (
-                        <div className="p-4 space-y-4">
-                            <div className={`px-3 py-2 ${vitalInfo.bg} border-l-4 ${vitalInfo.text.replace('text-', 'border-')} rounded-r-lg flex items-center gap-2`}>
-                                <VitalIcon size={16} className={vitalInfo.text} />
-                                <span className={`text-xs font-bold uppercase tracking-wider ${vitalInfo.text}`}>{vitalInfo.label}</span>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${vitalInfo.bg} ${vitalInfo.text} text-3xl`}>
-                                    <VitalIcon size={32} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <input
-                                            type="number"
-                                            value={draftVitalAmount || intent.data.amount || ''}
-                                            onChange={(e) => { setDraftVitalAmount(parseFloat(e.target.value)); setIsManual(true); }}
-                                            className="w-24 text-3xl font-black bg-transparent border-b-2 border-slate-600 focus:border-indigo-500 outline-none text-white text-center"
-                                            placeholder="0"
-                                        />
-                                        <span className="text-sm font-bold text-slate-400 uppercase">
-                                            {vitalInfo.unit}
-                                        </span>
-                                    </div>
-                                    <button
-                                        className={`text-white ${vitalInfo.bg.replace('/20', '')} hover:opacity-80 px-4 py-1.5 rounded-full text-xs font-bold`}
-                                        onClick={handleVitalsAction}
-                                    >
-                                        Spara
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <VitalsModule
+                            intent={intent}
+                            vitalInfo={vitalInfo}
+                            draftVitalAmount={draftVitalAmount}
+                            setDraftVitalAmount={setDraftVitalAmount}
+                            setIsManual={setIsManual}
+                            handleVitalsAction={handleVitalsAction}
+                        />
                     )}
 
                     {/* WEIGHT MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'weight' && (
-                        <div className="flex items-center gap-3 text-emerald-400 px-4 py-4">
-                            <span className="text-2xl">⚖️</span>
-                            <span className="text-lg">Logga vikt: <span className="font-bold">{intent.data.weight} kg</span></span>
-                            {intent.date && <span className="ml-2 text-slate-500 font-normal">({intent.date})</span>}
-                            <button
-                                className="ml-auto bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm"
-                                onClick={handleExecute}
-                            >
-                                Spara
-                            </button>
-                        </div>
+                        <WeightModule
+                            intent={intent}
+                            handleExecute={handleExecute}
+                        />
                     )}
 
                     {/* User Results */}
                     {!isSlashMode && !lockedFood && userResults.length > 0 && (
-                        <div className="px-2 py-2">
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>👥</span> Personer ({userResults.length})
-                            </div>
-                            {userResults.map((user, idx) => {
-                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'user' && i.id === user.id);
-                                return (
-                                    <div
-                                        key={user.id}
-                                        id={`omnibox-item-${globalIdx}`}
-                                        onClick={() => { 
-                                            const path = `/u/${user.handle || user.username}`;
-                                            logEvent('omnibox_nav', `Navigated to user ${user.name}`, 'omnibox', { path });
-                                            navigate(path); 
-                                            onClose(); 
-                                        }}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                            ? 'bg-indigo-500/20 text-indigo-400'
-                                            : 'hover:bg-white/5 text-white'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-sm font-bold text-indigo-400">
-                                                {user.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover rounded-lg" /> : user.name[0]}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="font-medium">{user.name}</div>
-                                                    {visitStats.users[user.id] > 0 && (
-                                                        <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                            👤 {visitStats.users[user.id]} besök
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[10px] text-slate-500">@{user.handle || user.username}</div>
-                                            </div>
-                                        </div>
-                                        <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <UserResultsModule
+                            userResults={userResults}
+                            selectableItems={selectableItems}
+                            selectedIndex={selectedIndex}
+                            visitStats={visitStats}
+                            navigate={navigate}
+                            onClose={onClose}
+                            logEvent={logEvent}
+                        />
                     )}
 
                     {/* Mixed Search Results */}
                     {!isSlashMode && !lockedFood && !lockedQuickMeal && (foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0) && (
-                        <div className="px-2 py-2">
-                             {/* Parsed Intent Preview for Food */}
-                             {intent.type === 'food' && (intent.data.quantity !== 100 || intent.data.mealType || intent.date) && (
-                                <div className="px-3 py-2 mb-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                                    <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                                        <span>🎯</span>
-                                        <span>Loggar:</span>
-                                        {intent.data.quantity && intent.data.quantity !== 100 && (
-                                            <span className="font-bold">{Math.round(intent.data.quantity)}{intent.data.unit || 'g'}</span>
-                                        )}
-                                        {intent.data.mealType && (
-                                            <span className="px-2 py-0.5 bg-emerald-500/20 rounded text-[10px] font-bold uppercase">
-                                                {intent.data.mealType === 'breakfast' ? 'frukost' :
-                                                    intent.data.mealType === 'lunch' ? 'lunch' :
-                                                        intent.data.mealType === 'dinner' ? 'middag' :
-                                                            intent.data.mealType === 'snack' ? 'mellanmål' : intent.data.mealType}
-                                            </span>
-                                        )}
-                                        {intent.date && (
-                                            <span className="text-slate-400 text-xs">→ {intent.date}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>🔍</span> Sökresultat ({foodResults.length + standardQuickMeals.length + savedEstimates.length})
-                            </div>
-
-                            {selectableItems.map((item, globalIdx) => {
-                                // 1. Render Food Item
-                                if (item.itemType === 'food') {
-                                    const logQuantity = (intent.type === 'food' && intent.data.quantity)
-                                        ? intent.data.quantity
-                                        : (item.defaultPortionGrams || item.usageStats?.avgGrams || 100);
-                                    const displayKcal = Math.round(item.calories * logQuantity / 100);
-                                    
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            id={`omnibox-item-${globalIdx}`}
-                                            onClick={() => logFoodItem(item, logQuantity)}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                ? 'bg-emerald-500/20 text-emerald-400'
-                                                : 'hover:bg-white/5 text-white'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm flex-shrink-0">
-                                                    {getCategoryEmoji(item.category)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-medium truncate">{item.name}</div>
-                                                        {item.brand && (
-                                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide flex-shrink-0">
-                                                                {item.brand}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                                        <span className="uppercase tracking-wide">{item.category || 'Övrigt'}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-slate-400">{displayKcal} kcal</span>
-                                                        {item.usageStats && (
-                                                            <>
-                                                                <span className="text-slate-600">•</span>
-                                                                <span className="text-emerald-500/70">{item.usageStats.count}x</span>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded ml-2 flex-shrink-0">
-                                                Råvara
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                // 2. Render Quick Meal / Combo
-                                if (item.itemType === 'quickMeal' || (item.id && item.id.startsWith('combo-'))) {
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            id={`omnibox-item-${globalIdx}`}
-                                            onClick={() => lockQuickMeal(item)}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                ? 'bg-amber-500/20 text-amber-400'
-                                                : 'hover:bg-white/5 text-white'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm font-bold text-amber-400 flex-shrink-0">
-                                                    {item.id.startsWith('combo-') ? '💡' : '⚡'}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-medium truncate">{item.name}</div>
-                                                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
-                                                            {Math.round((item as any).totals.calories)} kcal
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-[10px] uppercase font-bold text-amber-500/60 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 ml-2 flex-shrink-0">
-                                                Snabbval
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                // 3. Render Saved Estimate
-                                if (item.itemType === 'savedEstimate') {
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            id={`omnibox-item-${globalIdx}`}
-                                            onClick={() => lockQuickMeal(item)}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                ? 'bg-purple-500/20 text-purple-400'
-                                                : 'hover:bg-white/5 text-white'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
-                                                    <Calculator size={16} />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-medium truncate">{item.name}</div>
-                                                        <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-shrink-0">
-                                                            <span className="font-bold text-slate-400">{Math.round((item as any).totals.calories)} kcal</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-[10px] uppercase font-bold text-purple-400/60 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 ml-2 flex-shrink-0">
-                                                Estimering
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                return null;
-                            })}
-
-                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center mt-2 border-t border-white/5 pt-2">
-                                ↑↓ navigera • Enter för att logga
-                            </div>
-                        </div>
+                        <MixedSearchResultsModule
+                            intent={intent}
+                            foodResults={foodResults}
+                            standardQuickMeals={standardQuickMeals}
+                            savedEstimates={savedEstimates}
+                            selectableItems={selectableItems}
+                            selectedIndex={selectedIndex}
+                            logFoodItem={logFoodItem}
+                            lockQuickMeal={lockQuickMeal}
+                        />
                     )}
 
                     {/* No results for search */}
@@ -2373,95 +1489,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
                     {/* Empty state or Meal Keyword - show recents + popular/specific meal */}
                     {(!input || ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase())) && (
-                        <div className="px-2 py-2">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                            <span>🕐</span> Senast loggade
-                                        </div>
-                                        {recentFoods.map((item, idx) => {
-                                            const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'recent' && sel.id === item.id);
-                                            return (
-                                                <div
-                                                    key={item.id}
-                                                    id={`omnibox-item-${globalIdx}`}
-                                                    onClick={() => lockFood(item)}
-                                                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                        : 'hover:bg-white/5 text-white'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <div className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-xs flex-shrink-0">
-                                                            {getCategoryEmoji(item.category)}
-                                                        </div>
-                                                        <div className="truncate font-medium text-xs">{item.name}</div>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 flex-shrink-0">
-                                                        {Math.round(item.calories * item.usageStats.avgGrams / 100)} <span className="opacity-50">kcal</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        {popularFoods.length > 0 && (
-                                            <>
-                                                <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                                    <span>🔥</span> Populärt {(() => {
-                                                        const lower = input.trim().toLowerCase();
-                                                        if (lower === 'frukost') return 'Frukost';
-                                                        if (lower === 'lunch') return 'Lunch';
-                                                        if (lower === 'middag') return 'Middag';
-                                                        if (lower === 'mellanmål' || lower === 'snack') return 'Mellanmål';
-                                                        
-                                                        const hour = new Date().getHours();
-                                                        return (hour >= 5 && hour < 10) ? 'Frukost' : 
-                                                               (hour >= 10 && hour < 14) ? 'Lunch' : 
-                                                               (hour >= 17 && hour < 21) ? 'Middag' : 'Mellanmål';
-                                                    })()}
-                                                </div>
-                                                {popularFoods.map((item, idx) => {
-                                                    const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'popular' && sel.id === item.id);
-                                                    return (
-                                                        <div
-                                                            key={item.id}
-                                                            id={`omnibox-item-${globalIdx}`}
-                                                            onClick={() => lockFood(item)}
-                                                            className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
-                                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                                : 'hover:bg-white/5 text-white'
-                                                                }`}
-                                                        >
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <div className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-xs flex-shrink-0">
-                                                                    {getCategoryEmoji(item.category)}
-                                                                </div>
-                                                                <div className="truncate font-medium text-xs">{item.name}</div>
-                                                            </div>
-                                                            <div className="text-[10px] text-slate-500 flex-shrink-0">
-                                                                {item.usageStats.count}x
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="px-2 py-1 text-[10px] text-slate-600 text-center mt-2 border-t border-white/5 pt-2">
-                                    ↑↓ navigera • Enter för att logga
-                                </div>
-
-                            <div className="p-4 text-center text-slate-500 text-xs space-y-1 border-t border-white/5">
-                                <p>🍎 Sök råvaror: "kyckling", "havregryn", "ägg"</p>
-                                <p>⚖️ Logga vikt: "82.5kg"</p>
-                                <p>😴 Sömn: "7h sömn"</p>
-                                <p>🏋️ Träning: "löpning 30 min"</p>
-                                <p className="text-cyan-500/70">🧭 Navigera: skriv "/" för snabbnavigering</p>
-                            </div>
-                        </div>
+                        <EmptyStateModule
+                            input={input}
+                            recentFoods={recentFoods}
+                            popularFoods={popularFoods}
+                            selectableItems={selectableItems}
+                            selectedIndex={selectedIndex}
+                            lockFood={lockFood}
+                        />
                     )}
                 </div>
             </div >

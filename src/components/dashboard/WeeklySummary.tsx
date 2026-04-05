@@ -10,11 +10,14 @@ interface WeeklySummaryProps {
 
 export function WeeklySummary({ selectedDate, activities, history }: WeeklySummaryProps) {
     // Determine "Current Week" based on selectedDate
-    const d = new Date(selectedDate);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
-    const sunday = new Date(d.setDate(diff + 6)).toISOString().split('T')[0];
+    const dMon = new Date(selectedDate);
+    const day = dMon.getDay();
+    const diffMon = dMon.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const monday = new Date(dMon.setDate(diffMon)).toISOString().split('T')[0];
+    
+    const dSun = new Date(monday);
+    dSun.setDate(dSun.getDate() + 6);
+    const sunday = dSun.toISOString().split('T')[0];
 
     // Simple ISO week number
     const targetDate = new Date(monday);
@@ -25,10 +28,14 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
     const weekActivities = activities.filter(a => a.date >= monday && a.date <= sunday);
     const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
 
-    // We only want running distance for the Running summary
-    const runningActivities = weekActivities.filter(a => a.type === 'running');
+    const isStrength = (type: string) => ['strength', 'hyrox', 'hybrid'].includes((type || '').toLowerCase());
+    const isRunning = (type: string) => ['running', 'run'].includes((type || '').toLowerCase());
+
+    const runningActivities = weekActivities.filter(a => isRunning(a.type));
     const weekDistance = runningActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
-    // const weekWorkouts = weekActivities.length;
+    
+    const strengthActivities = weekActivities.filter(a => isStrength(a.type));
+    const cardioActivities = weekActivities.filter(a => !isStrength(a.type) && !isRunning(a.type));
 
     // Calculate context label
     const currentWeekNum = (() => {
@@ -45,13 +52,12 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
         mainTitle = 'NUVARANDE VECKA SUMMARY';
     }
 
-    const strengthActivities = weekActivities.filter(a => a.type === 'strength');
-
     const rangeText = `${new Date(monday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(sunday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`;
     const currentTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
     const runningDuration = runningActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
     const strengthDuration = strengthActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+    const cardioDuration = cardioActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
 
     const formatMinutes = (mins: number) => {
         const h = Math.floor(mins / 60);
@@ -63,6 +69,7 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
 
     const runningDurationText = formatMinutes(runningDuration);
     const strengthDurationText = formatMinutes(strengthDuration);
+    const cardioDurationText = formatMinutes(cardioDuration);
 
     // Measurement Diffs
     const getDiff = (type: 'weight' | 'waist' | 'chest') => {
@@ -129,6 +136,17 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
                     <div className="text-lg font-bold text-indigo-500 relative z-10 text-center">
                         <span className="text-sm text-slate-400 font-medium block">{strengthActivities.length} pass</span>
                         {weekVolume.toFixed(1)}t <span className="text-slate-300 mx-1">•</span> {strengthDurationText}
+                    </div>
+                </div>
+
+                {/* Cardio Box */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div className="absolute -right-2 -bottom-4 text-7xl opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none grayscale -rotate-12">❤️‍🔥</div>
+                    <Activity size={20} className="mb-2 text-rose-500 relative z-10" />
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1 relative z-10">Cardio</div>
+                    <div className="text-lg font-bold text-rose-500 relative z-10 text-center">
+                        <span className="text-sm text-slate-400 font-medium block">{cardioActivities.length} pass</span>
+                        {Math.round(cardioDuration)}m <span className="text-slate-300 mx-1">•</span> {cardioDurationText}
                     </div>
                 </div>
 
