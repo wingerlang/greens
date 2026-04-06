@@ -526,7 +526,12 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             const isExplicitCardioWorkout = /^cardio\b/i.test(workoutName) ||
                 workoutName.includes('cycl') || workoutName.includes('cyk') || workoutName.includes('bike') ||
                 workoutName.includes('run') || workoutName.includes('löp') ||
-                workoutName.includes('walk') || workoutName.includes('gång');
+                workoutName.includes('walk') || workoutName.includes('gång') ||
+                workoutName.includes('simm') || workoutName.includes('swim') ||
+                workoutName.includes('innebandy') || workoutName.includes('floorball') ||
+                workoutName.includes('fotboll') || workoutName.includes('football') ||
+                workoutName.includes('padel') || workoutName.includes('tennis') ||
+                workoutName.includes('basket') || workoutName.includes('hockey');
 
             const cardioExerciseRatio = w.exercises.length > 0 ? cardioExercises.length / w.exercises.length : 0;
             const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (
@@ -540,6 +545,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 let hasCycling = false;
                 let hasRunning = false;
                 let hasWalking = false;
+                let hasFootball = false;
                 let hasOther = false;
 
                 exercises.forEach(ex => {
@@ -547,15 +553,17 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     if (exName.includes('cycl') || exName.includes('cyk') || exName.includes('bike')) hasCycling = true;
                     else if (exName.includes('run') || exName.includes('löp')) hasRunning = true;
                     else if (exName.includes('walk') || exName.includes('gång')) hasWalking = true;
+                    else if (exName.includes('fotboll') || exName.includes('football') || exName.includes('innebandy') || exName.includes('floorball')) hasFootball = true;
                     else hasOther = true;
                 });
 
-                const typesCount = [hasCycling, hasRunning, hasWalking, hasOther].filter(Boolean).length;
+                const typesCount = [hasCycling, hasRunning, hasWalking, hasFootball, hasOther].filter(Boolean).length;
                 if (typesCount > 1) return 'cardio';
 
                 if (hasCycling) return 'cycling';
                 if (hasRunning) return 'running';
                 if (hasWalking) return 'walking';
+                if (hasFootball) return 'football';
                 return 'cardio';
             };
 

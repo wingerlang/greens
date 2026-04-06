@@ -263,7 +263,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         let totalCaffeine = 0; // Track caffeine
 
         newEntry.items.forEach(item => {
-            const { nutrition, caffeine, alcoholUnits } = calculateMealItemNutrition(item, recipes, foodItems);
+            const { nutrition, caffeine, alcoholUnits } = calculateMealItemNutrition(item, recipes, foodItems, quickMeals);
 
             totalCals += nutrition.calories;
             totalProtein += nutrition.protein;
@@ -379,7 +379,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
 
         for (const entry of entries) {
             for (const item of entry.items) {
-                const { nutrition: baseNutrition } = calculateMealItemNutrition(item, recipes, foodItems);
+                const { nutrition: baseNutrition } = calculateMealItemNutrition(item, recipes, foodItems, quickMeals);
 
                 // Account for pieces as a multiplier for the entire entry
                 const multiplier = entry.pieces ?? 1;

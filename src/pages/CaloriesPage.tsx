@@ -15,6 +15,7 @@ import {
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
 import { getActiveCalories } from '../utils/calorieTarget.ts';
+import { calculateMealItemNutrition } from '../utils/nutrition/calculations.ts';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { CreateQuickMealModal } from '../components/calories/CreateQuickMealModal.tsx';
@@ -420,32 +421,8 @@ export function CaloriesPage() {
     };
 
     const getItemCalories = (item: MealItem): number => {
-        if (item.type === 'estimate') return item.estimateDetails?.caloriesAvg || 0;
-        if (item.type === 'recipe') {
-            const recipe = recipes.find(r => r.id === item.referenceId);
-            if (recipe?.ingredientsText) {
-                const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-                return Math.round((estimate.calories / recipe.servings) * item.servings);
-            }
-            const recipeWithNutrition = getRecipeWithNutrition(item.referenceId);
-            if (recipeWithNutrition) {
-                return Math.round(recipeWithNutrition.nutritionPerServing.calories * item.servings);
-            }
-        } else {
-            const food = getFoodItem(item.referenceId);
-            if (food) {
-                let calories = food.calories * (item.servings / 100);
-                // If logged as cooked, divide by yieldFactor (raw→cooked conversion)
-                if (item.loggedAsCooked) {
-                    const yieldFactor = item.effectiveYieldFactor || food.yieldFactor || 2.3;
-                    if (yieldFactor > 1) {
-                        calories = calories / yieldFactor;
-                    }
-                }
-                return Math.round(calories);
-            }
-        }
-        return 0;
+        const { nutrition } = calculateMealItemNutrition(item, recipes, foodItems, quickMeals);
+        return Math.round(nutrition.calories);
     };
 
     const getItemBrand = (item: MealItem): string | undefined => {
@@ -457,45 +434,13 @@ export function CaloriesPage() {
     };
 
     const getItemNutrition = (item: MealItem) => {
-        if (item.type === 'recipe') {
-            const recipeWithNutrition = getRecipeWithNutrition(item.referenceId);
-            if (recipeWithNutrition) {
-                const n = recipeWithNutrition.nutritionPerServing;
-                return {
-                    calories: Math.round(n.calories * item.servings),
-                    protein: Math.round(n.protein * item.servings),
-                    carbs: Math.round(n.carbs * item.servings),
-                    fat: Math.round(n.fat * item.servings)
-                };
-            }
-        } else if (item.type === 'estimate') {
-            const est = item.estimateDetails;
-            return {
-                calories: est?.caloriesAvg || 0,
-                protein: est?.protein || 0,
-                carbs: est?.carbs || 0,
-                fat: est?.fat || 0
-            };
-        } else {
-            const food = getFoodItem(item.referenceId);
-            if (food) {
-                let mult = item.servings / 100;
-                // If logged as cooked, divide by yieldFactor (raw→cooked conversion)
-                if (item.loggedAsCooked) {
-                    const yieldFactor = item.effectiveYieldFactor || food.yieldFactor || 2.3;
-                    if (yieldFactor > 1) {
-                        mult = mult / yieldFactor;
-                    }
-                }
-                return {
-                    calories: Math.round(food.calories * mult),
-                    protein: Math.round(food.protein * mult),
-                    carbs: Math.round((food.carbs || 0) * mult),
-                    fat: Math.round((food.fat || 0) * mult)
-                };
-            }
-        }
-        return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+        const { nutrition } = calculateMealItemNutrition(item, recipes, foodItems, quickMeals);
+        return {
+            calories: Math.round(nutrition.calories),
+            protein: Math.round(nutrition.protein),
+            carbs: Math.round(nutrition.carbs),
+            fat: Math.round(nutrition.fat)
+        };
     };
 
     const isToday = selectedDate === getISODate();

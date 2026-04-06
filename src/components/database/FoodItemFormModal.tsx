@@ -132,6 +132,7 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                 proteinCategory: editingItem.proteinCategory,
                 seasons: editingItem.seasons || [],
                 ingredients: editingItem.ingredients || '',
+                aliases: editingItem.aliases || [],
                 extendedDetails: {
                     ...editingItem.extendedDetails,
                     caffeine: editingItem.extendedDetails?.caffeine || 0,
@@ -162,13 +163,18 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const finalFormData = {
+            ...formData,
+            aliases: alias.split(',').map(s => s.trim()).filter(Boolean)
+        };
+
         if (editingItem) {
-            updateFoodItem(editingItem.id, formData);
+            updateFoodItem(editingItem.id, finalFormData);
             if (alias !== (foodAliases[editingItem.id] || '')) {
                 updateFoodAlias(editingItem.id, alias);
             }
         } else {
-            addFoodItem(formData);
+            addFoodItem(finalFormData);
         }
         onClose();
     };
@@ -430,6 +436,18 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                                             value={formData.brand || ''}
                                             onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                                             placeholder="t.ex. Zeta"
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Alias (kommaseparerat)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={alias}
+                                            onChange={(e) => setAlias(e.target.value)}
+                                            placeholder="eg. sojaprotein, mifu..."
                                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500"
                                         />
                                     </div>

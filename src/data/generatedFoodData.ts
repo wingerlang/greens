@@ -4,6 +4,20 @@ import { FoodItem } from '../models/types.ts';
 
 export const GENERATED_FOOD_ITEMS: FoodItem[] = [
     {
+        "id": "gen_water_001",
+        "name": "Vatten",
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0,
+        "fiber": 0,
+        "unit": "ml",
+        "category": "other",
+        "aliases": ["vatten", "water", "kranvatten"],
+        "createdAt": "2026-04-06T00:00:00.000Z",
+        "updatedAt": "2026-04-06T00:00:00.000Z"
+    },
+    {
         "id": "gen_684d20ad",
         "name": "Nöt talg",
         "calories": 656,

@@ -8,6 +8,7 @@ import {
     type FoodCategory,
     type FoodStorageType,
     type Season,
+    type QuickMeal,
     CATEGORY_LABELS,
     UNIT_LABELS,
 } from '../models/types.ts';
@@ -21,7 +22,9 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, AreaChart, Area, Legend
 } from 'recharts';
+import { QuickMealEditModal } from '../components/database/QuickMealEditModal.tsx';
 import './DatabasePage.css';
+
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
     fresh: '🥬 Färsk',
@@ -72,7 +75,7 @@ type ViewMode = 'grid' | 'list';
 type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats' | 'brands';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions } = useData();
+    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions, updateQuickMeal } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const hasAutoOpened = useRef(false);
 
@@ -92,6 +95,10 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [activeTab, setActiveTab] = useState<DatabaseTab>('items');
     const [sourceFilter, setSourceFilter] = useState<'all' | 'user'>('all');
+
+    const [editingQuickMeal, setEditingQuickMeal] = useState<QuickMeal | null>(null);
+    const [isQuickMealEditOpen, setIsQuickMealEditOpen] = useState(false);
+    const [showArchivedQuickMeals, setShowArchivedQuickMeals] = useState(false);
 
     // Toast Timer
     useEffect(() => {
@@ -160,12 +167,13 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             const nameLower = normalizeText(item.name);
             const brandLower = item.brand ? normalizeText(item.brand) : '';
             const descLower = item.description ? normalizeText(item.description) : '';
+            const aliasesLower = (item.aliases || []).map(a => normalizeText(a));
 
-            if (nameLower === query || brandLower === query) {
+            if (nameLower === query || brandLower === query || aliasesLower.includes(query)) {
                 exactMatches.push(item);
-            } else if (nameLower.startsWith(query) || brandLower.startsWith(query)) {
+            } else if (nameLower.startsWith(query) || brandLower.startsWith(query) || aliasesLower.some(a => a.startsWith(query))) {
                 startsWithMatches.push(item);
-            } else if (nameLower.includes(query) || (brandLower && brandLower.includes(query)) || descLower.includes(query)) {
+            } else if (nameLower.includes(query) || brandLower.includes(query) || descLower.includes(query) || aliasesLower.some(a => a.includes(query))) {
                 containsMatches.push(item);
             }
         }
@@ -420,9 +428,26 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         // 1. My Food Items
         const myFoods = foodItems.filter(f => f.createdBy);
 
-        // 2. My Quick Meals
-        // quickMeals are already user-owned in context usually, but we check just in case
-        const myQuickMeals = quickMeals || [];
+        // 2. My Quick Meals with Stats
+        const qmStats = new Map<string, { count: number; lastUsed: string }>();
+        mealEntries.forEach(entry => {
+            entry.items.forEach(item => {
+                if ((item.type as any) === 'quickMeal' && item.referenceId) {
+                    if (!qmStats.has(item.referenceId)) {
+                        qmStats.set(item.referenceId, { count: 1, lastUsed: entry.date });
+                    } else {
+                        const s = qmStats.get(item.referenceId)!;
+                        s.count++;
+                        if (entry.date > s.lastUsed) s.lastUsed = entry.date;
+                    }
+                }
+            });
+        });
+
+        const myQuickMeals = (quickMeals || []).map(qm => ({
+            ...qm,
+            stats: qmStats.get(qm.id) || { count: 0, lastUsed: '-' }
+        })).filter(qm => showArchivedQuickMeals ? qm.isArchived : !qm.isArchived);
 
         // 3. Estimations from history
         const estimateMap = new Map<string, any>();
@@ -459,6 +484,17 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             setEditingItem(null);
         }
         setIsFormOpen(true);
+    };
+
+    const handleOpenQuickMealEdit = (qm: QuickMeal) => {
+        setEditingQuickMeal(qm);
+        setIsQuickMealEditOpen(true);
+    };
+
+    const handleArchiveQuickMeal = (e: React.MouseEvent, qm: QuickMeal) => {
+        e.stopPropagation();
+        updateQuickMeal(qm.id, { isArchived: !qm.isArchived });
+        setToastMessage(qm.isArchived ? `"${qm.name}" återställd.` : `"${qm.name}" arkiverad.`);
     };
 
     const handleCloseForm = () => {
@@ -522,6 +558,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
 
     return (
         <div className="database-page">
+            {editingQuickMeal && (
+                <QuickMealEditModal
+                    isOpen={isQuickMealEditOpen}
+                    onClose={() => setIsQuickMealEditOpen(false)}
+                    quickMeal={editingQuickMeal}
+                />
+            )}
+
             <ConfirmModal
                 isOpen={!!deleteItem}
                 onClose={() => setDeleteItem(null)}
@@ -661,29 +705,65 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     )}
 
                     {/* Quick Meals Section */}
-                    {myContentData.myQuickMeals.length > 0 && (
-                        <section>
-                            <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
+                    <section>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-black text-white flex items-center gap-2">
                                 <span>⚡</span> Quick Meals
                             </h3>
+                            <button
+                                onClick={() => setShowArchivedQuickMeals(!showArchivedQuickMeals)}
+                                className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-all ${showArchivedQuickMeals ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' : 'bg-slate-800 text-slate-500 border-slate-700'}`}
+                            >
+                                {showArchivedQuickMeals ? 'Visa Aktiva' : 'Visa Arkiverade'}
+                            </button>
+                        </div>
+                        {myContentData.myQuickMeals.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {myContentData.myQuickMeals.map((qm) => (
-                                    <div key={qm.id} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl hover:border-slate-600 transition-colors group relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 p-2 bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase tracking-tighter">Quick Meal</div>
-                                        <div className="font-bold text-slate-200 mb-3 group-hover:text-emerald-400 transition-colors">{qm.name}</div>
-                                        <div className="space-y-1">
+                                    <div key={qm.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl hover:border-slate-600 transition-colors group relative overflow-hidden flex flex-col">
+                                        <div className="absolute top-0 right-0 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase tracking-widest border-b border-l border-emerald-500/10 rounded-bl-xl">Quick Meal</div>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div className="font-bold text-slate-200 group-hover:text-emerald-400 transition-colors text-lg pr-12">{qm.name}</div>
+                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => handleOpenQuickMealEdit(qm as any)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white" title="Redigera">✏️</button>
+                                                <button onClick={(e) => handleArchiveQuickMeal(e, qm as any)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white" title={qm.isArchived ? "Återställ" : "Arkivera"}>
+                                                    {qm.isArchived ? '📥' : '📦'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 mb-4 text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-emerald-500/50">📊</span>
+                                                {(qm as any).stats.count} loggningar
+                                            </div>
+                                            { (qm as any).stats.lastUsed !== '-' && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-emerald-500/50">📅</span>
+                                                    Senast {(qm as any).stats.lastUsed}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5 flex-1">
                                             {qm.items.map((item, i) => (
-                                                <div key={i} className="text-[10px] text-slate-500 flex justify-between">
-                                                    <span>{item.type === 'foodItem' ? foodItems.find(f => f.id === item.referenceId)?.name : item.estimateDetails?.name || 'Okänd'}</span>
-                                                    <span>{item.servings} x</span>
+                                                <div key={i} className="text-[11px] text-slate-400 flex justify-between items-center bg-slate-800/30 px-2 py-1 rounded-lg">
+                                                    <span className="truncate pr-2">
+                                                        {item.type === 'foodItem' ? foodItems.find(f => f.id === item.referenceId)?.name : item.estimateDetails?.name || 'Okänd'}
+                                                    </span>
+                                                    <span className="font-mono text-slate-500 shrink-0">{item.servings}{item.type === 'foodItem' ? 'g' : ' port'}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </section>
-                    )}
+                        ) : (
+                            <div className="p-12 text-center bg-slate-900/30 border-2 border-dashed border-slate-800 rounded-3xl text-slate-600">
+                                {showArchivedQuickMeals ? 'Inga arkiverade Quick Meals hittades.' : 'Inga aktiva Quick Meals hittades.'}
+                            </div>
+                        )}
+                    </section>
 
                     {/* My Food Items Section */}
                     <section>

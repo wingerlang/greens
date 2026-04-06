@@ -117,6 +117,7 @@ export function TrainingPlanningPage() {
             p.date >= startStr && p.date <= endStr && p.status === 'PLANNED'
         );
         const plannedRunning = plannedThisWeek.filter((p: any) =>
+            p.type === 'RUN' ||
             p.title?.toLowerCase().includes('löpning') ||
             p.category === 'EASY' || p.category === 'INTERVALS' || p.category === 'TEMPO' ||
             p.category === 'LONG_RUN' || p.category === 'RECOVERY' || p.category === 'RACE' || p.isRace
@@ -140,6 +141,58 @@ export function TrainingPlanningPage() {
         const forecastStrengthSessions = strengthSessionCount + plannedStrength.length;
         const forecastOtherSessions = otherSessions + plannedOther.length;
 
+        // Get planned duration: use durationMinutes field first, fall back to race estimation or description parsing
+        const getPlannedMinutes = (p: any): number => {
+            // 1. Direct field (best source)
+            if (p.durationMinutes && p.durationMinutes > 0) return p.durationMinutes;
+
+            // 2. Race Fallback: Goals Priority (B > A > C)
+            const goals = p.raceDetails?.goals;
+            if (goals) {
+                const parse = (s: string) => {
+                    const match = s?.match(/(\d{1,2}):(\d{2})/);
+                    if (!match) return 0;
+                    const parts = s.split(':').map(val => parseInt(val.replace(/\D/g, '')));
+                    return parts.length === 3 ? parts[0] * 60 + parts[1] : (parts.length === 2 ? (parts[0] > 5 ? parts[0] + parts[1]/60 : parts[0] * 60 + parts[1]) : 0);
+                };
+                const dur = parse(goals.b) || parse(goals.a) || parse(goals.c);
+                if (dur > 0) return dur;
+            }
+
+            // 3. Race Fallback: Average Pace (5:30 min/km)
+            if ((p.isRace || p.category === 'RACE') && p.estimatedDistance > 0) {
+                return p.estimatedDistance * 5.5;
+            }
+
+            // 4. Parse "(HH:MM)" from description
+            const hhmmMatch = p.description?.match(/\((\d{1,2}):(\d{2})\)/);
+            if (hhmmMatch) return parseInt(hhmmMatch[1]) * 60 + parseInt(hhmmMatch[2]);
+
+            // 5. Parse "XXmin" or "XX min" from description
+            const minMatch = p.description?.match(/(\d+)\s*min/i);
+            if (minMatch) return parseInt(minMatch[1]);
+            return 0;
+        };
+
+        // Total completed training time (all types)
+        const completedTotalTime = runningTime + strengthTime + otherTime;
+
+        // Planned time per category
+        const plannedRunningTime = plannedRunning.reduce((sum: number, p: any) => sum + getPlannedMinutes(p), 0);
+        const plannedStrengthTime = plannedStrength.reduce((sum: number, p: any) => sum + getPlannedMinutes(p), 0);
+        const plannedOtherTime = plannedOther.reduce((sum: number, p: any) => sum + getPlannedMinutes(p), 0);
+
+        // Total planned training time for remaining planned activities
+        const plannedTotalTime = plannedThisWeek
+            .filter((p: any) => p.type !== 'REST' && p.category !== 'REST')
+            .reduce((sum: number, p: any) => sum + getPlannedMinutes(p), 0);
+
+        // Forecast = completed + planned
+        const forecastTotalTime = completedTotalTime + plannedTotalTime;
+        const forecastRunningTime = runningTime + plannedRunningTime;
+        const forecastStrengthTime = strengthTime + plannedStrengthTime;
+        const forecastOtherTime = otherTime + plannedOtherTime;
+
         return {
             running: {
                 sessions: runningSessions,
@@ -155,11 +208,19 @@ export function TrainingPlanningPage() {
                 sessions: otherSessions,
                 time: otherTime
             },
+            total: {
+                completedTime: completedTotalTime,
+                plannedTime: plannedTotalTime,
+                forecastTime: forecastTotalTime
+            },
             forecast: {
                 runningSessions: forecastRunningSessions,
                 runningKm: forecastRunningKm,
+                runningTime: forecastRunningTime,
                 strengthSessions: forecastStrengthSessions,
-                otherSessions: forecastOtherSessions
+                strengthTime: forecastStrengthTime,
+                otherSessions: forecastOtherSessions,
+                otherTime: forecastOtherTime
             }
         };
     };
@@ -434,6 +495,8 @@ export function TrainingPlanningPage() {
                             </div>
                             <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
                                 <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
+                                <span className="text-slate-300">•</span>
+                                <span>{formatDurationHHMM(weeklyStats.running.time)}{weeklyStats.forecast.runningTime > weeklyStats.running.time ? ` / ${formatDurationHHMM(weeklyStats.forecast.runningTime)}` : ''}</span>
                             </div>
                         </div>
 
@@ -466,7 +529,26 @@ export function TrainingPlanningPage() {
                             </div>
                             <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
                                 {formatDurationHHMM(weeklyStats.other.time)}
+                                {weeklyStats.forecast.otherTime > weeklyStats.other.time ? ` / ${formatDurationHHMM(weeklyStats.forecast.otherTime)}` : ''}
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Total Training Time Summary */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Clock size={14} className="text-indigo-500" />
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Total Träningstid</span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                            <span className="text-lg font-black text-slate-900 dark:text-white">
+                                {formatDurationHHMM(weeklyStats.total.completedTime)}
+                            </span>
+                            {weeklyStats.total.plannedTime > 0 && (
+                                <span className="text-sm font-bold text-slate-400">
+                                    / {formatDurationHHMM(weeklyStats.total.forecastTime)}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -707,7 +789,9 @@ export function TrainingPlanningPage() {
                                                                 ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700'
                                                                 : act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox')
                                                                     ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700'
-                                                                    : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
+                                                                    : act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType
+                                                                        ? 'bg-cyan-50 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700'
+                                                                        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
                                                     }`}
                                             >
                                                 <div className="relative mb-1">
@@ -715,247 +799,229 @@ export function TrainingPlanningPage() {
                                                         act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
                                                             act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
                                                                 act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
-                                                                    'text-emerald-600 dark:text-emerald-400'
+                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? 'text-cyan-600 dark:text-cyan-400' :
+                                                                        'text-emerald-600 dark:text-emerald-400'
                                                         }`}>
                                                         <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
                                                         <span className="leading-tight">
                                                             {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
                                                                 act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                                    (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : '⚡ ') + act.title :
+                                                                        (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
                                                         </span>
                                                     </span>
 
                                                     {/* Actions Overlay: Visible on Hover */}
-                                                    <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
-                                                        {!isCompleted && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const d = new Date(day.date + 'T00:00:00');
-                                                                        d.setDate(d.getDate() - 1);
-                                                                        const prevDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                                                        updatePlannedActivity(act.id, { date: prevDateStr });
-                                                                        notificationService.notify('success', `Passet flyttat till igår (${prevDateStr})`);
-                                                                    }}
-                                                                    className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                                    title="Flytta till igår"
-                                                                >
-                                                                    <ChevronLeft size={12} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const d = new Date(day.date + 'T00:00:00');
-                                                                        d.setDate(d.getDate() + 1);
-                                                                        const nextDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                                                        updatePlannedActivity(act.id, { date: nextDateStr });
-                                                                        notificationService.notify('success', `Passet flyttat till imorgon (${nextDateStr})`);
-                                                                    }}
-                                                                    className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                                    title="Flytta till imorgon"
-                                                                >
-                                                                    <ChevronRight size={12} />
-                                                                </button>
-                                                            </>
+                                                                 <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
+                                                                    {allEvents.length > 1 && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'up'); }}
+                                                                                className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                                                                                title="Flytta upp"
+                                                                            >
+                                                                                <LucideChevronUp size={12} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'down'); }}
+                                                                                className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                                                                                title="Flytta ner"
+                                                                            >
+                                                                                <LucideChevronDown size={12} />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
+                                                                        className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
+                                                                        title="Ta bort"
+                                                                    >
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                            {isRace && act.title && (() => {
+                                                                const idx = sortedRaces.findIndex((r: any) => r.id === act.id);
+                                                                const prev = idx > 0 ? sortedRaces[idx - 1] : null;
+                                                                const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
+                                                                const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
+                                                                const daysNext = next ? getDaysBetween(act.date, next.date) : null;
+
+                                                                return (
+                                                                    <span className="font-bold block mb-0.5">
+                                                                        {act.title} 
+                                                                        {act.estimatedDistance > 0 && (
+                                                                            <span className="text-amber-600 dark:text-amber-400 ml-1">
+                                                                                ({act.estimatedDistance.toFixed(1)} km)
+                                                                            </span>
+                                                                        )}
+                                                                        {(daysPrev !== null || daysNext !== null) && (
+                                                                            <span className="flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">
+                                                                                {daysPrev !== null && <span>⏮️ {daysPrev} dgr sen förra</span>}
+                                                                                {daysNext !== null && <span>⏭️ {daysNext} dgr till nästa</span>}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                            {act.description || (isCompleted ? (act.reconciliation?.matchReason?.includes('Liknande') ? 'Loggat pass' : 'Pass genomfört') : isSkipped ? 'Passet blev aldrig av' : '')}
+                                                        </p>
+
+                                                        {/* Developer Insights */}
+                                                        {(currentUser?.role === 'developer' || currentUser?.role === 'admin') && act.reconciliation && (
+                                                            <div className="mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-800/50 text-[9px] font-mono text-slate-400">
+                                                                <div className="flex justify-between items-center mb-0.5">
+                                                                    <span className={act.reconciliation.score! >= 60 ? 'text-emerald-500' : 'text-amber-500'}>
+                                                                        Match: {act.reconciliation.score}%
+                                                                    </span>
+                                                                    {act.reconciliation.reconciledAt && (
+                                                                        <span>{act.reconciliation.reconciledAt?.split('T')[1].substring(0, 5)}</span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="italic leading-[1.1] text-[8px] opacity-70">
+                                                                    {act.reconciliation.matchReason}
+                                                                </p>
+                                                                {act.externalId && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            updateUrlParams({ activityId: act.externalId! });
+                                                                        }}
+                                                                        className="mt-1 flex items-center gap-1 text-blue-500 hover:underline"
+                                                                    >
+                                                                        <Activity size={8} /> Visa källa: {act.externalId.substring(0, 8)}
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'up'); }}
-                                                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                            title="Flytta upp"
-                                                        >
-                                                            <LucideChevronUp size={12} />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'down'); }}
-                                                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                            title="Flytta ner"
-                                                        >
-                                                            <LucideChevronDown size={12} />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                            className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
-                                                            title="Ta bort"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                    {isRace && act.title && (() => {
-                                                        const idx = sortedRaces.findIndex((r: any) => r.id === act.id);
-                                                        const prev = idx > 0 ? sortedRaces[idx - 1] : null;
-                                                        const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
-                                                        const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
-                                                        const daysNext = next ? getDaysBetween(act.date, next.date) : null;
 
-                                                        return (
-                                                            <span className="font-bold block mb-0.5">
-                                                                {act.title} 
-                                                                {act.estimatedDistance > 0 && (
-                                                                    <span className="text-amber-600 dark:text-amber-400 ml-1">
-                                                                        ({act.estimatedDistance.toFixed(1)} km)
-                                                                    </span>
+                                                        {/* Time Indicator - only if explicit time exists  */}
+                                                        {event.time && (
+                                                            <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 opacity-60`}>
+                                                                <Clock size={9} />
+                                                                {event.time}
+                                                            </div>
+                                                        )}
+                                                        <div className="flex flex-col gap-1 mt-1">
+                                                            {/* Stats */}
+                                                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                                {(act.estimatedDistance || 0) > 0 && (
+                                                                    <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                                                                        <Activity size={10} />
+                                                                        {Number(act.estimatedDistance).toFixed(1)} km
+                                                                    </div>
                                                                 )}
-                                                                {(daysPrev !== null || daysNext !== null) && (
-                                                                    <span className="flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">
-                                                                        {daysPrev !== null && <span>⏮️ {daysPrev} dgr sen förra</span>}
-                                                                        {daysNext !== null && <span>⏭️ {daysNext} dgr till nästa</span>}
-                                                                    </span>
+                                                                {act.tonnage && act.tonnage > 0 && (
+                                                                    <div className={`text-[10px] font-bold flex items-center gap-1 text-slate-500`}>
+                                                                        <Dumbbell size={10} />
+                                                                        {(act.tonnage / 1000).toFixed(1)}t
+                                                                    </div>
                                                                 )}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                    {act.description || (isCompleted ? (act.reconciliation?.matchReason?.includes('Liknande') ? 'Loggat pass' : 'Pass genomfört') : isSkipped ? 'Passet blev aldrig av' : '')}
-                                                </p>
-
-                                                {/* Developer Insights */}
-                                                {(currentUser?.role === 'developer' || currentUser?.role === 'admin') && act.reconciliation && (
-                                                    <div className="mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-800/50 text-[9px] font-mono text-slate-400">
-                                                        <div className="flex justify-between items-center mb-0.5">
-                                                            <span className={act.reconciliation.score! >= 60 ? 'text-emerald-500' : 'text-amber-500'}>
-                                                                Match: {act.reconciliation.score}%
-                                                            </span>
-                                                            {act.reconciliation.reconciledAt && (
-                                                                <span>{act.reconciliation.reconciledAt?.split('T')[1].substring(0, 5)}</span>
+                                                            </div>
+                                                            {act.muscleGroups && act.muscleGroups.length > 0 && (
+                                                                <div className={`text-[10px] font-medium flex flex-wrap gap-1 text-slate-400`}>
+                                                                    {act.muscleGroups.slice(0, 3).map((m: any) => (
+                                                                        <span key={m} className={`px-1 rounded bg-slate-100 dark:bg-slate-800`}>
+                                                                            {({
+                                                                                legs: 'Ben',
+                                                                                chest: 'Bröst',
+                                                                                back: 'Rygg',
+                                                                                arms: 'Armar',
+                                                                                shoulders: 'Axlar',
+                                                                                core: 'Core'
+                                                                            } as Record<string, string>)[m] || m}
+                                                                        </span>
+                                                                    ))}
+                                                                    {act.muscleGroups.length > 3 && <span>+</span>}
+                                                                </div>
+                                                            )}
+                                                            {/* Race Goals Display */}
+                                                            {isRace && act.raceDetails?.goals && (act.raceDetails.goals.a || act.raceDetails.goals.b || act.raceDetails.goals.c) && (
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {act.raceDetails.goals.a && <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">A: {act.raceDetails.goals.a}</span>}
+                                                                    {act.raceDetails.goals.b && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">B: {act.raceDetails.goals.b}</span>}
+                                                                    {act.raceDetails.goals.c && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">C: {act.raceDetails.goals.c}</span>}
+                                                                </div>
                                                             )}
                                                         </div>
-                                                        <p className="italic leading-[1.1] text-[8px] opacity-70">
-                                                            {act.reconciliation.matchReason}
-                                                        </p>
-                                                        {act.externalId && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    updateUrlParams({ activityId: act.externalId! });
-                                                                }}
-                                                                className="mt-1 flex items-center gap-1 text-blue-500 hover:underline"
-                                                            >
-                                                                <Activity size={8} /> Visa källa: {act.externalId.substring(0, 8)}
-                                                            </button>
-                                                        )}
                                                     </div>
-                                                )}
-
-                                                {/* Time Indicator - only if explicit time exists  */}
-                                                {event.time && (
-                                                    <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 opacity-60`}>
-                                                        <Clock size={9} />
-                                                        {event.time}
-                                                    </div>
-                                                )}
-                                                <div className="flex flex-col gap-1 mt-1">
-                                                    {/* Stats */}
-                                                    <div className="flex flex-wrap gap-x-3 gap-y-1">
-                                                        {(act.estimatedDistance || 0) > 0 && (
-                                                            <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
-                                                                <Activity size={10} />
-                                                                {Number(act.estimatedDistance).toFixed(1)} km
-                                                            </div>
-                                                        )}
-                                                        {act.tonnage && act.tonnage > 0 && (
-                                                            <div className={`text-[10px] font-bold flex items-center gap-1 text-slate-500`}>
-                                                                <Dumbbell size={10} />
-                                                                {(act.tonnage / 1000).toFixed(1)}t
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    {act.muscleGroups && act.muscleGroups.length > 0 && (
-                                                        <div className={`text-[10px] font-medium flex flex-wrap gap-1 text-slate-400`}>
-                                                            {act.muscleGroups.slice(0, 3).map((m: any) => (
-                                                                <span key={m} className={`px-1 rounded bg-slate-100 dark:bg-slate-800`}>
-                                                                    {({
-                                                                        legs: 'Ben',
-                                                                        chest: 'Bröst',
-                                                                        back: 'Rygg',
-                                                                        arms: 'Armar',
-                                                                        shoulders: 'Axlar',
-                                                                        core: 'Core'
-                                                                    } as Record<string, string>)[m] || m}
+                                                    </React.Fragment>
+                                                );
+                                            } else {
+                                                // Actual Activity (Unmatched)
+                                                const actual = event.data;
+                                                return (
+                                                    <div
+                                                        key={actual.id}
+                                                        onClick={() => updateUrlParams({ activityId: actual.id })}
+                                                        className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
+                                                            ${actual.type === 'strength'
+                                                                ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30'
+                                                                : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'
+                                                            }`}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 
+                                                                ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                                {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}
+                                                                {(actual.source === 'strava' || actual.source === 'merged') && (
+                                                                    <span className="text-[#FC4C02]" title="Strava">🔥</span>
+                                                                )}
+                                                            </span>
+                                                            {event.time && (
+                                                                <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 opacity-60">
+                                                                    <Clock size={9} />
+                                                                    {event.time}
                                                                 </span>
-                                                            ))}
-                                                            {act.muscleGroups.length > 3 && <span>+</span>}
+                                                            )}
                                                         </div>
-                                                    )}
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
+                                                                {actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}
+                                                            </h4>
+                                                        </div>
+                                                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                                            {(actual.distance ?? 0) > 0 && (
+                                                                <span className="text-xs text-slate-500 font-medium">🏃 {actual.distance?.toFixed(1)} km</span>
+                                                            )}
+                                                            {actual.durationMinutes > 0 && (
+                                                                <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes)}</span>
+                                                            )}
+                                                            {(actual.tonnage ?? 0) > 0 && (
+                                                                <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                        })}
+
+
+                                        {allEvents.length === 0 && (
+                                            <div className="py-8 flex flex-col items-center justify-center opacity-20 pointer-events-none border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2">
+                                                    <Activity size={20} className="text-slate-400" />
                                                 </div>
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Vila</span>
                                             </div>
-                                            </React.Fragment>
-                                        );
-                                    } else {
-                                        // Actual Activity (Unmatched)
-                                        const actual = event.data;
-                                        return (
-                                            <div
-                                                key={actual.id}
-                                                onClick={() => updateUrlParams({ activityId: actual.id })}
-                                                className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
-                                                    ${actual.type === 'strength'
-                                                        ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30'
-                                                        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'
-                                                    }`}
-                                            >
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 
-                                                        ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                                        {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}
-                                                        {(actual.source === 'strava' || actual.source === 'merged') && (
-                                                            <span className="text-[#FC4C02]" title="Strava">🔥</span>
-                                                        )}
-                                                    </span>
-                                                    {event.time && (
-                                                        <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 opacity-60">
-                                                            <Clock size={9} />
-                                                            {event.time}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
-                                                        {actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}
-                                                    </h4>
-                                                </div>
-                                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                                    {(actual.distance ?? 0) > 0 && (
-                                                        <span className="text-xs text-slate-500 font-medium">🏃 {actual.distance?.toFixed(1)} km</span>
-                                                    )}
-                                                    {actual.durationMinutes > 0 && (
-                                                        <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes)}</span>
-                                                    )}
-                                                    {(actual.tonnage ?? 0) > 0 && (
-                                                        <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                })}
+                                        )}
 
-
-                                {allEvents.length === 0 && (
-                                    <div className="py-8 flex flex-col items-center justify-center opacity-20 pointer-events-none border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
-                                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2">
-                                            <Activity size={20} className="text-slate-400" />
-                                        </div>
-                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Vila</span>
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={() => {
-                                        if (isPast) {
-                                            updateUrlParams({ registerDate: day.date, registerInput: 'löpning' });
-                                        } else {
-                                            handleOpenModal(day.date);
-                                        }
-                                    }}
-                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                >
-                                    <Plus size={20} />
-                                    <span className="text-[10px] font-bold uppercase tracking-wide">
-                                        {isPast ? 'Registrera' : 'Planera'}
-                                    </span>
-                                </button>
+                                        <button
+                                            onClick={() => {
+                                                if (isPast) {
+                                                    updateUrlParams({ registerDate: day.date, registerInput: 'löpning' });
+                                                } else {
+                                                    handleOpenModal(day.date);
+                                                }
+                                            }}
+                                            className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        >
+                                            <Plus size={20} />
+                                            <span className="text-[10px] font-bold uppercase tracking-wide">
+                                                {isPast ? 'Registrera' : 'Planera'}
+                                            </span>
+                                        </button>
                             </div>
                         </div>
                     );

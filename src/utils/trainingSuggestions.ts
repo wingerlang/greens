@@ -42,6 +42,7 @@ export interface TrainingSuggestion {
     duration?: number;
     distance?: number;
     intensity?: 'low' | 'moderate' | 'high';
+    groupId?: string; // Shared ID for paired suggestions (e.g., uppjogg + nerjogg)
 }
 
 const WEEKDAY_NAMES = ['Söndag', 'Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag'];
@@ -55,7 +56,8 @@ export function getTrainingSuggestions(
     targetDate: string,
     goals: PerformanceGoal[] = [],
     weeklyStats?: WeeklyStats,
-    userSettings?: UserSettings
+    userSettings?: UserSettings,
+    plannedActivities: PlannedActivity[] = []
 ): TrainingSuggestion[] {
     const suggestions: TrainingSuggestion[] = [];
     const dateObj = new Date(targetDate);
@@ -88,6 +90,47 @@ export function getTrainingSuggestions(
     };
 
     const daysSinceHardRun = getDaysSinceHardRun();
+
+    // --- RACE DAY DETECTION ---
+    // Check if there's a race planned on the target date
+    const raceOnDate = plannedActivities.find(a =>
+        a.date.split('T')[0] === targetDate &&
+        (a.isRace || a.category === 'RACE' || a.title?.toLowerCase().includes('tävling'))
+    );
+
+    if (raceOnDate) {
+        const raceDayGroupId = `race-day-${targetDate}`;
+        const easyPace = estimatedEasyPace + 0.5; // Slower than normal easy
+        const warmupKm = 2;
+        const cooldownKm = 1.5;
+
+        suggestions.push({
+            id: generateId(),
+            type: 'RUN',
+            label: 'Uppjogg 🔥',
+            description: `${warmupKm} km lugn jogg`,
+            reason: `Värm upp inför "${raceOnDate.title}"`,
+            distance: warmupKm,
+            duration: Math.round(warmupKm * easyPace),
+            intensity: 'low',
+            groupId: raceDayGroupId
+        });
+
+        suggestions.push({
+            id: generateId(),
+            type: 'RUN',
+            label: 'Nerjogg 🧘',
+            description: `${cooldownKm} km lugn jogg`,
+            reason: `Varva ner efter "${raceOnDate.title}"`,
+            distance: cooldownKm,
+            duration: Math.round(cooldownKm * easyPace),
+            intensity: 'low',
+            groupId: raceDayGroupId
+        });
+
+        // On race days, skip all other suggestions – just return race-day ones
+        return suggestions;
+    }
 
     // --- GOAL BASED SUGGESTIONS ---
 

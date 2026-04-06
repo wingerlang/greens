@@ -24,7 +24,7 @@ export function WeeklyStatsAnalysis({
 
         const weekActivities = unifiedActivities.filter(e =>
             e.date >= weekStart && e.date <= endStr &&
-            (e.type === 'running' || e.type === 'cycling')
+            (e.type === 'running' || e.type === 'cycling' || e.type === 'cardio' || e.type === 'swimming' || e.type === 'football' || e.type === 'hyrox')
         );
 
         // Calculate max HR from age (220 - age formula)

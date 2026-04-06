@@ -22,7 +22,8 @@ export function useSmartTrainingSuggestions(
             selectedDate,
             performanceGoals,
             weeklyStats,
-            currentUser?.settings
+            currentUser?.settings,
+            plannedActivities
         );
 
         // 2. Context-Aware Filtering (Check Planned Activities)

@@ -50,7 +50,7 @@ export const MixedSearchResultsModule: React.FC<MixedSearchResultsModuleProps> =
             )}
 
             <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                <span>🔍</span> Sökresultat ({foodResults.length + standardQuickMeals.length + savedEstimates.length})
+                <span>🔍</span> Sökresultat ({selectableItems.filter(i => ['food', 'quickMeal', 'recipe', 'savedEstimate'].includes(i.itemType)).length})
             </div>
 
             {selectableItems.map((item, globalIdx) => {
@@ -165,6 +165,39 @@ export const MixedSearchResultsModule: React.FC<MixedSearchResultsModuleProps> =
                             </div>
                             <div className="text-[10px] uppercase font-bold text-purple-400/60 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20 ml-2 flex-shrink-0">
                                 Estimering
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 4. Render Recipe
+                if (item.itemType === 'recipe') {
+                    return (
+                        <div
+                            key={item.id}
+                            id={`omnibox-item-${globalIdx}`}
+                            onClick={() => lockQuickMeal(item)}
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                ? 'bg-indigo-500/20 text-indigo-400 border-l-2 border-indigo-500'
+                                : 'hover:bg-white/5 text-white border-l-2 border-transparent'
+                                }`}
+                        >
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-sm font-bold text-indigo-400 flex-shrink-0">
+                                    📖
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <div className="font-medium truncate italic">{item.name}</div>
+                                        <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
+                                            {Math.round((item as any).totals.calories)} kcal/p
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
+                                </div>
+                            </div>
+                            <div className="text-[10px] uppercase font-bold text-indigo-400/80 bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/30 ml-2 flex-shrink-0">
+                                Recept
                             </div>
                         </div>
                     );

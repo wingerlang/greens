@@ -47,6 +47,7 @@ export interface RecipeEstimate {
     price: number;
     co2: number;
     matchedCount: number;
+    totalWeight: number; // in grams
     totalCount: number;
     proteinCategories: string[]; // e.g. ['legume', 'grain']
     isCompleteProtein: boolean;
@@ -159,10 +160,17 @@ export function matchToFoodItem(parsed: ParsedIngredient, foodItems: FoodItem[])
     let match = foodItems.find(f => f.name.toLowerCase() === searchName);
     if (match) return match;
 
+    // Try exact alias match
+    match = foodItems.find(f => 
+        f.aliases?.some(a => a.toLowerCase() === searchName)
+    );
+    if (match) return match;
+
     // Try partial match (ingredient contains food name or vice versa)
     match = foodItems.find(f =>
         searchName.includes(f.name.toLowerCase()) ||
-        f.name.toLowerCase().includes(searchName)
+        f.name.toLowerCase().includes(searchName) ||
+        f.aliases?.some(a => searchName.includes(a.toLowerCase()) || a.toLowerCase().includes(searchName))
     );
     if (match) return match;
 
@@ -176,7 +184,8 @@ export function matchToFoodItem(parsed: ParsedIngredient, foodItems: FoodItem[])
     const firstWord = searchName.split(/\s+/)[0];
     match = foodItems.find(f =>
         f.name.toLowerCase().startsWith(firstWord) ||
-        f.name.toLowerCase().includes(firstWord)
+        f.name.toLowerCase().includes(firstWord) ||
+        f.aliases?.some(a => a.toLowerCase().startsWith(firstWord))
     );
 
     return match || null;
@@ -239,6 +248,7 @@ export function calculateRecipeEstimate(
     let totalPrice = 0;
     let totalCo2 = 0;
     let matchedCount = 0;
+    let totalWeight = 0;
     const proteinCategories = new Set<string>();
     const seasons = new Set<string>();
 
@@ -286,6 +296,11 @@ export function calculateRecipeEstimate(
                 foodItem.seasons.forEach(s => seasons.add(s));
             }
         }
+
+        // Always contribute to total weight if we have a quantity and unit
+        // even if not matched, to keep the "Gryta problem" mass correct
+        const gramsMultiplier = UNIT_TO_GRAMS[ingredient.unit] || 100;
+        totalWeight += ingredient.quantity * gramsMultiplier;
     }
 
     const categories = Array.from(proteinCategories);
@@ -399,6 +414,7 @@ export function calculateRecipeEstimate(
         co2: Math.round(totalCo2 * 100) / 100,
         matchedCount,
         totalCount: parsed.length,
+        totalWeight: Math.round(totalWeight),
         proteinCategories: categories,
         isCompleteProtein: isComplete,
         tags,
@@ -431,10 +447,24 @@ export function getIngredientSuggestions(
 
     const searchTerm = query.toLowerCase();
 
-    return foodItems
-        .filter(f =>
-            f.name.toLowerCase().includes(searchTerm) ||
-            f.description?.toLowerCase().includes(searchTerm)
-        )
-        .slice(0, limit);
+    const exactMatches: FoodItem[] = [];
+    const startsWithMatches: FoodItem[] = [];
+    const otherMatches: FoodItem[] = [];
+
+    for (const f of foodItems) {
+        const nameLower = f.name.toLowerCase();
+        const aliasesLower = (f.aliases || []).map(a => a.toLowerCase());
+
+        if (nameLower === searchTerm || aliasesLower.includes(searchTerm)) {
+            exactMatches.push(f);
+        } else if (nameLower.startsWith(searchTerm) || aliasesLower.some(a => a.startsWith(searchTerm))) {
+            startsWithMatches.push(f);
+        } else if (nameLower.includes(searchTerm) || f.description?.toLowerCase().includes(searchTerm) || aliasesLower.some(a => a.includes(searchTerm))) {
+            otherMatches.push(f);
+        }
+        
+        if (exactMatches.length >= limit) break;
+    }
+
+    return [...exactMatches, ...startsWithMatches, ...otherMatches].slice(0, limit);
 }

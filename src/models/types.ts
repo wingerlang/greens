@@ -345,6 +345,7 @@ export interface FoodItem {
     proteinCategory?: ProteinCategory;        // For amino acid balancing
     seasons?: Season[];                       // Best seasons for this item
     ingredients?: string;                     // List of ingredients
+    aliases?: string[];                       // Alternative names for matching
     createdAt: string;
     updatedAt: string;
     createdBy?: string; // User ID of the creator
@@ -468,6 +469,7 @@ export interface QuickMeal {
     name: string;
     items: MealItem[];
     createdAt: string;
+    isArchived?: boolean;
 }
 
 import type { RaceProfile, RunnerProfile, IntakeEvent, PacingStrategy } from '../utils/racePlannerCalculators.ts';
@@ -1411,6 +1413,7 @@ export interface PlannedActivity {
     targetPace: string;
     targetHrZone: number;
     estimatedDistance: number;
+    durationMinutes?: number; // Planned duration in minutes
     // Strength specific fields
     tonnage?: number;
     muscleGroups?: StrengthMuscleGroup[];
@@ -1448,6 +1451,7 @@ export interface RaceDetails {
     isRegistered?: boolean;
     isVirtual?: boolean; // Manually flag as virtual race (overrides location in UI)
     isTrail?: boolean;   // Manually flag as trail race
+    elevationGain?: number; // Total elevation gain in meters
     seriesName?: string;
     cupName?: string;
     goals?: {

@@ -43,6 +43,9 @@ export function ActivityModal({
     const [formNotes, setFormNotes] = useState('');
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
     const [isRace, setIsRace] = useState(false);
+    const [formGoalA, setFormGoalA] = useState('');
+    const [formGoalB, setFormGoalB] = useState('');
+    const [formGoalC, setFormGoalC] = useState('');
     const [formPace, setFormPace] = useState('05:30'); // Tempo in mm:ss per km
 
     // Ref to track which field was last changed by the user to prevent circular calculation loops
@@ -68,6 +71,73 @@ export function ActivityModal({
         const hasCompleted = exerciseEntries.some(e => e.date === selectedDate);
         return hasPlanned || hasCompleted;
     }, [selectedDate, plannedActivities, exerciseEntries, editingActivity]);
+
+    // Find previous race results matching the current race name
+    const previousRaceResults = useMemo(() => {
+        if (!isRace || !editingActivity?.title) return [];
+
+        // Extract core race name: remove emojis, "TÄVLING", year, km, etc.
+        const raceTitle = editingActivity.title
+            .replace(/🏆/g, '').replace(/TÄVLING/gi, '').trim();
+        if (!raceTitle || raceTitle.length < 3) return [];
+
+        // Normalize: lowercase, strip common suffixes
+        const normalize = (s: string) => s.toLowerCase()
+            .replace(/\d{4}/g, '').replace(/\d+[\.,]?\d*\s*km/gi, '')
+            .replace(/[^\wåäöÅÄÖ\s]/g, '').trim();
+        const coreName = normalize(raceTitle);
+        if (!coreName || coreName.length < 3) return [];
+
+        // Search exerciseEntries for past races
+        const fromExercises = exerciseEntries
+            .filter(e => {
+                if (e.subType !== 'race' || !e.title) return false;
+                const entryCore = normalize(e.title);
+                return entryCore.includes(coreName) || coreName.includes(entryCore);
+            })
+            .map(e => ({
+                date: e.date,
+                title: e.title || 'Tävling',
+                distance: e.distance || 0,
+                durationMinutes: e.durationMinutes || 0,
+                timeFormatted: e.durationMinutes
+                    ? `${Math.floor(e.durationMinutes / 60)}:${String(Math.round(e.durationMinutes % 60)).padStart(2, '0')}`
+                    : null,
+                pace: e.distance && e.durationMinutes
+                    ? `${Math.floor(e.durationMinutes / e.distance)}:${String(Math.round((e.durationMinutes / e.distance % 1) * 60)).padStart(2, '0')}`
+                    : null,
+                source: 'log' as const
+            }));
+
+        // Also search completed planned activities that are races
+        const fromPlanned = plannedActivities
+            .filter(p => {
+                if (!p.isRace || p.status !== 'COMPLETED' || !p.title) return false;
+                const entryCore = normalize(p.title);
+                return entryCore.includes(coreName) || coreName.includes(entryCore);
+            })
+            .map(p => ({
+                date: p.date,
+                title: p.title,
+                distance: p.actualDistance || p.estimatedDistance || 0,
+                durationMinutes: p.actualTimeSeconds ? p.actualTimeSeconds / 60 : (p.durationMinutes || 0),
+                timeFormatted: p.actualTimeSeconds
+                    ? `${Math.floor(p.actualTimeSeconds / 3600)}:${String(Math.floor((p.actualTimeSeconds % 3600) / 60)).padStart(2, '0')}:${String(p.actualTimeSeconds % 60).padStart(2, '0')}`
+                    : null,
+                pace: null,
+                source: 'plan' as const
+            }));
+
+        // Deduplicate by date, prefer exercise entries
+        const byDate = new Map<string, typeof fromExercises[0]>();
+        [...fromPlanned, ...fromExercises].forEach(r => {
+            byDate.set(r.date, r);
+        });
+
+        return Array.from(byDate.values())
+            .filter(r => r.date !== editingActivity?.date) // Exclude current race
+            .sort((a, b) => b.date.localeCompare(a.date)); // Newest first
+    }, [isRace, editingActivity, exerciseEntries, plannedActivities]);
 
     // 2. Smart Suggestions Hook
     const smartSuggestions = useSmartTrainingSuggestions(selectedDate, weeklyStats, goalProgress);
@@ -216,6 +286,17 @@ export function ActivityModal({
         }
     }, [formDistance]);
 
+    // Smart Note Logic: Update "(HH:MM)" duration in notes when duration changes
+    useEffect(() => {
+        if (formDuration && formNotes) {
+            const regex = /\((\d{2}:\d{2})\)/;
+            const match = formNotes.match(regex);
+            if (match && match[1] !== formDuration) {
+                setFormNotes(formNotes.replace(regex, `(${formDuration})`));
+            }
+        }
+    }, [formDuration]);
+
     // Auto-calculate duration from distance and pace
     useEffect(() => {
         // Only trigger if pace, distance or preset was changed by user, or if it's a RUN
@@ -295,6 +376,9 @@ export function ActivityModal({
                 setFormNotes(editingActivity.description || '');
                 setFormIntensity(editingActivity.targetHrZone <= 2 ? 'low' : editingActivity.targetHrZone >= 4 ? 'high' : 'moderate');
                 setIsRace(editingActivity.isRace || false);
+                setFormGoalA(editingActivity.raceDetails?.goals?.a || '');
+                setFormGoalB(editingActivity.raceDetails?.goals?.b || '');
+                setFormGoalC(editingActivity.raceDetails?.goals?.c || '');
                 setFormIncludesRunning(editingActivity.includesRunning ?? true);
                 setFormHyroxFocus((editingActivity as any).hyroxFocus || 'hybrid');
                 setFormStartTime(editingActivity.startTime || '');
@@ -310,6 +394,9 @@ export function ActivityModal({
                 setFormNotes('');
                 setFormIntensity('moderate');
                 setIsRace(false);
+                setFormGoalA('');
+                setFormGoalB('');
+                setFormGoalC('');
                 setFormIncludesRunning(true);
                 setFormHyroxFocus('hybrid');
                 setFormStartTime('');
@@ -364,7 +451,7 @@ export function ActivityModal({
         // Determine Final Category
         let finalCategory = 'EASY';
         if (formType === 'RUN') {
-            if (isRace) finalCategory = 'TEMPO'; // Or specific RACE category if added later
+            if (isRace) finalCategory = 'RACE';
             else finalCategory = runSubCategory;
         } else if (formType === 'STRENGTH') {
             finalCategory = 'STRENGTH';
@@ -373,6 +460,10 @@ export function ActivityModal({
             finalCategory = formHyroxFocus === 'strength' ? 'STRENGTH' : 'INTERVALS';
         } else if (formType === 'REST') {
             finalCategory = 'REST';
+        } else if (formType === 'CARDIO' || formType === 'BIKE') {
+            finalCategory = 'CARDIO';
+        } else {
+            finalCategory = 'OTHER';
         }
 
         // Determine Title
@@ -405,11 +496,12 @@ export function ActivityModal({
             id: editingActivity?.id || generateId(),
             date: formDate,
             type: formType,
-            category: (formType === 'STRENGTH' ? 'STRENGTH' : formType === 'REST' ? 'REST' : (formType === 'CARDIO' || formType === 'BIKE') ? 'CARDIO' : 'RUN') as any,
+            category: finalCategory as PlannedActivity['category'],
             subType: (formType === 'CARDIO' || formType === 'BIKE') ? (formType === 'BIKE' ? 'cycling' : formSubType) : undefined,
             title: title,
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
             estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
+            durationMinutes: totalMinutes || undefined,
 
             // Hyrox & Strength
             tonnage: (formType === 'STRENGTH' || formType === 'HYROX') && formTonnage ? parseInt(formTonnage) : undefined,
@@ -424,7 +516,15 @@ export function ActivityModal({
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
             status: formStatus as any,
-            isRace: isRace
+            isRace: isRace,
+            raceDetails: isRace ? {
+                ...editingActivity?.raceDetails,
+                goals: {
+                    a: formGoalA || undefined,
+                    b: formGoalB || undefined,
+                    c: formGoalC || undefined
+                }
+            } : undefined
         };
 
         onSave(activityData);
@@ -451,6 +551,7 @@ export function ActivityModal({
             title: s.label,
             description: s.description,
             estimatedDistance: s.distance || 0,
+            durationMinutes: s.duration,
             targetPace: '',
             targetHrZone: s.intensity === 'low' ? 2 : s.intensity === 'moderate' ? 3 : 4,
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
@@ -458,6 +559,33 @@ export function ActivityModal({
         };
 
         onSave(newActivity);
+        onClose();
+    };
+
+    // Handler to add multiple suggestions at once (e.g., Uppjogg + Nerjogg)
+    const handleApplyGroup = (group: TrainingSuggestion[]) => {
+        if (!formDate) return;
+
+        group.forEach((s) => {
+            // Uppjogg always before race (order 0), Nerjogg always after (order 9999)
+            const isNerjogg = s.label.toLowerCase().includes('nerjogg');
+            const newActivity: PlannedActivity = {
+                id: generateId(),
+                date: formDate,
+                type: 'RUN' as PlannedActivity['type'],
+                category: 'RECOVERY' as PlannedActivity['category'],
+                title: s.label,
+                description: s.description,
+                estimatedDistance: s.distance || 0,
+                durationMinutes: s.duration,
+                targetPace: '',
+                targetHrZone: 2,
+                structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
+                status: 'PLANNED',
+                order: isNerjogg ? 9999 : 0
+            };
+            onSave(newActivity);
+        });
         onClose();
     };
 
@@ -506,22 +634,32 @@ export function ActivityModal({
                     )}
 
                     {/* Suggestions */}
-                    {!editingActivity && smartSuggestions.length > 0 && (
-                        <div className="mb-6">
-                            <div className="flex items-center gap-2 mb-3">
-                                <Zap size={14} className="text-amber-500 fill-amber-500" />
-                                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Smarta Förslag</span>
-                            </div>
-                            <div className="space-y-2">
-                                {smartSuggestions
-                                    .filter(s => {
-                                        if (formType === 'STRENGTH') return s.type === 'STRENGTH';
-                                        if (formType === 'RUN') return s.type === 'RUN' || s.type === 'REST';
-                                        if (formType === 'HYROX') return s.type === 'HYROX' || s.type === 'STRENGTH' || s.type === 'RUN';
-                                        return true;
-                                    })
-                                    .map(s => {
-                                        const colorClasses = getSuggestionColor(s);
+                    {!editingActivity && smartSuggestions.length > 0 && (() => {
+                        const filtered = smartSuggestions.filter(s => {
+                            if (formType === 'STRENGTH') return s.type === 'STRENGTH';
+                            if (formType === 'RUN') return s.type === 'RUN' || s.type === 'REST';
+                            if (formType === 'HYROX') return s.type === 'HYROX' || s.type === 'STRENGTH' || s.type === 'RUN';
+                            return true;
+                        });
+                        if (filtered.length === 0) return null;
+
+                        // Detect grouped suggestions (e.g., race-day pair)
+                        const groupIds = [...new Set(filtered.filter(s => s.groupId).map(s => s.groupId!))];
+                        const hasGroup = groupIds.length > 0;
+
+                        return (
+                            <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Zap size={14} className="text-amber-500 fill-amber-500" />
+                                    <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                                        {hasGroup ? 'Tävlingsdag' : 'Smarta Förslag'}
+                                    </span>
+                                </div>
+                                <div className="space-y-2">
+                                    {filtered.map(s => {
+                                        const colorClasses = s.groupId
+                                            ? 'from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400'
+                                            : getSuggestionColor(s);
                                         return (
                                             <button
                                                 key={s.id}
@@ -538,9 +676,32 @@ export function ActivityModal({
                                             </button>
                                         );
                                     })}
+                                    {/* "Add Both" button for grouped suggestions */}
+                                    {groupIds.map(gid => {
+                                        const group = filtered.filter(s => s.groupId === gid);
+                                        if (group.length < 2) return null;
+                                        return (
+                                            <button
+                                                key={`group-${gid}`}
+                                                onClick={() => handleApplyGroup(group)}
+                                                className="w-full p-3 bg-gradient-to-r from-yellow-100 to-amber-100 dark:from-yellow-900/30 dark:to-amber-900/30 border-2 border-yellow-400 dark:border-yellow-600 rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left text-yellow-800 dark:text-yellow-300 shadow-sm"
+                                            >
+                                                <div>
+                                                    <div className="text-xs font-black mb-0.5">✨ Lägg till båda</div>
+                                                    <div className="text-[10px] opacity-80 font-medium">
+                                                        {group.map(s => s.label.replace(/ [\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u, '')).join(' + ')}
+                                                    </div>
+                                                </div>
+                                                <div className="p-1.5 bg-yellow-200/80 dark:bg-yellow-800/50 rounded-full shadow-sm">
+                                                    <Plus size={14} />
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Smart Distance Presets - Always visible */}
                     {formType === 'RUN' && (
@@ -754,6 +915,125 @@ export function ActivityModal({
                                     <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
                                     <span className="text-xs font-black uppercase">Tävling</span>
                                 </button>
+                            </div>
+                        )}
+
+                        {/* Race Goals & Previous Results */}
+                        {formType === 'RUN' && isRace && (
+                            <div className="mb-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 space-y-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Trophy size={14} className="text-amber-500 fill-amber-500" />
+                                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Målsättningar</span>
+                                </div>
+
+                                {/* Previous Race Results */}
+                                {previousRaceResults.length > 0 && (
+                                    <div className="space-y-2">
+                                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                            📊 Tidigare resultat
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            {previousRaceResults.slice(0, 3).map(r => (
+                                                <div key={r.date} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                                                    <div>
+                                                        <div className="text-xs font-black text-slate-800 dark:text-slate-200">{r.title}</div>
+                                                        <div className="text-[10px] text-slate-500 font-medium">{r.date}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        {r.timeFormatted && (
+                                                            <div className="text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">{r.timeFormatted}</div>
+                                                        )}
+                                                        <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2 justify-end">
+                                                            {r.distance > 0 && <span>{r.distance.toFixed(1)} km</span>}
+                                                            {r.pace && <span>({r.pace} /km)</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Goal Inputs: A / B / C */}
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label className="block text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 mb-1 ml-0.5 tracking-wider">🥇 Mål A</label>
+                                        <input
+                                            type="text"
+                                            value={formGoalA}
+                                            onChange={(e) => setFormGoalA(e.target.value)}
+                                            placeholder="Drömtid"
+                                            className="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/40 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-amber-400 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥈 Mål B</label>
+                                        <input
+                                            type="text"
+                                            value={formGoalB}
+                                            onChange={(e) => setFormGoalB(e.target.value)}
+                                            placeholder="Realistiskt"
+                                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥉 Mål C</label>
+                                        <input
+                                            type="text"
+                                            value={formGoalC}
+                                            onChange={(e) => setFormGoalC(e.target.value)}
+                                            placeholder="Säkert"
+                                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Smarta Förslag för Tävling (Warmup/Cooldown) */}
+                                <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/30">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                                        <Zap size={10} className="fill-amber-500" /> Smarta förslag för tävlingsdagen
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                const warmup: PlannedActivity = {
+                                                    id: generateId(),
+                                                    date: formDate,
+                                                    type: 'RUN',
+                                                    category: 'EASY',
+                                                    title: 'Uppjogg',
+                                                    description: '20 min lätt löpning inför tävling',
+                                                    durationMinutes: 20,
+                                                    estimatedDistance: 3,
+                                                    status: 'PLANNED',
+                                                    order: -1 // Before race
+                                                };
+                                                const cooldown: PlannedActivity = {
+                                                    id: generateId(),
+                                                    date: formDate,
+                                                    type: 'RUN',
+                                                    category: 'RECOVERY',
+                                                    title: 'Nerjogg',
+                                                    description: '20 min lätt löpning efter tävling',
+                                                    durationMinutes: 20,
+                                                    estimatedDistance: 3,
+                                                    status: 'PLANNED',
+                                                    order: 1 // After race
+                                                };
+                                                // We need to handle this via a special multi-save path or just state
+                                                if (window.confirm('Vill du lägga till både uppjogg och nerjogg inför denna tävling?')) {
+                                                    // This is a bit hacky but works for now as we don't have multi-save in the modal props yet
+                                                    // We'll rely on the parent logic if we can update it, or just use a state to track them
+                                                    (window as any)._pendingRacesActivities = [warmup, cooldown];
+                                                    notificationService.notify('info', 'Uppjogg och Nerjogg kommer att sparas tillsammans med tävlingen.');
+                                                }
+                                            }}
+                                            className="flex-1 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 p-2 rounded-xl text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                                        >
+                                            Lägg till Uppjogg & Nerjogg
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

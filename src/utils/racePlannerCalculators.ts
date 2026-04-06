@@ -1,3 +1,4 @@
+import { predictRaceTime } from './runningCalculator.ts';
 
 /**
  * Race Planner Calculators
@@ -271,6 +272,35 @@ export function calculateWeatherPenaltyFactor(tempC: number, humidity: number): 
     const totalPenaltyPct = excessTemp * 0.015 * humidityCorrection;
 
     return 1 + totalPenaltyPct;
+}
+
+/**
+ * Estimates race time accounting for trail technicality and elevation gain.
+ * 
+ * Heuristics:
+ * - Elevation: 1m gain is roughly equivalent to 8m flat distance in effort.
+ * - Trail: Adds a percentage multiplier to total time (technicality factor).
+ */
+export function calculateAdjustedRaceTime(
+    distanceKm: number,
+    elevationGainM: number,
+    isTrail: boolean,
+    vdot: number,
+    trailFactor: number = 1.15 // Default 15% slower
+): number {
+    if (vdot <= 0 || distanceKm <= 0) return 0;
+
+    // 1. Effective distance based on elevation (Naismith equivalent)
+    // 100m gain = +0.8km flat distance effort
+    const effectiveDistKm = distanceKm + (elevationGainM / 1000) * 8.0;
+
+    // 2. Base time from VDOT using effective distance
+    const baseTimeSecs = predictRaceTime(vdot, effectiveDistKm);
+
+    // 3. Apply Trail Penalty (technicality, footing, turns)
+    const trailMultiplier = isTrail ? trailFactor : 1.0;
+
+    return baseTimeSecs * trailMultiplier;
 }
 
 // --- Glycogen Modeling ---

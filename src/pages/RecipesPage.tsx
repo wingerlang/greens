@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, memo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
-import { type Recipe, type MealType, type PriceCategory, type Season, MEAL_TYPE_LABELS } from '../models/types.ts';
-import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
+import { type FoodItem, type Recipe, type MealType, type PriceCategory, type Season, MEAL_TYPE_LABELS } from '../models/types.ts';
+import { calculateRecipeEstimate, getIngredientSuggestions } from '../utils/ingredientParser.ts';
 import './RecipesPage.css';
 
 interface RecipeFormState {
@@ -34,6 +34,86 @@ const EMPTY_FORM: RecipeFormState = {
     seasons: [],
 };
 
+interface RecipeCardProps {
+    recipe: Recipe;
+    foodItems: FoodItem[];
+    onOpen: (recipe: Recipe) => void;
+    onDelete: (e: React.MouseEvent, id: string) => void;
+    onCook: (recipe: Recipe) => void;
+}
+
+const RecipeCard = memo(({ recipe, foodItems, onOpen, onDelete, onCook }: RecipeCardProps) => {
+    const estimate = useMemo(() => {
+        if (recipe.ingredientsText) {
+            return calculateRecipeEstimate(recipe.ingredientsText, foodItems);
+        }
+        return null;
+    }, [recipe.ingredientsText, foodItems]);
+
+    const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
+
+    return (
+        <div
+            className="recipe-card"
+            onClick={() => onOpen(recipe)}
+        >
+            <div className="recipe-card-header">
+                <h3>{recipe.name}</h3>
+                <button
+                    className="delete-btn"
+                    onClick={(e) => onDelete(e, recipe.id)}
+                    title="Ta bort"
+                >
+                    ×
+                </button>
+            </div>
+
+            <p className="recipe-description">{recipe.description}</p>
+
+            <div className="recipe-meta">
+                {totalTime > 0 && <span>⏱️ {totalTime} min</span>}
+                <span>🍽️ {recipe.servings} port</span>
+                {recipe.mealType && (
+                    <span className="meal-badge">{MEAL_TYPE_LABELS[recipe.mealType]}</span>
+                )}
+            </div>
+
+            {estimate && (
+                <div className="recipe-nutrition">
+                    <div className="nutrition-item calories">
+                        <span className="value">{Math.round(estimate.calories / recipe.servings)}</span>
+                        <span className="label">kcal</span>
+                    </div>
+                    <div className="nutrition-item">
+                        <span className="value">{Math.round(estimate.protein / recipe.servings)}g</span>
+                        <span className="label">protein</span>
+                    </div>
+                    <div className="nutrition-item">
+                        <span className="value">{Math.round(estimate.price / recipe.servings)} kr</span>
+                        <span className="label">pris</span>
+                    </div>
+                    <div className="nutrition-item co2">
+                        <span className="value">{(estimate.co2 / recipe.servings).toFixed(1)}</span>
+                        <span className="label">kg CO₂</span>
+                    </div>
+                </div>
+            )}
+
+            <div className="recipe-actions">
+                <button
+                    className="btn btn-primary btn-sm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCook(recipe);
+                    }}
+                >
+                    🍳 Laga
+                </button>
+            </div>
+        </div>
+    );
+});
+
 export function RecipesPage() {
     const { recipes, addRecipe, updateRecipe, deleteRecipe, foodItems } = useData();
     const { openRecipe } = useCooking();
@@ -42,6 +122,9 @@ export function RecipesPage() {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
     const [formData, setFormData] = useState<RecipeFormState>(EMPTY_FORM);
+    const [suggestions, setSuggestions] = useState<FoodItem[]>([]);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Handle ?action=new
     useEffect(() => {
@@ -53,10 +136,23 @@ export function RecipesPage() {
         }
     }, [searchParams]);
 
+    const [debouncedIngredients, setDebouncedIngredients] = useState(formData.ingredientsText);
+    const [isCalculating, setIsCalculating] = useState(false);
+
+    // Debounce ingredients text
+    useEffect(() => {
+        setIsCalculating(true);
+        const timer = setTimeout(() => {
+            setDebouncedIngredients(formData.ingredientsText);
+            setIsCalculating(false);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [formData.ingredientsText]);
+
     // Live nutrition estimate
     const liveEstimate = useMemo(() => {
-        return calculateRecipeEstimate(formData.ingredientsText, foodItems);
-    }, [formData.ingredientsText, foodItems]);
+        return calculateRecipeEstimate(debouncedIngredients, foodItems);
+    }, [debouncedIngredients, foodItems]);
 
     const perServing = useMemo(() => ({
         calories: Math.round(liveEstimate.calories / formData.servings),
@@ -65,7 +161,75 @@ export function RecipesPage() {
         co2: Math.round((liveEstimate.co2 / formData.servings) * 100) / 100,
     }), [liveEstimate, formData.servings]);
 
-    const handleOpenForm = (recipe?: Recipe) => {
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        setFormData({ ...formData, ingredientsText: value });
+
+        const cursorPosition = e.target.selectionStart;
+        const textBeforeCursor = value.substring(0, cursorPosition);
+        const lines = textBeforeCursor.split('\n');
+        const currentLine = lines[lines.length - 1].trim();
+
+        // Extract query: ignore quantity/unit patterns
+        // e.g. "400g tofu" -> query "tofu"
+        const queryMatch = currentLine.match(/^(?:\d+(?:[.,]\d+)?\s*[a-zåäö]*\s+)?(.*)$/i);
+        const query = queryMatch?.[1]?.trim() || '';
+
+        if (query.length >= 2) {
+            const matches = getIngredientSuggestions(query, foodItems);
+            setSuggestions(matches);
+            setActiveSuggestionIndex(0);
+        } else {
+            setSuggestions([]);
+        }
+    };
+
+    const applySuggestion = (suggestion: FoodItem) => {
+        if (!textareaRef.current) return;
+
+        const value = formData.ingredientsText;
+        const cursorPosition = textareaRef.current.selectionStart;
+        const textBeforeCursor = value.substring(0, cursorPosition);
+        const textAfterCursor = value.substring(cursorPosition);
+        
+        const linesBefore = textBeforeCursor.split('\n');
+        const currentLine = linesBefore[linesBefore.length - 1];
+        
+        // Keep the quantity part if it exists
+        const quantityMatch = currentLine.match(/^(\d+(?:[.,]\d+)?\s*[a-zåäö]*\s+)/i);
+        const prefix = quantityMatch ? quantityMatch[1] : '';
+        
+        const newLine = `${prefix}${suggestion.name}`;
+        linesBefore[linesBefore.length - 1] = newLine;
+        
+        const newValue = linesBefore.join('\n') + textAfterCursor;
+        setFormData({ ...formData, ingredientsText: newValue });
+        setSuggestions([]);
+        
+        // Focus back on textarea after some time
+        setTimeout(() => {
+            textareaRef.current?.focus();
+        }, 0);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (suggestions.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveSuggestionIndex(prev => (prev + 1) % suggestions.length);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveSuggestionIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                applySuggestion(suggestions[activeSuggestionIndex]);
+            } else if (e.key === 'Escape') {
+                setSuggestions([]);
+            }
+        }
+    };
+
+    const handleOpenForm = useCallback((recipe?: Recipe) => {
         if (recipe) {
             setEditingRecipe(recipe);
             setFormData({
@@ -86,13 +250,13 @@ export function RecipesPage() {
             setFormData(EMPTY_FORM);
         }
         setIsFormOpen(true);
-    };
+    }, []);
 
-    const handleCloseForm = () => {
+    const handleCloseForm = useCallback(() => {
         setIsFormOpen(false);
         setEditingRecipe(null);
         setFormData(EMPTY_FORM);
-    };
+    }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,7 +270,7 @@ export function RecipesPage() {
             mealType: formData.mealType,
             ingredientsText: formData.ingredientsText,
             instructionsText: formData.instructionsText,
-            totalWeight: formData.totalWeight || liveEstimate.calories * 2,
+            totalWeight: formData.totalWeight || liveEstimate.totalWeight,
             priceCategory: formData.priceCategory,
             seasons: formData.seasons,
             ingredients: [],
@@ -121,20 +285,13 @@ export function RecipesPage() {
         handleCloseForm();
     };
 
-    const handleDelete = (e: React.MouseEvent, id: string) => {
+    const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         if (confirm('Är du säker på att du vill ta bort detta recept?')) {
             deleteRecipe(id);
         }
-    };
+    }, [deleteRecipe]);
 
-    // Calculate estimate for a recipe
-    const getRecipeEstimate = (recipe: Recipe) => {
-        if (recipe.ingredientsText) {
-            return calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-        }
-        return null;
-    };
 
     return (
         <div className="recipes-page">
@@ -158,72 +315,16 @@ export function RecipesPage() {
                 </div>
             ) : (
                 <div className="recipes-grid">
-                    {recipes.map(recipe => {
-                        const estimate = getRecipeEstimate(recipe);
-                        const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
-
-                        return (
-                            <div
-                                key={recipe.id}
-                                className="recipe-card"
-                                onClick={() => handleOpenForm(recipe)}
-                            >
-                                <div className="recipe-card-header">
-                                    <h3>{recipe.name}</h3>
-                                    <button
-                                        className="delete-btn"
-                                        onClick={(e) => handleDelete(e, recipe.id)}
-                                        title="Ta bort"
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-
-                                <p className="recipe-description">{recipe.description}</p>
-
-                                <div className="recipe-meta">
-                                    {totalTime > 0 && <span>⏱️ {totalTime} min</span>}
-                                    <span>🍽️ {recipe.servings} port</span>
-                                    {recipe.mealType && (
-                                        <span className="meal-badge">{MEAL_TYPE_LABELS[recipe.mealType]}</span>
-                                    )}
-                                </div>
-
-                                {estimate && (
-                                    <div className="recipe-nutrition">
-                                        <div className="nutrition-item calories">
-                                            <span className="value">{Math.round(estimate.calories / recipe.servings)}</span>
-                                            <span className="label">kcal</span>
-                                        </div>
-                                        <div className="nutrition-item">
-                                            <span className="value">{Math.round(estimate.protein / recipe.servings)}g</span>
-                                            <span className="label">protein</span>
-                                        </div>
-                                        <div className="nutrition-item">
-                                            <span className="value">{Math.round(estimate.price / recipe.servings)} kr</span>
-                                            <span className="label">pris</span>
-                                        </div>
-                                        <div className="nutrition-item co2">
-                                            <span className="value">{(estimate.co2 / recipe.servings).toFixed(1)}</span>
-                                            <span className="label">kg CO₂</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="recipe-actions">
-                                    <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            openRecipe(recipe);
-                                        }}
-                                    >
-                                        🍳 Laga
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {recipes.map(recipe => (
+                        <RecipeCard
+                            key={recipe.id}
+                            recipe={recipe}
+                            foodItems={foodItems}
+                            onOpen={handleOpenForm}
+                            onDelete={handleDelete}
+                            onCook={openRecipe}
+                        />
+                    ))}
                 </div>
             )}
 
@@ -306,20 +407,43 @@ export function RecipesPage() {
                                         <span className="estimate-item co2">♻️ {liveEstimate.co2.toFixed(1)} kg</span>
                                     </div>
                                 </div>
-                                <textarea
-                                    className="ingredients-textarea"
-                                    value={formData.ingredientsText}
-                                    onChange={(e) => setFormData({ ...formData, ingredientsText: e.target.value })}
-                                    placeholder={`4 port ris (gärna kallt)
+                                <div className="textarea-container">
+                                    <textarea
+                                        ref={textareaRef}
+                                        className="ingredients-textarea"
+                                        value={formData.ingredientsText}
+                                        onChange={handleTextareaChange}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder={`4 port ris (gärna kallt)
 400g fast tofu
 1 påse wokgrönsaker
 Soja
 Sesamolja
 1 vitlöksklyfta`}
-                                    rows={6}
-                                />
+                                        rows={6}
+                                    />
+                                    {suggestions.length > 0 && (
+                                        <div className="ingredient-suggestions">
+                                            {suggestions.map((s, index) => (
+                                                <div
+                                                    key={s.id}
+                                                    className={`suggestion-item ${index === activeSuggestionIndex ? 'active' : ''}`}
+                                                    onClick={() => applySuggestion(s)}
+                                                >
+                                                    <span className="suggestion-name">{s.name}</span>
+                                                    {s.brand && <span className="suggestion-brand">{s.brand}</span>}
+                                                    <div className="suggestion-macros">
+                                                        <span>🔥 {s.calories}kcal</span>
+                                                        <span>💪 {s.protein}g P</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <p className="form-hint">
-                                    {liveEstimate.matchedCount}/{liveEstimate.totalCount} ingredienser matchade •
+                                    {isCalculating ? '⏳ Beräknar...' : `${liveEstimate.matchedCount}/${liveEstimate.totalCount} matchade`} •
+                                    {liveEstimate.totalWeight}g totalvikt •
                                     ~{perServing.calories} kcal/portion
                                 </p>
                             </div>

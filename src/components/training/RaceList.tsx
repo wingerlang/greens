@@ -34,6 +34,8 @@ import {
     Pencil
 } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
+import { calculateAdjustedRaceTime } from '../../utils/racePlannerCalculators.ts';
+import { calculateVDOT } from '../../utils/runningCalculator.ts';
 
 const isTrailRace = (title: string) => {
     const t = title.toLowerCase();
@@ -51,6 +53,23 @@ const getDistanceStyle = (distance: number = 0) => {
     if (distance >= 10) return 'bg-blue-500/10 text-blue-400 border-blue-500/20'; // 10k
     if (distance >= 5) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'; // 5k
     return 'bg-slate-800 text-slate-300 border-white/5'; // Other
+};
+
+const normalizeRaceTitle = (title: string) => {
+    if (!title) return '';
+    let normalized = title.toLowerCase();
+    // 1. Remove years (YYYY)
+    normalized = normalized.replace(/\b(19|20)\d{2}\b/g, '');
+    // 2. Remove distances (e.g., 34k, 21km, 1000m, 50 miles)
+    normalized = normalized.replace(/\b\d+([,.]\d+)?\s*(km|k|m|mil|miles)\b/g, '');
+    // 3. Remove "trailing junk" separators: " - ...", ", ..."
+    normalized = normalized.split(/\s+[-–—]\s+/)[0];
+    normalized = normalized.split(/,\s+/)[0];
+    // 4. Remove emojis and special chars
+    normalized = normalized.replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
+    normalized = normalized.replace(/['"()]/g, '');
+    // 5. Cleanup whitespace
+    return normalized.replace(/\s+/g, ' ').trim();
 };
 
 const formatRaceDateCompact = (dateString: string) => {
@@ -251,26 +270,8 @@ export function RaceList({
 
         races.forEach(r => {
             const rawTitle = resolveTitle(r);
-            // Advanced Normalization Pipeline
-            let normalized = rawTitle.toLowerCase();
-
-            // 1. Remove years (YYYY)
-            normalized = normalized.replace(/\b(19|20)\d{2}\b/g, '');
-
-            // 2. Remove distances (e.g., 34k, 21km, 1000m, 50 miles)
-            normalized = normalized.replace(/\b\d+([,.]\d+)?\s*(km|k|m|mil|miles)\b/g, '');
-
-            // 3. Remove "trailing junk" separators: " - ...", ", ..."
-            normalized = normalized.split(/\s+[-–—]\s+/)[0];
-            normalized = normalized.split(/,\s+/)[0];
-
-            // 4. Remove emojis and special chars (parentheses, quotes)
-            normalized = normalized.replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
-            normalized = normalized.replace(/['"()]/g, '');
-
-            // 5. Cleanup whitespace
-            normalized = normalized.replace(/\s+/g, ' ').trim();
-
+            const normalized = normalizeRaceTitle(rawTitle);
+            
             // Capitalize for display key
             const key = normalized.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); /* Simple capitalization */
 
@@ -460,6 +461,7 @@ export function RaceList({
                                 <UpcomingRaceCard
                                     key={race.id}
                                     race={race}
+                                    historyRaces={races}
                                     onUpdate={handleSaveRace}
                                     onDelete={deletePlannedActivity}
                                     onEdit={handleEditClick}
@@ -472,6 +474,7 @@ export function RaceList({
                                 <UpcomingRaceCardCompact
                                     key={race.id}
                                     race={race}
+                                    historyRaces={races}
                                     onEdit={handleEditClick}
                                 />
                             ))}
@@ -774,17 +777,43 @@ export function RaceList({
 
 function UpcomingRaceCard({
     race,
+    historyRaces = [],
     onUpdate,
     onDelete,
     onEdit
 }: {
     race: PlannedActivity,
+    historyRaces?: ExerciseEntry[],
     onUpdate: (r: PlannedActivity) => void,
     onDelete: (id: string) => void,
     onEdit: (r: PlannedActivity) => void
 }) {
     const [isGoalsExpanded, setIsGoalsExpanded] = useState(false);
     const [isChecklistExpanded, setIsChecklistExpanded] = useState(false);
+    const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+
+    const historySummary = useMemo(() => {
+        const normTitle = normalizeRaceTitle(race.title);
+        const dist = race.estimatedDistance;
+        if (!normTitle || !dist) return null;
+
+        const matches = historyRaces.filter(h => {
+            const hTitle = normalizeRaceTitle(h.title || h.notes || '');
+            const hDist = h.distance || 0;
+            const titleMatch = hTitle === normTitle;
+            const distMatch = Math.abs(hDist - dist) / dist < 0.1;
+            return titleMatch && distMatch;
+        });
+        
+        if (matches.length === 0) return null;
+
+        const pb = matches.reduce((best, curr) => curr.durationMinutes < best.durationMinutes ? curr : best, matches[0]);
+        
+        return {
+            count: matches.length,
+            pb: pb
+        };
+    }, [race.title, race.estimatedDistance, historyRaces]);
 
     const daysLeft = useMemo(() => {
         const diff = new Date(race.date).getTime() - new Date().getTime();
@@ -846,6 +875,11 @@ END:VCALENDAR`;
                         <div>
                             <div className="flex flex-wrap gap-2 mb-2">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">RACE DAY</span>
+                                {historySummary && (
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                        <Trophy size={10} /> Sprunget {historySummary.count}x förut
+                                    </span>
+                                )}
                                 {isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
                                 {isTrail && !isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">Trail</span>}
                             </div>
@@ -863,6 +897,15 @@ END:VCALENDAR`;
                         </div>
                     </div>
                 </div>
+                {historySummary && (
+                    <div className="mx-5 mb-2 -mt-1 p-2 rounded-lg bg-blue-500/5 border border-blue-500/10 flex items-center justify-between relative z-20">
+                        <div className="flex items-center gap-2">
+                             <Trophy size={12} className="text-amber-900" />
+                             <span className="text-[10px] font-black text-amber-950 uppercase tracking-tight">Ditt personbästa här:</span>
+                        </div>
+                        <span className="text-xs font-black text-amber-950 font-mono">{formatActivityDuration(historySummary.pb.durationMinutes)}</span>
+                    </div>
+                )}
             </div>
 
             {/* Content Body */}
@@ -953,6 +996,53 @@ END:VCALENDAR`;
                         </div>
                     )}
                 </div>
+
+                {/* Previous Results Expandable */}
+                <div className={`bg-slate-950/30 rounded-xl border border-white/5 overflow-hidden transition-all ${isHistoryExpanded ? 'p-4' : 'p-0'}`}>
+                    <button
+                        onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                        className={`w-full flex justify-between items-center p-3 text-sm font-bold text-slate-300 hover:text-white hover:bg-white/5 transition-all ${isHistoryExpanded ? 'border-b border-white/5 mb-3 bg-white/5' : ''}`}
+                    >
+                        <span className="flex items-center gap-2">
+                            <Clock size={16} className="text-blue-400" />
+                            Tidigare Resultat
+                        </span>
+                        {isHistoryExpanded ? <ChevronDown className="rotate-180" size={16} /> : <ChevronDown size={16} />}
+                    </button>
+
+                    {isHistoryExpanded && (
+                        <div className="space-y-2">
+                            {(() => {
+                                const normTitle = normalizeRaceTitle(race.title);
+                                const dist = race.estimatedDistance;
+                                const matchingHistory = historyRaces
+                                    .filter(h => {
+                                        const hTitle = normalizeRaceTitle(h.title || h.notes || '');
+                                        const hDist = h.distance || 0;
+                                        return hTitle === normTitle && Math.abs(hDist - dist) / dist < 0.1;
+                                    })
+                                    .sort((a, b) => b.date.localeCompare(a.date));
+
+                                if (matchingHistory.length === 0) {
+                                    return <div className="text-xs text-slate-500 italic text-center py-2">Inga tidigare resultat för denna distans.</div>;
+                                }
+
+                                return matchingHistory.map(h => (
+                                    <div key={h.id} className="flex justify-between items-center p-2 rounded-lg bg-white/5 text-xs">
+                                        <div className="flex flex-col">
+                                            <span className="text-slate-300 font-bold">{h.date}</span>
+                                            <span className="text-[10px] text-slate-500">{h.distance?.toFixed(1)} km</span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-emerald-400 font-black font-mono">{formatActivityDuration(h.durationMinutes)}</span>
+                                            <span className="text-[9px] text-slate-500">{calcPace(h.distance, h.durationMinutes)}</span>
+                                        </div>
+                                    </div>
+                                ));
+                            })()}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Footer Actions */}
@@ -998,11 +1088,34 @@ END:VCALENDAR`;
 
 function UpcomingRaceCardCompact({
     race,
+    historyRaces = [],
     onEdit
 }: {
     race: PlannedActivity,
+    historyRaces?: ExerciseEntry[],
     onEdit: (r: PlannedActivity) => void
 }) {
+    const historySummary = useMemo(() => {
+        const normTitle = normalizeRaceTitle(race.title);
+        const dist = race.estimatedDistance;
+        if (!normTitle || !dist) return null;
+        
+        const matches = historyRaces.filter(h => {
+            const hTitle = normalizeRaceTitle(h.title || h.notes || '');
+            const hDist = h.distance || 0;
+            return hTitle === normTitle && Math.abs(hDist - dist) / dist < 0.1;
+        });
+
+        if (matches.length === 0) return null;
+
+        const pb = matches.reduce((best, curr) => curr.durationMinutes < best.durationMinutes ? curr : best, matches[0]);
+        
+        return {
+            count: matches.length,
+            pb: pb
+        };
+    }, [race.title, race.estimatedDistance, historyRaces]);
+
     const daysLeft = useMemo(() => {
         const diff = new Date(race.date).getTime() - new Date().getTime();
         return Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -1020,6 +1133,11 @@ function UpcomingRaceCardCompact({
             <div>
                 <div className="flex gap-1.5 mb-2 items-center flex-wrap">
                     <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase shadow-sm">{daysLeft} dagar</span>
+                    {historySummary && (
+                        <span className="flex items-center gap-1 text-blue-400 font-black text-[9px] uppercase bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                            <Trophy size={10} /> {historySummary.count}x
+                        </span>
+                    )}
                     {isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-1.5 py-0.5 rounded shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
                     {isTrail && !isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">Trail</span>}
                 </div>
@@ -1063,6 +1181,9 @@ function AddRaceModal({
         isRegistered: true,
         isVirtual: false,
         isTrail: false,
+        elevationGain: '',
+        goalA: '',
+        goalB: '',
         goalC: '',
         description: '',
         type: 'RUN' as PlannedActivity['type'],
@@ -1096,6 +1217,7 @@ function AddRaceModal({
                 isRegistered: activityToEdit.raceDetails?.isRegistered ?? true,
                 isVirtual: activityToEdit.raceDetails?.isVirtual ?? false,
                 isTrail: activityToEdit.raceDetails?.isTrail ?? false,
+                elevationGain: activityToEdit.raceDetails?.elevationGain?.toString() || '',
                 goalA: activityToEdit.raceDetails?.goals?.a || '',
                 goalB: activityToEdit.raceDetails?.goals?.b || '',
                 goalC: activityToEdit.raceDetails?.goals?.c || '',
@@ -1118,6 +1240,29 @@ function AddRaceModal({
     const handleSubmit = () => {
         if (!form.title || !form.date) return;
 
+        // Parse duration using B > A > C priority
+        const parseDuration = (s: string) => {
+            const match = s.match(/(\d{1,2}):(\d{2})/);
+            if (!match) return 0;
+            const parts = s.split(':').map(p => parseInt(p.replace(/\D/g, '')));
+            if (parts.length === 3) return parts[0] * 60 + parts[1]; // HH:MM:SS -> mins
+            if (parts.length === 2) {
+                // If the first part is > 5, it's likely MM:SS. If < 5, maybe HH:MM?
+                // For races, let's assume HH:MM if it's a long distance (> 5km).
+                const dist = parseFloat(form.distance);
+                if (dist > 10 && parts[0] < 5) return parts[0] * 60 + parts[1]; 
+                return parts[0] + parts[1] / 60;
+            }
+            return 0;
+        };
+
+        let durationMins = parseDuration(form.goalB) || parseDuration(form.goalA) || parseDuration(form.goalC);
+        
+        // If no goals set, fallback to average pace (e.g. 5:30 min/km)
+        if (!durationMins && form.distance) {
+            durationMins = parseFloat(form.distance) * 5.5;
+        }
+
         const newActivity: PlannedActivity = {
             id: activityToEdit?.id || generateId(),
             title: form.title,
@@ -1130,6 +1275,7 @@ function AddRaceModal({
             raceUrl: form.url,
             description: form.description,
             estimatedDistance: parseFloat(form.distance) || 0,
+            durationMinutes: durationMins || undefined,
             status: 'PLANNED',
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
             targetPace: '',
@@ -1138,6 +1284,7 @@ function AddRaceModal({
                 isRegistered: form.isRegistered,
                 isVirtual: form.isVirtual,
                 isTrail: form.isTrail,
+                elevationGain: parseFloat(form.elevationGain) || 0,
                 goals: {
                     a: form.goalA,
                     b: form.goalB,
@@ -1297,15 +1444,27 @@ function AddRaceModal({
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Länk till loppet</label>
-                                <input
-                                    type="url"
-                                    value={form.url}
-                                    onChange={e => setForm({ ...form, url: e.target.value })}
-                                    className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none text-sm"
-                                    placeholder="https://..."
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Höjdmeter (m)</label>
+                                    <input
+                                        type="number"
+                                        value={form.elevationGain}
+                                        onChange={e => setForm({ ...form, elevationGain: e.target.value })}
+                                        className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
+                                        placeholder="t.ex. 250"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Länk till loppet</label>
+                                    <input
+                                        type="url"
+                                        value={form.url}
+                                        onChange={e => setForm({ ...form, url: e.target.value })}
+                                        className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none text-sm"
+                                        placeholder="https://..."
+                                    />
+                                </div>
                             </div>
 
                             {/* Race Type Flags */}
@@ -1352,56 +1511,131 @@ function AddRaceModal({
 
                             <div className="flex justify-between items-end border-b border-white/10 pb-2">
                                 <h4 className="text-sm font-bold text-white">Målsättningar</h4>
-                                <button
-                                    onClick={() => {
-                                        const dist = parseFloat(form.distance);
-                                        if (isNaN(dist) || dist <= 0) {
-                                            alert("Du måste ange en distans för att använda estimeringen.");
-                                            return;
-                                        }
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            const dist = parseFloat(form.distance);
+                                            if (isNaN(dist) || dist <= 0) {
+                                                alert("Du måste ange en distans för att använda estimeringen.");
+                                                return;
+                                            }
 
-                                        // 1. Find best comparable race
-                                        const comps = races.filter(r => r.distance && Math.abs(r.distance - dist) / dist < 0.1 && r.durationMinutes > 0);
-                                        comps.sort((a, b) => a.durationMinutes - b.durationMinutes);
-                                        const pb = comps[0];
+                                            // 1. Find best comparable race in history
+                                            const normTitle = normalizeRaceTitle(form.title);
+                                            const matches = races.filter(r => 
+                                                normalizeRaceTitle(r.title || r.notes || '') === normTitle ||
+                                                (r.distance && Math.abs(r.distance - dist) / dist < 0.1)
+                                            );
+                                            
+                                            if (matches.length === 0) {
+                                                alert("Hittade inga tidigare resultat för detta lopp eller denna distans.");
+                                                return;
+                                            }
 
-                                        if (pb) {
-                                            const pbPaceDec = pb.durationMinutes / pb.distance!;
-
-                                            // A Goal: 2.5% faster than PB
-                                            const aPace = pbPaceDec * 0.975;
-                                            const aTime = aPace * dist;
-
-                                            // B Goal: PB
-                                            const bTime = pb.durationMinutes;
-
-                                            // C Goal: Finish or 5% slower
-                                            const cTime = pb.durationMinutes * 1.05;
+                                            matches.sort((a, b) => a.durationMinutes - b.durationMinutes);
+                                            const pb = matches[0];
 
                                             setForm(prev => ({
                                                 ...prev,
-                                                goalA: `Sub ${formatActivityDuration(aTime)} (PB -2.5%)`,
-                                                goalB: `Sub ${formatActivityDuration(bTime)} (Tidigare PB)`,
-                                                goalC: `Sub ${formatActivityDuration(cTime)}`
+                                                goalB: `${formatActivityDuration(pb.durationMinutes)} (Historik ${pb.date.substring(0,4)})`,
+                                                goalC: 'Gå i mål'
                                             }));
-                                        } else {
-                                            // Naive extrapolation based on a general user profile
-                                            // Assumes user is a ~5:00/km runner
-                                            const basePaceDec = 5.0; // 5 min/km
-                                            const targetDec = dist > 21 ? basePaceDec * 1.05 : (dist > 10 ? basePaceDec : basePaceDec * 0.95);
+                                        }}
+                                        className="text-[10px] bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-2 py-1 rounded font-black uppercase tracking-wider transition-colors border border-blue-500/30 flex items-center gap-1"
+                                    >
+                                        <Trophy size={10} /> Fyll från historik
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const dist = parseFloat(form.distance);
+                                            const elev = parseFloat(form.elevationGain) || 0;
+                                            if (isNaN(dist) || dist <= 0) {
+                                                alert("Du måste ange en distans för att använda estimeringen.");
+                                                return;
+                                            }
 
+                                            // 1. Calculate current "Form" VDOT from recent runs (last 90 days)
+                                            const ninetyDaysAgo = new Date();
+                                            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                                            const recentRuns = races.filter(r => 
+                                                new Date(r.date) >= ninetyDaysAgo && 
+                                                r.distance && r.distance >= 5 && 
+                                                r.durationMinutes > 0
+                                            );
+
+                                            if (recentRuns.length === 0) {
+                                                alert("Behöver fler nyligen genomförda pass (minst 5km) för att räkna ut din form.");
+                                                return;
+                                            }
+
+                                            // Calculate VDOT for each and pick the 85th percentile (best "true" form)
+                                            const vdots = recentRuns.map(r => calculateVDOT(r.distance!, r.durationMinutes * 60)).sort((a, b) => b - a);
+                                            const currentVdot = vdots[0]; // Take best in last 90 days
+
+                                            // 2. Estimate adjusted time
+                                            const estimatedSecs = calculateAdjustedRaceTime(dist, elev, form.isTrail, currentVdot);
+                                            
                                             setForm(prev => ({
                                                 ...prev,
-                                                goalA: `Sub ${formatActivityDuration((targetDec * 0.95) * dist)}`,
-                                                goalB: `Sub ${formatActivityDuration(targetDec * dist)}`,
-                                                goalC: 'Finish'
+                                                goalB: `${formatActivityDuration(estimatedSecs / 60)} (Form-estimerat)`,
+                                                goalA: `${formatActivityDuration((estimatedSecs * 0.97) / 60)} (Drömmål)`
                                             }));
-                                        }
-                                    }}
-                                    className="text-[10px] bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 px-2 py-1 rounded font-black uppercase tracking-wider transition-colors border border-indigo-500/30 flex items-center gap-1"
-                                >
-                                    <Clock size={10} /> Smart Estimate
-                                </button>
+                                        }}
+                                        className="text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-1 rounded font-black uppercase tracking-wider transition-colors border border-emerald-500/30 flex items-center gap-1"
+                                    >
+                                        <Target size={10} /> Estimerat baserat på form
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const dist = parseFloat(form.distance);
+                                            if (isNaN(dist) || dist <= 0) {
+                                                alert("Du måste ange en distans för att använda estimeringen.");
+                                                return;
+                                            }
+
+                                            // 1. Find best comparable race
+                                            const comps = races.filter(r => r.distance && Math.abs(r.distance - dist) / dist < 0.1 && r.durationMinutes > 0);
+                                            comps.sort((a, b) => a.durationMinutes - b.durationMinutes);
+                                            const pb = comps[0];
+
+                                            if (pb) {
+                                                const pbPaceDec = pb.durationMinutes / pb.distance!;
+
+                                                // A Goal: 2.5% faster than PB
+                                                const aPace = pbPaceDec * 0.975;
+                                                const aTime = aPace * dist;
+
+                                                // B Goal: PB
+                                                const bTime = pb.durationMinutes;
+
+                                                // C Goal: Finish or 5% slower
+                                                const cTime = pb.durationMinutes * 1.05;
+
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    goalA: `Sub ${formatActivityDuration(aTime)} (PB -2.5%)`,
+                                                    goalB: `Sub ${formatActivityDuration(bTime)} (Tidigare PB)`,
+                                                    goalC: `Sub ${formatActivityDuration(cTime)}`
+                                                }));
+                                            } else {
+                                                // Naive extrapolation based on a general user profile
+                                                // Assumes user is a ~5:00/km runner
+                                                const basePaceDec = 5.0; // 5 min/km
+                                                const targetDec = dist > 21 ? basePaceDec * 1.05 : (dist > 10 ? basePaceDec : basePaceDec * 0.95);
+
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    goalA: `Sub ${formatActivityDuration((targetDec * 0.95) * dist)}`,
+                                                    goalB: `Sub ${formatActivityDuration(targetDec * dist)}`,
+                                                    goalC: 'Finish'
+                                                }));
+                                            }
+                                        }}
+                                        className="text-[10px] bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 px-2 py-1 rounded font-black uppercase tracking-wider transition-colors border border-indigo-500/30 flex items-center gap-1"
+                                    >
+                                        <Clock size={10} /> Smart Estimate
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
@@ -1434,6 +1668,54 @@ function AddRaceModal({
                                     placeholder="t.ex. Ha kul och gå i mål"
                                 />
                             </div>
+
+                            {/* Previous Times for Distance */}
+                            {(() => {
+                                const dist = parseFloat(form.distance);
+                                if (!isNaN(dist) && dist > 0) {
+                                    const matches = races
+                                        .filter(r => r.distance && Math.abs(r.distance - dist) / dist < 0.1)
+                                        .sort((a, b) => a.durationMinutes - b.durationMinutes)
+                                        .slice(0, 3);
+                                    
+                                    if (matches.length > 0) {
+                                        return (
+                                            <div className="p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h5 className="text-[10px] font-black uppercase tracking-wider text-indigo-400">Dina bästa tider ({dist}km +/- 10%)</h5>
+                                                    <Trophy size={12} className="text-indigo-500" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {matches.map(m => (
+                                                        <div key={m.id} className="flex justify-between items-center text-xs group/item">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-slate-200 line-clamp-1">{m.title || m.notes || 'Okänt lopp'}</span>
+                                                                <span className="text-[10px] text-slate-500">{m.date} • {m.distance?.toFixed(1)}km</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono font-black text-indigo-400 mr-2">{formatActivityDuration(m.durationMinutes)}</span>
+                                                                <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                    {['A', 'B', 'C'].map(label => (
+                                                                        <button
+                                                                            key={label}
+                                                                            onClick={() => setForm(prev => ({ ...prev, [`goal${label}`]: `Sub ${formatActivityDuration(m.durationMinutes)}` }))}
+                                                                            className="w-5 h-5 flex items-center justify-center rounded bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500 text-[10px] font-black transition-colors"
+                                                                            title={`Sätt som Mål ${label}`}
+                                                                        >
+                                                                            {label}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                }
+                                return null;
+                            })()}
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Anteckningar / Strategi</label>
                                 <textarea
@@ -1822,12 +2104,12 @@ function TimelineTable({
                 {races.map((race: any) => {
                     const getRaceTitle = (r: ExerciseEntry) => {
                         if (r.title && !r.title.startsWith('Merged')) return r.title;
-                        const ua = universalActivities.find(u => u.id === r.id);
+                        const ua = universalActivities.find((u: UniversalActivity) => u.id === r.id);
                         if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
-                            const components = universalActivities.filter(u => ua.mergeInfo!.originalActivityIds!.includes(u.id));
-                            const stravaComp = components.find(c => c.performance?.source?.source === 'strava');
+                            const components = universalActivities.filter((u: UniversalActivity) => ua.mergeInfo!.originalActivityIds!.includes(u.id));
+                            const stravaComp = components.find((c: UniversalActivity) => (c as any).performance?.source?.source === 'strava');
                             if (stravaComp?.plan?.title) return stravaComp.plan.title;
-                            const bestComp = components.find(c => c.plan?.title && !c.plan.title.startsWith('Merged'));
+                            const bestComp = components.find((c: UniversalActivity) => c.plan?.title && !c.plan.title.startsWith('Merged'));
                             if (bestComp) return bestComp.plan?.title;
                         }
                         return r.notes || r.type || 'Okänd Aktivitet';
