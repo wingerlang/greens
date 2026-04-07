@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Calendar, MapPin, Trophy, Target, CheckSquare, Clock, ChevronDown, ChevronUp, ExternalLink, Pencil, X } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry } from '../../../models/types.ts';
-import { normalizeRaceTitle, isTrailRace, isUltraRace, getDistanceStyle, formatRaceDateCompact, calcPace } from './utils.ts';
+import { normalizeRaceTitle, isTrailRace, isUltraRace, getDistanceStyle, formatRaceDateCompact, calcPace, getPlannedRaceTime } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/formatters.ts';
 
 interface UpcomingRaceCardProps {
@@ -96,6 +96,8 @@ END:VCALENDAR`;
     const isTrail = isTrailRace(race.title);
     const isUltra = isUltraRace(race.title, race.estimatedDistance);
     const distStyle = getDistanceStyle(race.estimatedDistance);
+    const plannedTime = getPlannedRaceTime(race);
+    const plannedPace = calcPace(race.estimatedDistance, plannedTime);
 
     return (
         <div className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden relative group hover:border-amber-500/50 transition-all duration-300 shadow-xl shadow-black/40 flex flex-col">
@@ -147,9 +149,14 @@ END:VCALENDAR`;
                         <div className="text-xs uppercase font-bold mb-1 opacity-70">Distans</div>
                         <div className="text-xl font-black">{race.estimatedDistance > 0 ? `${race.estimatedDistance} km` : '?'}</div>
                     </div>
-                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Starttid</div>
-                        <div className="text-xl font-black text-white">{race.startTime || 'TBD'}</div>
+                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Måltid</div>
+                        <div className="text-xl font-black text-white font-mono tabular-nums">{plannedTime ? formatActivityDuration(plannedTime) : 'TBD'}</div>
+                        {plannedPace !== '-' && (
+                            <div className="absolute top-1 right-2 text-[8px] font-black uppercase text-slate-600 bg-white/5 px-1 rounded-sm border border-white/5">
+                                {plannedPace}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -355,6 +362,8 @@ export function UpcomingRaceCardCompact({
     const isTrail = isTrailRace(race.title);
     const isUltra = isUltraRace(race.title, race.estimatedDistance);
     const distStyle = getDistanceStyle(race.estimatedDistance);
+    const plannedTime = getPlannedRaceTime(race);
+    const plannedPace = calcPace(race.estimatedDistance, plannedTime);
 
     return (
         <div
@@ -377,13 +386,21 @@ export function UpcomingRaceCardCompact({
             </div>
 
             <div className="flex items-center justify-between mt-4 text-xs">
-                <span className="flex items-center gap-1 text-slate-400 max-w-[60%]">
+                <span className="flex items-center gap-1 text-slate-400 max-w-[50%]">
                     <MapPin size={10} className="text-slate-500 shrink-0" />
                     <span className="truncate">{race.raceDetails?.logistics?.location || 'Mål'}</span>
                 </span>
-                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${distStyle}`}>
-                    {race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '-'}
-                </span>
+                <div className="flex gap-1.5 items-center">
+                    {plannedTime && (
+                         <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black text-white font-mono tabular-nums leading-none mb-0.5">{formatActivityDuration(plannedTime)}</span>
+                            {plannedPace !== '-' && <span className="text-[8px] font-bold text-slate-500 font-mono tracking-tighter leading-none">{plannedPace}</span>}
+                        </div>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${distStyle}`}>
+                        {race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '-'}
+                    </span>
+                </div>
             </div>
         </div>
     );

@@ -49,6 +49,45 @@ export const calcPace = (distValues: number | undefined, minutes: number | undef
     return `${pMin}:${pSec.toString().padStart(2, '0')}/km`;
 };
 
+export const parseRaceGoal = (goalStr: string | undefined): number | null => {
+    if (!goalStr) return null;
+    const s = goalStr.toLowerCase();
+    
+    // 1. Try HH:MM:SS or HH:MM (e.g., "1:43:00", "01:22", "1h43m")
+    const timeMatch = s.match(/\b(\d{1,2})[:h](\d{2})(?:[:m](\d{2}))?\b/);
+    if (timeMatch) {
+        const h = parseInt(timeMatch[1]);
+        const m = parseInt(timeMatch[2]);
+        const sec = timeMatch[3] ? parseInt(timeMatch[3]) : 0;
+        return h * 60 + m + sec / 60;
+    }
+
+    // 2. Try "X h Y min" or "Xh Ym"
+    const hMatch = s.match(/(\d+)\s*h/);
+    const mMatch = s.match(/(\d+)\s*min/);
+    if (hMatch || mMatch) {
+        const h = hMatch ? parseInt(hMatch[1]) : 0;
+        const m = mMatch ? parseInt(mMatch[1]) : 0;
+        return h * 60 + m;
+    }
+
+    // 3. Try "X min"
+    const minMatch = s.match(/(\d+)\s*(min|minuter)/);
+    if (minMatch) return parseInt(minMatch[1]);
+
+    return null;
+};
+
+export const getPlannedRaceTime = (race: PlannedActivity): number | undefined => {
+    if (race.durationMinutes) return race.durationMinutes;
+    // Check realistic goal B first, then dream goal A
+    const goalB = parseRaceGoal(race.raceDetails?.goals?.b);
+    if (goalB) return goalB;
+    const goalA = parseRaceGoal(race.raceDetails?.goals?.a);
+    if (goalA) return goalA;
+    return undefined;
+};
+
 export const MONTH_MAP: Record<string, string> = { 
     'jan': '01', 'januari': '01', 
     'feb': '02', 'februari': '02', 

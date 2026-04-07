@@ -13,6 +13,7 @@ import {
 import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
+import { getPlannedRaceTime, calcPace } from '../components/training/races/utils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
 import { notificationService } from '../services/notificationService.ts';
 import { ActivityModal } from '../components/planning/ActivityModal.tsx';
@@ -143,32 +144,15 @@ export function TrainingPlanningPage() {
 
         // Get planned duration: use durationMinutes field first, fall back to race estimation or description parsing
         const getPlannedMinutes = (p: any): number => {
-            // 1. Direct field (best source)
-            if (p.durationMinutes && p.durationMinutes > 0) return p.durationMinutes;
+            // 1. New Central Logic (handles races etc)
+            const resolved = getPlannedRaceTime(p);
+            if (resolved) return resolved;
 
-            // 2. Race Fallback: Goals Priority (B > A > C)
-            const goals = p.raceDetails?.goals;
-            if (goals) {
-                const parse = (s: string) => {
-                    const match = s?.match(/(\d{1,2}):(\d{2})/);
-                    if (!match) return 0;
-                    const parts = s.split(':').map(val => parseInt(val.replace(/\D/g, '')));
-                    return parts.length === 3 ? parts[0] * 60 + parts[1] : (parts.length === 2 ? (parts[0] > 5 ? parts[0] + parts[1]/60 : parts[0] * 60 + parts[1]) : 0);
-                };
-                const dur = parse(goals.b) || parse(goals.a) || parse(goals.c);
-                if (dur > 0) return dur;
-            }
-
-            // 3. Race Fallback: Average Pace (5:30 min/km)
-            if ((p.isRace || p.category === 'RACE') && p.estimatedDistance > 0) {
-                return p.estimatedDistance * 5.5;
-            }
-
-            // 4. Parse "(HH:MM)" from description
+            // 2. Parse "(HH:MM)" from description
             const hhmmMatch = p.description?.match(/\((\d{1,2}):(\d{2})\)/);
             if (hhmmMatch) return parseInt(hhmmMatch[1]) * 60 + parseInt(hhmmMatch[2]);
 
-            // 5. Parse "XXmin" or "XX min" from description
+            // 3. Parse "XXmin" or "XX min" from description
             const minMatch = p.description?.match(/(\d+)\s*min/i);
             if (minMatch) return parseInt(minMatch[1]);
             return 0;
@@ -925,6 +909,23 @@ export function TrainingPlanningPage() {
                                                                 {event.time}
                                                             </div>
                                                         )}
+                                                        {isRace && (act.estimatedDistance > 0) && (() => {
+                                                            const pTime = getPlannedRaceTime(act);
+                                                            const pPace = calcPace(act.estimatedDistance, pTime);
+                                                            if (!pTime) return null;
+                                                            return (
+                                                                <div className="mt-1.5 flex items-center gap-1.5">
+                                                                    <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-1.5 py-0.5 rounded text-[9px] font-black font-mono">
+                                                                        {formatDurationHHMM(pTime)}
+                                                                    </div>
+                                                                    {pPace !== '-' && (
+                                                                        <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded text-[9px] font-black font-mono">
+                                                                            {pPace}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                         <div className="flex flex-col gap-1 mt-1">
                                                             {/* Stats */}
                                                             <div className="flex flex-wrap gap-x-3 gap-y-1">
