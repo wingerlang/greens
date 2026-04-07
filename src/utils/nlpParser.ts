@@ -1,4 +1,4 @@
-import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType, type BodyMeasurementType, type PlannedActivity } from '../models/types.ts';
+import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType, type BodyMeasurementType, type PlannedActivity, type Unit } from '../models/types.ts';
 import { parsePlanningInput } from './planningParser.ts';
 
 export type OmniboxIntent =
@@ -9,7 +9,8 @@ export type OmniboxIntent =
     | { type: 'measurement'; data: { measurementType?: BodyMeasurementType; value?: number }; date?: string }
     | { type: 'navigate'; data: { path: string }; date?: string }
     | { type: 'search'; data: { query: string }; date?: string }
-    | { type: 'planera'; data: Partial<PlannedActivity>; rawInput: string; date?: string };
+    | { type: 'planera'; data: Partial<PlannedActivity>; rawInput: string; date?: string }
+    | { type: 'purchase'; data: { query: string; price?: number; quantity?: number; packageSize?: number; unit?: Unit }; date?: string };
 
 /**
  * Calculate calories burned for an exercise.
@@ -70,6 +71,10 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
     const vitalsIntent = parseVitals(lower);
     if (vitalsIntent) return { ...vitalsIntent, date };
 
+    // 2. Buy/Purchase Check (e.g. "köp 2st tofu 25kr")
+    const purchaseIntent = parsePurchase(lower);
+    if (purchaseIntent) return { ...purchaseIntent, date };
+
     // 2.5 Navigation Check
     if (lower.startsWith('gå till') || lower.startsWith('navigera') || lower.startsWith('/')) {
         let path = '/';
@@ -123,6 +128,93 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
 
     // 6. Default to Search
     return { type: 'search', data: { query: input }, date };
+}
+
+function parsePurchase(input: string): OmniboxIntent | null {
+    const { date, remaining } = parseDate(input);
+    const purchaseKeywords = ['köp', 'köpt', 'buy', 'bought', 'inhandlat'];
+    let working = remaining.toLowerCase().trim();
+    
+    let isPurchase = false;
+    for (const kw of purchaseKeywords) {
+        if (working.startsWith(kw + ' ') || working === kw) {
+            isPurchase = true;
+            working = working.replace(kw, '').trim();
+            break;
+        }
+    }
+    
+    if (!isPurchase) return null;
+    
+    // Extract Price: "25kr", "25 kr", "25:-", "price 25"
+    let price: number | undefined;
+    const priceMatch = working.match(/(\d+(?:[.,]\d+)?)\s*(?:kr|sek|:-|sek|kr)/i);
+    if (priceMatch) {
+        price = parseFloat(priceMatch[1].replace(',', '.'));
+        working = working.replace(priceMatch[0], '').trim();
+    }
+    
+    // Extract quantity and package size
+    let quantity = 1;
+    let packageSize = 1;
+    let unit: Unit = 'g';
+
+    // 1. Check for "NxM" or "N x M" format (e.g., "2x12", "2 x 12")
+    const nxmMatch = working.match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\b/i);
+    if (nxmMatch) {
+        quantity = parseFloat(nxmMatch[1].replace(',', '.'));
+        packageSize = parseFloat(nxmMatch[2].replace(',', '.'));
+        unit = 'pcs'; 
+        working = working.replace(nxmMatch[0], '').trim();
+    } else {
+        // 2. Individual matches
+        // Matches: "2st", "2 st", "2x"
+        const quantityMatch = working.match(/(\d+(?:[.,]\d+)?)\s*(st|stk|pcs|x)\b/i);
+        if (quantityMatch) {
+            quantity = parseFloat(quantityMatch[1].replace(',', '.'));
+            working = working.replace(quantityMatch[0], '').trim();
+        }
+
+        // Matches: "12pack", "12-pack", "6 pack"
+        const packMatch = working.match(/(\d+)\s*-?\s*pack\b/i);
+        if (packMatch) {
+            packageSize = parseFloat(packMatch[1].replace(',', '.'));
+            unit = 'pcs';
+            working = working.replace(packMatch[0], '').trim();
+        }
+
+        // Matches: "400g", "400 g", "1kg", "1 kg", "500ml", "1l", "1 l"
+        const sizeMatch = working.match(/(\d+(?:[.,]\d+)?)\s*(g|gram|kg|kilo|ml|l|liter|dl|st|port|portion)\b/i);
+        if (sizeMatch) {
+            packageSize = parseFloat(sizeMatch[1].replace(',', '.'));
+            const rawUnit = sizeMatch[2].toLowerCase();
+            
+            if (rawUnit.startsWith('kg') || rawUnit.startsWith('kilo')) unit = 'kg';
+            else if (rawUnit.startsWith('l') && !rawUnit.startsWith('liter')) unit = 'l';
+            else if (rawUnit.startsWith('ml')) unit = 'ml';
+            else if (rawUnit.startsWith('dl')) { unit = 'ml'; packageSize *= 100; }
+            else if (rawUnit.startsWith('st')) unit = 'pcs';
+            else if (rawUnit.startsWith('port')) unit = 'pcs';
+            else unit = 'g';
+
+            working = working.replace(sizeMatch[0], '').trim();
+        }
+    }
+
+    // Clean up working query
+    const query = working.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+
+    return {
+        type: 'purchase',
+        data: {
+            query: query || 'Okänd',
+            price,
+            quantity,
+            packageSize,
+            unit
+        },
+        date
+    };
 }
 
 

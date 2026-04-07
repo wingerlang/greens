@@ -12,7 +12,6 @@ import {
     getISODate,
     generateId,
 } from '../models/types.ts';
-import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
 import { getActiveCalories } from '../utils/calorieTarget.ts';
 import { calculateMealItemNutrition } from '../utils/nutrition/calculations.ts';

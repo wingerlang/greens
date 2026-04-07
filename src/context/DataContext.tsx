@@ -137,14 +137,14 @@ export function DataProvider({ children }: DataProviderProps) {
 
     // 3. Nutrition Context
     const {
-        foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, quickMeals: storedQuickMeals, foodAliases,
-        setFoodItems, setRecipes, setMealEntries, setWeeklyPlans, setPantryItems, setPantryQuantitiesState, setQuickMeals, setFoodAliases,
+        foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, quickMeals: storedQuickMeals, foodAliases, purchaseLogs,
+        setFoodItems, setRecipes, setMealEntries, setWeeklyPlans, setPantryItems, setPantryQuantitiesState, setQuickMeals, setFoodAliases, setPurchaseLogs,
         togglePantryItem, setPantryQuantity, getPantryQuantity,
         addFoodItem, updateFoodItem, deleteFoodItem, getFoodItem,
         addRecipe, updateRecipe, deleteRecipe, getRecipe, calculateRecipeNutrition, getRecipeWithNutrition,
         addMealEntry, updateMealEntry, deleteMealEntry, getMealEntriesForDate, calculateDailyNutrition,
         getWeeklyPlan, saveWeeklyPlan, getPlannedMealsForDate,
-        addQuickMeal, deleteQuickMeal, updateQuickMeal, updateFoodAlias
+        addQuickMeal, deleteQuickMeal, updateQuickMeal, updateFoodAlias, addPurchaseLog
     } = useNutritionContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, updateVitals, getVitalsForDate });
 
     // 4. Activity Context
@@ -205,6 +205,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setPantryQuantitiesState(data.pantryQuantities || {});
         setQuickMeals(data.quickMeals || []);
         setFoodAliases(data.foodAliases || {});
+        setPurchaseLogs(data.purchaseLogs || []);
 
         // User
         let loadedUsers = data.users || [];
@@ -418,7 +419,8 @@ export function DataProvider({ children }: DataProviderProps) {
                 // PERSIST: Race Definitions & Tours
                 raceDefinitions,
                 raceIgnoreRules,
-                tours
+                tours,
+                purchaseLogs
             }, { skipApi: true });
         }
     }, [
@@ -431,7 +433,7 @@ export function DataProvider({ children }: DataProviderProps) {
         bodyMeasurements,
         storedQuickMeals, foodAliases, exercises,
         // DEPENDENCIES: Race Definitions & Tours
-        raceDefinitions, raceIgnoreRules, tours
+        raceDefinitions, raceIgnoreRules, tours, purchaseLogs
     ]);
 
     // ============================================
@@ -648,6 +650,8 @@ export function DataProvider({ children }: DataProviderProps) {
         addTour,
         updateTour,
         deleteTour,
+        purchaseLogs,
+        addPurchaseLog,
     };
 
     return (

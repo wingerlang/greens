@@ -17,7 +17,7 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal } from 'lucide-react';
 
 // Expandable Exercise Component - click to show sets
 const ExpandableExercise = React.memo(({ exercise }: { exercise: any }) => {
@@ -462,7 +462,9 @@ export function ActivityDetailModal({
         excludeFromStats: currentActivity.excludeFromStats || false,
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
         hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
-        startKm: '0'
+        startKm: '0',
+        placement: currentActivity.raceDetails?.placement?.toString() || '',
+        totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || ''
     });
 
     const [hoveredExtractEffort, setHoveredExtractEffort] = useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
@@ -1084,7 +1086,12 @@ export function ActivityDetailModal({
             location: editForm.location,
             excludeFromStats: editForm.excludeFromStats,
             isHiddenInCalendar: editForm.isHiddenInCalendar,
-            hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined
+            hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
+            raceDetails: editForm.subType === 'race' || editForm.subType === 'competition' ? {
+                ...activity.raceDetails,
+                placement: parseInt((editForm as any).placement) || undefined,
+                totalParticipants: parseInt((editForm as any).totalParticipants) || undefined
+            } : activity.raceDetails
         };
 
         // Local update (works for 'manual', 'strava', and 'merged')
@@ -1421,6 +1428,32 @@ export function ActivityDetailModal({
                                         onChange={e => setEditForm({ ...editForm, distance: e.target.value })}
                                         className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
                                     />
+                                </div>
+                            )}
+
+                            {/* Placement Inputs for Race Mode */}
+                            {(editForm.subType === 'race' || editForm.subType === 'competition') && (
+                                <div className="grid grid-cols-2 gap-4 md:col-span-2 bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-amber-500 uppercase">🏁 Placering</label>
+                                        <input
+                                            type="number"
+                                            placeholder="t.ex. 1"
+                                            value={(editForm as any).placement}
+                                            onChange={e => setEditForm({ ...editForm, placement: e.target.value })}
+                                            className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-amber-500 uppercase">Deltagare</label>
+                                        <input
+                                            type="number"
+                                            placeholder="Totalt antal"
+                                            value={(editForm as any).totalParticipants}
+                                            onChange={e => setEditForm({ ...editForm, totalParticipants: e.target.value })}
+                                            className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
+                                        />
+                                    </div>
                                 </div>
                             )}
 
@@ -2390,6 +2423,26 @@ export function ActivityDetailModal({
                                                     </div>
                                                 )}
 
+                                                {/* Placement */}
+                                                {activity.raceDetails?.placement && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Placering</span>
+                                                        <div className={`inline-flex items-center gap-1.5 font-black px-2.5 py-1 rounded-xl w-fit ${
+                                                            activity.raceDetails.placement === 1 ? 'bg-yellow-400 text-black shadow-[0_0_12px_rgba(250,204,21,0.5)]' :
+                                                            activity.raceDetails.placement === 2 ? 'bg-slate-300 text-black' :
+                                                            activity.raceDetails.placement === 3 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'
+                                                        }`}>
+                                                            {activity.raceDetails.placement <= 3 && <Medal size={14} />}
+                                                            <span className="text-xl">#{activity.raceDetails.placement}</span>
+                                                            {activity.raceDetails.totalParticipants && (
+                                                                <span className="text-xs opacity-60 ml-0.5">
+                                                                    /{activity.raceDetails.totalParticipants}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Elevation Gain */}
                                                 {!!perf?.elevationGain && (
                                                     <div className="flex flex-col">
@@ -2525,6 +2578,24 @@ export function ActivityDetailModal({
                                                     <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
                                                 </div>
                                             ) : null}
+
+                                            {/* Race Placement Card */}
+                                            {activity.raceDetails?.placement && (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col items-center justify-center border border-white/5">
+                                                    <div className={`flex items-baseline gap-1.5 font-black ${
+                                                        activity.raceDetails.placement === 1 ? 'text-yellow-400 font-black drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' :
+                                                        activity.raceDetails.placement === 2 ? 'text-slate-300' :
+                                                        activity.raceDetails.placement === 3 ? 'text-amber-700' : 'text-white'
+                                                    }`}>
+                                                        {activity.raceDetails.placement <= 3 ? <Medal size={16} /> : <Trophy size={16} />}
+                                                        <span className="text-2xl">#{activity.raceDetails.placement}</span>
+                                                        {activity.raceDetails.totalParticipants && (
+                                                            <span className="text-xs opacity-50 font-bold">/{activity.raceDetails.totalParticipants}</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">Placering</p>
+                                                </div>
+                                            )}
 
                                             {/* Watts (Generic Fallback for Extracts) */}
                                             {activity.extractedFromId && parentUniversal?.performance?.averageWatts && (

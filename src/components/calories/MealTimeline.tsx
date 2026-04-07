@@ -452,9 +452,31 @@ function PortionControls({
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const isSubmitting = React.useRef(false); // Ref to track submission to avoid double calls (e.g. Enter + Blur)
+    const [localServings, setLocalServings] = useState(item.servings);
+    const isSubmitting = React.useRef(false); 
+    const debounceTimer = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Keep local servings in sync with props if we are not actively bumping it or editing
+    React.useEffect(() => {
+        if (!isEditing && !debounceTimer.current) {
+            setLocalServings(item.servings);
+        }
+    }, [item.servings, isEditing]);
 
     const step = item.type === 'recipe' ? 0.25 : 25;
+
+    const debouncedUpdate = (newVal: number) => {
+        setLocalServings(newVal);
+        
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        
+        debounceTimer.current = setTimeout(() => {
+            onUpdate(newVal);
+            debounceTimer.current = null;
+        }, 500); // 500ms debounce
+    };
 
     const handleInputSubmit = () => {
         if (isSubmitting.current) return;
@@ -502,7 +524,7 @@ function PortionControls({
         >
             <button
                 className={`${isCompact ? 'w-5 h-5 text-sm' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors cursor-pointer`}
-                onClick={(e) => { e.stopPropagation(); onUpdate(Math.max(step, item.servings - step)); }}
+                onClick={(e) => { e.stopPropagation(); debouncedUpdate(Math.max(step, localServings - step)); }}
             >
                 −
             </button>
@@ -510,18 +532,18 @@ function PortionControls({
                 className={`flex flex-col items-center justify-center ${isCompact ? 'min-w-[50px]' : 'min-w-[60px]'} hover:bg-slate-700/30 rounded px-1 transition-colors cursor-text`}
                 onClick={(e) => {
                     e.stopPropagation();
-                    setInputValue(String(item.servings));
+                    setInputValue(String(localServings));
                     setIsEditing(true);
                     onActive?.(true);
                 }}
             >
                 <span className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-slate-200 font-bold`}>
-                    {item.type === 'recipe' ? `${item.servings} p` : `${item.servings}g`}
+                    {item.type === 'recipe' ? `${localServings} p` : `${localServings}g`}
                 </span>
             </button>
             <button
                 className={`${isCompact ? 'w-5 h-5 text-sm' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors cursor-pointer`}
-                onClick={(e) => { e.stopPropagation(); onUpdate(item.servings + step); }}
+                onClick={(e) => { e.stopPropagation(); debouncedUpdate(localServings + step); }}
             >
                 +
             </button>

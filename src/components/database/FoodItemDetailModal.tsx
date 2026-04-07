@@ -3,6 +3,7 @@ import { Modal } from '../common/Modal.tsx';
 import { FoodItem, FoodCategory, Unit } from '../../models/types.ts';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
+import { useData } from '../../context/DataShared.ts';
 
 interface FoodItemDetailModalProps {
     item: FoodItem;
@@ -21,6 +22,14 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
     unitLabels,
     creatorName
 }) => {
+    const { purchaseLogs } = useData();
+    
+    const itemPurchases = React.useMemo(() => {
+        return purchaseLogs
+            .filter(log => log.foodItemId === item.id)
+            .sort((a, b) => b.date.localeCompare(a.date));
+    }, [purchaseLogs, item.id]);
+
     const formatDate = (dateStr: string) => {
         try {
             return format(new Date(dateStr), 'd MMM yyyy', { locale: sv });
@@ -170,6 +179,44 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
                         highlight
                     />
                 </div>
+
+                {/* Purchase History */}
+                {itemPurchases.length > 0 && (
+                    <div className="space-y-4 pt-8 border-t border-white/5">
+                        <div className="flex justify-between items-end">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <span>🛒</span> Prishistorik & Inköp
+                            </h3>
+                            <span className="text-[10px] text-slate-500 font-mono italic">{itemPurchases.length} poster</span>
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                            {itemPurchases.map(log => {
+                                const totalQty = log.quantity * log.packageSize;
+                                const unitPrice = log.price / totalQty;
+                                const displayUnitPrice = log.unit === 'g' || log.unit === 'ml' 
+                                    ? `${(unitPrice * 1000).toFixed(2)} kr/kg`
+                                    : `${unitPrice.toFixed(2)} kr/${log.unit}`;
+
+                                return (
+                                    <div key={log.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-xl border border-white/5 group hover:border-blue-500/30 transition-all">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-slate-200 group-hover:text-blue-400 transition-colors">
+                                                {log.price} kr <span className="text-[10px] text-slate-500 font-normal">• {log.quantity}st à {log.packageSize}{log.unit}</span>
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 uppercase tracking-widest">
+                                                {formatDate(log.date)} {log.store && `• ${log.store}`}
+                                            </span>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm font-black text-white">{displayUnitPrice}</div>
+                                            <div className="text-[8px] text-slate-500 uppercase font-bold tracking-tighter">Jämförpris</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Additional Details */}
                 {(item.ingredients || item.brand || item.containsGluten) && (

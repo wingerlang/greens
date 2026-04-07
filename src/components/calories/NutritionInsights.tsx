@@ -12,27 +12,62 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
     const { settings } = useSettings();
     const [range, setRange] = React.useState<7 | 14 | 30>(7);
 
-    // Calculate last N days of data
+    // Calculate last N days that have measurements (not empty, not incomplete)
     const daysData = useMemo(() => {
-        const days = [];
-        for (let i = range as number; i >= 0; i--) {
+        const foundDays = [];
+        let measurementsFound = 0;
+        let lookback = 0;
+        const maxLookback = 180; // Hard cap at half a year back
+        
+        const todayStr = getISODate();
+        
+        while (measurementsFound < range && lookback < maxLookback) {
             const date = new Date();
-            date.setDate(date.getDate() - i);
+            date.setDate(date.getDate() - lookback);
             const dateStr = getISODate(date);
+            
+            const entries = mealEntries.filter(e => e.date === dateStr);
+            const isIncomplete = settings.incompleteDays?.[dateStr];
+            const isToday = dateStr === todayStr;
+
             const nutrition = calculateDailyNutrition(dateStr);
+            const hasData = entries.length > 0 && nutrition.calories > 0;
+            const isComplete = !isIncomplete;
 
-            days.push({
-                date: dateStr,
-                label: i === 0 ? 'Idag' : i === 1 ? 'Igår' : new Date(dateStr).toLocaleDateString('sv-SE', { weekday: 'short' }),
-                calories: nutrition.calories,
-                protein: nutrition.protein,
-                isToday: i === 0
-            });
+            // Only count towards 'range' if it's a valid complete measurement
+            if (hasData && isComplete) {
+                foundDays.push({
+                    date: dateStr,
+                    label: isToday ? 'Idag' : lookback === 1 ? 'Igår' : new Date(dateStr).toLocaleDateString('sv-SE', { weekday: 'short' }),
+                    calories: nutrition.calories,
+                    protein: nutrition.protein,
+                    isToday,
+                    isHistorical: !isToday
+                });
+                measurementsFound++;
+            } else if (isToday) {
+                // If today is empty/incomplete, we still show it in the chart for current context,
+                // but we don't count it towards the 'range' limit for history.
+                foundDays.push({
+                    date: dateStr,
+                    label: 'Idag',
+                    calories: nutrition.calories,
+                    protein: nutrition.protein,
+                    isToday: true,
+                    isHistorical: false,
+                    isEmpty: true
+                });
+            }
+
+            lookback++;
         }
-        return days;
-    }, [mealEntries, recipes, foodItems, calculateDailyNutrition, range]);
 
-    // Filter out incomplete days, and EXCLUDE TODAY for the average
+        // foundDays might have Today at index 0 after unshift, and then historical days
+        // We want them chronological for the SVG (oldest to newest)
+        return foundDays.sort((a, b) => a.date.localeCompare(b.date));
+    }, [mealEntries, recipes, foodItems, calculateDailyNutrition, range, settings.incompleteDays]);
+
+    // Filter for average: Only historical complete days (exclude today as it's partial/ongoing)
     const completeDays = daysData.filter((d: any) => !d.isToday && !settings.incompleteDays?.[d.date]);
 
     // Safety check to avoid division by zero

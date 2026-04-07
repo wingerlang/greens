@@ -60,6 +60,8 @@ import { EmptyStateModule } from './omnibox/modules/EmptyStateModule.tsx';
 import { MixedSearchResultsModule } from './omnibox/modules/MixedSearchResultsModule.tsx';
 import { NavSuggestionsModule } from './omnibox/modules/NavSuggestionsModule.tsx';
 import { ActionSuggestionsModule } from './omnibox/modules/ActionSuggestionsModule.tsx';
+import { LockedRecipeModule } from './omnibox/modules/LockedRecipeModule.tsx';
+import { PurchaseModule } from './omnibox/modules/PurchaseModule.tsx';
 
 export interface OmniboxProps {
     isOpen: boolean;
@@ -96,7 +98,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         quickMeals,
         addQuickMeal,
         calculateRecipeNutrition,
-        savePlannedActivities
+        savePlannedActivities,
+        addPurchaseLog
     } = useData();
     const { logEvent, visitStats } = useAnalytics();
 
@@ -123,6 +126,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     const [lockedRecipe, setLockedRecipe] = useState<(Recipe & { totals?: { calories: number, protein: number, carbs: number, fat: number }, summary?: string }) | null>(null);
     const [draftQuickMealMealType, setDraftQuickMealMealType] = useState<MealType | null>(null);
     const [draftQuickMealDate, setDraftQuickMealDate] = useState<string | null>(null);
+    const [draftRecipeMealType, setDraftRecipeMealType] = useState<MealType | null>(null);
+    const [draftRecipeDate, setDraftRecipeDate] = useState<string | null>(null);
+    const [draftRecipeServings, setDraftRecipeServings] = useState<number>(1);
 
     // Measurement drafts
     const [draftMeasurementType, setDraftMeasurementType] = useState<BodyMeasurementType | null>(null);
@@ -131,6 +137,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Cooked toggle state for raw ingredients
     const [draftLogAsCooked, setDraftLogAsCooked] = useState(false);
+
+    // Purchase Specific State
+    const [lockedPurchaseFood, setLockedPurchaseFood] = useState<FoodItem | null>(null);
 
     // UX Friction Tracking: Timestamp when opened
     const [openTimestamp, setOpenTimestamp] = useState<number | null>(null);
@@ -162,15 +171,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             setDraftVitalAmount(intent.data.amount || null);
         }
         // Sync food drafts from intent - only sync quantity if explicitly parsed (not default 100g)
-        if (intent.type === 'food' && lockedFood) {
+        if (intent.type === 'food' && (lockedFood || lockedRecipe || lockedQuickMeal)) {
             const foodData = intent.data;
             const hasExplicitQuantity = !!(foodData.quantity &&
                 (foodData.quantity !== 100 || (foodData.unit && foodData.unit !== 'g')));
             if (hasExplicitQuantity && typeof foodData.quantity === 'number') {
                 setDraftFoodQuantity(foodData.quantity);
             }
-            if (foodData.mealType) setDraftFoodMealType(foodData.mealType);
+            if (foodData.mealType) setDraftFoodMealType(foodData.mealType as MealType);
             if (intent.date) setDraftFoodDate(intent.date);
+
+            // Sync servings if it's a recipe or quick meal
+            if (foodData.quantity && (foodData.unit === 'portion' || foodData.unit === 'st')) {
+                setDraftRecipeServings(foodData.quantity);
+            }
 
             // Auto-detect "kokt" in input text
             if (lockedFood && input.toLowerCase().includes('kokt')) {
@@ -181,14 +195,18 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             }
         }
 
+
         if (!isManual && intent.type === 'measurement') {
             if (intent.data.measurementType) setDraftMeasurementType(intent.data.measurementType);
             setDraftMeasurementValue(intent.data.value ?? null);
             setDraftMeasurementDate(intent.date || null);
         }
-    }, [intent, isManual, lockedFood, input]);
+    }, [intent, isManual, lockedFood, lockedRecipe, lockedQuickMeal, input]);
 
     // Reset drafts when input clears
+    // Note: Do NOT reset lockedFood/lockedQuickMeal/lockedRecipe here!
+    // The lock functions intentionally clear input after locking, so resetting
+    // locked states here would immediately undo the lock.
     useEffect(() => {
         if (!input) {
             setIsManual(false);
@@ -196,14 +214,6 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             setDraftDuration(null);
             setDraftIntensity(null);
             setDraftVitalAmount(null);
-            setLockedFood(null);
-            setDraftFoodQuantity(null);
-            setDraftFoodMealType(null);
-            setDraftFoodDate(null);
-            setLockedQuickMeal(null);
-            setLockedRecipe(null);
-            setDraftQuickMealMealType(null);
-            setDraftQuickMealDate(null);
             setDraftMeasurementType(null);
             setDraftMeasurementValue(null);
             setDraftMeasurementDate(null);
@@ -369,6 +379,27 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         return stats;
     }, [mealEntries]);
 
+    // Calculate recipe usage stats from meal entries
+    const recipeUsageStats = useMemo(() => {
+        const stats: Record<string, { count: number; lastUsed: string }> = {};
+
+        mealEntries.forEach(entry => {
+            entry.items.forEach(item => {
+                if (item.type === 'recipe') {
+                    if (!stats[item.referenceId]) {
+                        stats[item.referenceId] = { count: 0, lastUsed: entry.date };
+                    }
+                    stats[item.referenceId].count++;
+                    if (entry.date > stats[item.referenceId].lastUsed) {
+                        stats[item.referenceId].lastUsed = entry.date;
+                    }
+                }
+            });
+        });
+
+        return stats;
+    }, [mealEntries]);
+
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
         const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number }> = {};
@@ -497,11 +528,26 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             includeScore: true
         }).map(r => ({
             ...r.item,
-            type: 'food' as const,
+            itemType: 'food' as const,
             usageStats: foodUsageStats[r.item.id] || null,
             searchScore: r.score
         }));
     }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
+
+    const purchaseResults = useMemo(() => {
+        if (isSlashMode || lockedPurchaseFood) return [];
+        if (intent.type !== 'purchase') return [];
+        
+        return performSmartSearch(intent.data.query, foodItems, {
+            textFn: (item) => `${item.name} ${item.brand || ''}`,
+            limit: 5,
+            includeScore: true
+        }).map(r => ({
+            ...r.item,
+            itemType: 'purchase_match' as const,
+            searchScore: r.score
+        }));
+    }, [intent, foodItems, isSlashMode, lockedPurchaseFood]);
 
     // Recipe search results
     const recipeResults = useMemo(() => {
@@ -519,16 +565,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 ...r.item,
                 itemType: 'recipe' as const,
                 searchScore: r.score,
+                usageStats: recipeUsageStats[r.item.id] || null,
                 totals: {
-                    calories: nutrition.calories,
-                    protein: nutrition.protein,
-                    carbs: nutrition.carbs,
-                    fat: nutrition.fat
+                    calories: Math.round(nutrition.calories / r.item.servings),
+                    protein: Math.round((nutrition.protein / r.item.servings) * 10) / 10,
+                    carbs: Math.round((nutrition.carbs / r.item.servings) * 10) / 10,
+                    fat: Math.round((nutrition.fat / r.item.servings) * 10) / 10
                 },
-                summary: `${r.item.servings} portioner • ${r.item.ingredientsText?.split('\n').length || 0} ingredienser`
+                summary: `${r.item.servings} portioner • ~${Math.round(nutrition.calories / r.item.servings)} kcal per portion`
             };
         });
-    }, [input, recipes, foodItems, isSlashMode, intent]);
+    }, [input, recipes, foodItems, isSlashMode, intent, recipeUsageStats]);
 
     // User search results
     const userResults = useMemo(() => {
@@ -743,9 +790,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Combined selectable items for keyboard nav
     const selectableItems = useMemo(() => {
-        if (lockedFood || lockedQuickMeal) return []; // No selection when locked
+        if (lockedFood || lockedQuickMeal || lockedRecipe || lockedPurchaseFood) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
         if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
+
+        if (intent.type === 'purchase') return purchaseResults;
 
         const isMealKeyword = ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase());
         const is2ColMode = !input || isMealKeyword;
@@ -769,7 +818,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (is2ColMode && popularFoods.length > 0) items.push(...popularFoods.map(f => ({ itemType: 'popular' as const, ...f })));
 
         return items;
-    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood, frequentCombos]);
+    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, purchaseResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood, lockedQuickMeal, lockedRecipe, lockedPurchaseFood, frequentCombos, intent.type]);
 
 
     // Reset selection when results change or input changes
@@ -795,8 +844,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             inputRef.current.focus();
             setInput('');
             setOpenTimestamp(Date.now());
-        } else {
+        } else if (!isOpen) {
             setOpenTimestamp(null);
+            setLockedFood(null);
+            setLockedRecipe(null);
+            setLockedQuickMeal(null);
+            setLockedPurchaseFood(null);
+            setDraftFoodQuantity(null);
+            setDraftRecipeServings(1);
+            setDraftRecipeMealType(null);
+            setDraftRecipeDate(null);
+            setDraftQuickMealMealType(null);
+            setDraftQuickMealDate(null);
+            setShowFeedback(false);
+            setSelectedIndex(0);
         }
     }, [isOpen]);
 
@@ -944,21 +1005,41 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     const lockQuickMeal = (meal: any) => {
         if (meal.itemType === 'recipe') {
             setLockedRecipe(meal);
+            
+            // Check intent for quantity
+            if (intent.type === 'food' && intent.data.quantity) {
+                if (intent.data.unit === 'g' || intent.data.unit === 'kg') {
+                    const grams = intent.data.unit === 'kg' ? intent.data.quantity * 1000 : intent.data.quantity;
+                    if (meal.totalWeight > 0) {
+                        const totalS = meal.servings || 1;
+                        setDraftRecipeServings((grams / meal.totalWeight) * totalS);
+                    }
+                } else {
+                    // portion, st, or unknown unit
+                    setDraftRecipeServings(intent.data.quantity);
+                }
+            } else {
+                setDraftRecipeServings(1); // default
+            }
         } else {
             setLockedQuickMeal(meal);
         }
         setDraftQuickMealMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
         setDraftQuickMealDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
+        setInput(''); // Clear input to prevent accidental NLP redirects
     };
 
-    const handleLockedQuickMealAction = () => {
+
+    const handleLockedMealAction = () => {
         if (!lockedQuickMeal && !lockedRecipe) return;
 
-        const logDate = (lockedRecipe ? draftQuickMealDate : draftQuickMealDate) || intent.date || selectedDate || new Date().toISOString().split('T')[0];
+        const logDate = (lockedRecipe ? draftRecipeDate : draftQuickMealDate) || intent.date || selectedDate || new Date().toISOString().split('T')[0];
 
         // Determine meal type
         let mealType: MealType = 'snack';
-        if (draftQuickMealMealType) {
+        if (lockedRecipe && draftRecipeMealType) {
+            mealType = draftRecipeMealType;
+        } else if (lockedQuickMeal && draftQuickMealMealType) {
             mealType = draftQuickMealMealType;
         } else if (intent.type === 'food' && intent.data.mealType) {
             mealType = intent.data.mealType;
@@ -976,7 +1057,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 items: [{
                     type: 'recipe',
                     referenceId: lockedRecipe.id,
-                    servings: lockedRecipe.servings
+                    servings: draftRecipeServings
                 }],
                 title: lockedRecipe.name
             });
@@ -992,29 +1073,38 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             });
         }
 
-        // Analytics
+        // Analytics & Tracking
         const durationMs = openTimestamp ? Date.now() - openTimestamp : null;
-        logEvent('omnibox_log', lockedQuickMeal.name, 'food', {
-            type: 'quick_meal',
-            mealId: lockedQuickMeal.id,
-            itemCount: lockedQuickMeal.items.length,
+        const loggedName = lockedRecipe ? lockedRecipe.name : (lockedQuickMeal?.name || '');
+        const loggedId = lockedRecipe ? lockedRecipe.id : (lockedQuickMeal?.id || '');
+        const loggedType = lockedRecipe ? 'recipe' : 'quickMeal';
+        const loggedCalories = lockedRecipe 
+            ? Math.round((lockedRecipe.totals?.calories || 0) * draftRecipeServings)
+            : Math.round(lockedQuickMeal?.totals?.calories || 0);
+
+        logEvent('omnibox_log', loggedName, 'food', {
+            type: loggedType,
+            mealId: loggedId,
+            itemCount: lockedRecipe ? 1 : (lockedQuickMeal?.items.length || 0),
             logDate,
             mealType,
             durationMs
         });
 
         setLastLoggedItem({
-            name: lockedQuickMeal.name,
-            id: lockedQuickMeal.id,
-            calories: Math.round(lockedQuickMeal.totals?.calories || 0),
+            name: loggedName,
+            id: loggedId,
+            calories: loggedCalories,
             quantity: 1,
             date: logDate,
-            type: 'quickMeal'
+            type: loggedType === 'recipe' ? 'foodItem' as any : 'quickMeal' // Simplified for recent items tracking
         });
 
         setShowFeedback(true);
         setInput('');
         setLockedQuickMeal(null);
+        setLockedRecipe(null);
+        setDraftRecipeServings(1);
     };
 
     const handleSaveComboAsQuickMeal = (meal: any) => {
@@ -1078,6 +1168,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         setDraftFoodQuantity(initialQty);
         setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
         setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
+        setInput(''); // Clear input to prevent accidental NLP redirects
     };
 
     // Handle logging the locked food
@@ -1214,7 +1305,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
         // Handle locked quick meal
         if (lockedQuickMeal) {
-            handleLockedQuickMealAction();
+            handleLockedMealAction();
+            return;
+        }
+
+        // Handle locked recipe
+        if (lockedRecipe) {
+            handleLockedMealAction();
             return;
         }
 
@@ -1258,6 +1355,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             return;
         }
 
+        // Handle recipe selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'recipe') {
+            const selectedRecipe = selectableItems[selectedIndex];
+            lockQuickMeal(selectedRecipe);
+            return;
+        }
+
+        // Handle purchase match selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'purchase_match') {
+            const selectedFood = selectableItems[selectedIndex];
+            setLockedPurchaseFood(selectedFood);
+            return;
+        }
+
         // Handle food selection - lock it instead of immediately logging
         if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent' || selectableItems[selectedIndex]?.itemType === 'popular')) {
             const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number; count: number; lastUsed: string } };
@@ -1266,6 +1377,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 return;
             }
         }
+
 
 
         if (!input.trim()) return;
@@ -1312,7 +1424,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     const VitalIcon = vitalInfo?.icon || Droplets;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[20vh] bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+        <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[10vh] bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
             <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300" onClick={e => e.stopPropagation()}>
                 <div className="p-4 flex items-center gap-4 border-b border-white/5 relative">
                     <span className="text-xl">{isSlashMode ? '🧭' : '✨'}</span>
@@ -1439,7 +1551,25 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                             setDraftQuickMealDate={setDraftQuickMealDate}
                             setLockedQuickMeal={setLockedQuickMeal}
                             handleSaveComboAsQuickMeal={handleSaveComboAsQuickMeal}
-                            handleLockedQuickMealAction={handleLockedQuickMealAction}
+                            handleLockedQuickMealAction={handleLockedMealAction}
+                        />
+                    )}
+
+                    {/* LOCKED RECIPE MODULE - Shows when a recipe is selected */}
+                    {!isSlashMode && !lockedFood && !lockedQuickMeal && lockedRecipe && (
+                        <LockedRecipeModule
+                            lockedRecipe={{
+                                ...lockedRecipe,
+                                usageStats: recipeUsageStats[lockedRecipe.id] || null
+                            }}
+                            draftRecipeMealType={draftRecipeMealType}
+                            draftRecipeDate={draftRecipeDate}
+                            draftRecipeServings={draftRecipeServings}
+                            setDraftRecipeMealType={setDraftRecipeMealType}
+                            setDraftRecipeDate={setDraftRecipeDate}
+                            setDraftRecipeServings={setDraftRecipeServings}
+                            setLockedRecipe={setLockedRecipe}
+                            handleLockedRecipeAction={handleLockedMealAction}
                         />
                     )}
 
@@ -1494,6 +1624,27 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                         />
                     )}
 
+                    {/* PURCHASE MODULE */}
+                    {!isSlashMode && intent.type === 'purchase' && (
+                        <PurchaseModule
+                            intent={intent}
+                            lockedFood={lockedPurchaseFood}
+                            results={purchaseResults}
+                            selectedIndex={selectedIndex}
+                            selectableItems={selectableItems}
+                            onSelectFood={(f) => {
+                                setLockedPurchaseFood(f);
+                                inputRef.current?.focus();
+                            }}
+                            onLogPurchase={(data) => {
+                                addPurchaseLog(data);
+                                setInput('');
+                                setLockedPurchaseFood(null);
+                                onClose();
+                            }}
+                        />
+                    )}
+
                     {/* WEIGHT MODULE */}
                     {!isSlashMode && !lockedFood && intent.type === 'weight' && (
                         <WeightModule
@@ -1516,12 +1667,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                     )}
 
                     {/* Mixed Search Results */}
-                    {!isSlashMode && !lockedFood && !lockedQuickMeal && (foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0) && (
+                    {!isSlashMode && !lockedFood && !lockedQuickMeal && !lockedRecipe && (foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0 || recipeResults.length > 0) && (
                         <MixedSearchResultsModule
                             intent={intent}
                             foodResults={foodResults}
                             standardQuickMeals={standardQuickMeals}
                             savedEstimates={savedEstimates}
+                            recipeResults={recipeResults}
                             selectableItems={selectableItems}
                             selectedIndex={selectedIndex}
                             logFoodItem={logFoodItem}
@@ -1537,7 +1689,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                     )}
 
                     {/* Empty state or Meal Keyword - show recents + popular/specific meal */}
-                    {(!input || ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase())) && (
+                    {!lockedFood && !lockedQuickMeal && !lockedRecipe && (!input || ['frukost', 'lunch', 'middag', 'mellanmål', 'snack'].includes(input.trim().toLowerCase())) && (
                         <EmptyStateModule
                             input={input}
                             recentFoods={recentFoods}

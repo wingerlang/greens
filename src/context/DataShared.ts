@@ -41,7 +41,8 @@ import {
     type ExerciseDefinition,
     type PermissionConfig,
     type Tour,
-    type TourFormData
+    type TourFormData,
+    type PurchaseLog
 } from '../models/types.ts';
 
 export interface DataContextType {
@@ -225,6 +226,10 @@ export interface DataContextType {
     addTour: (data: TourFormData) => Tour;
     updateTour: (id: string, updates: Partial<Tour>) => void;
     deleteTour: (id: string) => void;
+
+    // Purchase Logs
+    purchaseLogs: PurchaseLog[];
+    addPurchaseLog: (data: Omit<PurchaseLog, 'id' | 'userId'>) => PurchaseLog;
 }
 
 export const DataContext = createContext<DataContextType | null>(null);

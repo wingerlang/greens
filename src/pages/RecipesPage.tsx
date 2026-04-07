@@ -5,6 +5,7 @@ import { useCooking } from '../context/CookingModeProvider.tsx';
 import { type FoodItem, type Recipe, type MealType, type PriceCategory, type Season, MEAL_TYPE_LABELS } from '../models/types.ts';
 import { calculateRecipeEstimate, getIngredientSuggestions } from '../utils/ingredientParser.ts';
 import './RecipesPage.css';
+import { RecipeNutritionPreview } from '../components/shared/RecipeNutritionPreview.tsx';
 
 interface RecipeFormState {
     name: string;
@@ -149,17 +150,36 @@ export function RecipesPage() {
         return () => clearTimeout(timer);
     }, [formData.ingredientsText]);
 
-    // Live nutrition estimate
     const liveEstimate = useMemo(() => {
-        return calculateRecipeEstimate(debouncedIngredients, foodItems);
-    }, [debouncedIngredients, foodItems]);
+        try {
+            if (!debouncedIngredients.trim()) {
+                return { 
+                    calories: 0, protein: 0, carbs: 0, fat: 0, matchedCount: 0, totalCount: 0, totalWeight: 0, price: 0, co2: 0,
+                    matchedIngredients: [], activeTime: 0, passiveTime: 0 
+                };
+            }
+            return calculateRecipeEstimate(debouncedIngredients, foodItems, {}, formData.instructionsText, formData.name);
+        } catch (error) {
+            console.error("Failed to calculate recipe estimate:", error);
+            return { 
+                calories: 0, protein: 0, carbs: 0, fat: 0, matchedCount: 0, totalCount: 0, totalWeight: 0, price: 0, co2: 0,
+                matchedIngredients: [], activeTime: 0, passiveTime: 0 
+            };
+        }
+    }, [debouncedIngredients, foodItems, formData.instructionsText, formData.name]);
 
-    const perServing = useMemo(() => ({
-        calories: Math.round(liveEstimate.calories / formData.servings),
-        protein: Math.round(liveEstimate.protein / formData.servings),
-        price: Math.round(liveEstimate.price / formData.servings),
-        co2: Math.round((liveEstimate.co2 / formData.servings) * 100) / 100,
-    }), [liveEstimate, formData.servings]);
+    // Auto-update time based on instructions
+    useEffect(() => {
+        if (liveEstimate.activeTime > 0 || liveEstimate.passiveTime > 0) {
+            setFormData(prev => ({
+                ...prev,
+                prepTime: liveEstimate.activeTime,
+                cookTime: liveEstimate.passiveTime
+            }));
+        }
+    }, [liveEstimate.activeTime, liveEstimate.passiveTime]);
+
+
 
     const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
@@ -362,10 +382,19 @@ export function RecipesPage() {
 
                             <div className="form-row form-row-4">
                                 <div className="form-group">
-                                    <label>TID (MIN)</label>
+                                    <label>AKTIV TID (MIN)</label>
                                     <input
                                         type="number"
-                                        value={formData.prepTime + formData.cookTime}
+                                        value={formData.prepTime}
+                                        onChange={(e) => setFormData({ ...formData, prepTime: Number(e.target.value) })}
+                                        min="0"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>PASSIV TID (MIN)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.cookTime}
                                         onChange={(e) => setFormData({ ...formData, cookTime: Number(e.target.value) })}
                                         min="0"
                                     />
@@ -442,11 +471,78 @@ Sesamolja
                                     )}
                                 </div>
                                 <p className="form-hint">
-                                    {isCalculating ? '⏳ Beräknar...' : `${liveEstimate.matchedCount}/${liveEstimate.totalCount} matchade`} •
-                                    {liveEstimate.totalWeight}g totalvikt •
-                                    ~{perServing.calories} kcal/portion
+                                    {isCalculating ? '⏳ Beräknar...' : `${liveEstimate.matchedCount}/${liveEstimate.totalCount} matchade`}
                                 </p>
+
+                                {/* Matched Ingredients Overview */}
+                                {liveEstimate.matchedIngredients.length > 0 && (
+                                    <div className="matched-ingredients-overview">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Matchade Råvaror</label>
+                                        <div className="matched-list">
+                                            {liveEstimate.matchedIngredients.map((mi, idx) => (
+                                                <div key={`${mi.name}-${idx}`} className="matched-item">
+                                                    <div className="matched-item-info">
+                                                        <span className={`status-dot ${mi.foodItem ? 'matched' : 'unmatched'}`}></span>
+                                                        <span className="mi-name">{mi.originalText}</span>
+                                                        {mi.foodItem && (
+                                                            <div className="mi-details">
+                                                                <span className="mi-food-name">→ {mi.foodItem.name}</span>
+                                                                {mi.foodItem.aliases && mi.foodItem.aliases.length > 0 && (
+                                                                    <button 
+                                                                        type="button"
+                                                                        className="alias-btn"
+                                                                        title="Ersätt med alias"
+                                                                        onClick={() => {
+                                                                            const alias = mi.foodItem!.aliases![0];
+                                                                            const updated = formData.ingredientsText.replace(mi.name, alias);
+                                                                            setFormData({ ...formData, ingredientsText: updated });
+                                                                        }}
+                                                                    >
+                                                                        🏷️ Använd "{mi.foodItem.aliases[0]}"
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {mi.foodItem && (
+                                                        <div className="mi-actions">
+                                                            <span className="mi-price">{mi.price} kr</span>
+                                                            <a 
+                                                                href={`/database?id=${mi.foodItem.id}`}
+                                                                className="mi-edit-link"
+                                                                target="_blank"
+                                                                onClick={(e) => {
+                                                                    // If we are in the same app, maybe we want to do something smarter
+                                                                    // but for now, simple link works
+                                                                }}
+                                                            >
+                                                                ⚙️
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Shared Nutrition Preview Component */}
+                            <RecipeNutritionPreview
+                                servings={formData.servings}
+                                totalCalories={liveEstimate.calories}
+                                totalProtein={liveEstimate.protein}
+                                totalCarbs={liveEstimate.carbs}
+                                totalFat={liveEstimate.fat}
+                                totalWeight={liveEstimate.totalWeight}
+                                recipeServings={formData.servings}
+                                onViewModeChange={(mode) => {
+                                    if (mode === 'recipe' || mode === 'portion') {
+                                        const form = document.querySelector('form');
+                                        if (form) form.requestSubmit();
+                                    }
+                                }}
+                            />
 
                             <div className="form-group">
                                 <label>INSTRUKTIONER (EN PER RAD)</label>

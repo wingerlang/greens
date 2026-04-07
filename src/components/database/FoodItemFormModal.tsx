@@ -133,6 +133,9 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                 seasons: editingItem.seasons || [],
                 ingredients: editingItem.ingredients || '',
                 aliases: editingItem.aliases || [],
+                lastPurchasedPrice: editingItem.lastPurchasedPrice,
+                lastPurchasedDate: editingItem.lastPurchasedDate,
+                commonPackageSizes: editingItem.commonPackageSizes || [],
                 extendedDetails: {
                     ...editingItem.extendedDetails,
                     caffeine: editingItem.extendedDetails?.caffeine || 0,
@@ -698,31 +701,98 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                                 )}
                             </div>
 
-                            {/* Environmental & Price (Advanced Only) */}
-                            {showAdvanced && (
+                            {/* Environmental & Price */}
+                            <div className="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/50 space-y-4">
+                                <h3 className="text-xs font-bold text-blue-400 flex items-center gap-2">
+                                    <span>💰</span> Pris & Förpackning
+                                </h3>
+                                
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">CO2 Avtryck</label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={formData.co2PerUnit || 0}
-                                            onChange={v => setFormData({ ...formData, co2PerUnit: Number(v.target.value) })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
-                                        />
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Inköpspris</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="t.ex. 25.90"
+                                                onChange={(e) => {
+                                                    const price = Number(e.target.value);
+                                                    const weight = formData.packageWeight || 0;
+                                                    if (price > 0 && weight > 0) {
+                                                        const pUnit = (price / (weight / 1000));
+                                                        setFormData(prev => ({ ...prev, pricePerUnit: Math.round(pUnit * 10) / 10 }));
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">KR</span>
+                                        </div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Pris per enhet</label>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Förpackning</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={formData.packageWeight || ''}
+                                                onChange={(e) => {
+                                                    const weight = Number(e.target.value);
+                                                    setFormData(prev => ({ ...prev, packageWeight: weight }));
+                                                }}
+                                                placeholder="t.ex. 400"
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">{formData.unit}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Andra vanliga storlekar (t.ex. 400, 800)</label>
+                                    <input
+                                        type="text"
+                                        value={(formData.commonPackageSizes || []).join(', ')}
+                                        onChange={(e) => {
+                                            const sizes = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                                            setFormData(prev => ({ ...prev, commonPackageSizes: sizes }));
+                                        }}
+                                        placeholder="t.ex. 450, 900"
+                                        className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2 text-white font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Målpris (Jmf-pris)</label>
+                                    <div className="relative">
                                         <input
                                             type="number"
                                             step="0.1"
                                             value={formData.pricePerUnit || 0}
                                             onChange={v => setFormData({ ...formData, pricePerUnit: Number(v.target.value) })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                            className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-blue-400 font-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 pr-16"
                                         />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">KR/KG</span>
                                     </div>
+                                    <p className="text-[9px] text-slate-500 mt-2 italic px-1">
+                                        Detta pris används för att beräkna kostnad för recept och snacks. {formData.lastPurchasedPrice && `Senast loggade pris: ${formData.lastPurchasedPrice}kr (${formData.lastPurchasedDate})`}
+                                    </p>
                                 </div>
-                            )}
+
+                                {showAdvanced && (
+                                    <div className="pt-2 border-t border-slate-800/50">
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">CO2 Avtryck</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={formData.co2PerUnit || 0}
+                                                onChange={v => setFormData({ ...formData, co2PerUnit: Number(v.target.value) })}
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">KG CO2/KG</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Seasons (Advanced Only) */}
                             {showAdvanced && (

@@ -53,6 +53,9 @@ export interface RecipeEstimate {
     isCompleteProtein: boolean;
     tags: string[];           // e.g. ['seasonal-powerhouse', 'budget-win']
     synergies: SynergyResult[];
+    matchedIngredients: MatchedIngredient[];
+    activeTime: number; // minutes
+    passiveTime: number; // minutes
 }
 
 // ============================================
@@ -230,9 +233,12 @@ export function calculateIngredientNutrition(
 export function calculateRecipeEstimate(
     ingredientsText: string,
     foodItems: FoodItem[],
-    swaps?: Record<string, string>
+    swaps?: Record<string, string>,
+    instructionsText?: string,
+    recipeName?: string
 ): RecipeEstimate {
     const parsed = parseIngredients(ingredientsText);
+    const matchedIngredients: MatchedIngredient[] = [];
 
     let totalCalories = 0;
     let totalProtein = 0;
@@ -295,6 +301,18 @@ export function calculateRecipeEstimate(
             if (foodItem.seasons) {
                 foodItem.seasons.forEach(s => seasons.add(s));
             }
+
+            matchedIngredients.push({
+                ...ingredient,
+                foodItem,
+                nutrition: nutrition,
+                price,
+                co2
+            });
+        } else {
+            matchedIngredients.push({
+                ...ingredient
+            });
         }
 
         // Always contribute to total weight if we have a quantity and unit
@@ -418,9 +436,53 @@ export function calculateRecipeEstimate(
         proteinCategories: categories,
         isCompleteProtein: isComplete,
         tags,
-        synergies
+        synergies,
+        matchedIngredients,
+        ...parseRecipeTimes(recipeName || '', instructionsText || '')
     };
 }
+
+/**
+ * Smart Time Parser
+ * Extracts active and passive time from recipe name and instructions
+ */
+export function parseRecipeTimes(name: string, instructions: string): { activeTime: number; passiveTime: number } {
+    let activeTime = 0;
+    let passiveTime = 0;
+
+    const allText = (name + '\n' + instructions).toLowerCase();
+    
+    // Active time patterns: "15 min prep", "hacka", "stek", "vispa"
+    // Passive time patterns: "30 min i ugn", "koka 10 min", "dra åt sidan", "låt stå"
+
+    // Look for duration patterns: "X min", "X h", "X timmar"
+    const durationRegex = /(\d+)\s*(min|h|tim)/gi;
+    let match;
+    
+    const lines = allText.split('\n');
+    for (const line of lines) {
+        let lineMatch;
+        while ((lineMatch = durationRegex.exec(line)) !== null) {
+            const val = parseInt(lineMatch[1]);
+            const unit = lineMatch[2];
+            let mins = val;
+            if (unit.startsWith('h') || unit.startsWith('tim')) mins *= 60;
+
+            // Context check
+            if (line.includes('ugn') || line.includes('låt stå') || line.includes('koka') || line.includes('puttra')) {
+                passiveTime += mins;
+            } else {
+                activeTime += mins;
+            }
+        }
+    }
+
+    // Default if nothing found but instructions exist
+    if (activeTime === 0 && instructions.length > 50) activeTime = 15;
+
+    return { activeTime, passiveTime };
+}
+
 
 /**
  * Calculate calories for a weighed portion

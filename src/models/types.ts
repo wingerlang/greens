@@ -321,6 +321,7 @@ export interface FoodItem {
     containsGluten?: boolean;   // Whether the item contains gluten
     isCooked?: boolean;         // Whether this is the cooked version (affects kcal)
     packageWeight?: number;     // Total weight of a full package (e.g. 275g)
+    commonPackageSizes?: number[]; // Common sizes for quick select (e.g. [400, 800])
     defaultPortionGrams?: number; // Default portion size in grams (e.g., banana = 120g)
     gramsPerDl?: number;        // Weight in grams for 1 dl
     yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
@@ -350,6 +351,24 @@ export interface FoodItem {
     updatedAt: string;
     createdBy?: string; // User ID of the creator
     deletedAt?: string;                       // For 3-month quarantine (Soft Delete)
+    lastPurchasedPrice?: number;              // Latest recorded price
+    lastPurchasedDate?: string;                // Latest recorded purchase date
+}
+
+/**
+ * PurchaseLog - Records a purchase of a food item
+ */
+export interface PurchaseLog {
+    id: string;
+    foodItemId: string;
+    date: string;
+    price: number;           // Total price paid
+    quantity: number;        // Number of units/packages
+    packageSize: number;     // Size of one package (e.g. 400 for 400g)
+    unit: Unit;              // Unit of the package size
+    store?: string;
+    userId?: string;
+    note?: string;
 }
 
 export interface ExtendedFoodDetails {
@@ -731,6 +750,7 @@ export interface ExerciseEntry {
 
     hyroxStats?: HyroxActivityStats;
     extractedFromId?: string;
+    raceDetails?: RaceDetails;
 
     // Performance Data
     splits?: Array<{
@@ -833,6 +853,7 @@ export interface StravaActivity {
     kudos_count: number;
     achievement_count: number;
     excludeFromStats?: boolean;
+    raceDetails?: RaceDetails;
 }
 
 // ============================================
@@ -1219,6 +1240,7 @@ export interface ActivityPlanSection {
         mainSet: { reps: number; distKm: number; pace: string; restMin: number }[];
         cooldownKm: number;
     };
+    raceDetails?: RaceDetails;
 }
 
 /**
@@ -1281,6 +1303,7 @@ export interface ActivityPerformanceSection {
     bestEfforts?: BestEffort[];
     prCount?: number;
     isHiddenInCalendar?: boolean;
+    raceDetails?: RaceDetails;
 }
 
 /**
@@ -1348,6 +1371,7 @@ export interface UniversalActivity {
 
     createdAt: string;
     updatedAt: string;
+    raceDetails?: RaceDetails;
 }
 
 // ============================================
@@ -1454,6 +1478,8 @@ export interface RaceDetails {
     elevationGain?: number; // Total elevation gain in meters
     seriesName?: string;
     cupName?: string;
+    placement?: number;
+    totalParticipants?: number;
     goals?: {
         a?: string; // Dream goal (e.g., "Sub 3:00")
         b?: string; // Realistic goal (e.g., "Sub 3:15")
@@ -1616,7 +1642,8 @@ export interface AppData {
 
     // Quick Meals & Aliases
     quickMeals?: QuickMeal[];
-    foodAliases?: Record<string, string>; // foodId -> alias
+    foodAliases: Record<string, string>; // foodId -> alias
+    purchaseLogs?: PurchaseLog[];
 
     exercises?: ExerciseDefinition[]; // Central exercise database
 
@@ -1651,6 +1678,9 @@ export type DatabaseEntityType =
     | 'period'
     | 'body_measurement'
     | 'tour'
+    | 'competition'
+    | 'planned_activity'
+    | 'purchase_log'
     | 'other';
 
 export interface DatabaseAction {

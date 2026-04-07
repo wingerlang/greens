@@ -17,6 +17,7 @@ import {
     type DatabaseActionType,
     type DatabaseEntityType,
     type DailyVitals,
+    type PurchaseLog,
     generateId,
     getWeekStartDate,
     getWeekdayFromDate
@@ -49,6 +50,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     const [pantryQuantities, setPantryQuantitiesState] = useState<Record<string, { quantity: number; unit: string }>>({});
     const [quickMeals, setQuickMeals] = useState<QuickMeal[]>([]);
     const [foodAliases, setFoodAliases] = useState<Record<string, string>>({});
+    const [purchaseLogs, setPurchaseLogs] = useState<PurchaseLog[]>([]);
 
     // ============================================
     // Pantry CRUD
@@ -556,6 +558,50 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         });
     }, []);
 
+    const addPurchaseLog = useCallback((data: Omit<PurchaseLog, 'id' | 'userId'>) => {
+        const id = generateId();
+        const newLog: PurchaseLog = {
+            ...data,
+            id,
+            userId: currentUser?.id
+        };
+
+        setPurchaseLogs(prev => [newLog, ...prev]);
+
+        // Auto-update FoodItem price per unit (per kg/l)
+        const food = foodItems.find(f => f.id === data.foodItemId);
+        if (food) {
+            let pricePerUnit = 0;
+            const totalWeight = data.quantity * data.packageSize;
+            
+            if (data.unit === 'g' || data.unit === 'ml') {
+                // Calculation for per kg/l
+                pricePerUnit = (data.price / (totalWeight / 1000));
+            } else if (data.unit === 'kg' || data.unit === 'l') {
+                pricePerUnit = data.price / totalWeight;
+            } else {
+                // pcs or other, assume price per unit
+                pricePerUnit = data.price / (data.quantity);
+            }
+
+            if (pricePerUnit > 0) {
+                updateFoodItem(food.id, { 
+                    pricePerUnit: Math.round(pricePerUnit * 10) / 10,
+                    lastPurchasedPrice: data.price,
+                    lastPurchasedDate: data.date,
+                    packageWeight: food.packageWeight || data.packageSize
+                });
+            }
+        }
+
+        skipAutoSave.current = true;
+        storageService.savePurchaseLog?.(newLog).catch(e => console.error("Failed to save purchase log:", e));
+        
+        logAction('CREATE', 'purchase_log', id, food?.name || 'Okänd');
+        
+        return newLog;
+    }, [currentUser, foodItems, updateFoodItem, logAction, skipAutoSave]);
+
     return {
         // State
         foodItems,
@@ -602,6 +648,9 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         addQuickMeal,
         deleteQuickMeal,
         updateQuickMeal,
-        updateFoodAlias
+        updateFoodAlias,
+        purchaseLogs,
+        setPurchaseLogs,
+        addPurchaseLog
     };
 }

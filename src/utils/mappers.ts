@@ -52,6 +52,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         source: a.performance.source?.source || 'unknown',
         splits: a.performance.splits,
         laps: a.performance.laps,
+        raceDetails: a.raceDetails || a.performance.raceDetails || a.plan?.raceDetails,
     };
 }
 
@@ -73,5 +74,6 @@ export function mapUniversalToPlanned(u: UniversalActivity): PlannedActivity {
         status: u.status as PlannedActivity['status'],
         actualDistance: u.performance?.distanceKm,
         actualTimeSeconds: u.performance?.durationMinutes ? u.performance.durationMinutes * 60 : undefined,
+        raceDetails: u.raceDetails || u.plan?.raceDetails || u.performance?.raceDetails,
     };
 }

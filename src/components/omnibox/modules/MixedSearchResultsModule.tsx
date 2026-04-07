@@ -7,6 +7,7 @@ interface MixedSearchResultsModuleProps {
     foodResults: any[];
     standardQuickMeals: any[];
     savedEstimates: any[];
+    recipeResults: any[];
     selectableItems: any[];
     selectedIndex: number;
     logFoodItem: (item: any, quantity: number) => void;
@@ -193,7 +194,15 @@ export const MixedSearchResultsModule: React.FC<MixedSearchResultsModuleProps> =
                                             {Math.round((item as any).totals.calories)} kcal/p
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-slate-500 truncate">{(item as any).summary}</div>
+                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                        <span className="truncate">{(item as any).summary}</span>
+                                        {item.usageStats && (
+                                            <>
+                                                <span className="text-slate-600">•</span>
+                                                <span className="text-indigo-400/70">{item.usageStats.count}x</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <div className="text-[10px] uppercase font-bold text-indigo-400/80 bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/30 ml-2 flex-shrink-0">

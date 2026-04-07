@@ -72,10 +72,10 @@ const EMPTY_FORM: FoodItemFormData = {
 };
 
 type ViewMode = 'grid' | 'list';
-type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats' | 'brands';
+type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats' | 'brands' | 'purchases';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions, updateQuickMeal } = useData();
+    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions, updateQuickMeal, purchaseLogs } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const hasAutoOpened = useRef(false);
 
@@ -629,6 +629,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             >
                                 🏷️ Märken
                             </button>
+                            <button
+                                className={`px-4 py-2 rounded-lg transition-all text-sm font-bold ${activeTab === 'purchases' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                                onClick={() => setActiveTab('purchases')}
+                            >
+                                🛒 Inköp
+                            </button>
                         </div>
                         <div className="w-[1px] bg-slate-800 mx-2" />
                         <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
@@ -913,6 +919,82 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {activeTab === 'purchases' && (
+                <motion.div
+                    key="purchases"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="space-y-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold flex items-center gap-3">
+                            🛒 Inköpshistorik
+                            <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono uppercase tracking-widest">{purchaseLogs.length} poster</span>
+                        </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {purchaseLogs.sort((a, b) => b.date.localeCompare(a.date)).map(log => {
+                            const food = foodItems.find(f => f.id === log.foodItemId);
+                            const totalQty = log.quantity * log.packageSize;
+                            const unitPrice = log.price / totalQty;
+                            const displayUnitPrice = log.unit === 'g' || log.unit === 'ml' 
+                                ? `${(unitPrice * 1000).toFixed(2)} kr/kg`
+                                : `${unitPrice.toFixed(2)} kr/${log.unit}`;
+
+                            return (
+                                <div key={log.id} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 hover:border-blue-500/30 transition-all group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl">
+                                                {food ? (food.category === 'protein' ? '🥩' : food.category === 'vegetables' ? '🥦' : '🥬') : '📦'}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-white group-hover:text-blue-400 transition-colors">
+                                                    {food?.name || 'Okänd råvara'}
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 uppercase tracking-widest">
+                                                    {log.date} {log.store && `• ${log.store}`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-lg font-black text-white">{log.price} kr</div>
+                                            <div className="text-[10px] text-blue-400 font-bold uppercase tracking-tighter">{displayUnitPrice}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between pt-3 border-top border-white/5 text-xs text-slate-400">
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-300">
+                                                {log.quantity}st à {log.packageSize}{log.unit}
+                                            </span>
+                                        </div>
+                                        {food && (
+                                            <button 
+                                                onClick={() => setDetailItem(food)}
+                                                className="text-slate-500 hover:text-white transition-colors"
+                                            >
+                                                Visa råvara →
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {purchaseLogs.length === 0 && (
+                            <div className="col-span-full py-12 text-center bg-slate-900/30 rounded-3xl border border-dashed border-white/5">
+                                <div className="text-4xl mb-4">🛒</div>
+                                <h3 className="text-white font-bold mb-1">Inga sparade inköp</h3>
+                                <p className="text-slate-500 text-sm">Logga ditt första köp via Omniboxen genom att skriva t.ex. "köp tofu 25kr"</p>
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
             )}
 
             {activeTab === 'stats' && databaseStatistics ? (

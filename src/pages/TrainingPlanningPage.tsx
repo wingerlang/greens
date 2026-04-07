@@ -714,18 +714,40 @@ export function TrainingPlanningPage() {
                                     <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
                                     <div className="flex items-center gap-2">
                                         {warning && (
-                                            <Link to="/tools/interference" className="pointer-events-auto" title={`${warning.message}: ${warning.suggestion}`}>
-                                                <AlertTriangle size={14} className="text-amber-500 animate-pulse hover:scale-110 transition-transform" />
-                                            </Link>
+                                            <div className="relative group/tooltip">
+                                                <Link to="/tools/interference" className="pointer-events-auto">
+                                                    <AlertTriangle size={14} className="text-amber-500 animate-pulse hover:scale-110 transition-transform" />
+                                                </Link>
+                                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[100] border border-white/10">
+                                                    <div className="font-black text-amber-400 uppercase mb-1">{warning.message}</div>
+                                                    <div className="opacity-80 leading-tight">{warning.suggestion}</div>
+                                                    <div className="absolute top-full right-3 border-8 border-transparent border-t-slate-800"></div>
+                                                </div>
+                                            </div>
                                         )}
                                         <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
                                             {day.date.split('-')[2]}
                                         </span>
                                     </div>
                                 </div>
-                                <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
-                                    {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
-                                    {dayTime > 0 && <span>⏱️ {formatDurationHHMM(dayTime)}</span>}
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
+                                        {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
+                                        {dayTime > 0 && <span>⏱️ {formatDurationHHMM(dayTime)}</span>}
+                                    </div>
+                                    <div className="text-[9px] font-black text-slate-400/70">
+                                        {allEvents.length > 0 && (
+                                            <span>
+                                                {formatDurationHHMM(allEvents.reduce((sum, e) => {
+                                                    const d = e.data as any;
+                                                    return sum + (d.durationMinutes || 0);
+                                                }, 0))} | {allEvents.filter(e => {
+                                                    const d = e.data as any;
+                                                    return d.type !== 'REST' && d.category !== 'REST';
+                                                }).length} pass
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -806,13 +828,13 @@ export function TrainingPlanningPage() {
                                                         <span className="leading-tight">
                                                             {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
                                                                 act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : '⚡ ') + act.title :
-                                                                        (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : (act.title?.toLowerCase().includes('innebandy') ? '🏒 ' : '⚡ ')) + act.title :
+                                                                        ((act.type === 'RUN' ? '🏃 ' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪 ' : '📅 '))) + act.title}
                                                         </span>
                                                     </span>
 
                                                     {/* Actions Overlay: Visible on Hover */}
-                                                                 <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
+                                                                 <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover/card:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
                                                                     {allEvents.length > 1 && (
                                                                         <>
                                                                             <button
@@ -910,6 +932,12 @@ export function TrainingPlanningPage() {
                                                                     <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
                                                                         <Activity size={10} />
                                                                         {Number(act.estimatedDistance).toFixed(1)} km
+                                                                    </div>
+                                                                )}
+                                                                {act.durationMinutes !== undefined && act.durationMinutes > 0 && (
+                                                                    <div className="text-[10px] font-bold flex items-center gap-1 text-slate-500">
+                                                                        <Clock size={10} />
+                                                                        {formatDurationHHMM(act.durationMinutes)}
                                                                     </div>
                                                                 )}
                                                                 {act.tonnage && act.tonnage > 0 && (
