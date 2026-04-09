@@ -4,6 +4,11 @@ import { parseNutritionText } from "../../utils/nutrition/index.ts";
 export async function handleUploadRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
 
+    // Check for Deno Deploy environment (Read-only FS)
+    if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
+        return new Response(JSON.stringify({ error: "File uploads not supported in Deno Deploy environment" }), { status: 501, headers });
+    }
+
     // POST /api/upload-temp
     if (url.pathname === "/api/upload-temp" && method === "POST") {
         try {

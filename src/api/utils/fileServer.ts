@@ -6,6 +6,7 @@ import { lookup } from "mime-types";
 interface ServeDirOptions {
     fsRoot?: string;
     urlRoot?: string;
+    quiet?: boolean;
 }
 
 export async function serveDir(req: Request, options: ServeDirOptions = {}): Promise<Response> {
@@ -13,7 +14,8 @@ export async function serveDir(req: Request, options: ServeDirOptions = {}): Pro
     if (typeof Deno !== "undefined" && typeof (Deno as any).serve === "function" && !(globalThis as any).IS_NODE_COMPAT_MODE) {
         // Dynamic import for Deno to avoid static analysis errors in Node
         try {
-            const mod = await import("https://deno.land/std@0.208.0/http/file_server.ts");
+            // Use the project's standard library version defined in deno.json
+            const mod = await import("@std/http/file-server");
             return mod.serveDir(req, options);
         } catch (e) {
             console.error("Failed to load Deno file_server:", e);
