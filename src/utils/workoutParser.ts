@@ -213,12 +213,17 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         // Match: <reps>x (<work_dist> / <recovery_dist>)
         // Also match variants: "5x (2000m / 1000m jogg)", "5x(2k/1k)", "5 x (2000 / 1000)"
         const parenMatch = line.match(/(\d+)\s*x\s*\(\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*[\/\|\+]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?:\s+[a-zåäö]+)?\s*\)/);
-        if (parenMatch) {
-            const reps = parseInt(parenMatch[1], 10);
-            let workDist = parseFloat(parenMatch[2].replace(',', '.'));
-            const workUnit = parenMatch[3] || 'm';
-            let recoveryDist = parseFloat(parenMatch[4].replace(',', '.'));
-            const recoveryUnit = parenMatch[5] || 'm';
+        
+        // Match: <reps>x<work>[/|+]<recovery>  (e.g. 10x400/200, 5x1k+500m)
+        const looseMatch = line.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?\s*[\/\|\+]\s*(\d+(?:[.,]\d+)?)\s*(k(?:m)?|m)?(?!\w)/);
+
+        if (parenMatch || looseMatch) {
+            const m = parenMatch || looseMatch!;
+            const reps = parseInt(m[1], 10);
+            let workDist = parseFloat(m[2].replace(',', '.'));
+            const workUnit = m[3] || 'm';
+            let recoveryDist = parseFloat(m[4].replace(',', '.'));
+            const recoveryUnit = m[5] || 'm';
 
             // Convert to meters
             if (workUnit.startsWith('k')) workDist *= 1000;

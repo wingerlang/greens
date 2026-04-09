@@ -18,6 +18,8 @@ export interface DashboardStats {
     count: number;
     chartData: { date: string, count: number, projected: number }[];
     goldCount: number;
+    silverCount: number;
+    bronzeCount: number;
     podiumCount: number;
     top10Count: number;
     avgPercent: number;

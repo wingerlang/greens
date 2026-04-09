@@ -3,7 +3,8 @@ import { ExerciseEntry, UniversalActivity, ExerciseSubType } from '../../models/
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { formatSwedishDate, formatDuration } from '../../utils/dateUtils.ts';
-import { AlertCircle, CheckCircle2, Trash2, Zap, ArrowRight, Activity, ShieldCheck, Info, RefreshCcw, Clock, Target } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Trash2, Zap, ArrowRight, Activity, ShieldCheck, Info, RefreshCcw, Clock, Target, BarChart3, Medal } from 'lucide-react';
+import { PrepAnalysisModal } from '../../components/training/PrepAnalysisModal.tsx';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 
 interface Anomaly {
@@ -27,9 +28,10 @@ interface DataAnalysisViewProps {
 
 export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntries, universalActivities, setSelectedActivityId }) => {
     const { token } = useAuth();
-    const { updateExercise, deleteExercise } = useData();
+    const { updateExercise, deleteExercise, plannedActivities } = useData();
     const [processedIds, setProcessedIds] = useState<Set<string>>(new Set());
     const [isFixing, setIsFixing] = useState<string | null>(null);
+    const [analyzingRace, setAnalyzingRace] = useState<PlannedActivity | null>(null);
 
     // Detection Engine
     const anomalies = useMemo(() => {
@@ -552,6 +554,47 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
                 )
             }
 
+            {/* Race Analysis & Readiness */}
+            {plannedActivities.length > 0 && (
+                <div className="space-y-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2 px-2">
+                        <Medal size={16} className="text-amber-500" />
+                        Tävlingsanalys & Readiness
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {plannedActivities
+                            .filter(r => new Date(r.date) >= new Date())
+                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                            .slice(0, 3)
+                            .map(race => (
+                                <div key={race.id} className="bg-slate-900 border border-white/5 rounded-3xl p-5 hover:border-amber-500/20 transition-all group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="space-y-1">
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{formatSwedishDate(race.date)}</div>
+                                            <h4 className="text-base font-black text-white italic group-hover:text-amber-400 transition-colors leading-tight">
+                                                {race.title}
+                                            </h4>
+                                        </div>
+                                        <div className="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20 text-amber-500">
+                                            <Medal size={16} />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-500 mb-4">
+                                        <span>{race.estimatedDistance} KM</span>
+                                        <span>{Math.ceil((new Date(race.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} Dagar kvar</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setAnalyzingRace(race)}
+                                        className="w-full py-2.5 bg-white/5 hover:bg-amber-500 text-slate-300 hover:text-slate-900 font-black rounded-2xl text-[10px] uppercase transition-all flex items-center justify-center gap-2 border border-white/5 hover:border-amber-500"
+                                    >
+                                        <BarChart3 size={14} /> Analysera Prep
+                                    </button>
+                                </div>
+                            ))}
+                    </div>
+                </div>
+            )}
+
             {/* Quality Hierarchy Explainer */}
             <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
                 <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
@@ -564,6 +607,21 @@ export const DataAnalysisView: React.FC<DataAnalysisViewProps> = ({ exerciseEntr
                     </p>
                 </div>
             </div>
+
+            {analyzingRace && (
+                <PrepAnalysisModal
+                    event={{
+                        id: analyzingRace.id,
+                        date: analyzingRace.date,
+                        title: analyzingRace.title,
+                        distance: analyzingRace.estimatedDistance,
+                        isRace: true,
+                        activity: analyzingRace
+                    }}
+                    allActivities={exerciseEntries}
+                    onClose={() => setAnalyzingRace(null)}
+                />
+            )}
         </div >
     );
 };

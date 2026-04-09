@@ -28,6 +28,7 @@ import type { FeedEventType } from '../../models/feedTypes.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { generateTrainingPlan } from '../../services/coach/planGenerator.ts';
 import { isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { parsePowerCalories } from '../../utils/analytics.ts';
 
 interface UseActivityContextProps {
     currentUser: User | null;
@@ -45,6 +46,7 @@ interface UseActivityContextProps {
 }
 
 export function useActivityContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, getLatestWeight, isLoaded }: UseActivityContextProps) {
+    console.log('[useActivityContext] Initializing hook body');
     const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
     const [strengthSessions, setStrengthSessions] = useState<StrengthWorkout[]>([]);
     const [competitions, setCompetitions] = useState<Competition[]>([]);
@@ -264,7 +266,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 // Also update distance in performance if changed
                                 distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm,
                                 excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats
-                            }
+                            },
+                            raceDetails: updates.raceDetails || ua.raceDetails
                         } as UniversalActivity;
                     }
                     return ua;
@@ -288,7 +291,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         subType: updates.subType,
                         location: updates.location,
                         hyroxStats: updates.hyroxStats,
-                        excludeFromStats: updates.excludeFromStats
+                        excludeFromStats: updates.excludeFromStats,
+                        raceDetails: updates.raceDetails
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
                 return;
@@ -324,8 +328,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         subType: updates.subType || ua.performance?.subType,
                         splits: updates.splits || ua.performance?.splits,
                         laps: updates.laps || ua.performance?.laps
-                    }
-
+                    },
+                    raceDetails: updates.raceDetails || ua.raceDetails
                 } as UniversalActivity;
             }
             return ua;
@@ -351,7 +355,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     subType: updated.subType,
                     location: updated.location,
                     hyroxStats: updated.hyroxStats,
-                    excludeFromStats: updated.excludeFromStats
+                    excludeFromStats: updated.excludeFromStats,
+                    raceDetails: updated.raceDetails
                 })
             }).catch(e => console.error("Failed to persist manual activity update:", e));
         }
@@ -427,7 +432,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
     }, [storageService]);
 
-    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity): number => {
+    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string): number => {
         const weight = getLatestWeight();
 
         // MET values
@@ -446,6 +451,12 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             football: { low: 6, moderate: 8, high: 10, ultra: 12 },
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
+
+        // 1. Try to parse power from notes if available
+        if (notes) {
+            const powerCalories = parsePowerCalories(notes);
+            if (powerCalories > 0) return Math.round(powerCalories);
+        }
 
         const met = METS[type][intensity];
         return Math.round(met * weight * (duration / 60));
@@ -489,7 +500,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     strava: e,
                     universalActivity: u,
                     strengthWorkout: sw
-                }
+                },
+                caloriesBurned: parsePowerCalories(u?.performance?.notes || '') > 0 
+                  ? Math.round(parsePowerCalories(u?.performance?.notes || '')) 
+                  : e.caloriesBurned
             };
         });
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' as const }));
@@ -592,7 +606,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 type: finalType.toLowerCase() as any, // FIXED: Force lowercase to match Strava types for the merging logic
                 durationMinutes: totalDurationMinutes,
                 intensity: 'moderate' as const,
-                caloriesBurned: calculateExerciseCalories(finalType, totalDurationMinutes, 'moderate'),
+                caloriesBurned: calculateExerciseCalories(finalType, totalDurationMinutes, 'moderate', w.notes),
                 distance: totalDistance > 0 ? totalDistance / 1000 : undefined, // Convert to km
                 tonnage: w.totalVolume || 0,
                 totalSets: w.totalSets || 0,
@@ -875,161 +889,6 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return finalSorted;
     }, [universalActivities, exerciseEntries, strengthSessions]);
 
-    // ============================================
-    // Automatic Reconciliation
-    // ============================================
-
-    useEffect(() => {
-        if (!isLoaded || plannedActivities.length === 0 || unifiedActivities.length === 0) return;
-
-        let hasChanges = false;
-        const usedActivityIds = new Set<string>(); // Prevent double-matching
-
-        const updatedPlanned = plannedActivities.map(planned => {
-            // Only sync those that are still 'PLANNED'
-            // or those that have reconciliation data but might need updating (though COMPLETED is terminal here for auto-sync)
-            if (planned.status !== 'PLANNED') return planned;
-
-            // Find matching activity on same date with matching type
-            const candidates = unifiedActivities
-                .filter(actual => !usedActivityIds.has(actual.id))
-                .map(actual => {
-                    const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
-                    if (!sameDate) return { actual, score: 0, reason: "Annat datum" };
-
-                    // Type mapping for reconciliation
-                    const pType = planned.type;
-                    const aType = actual.type;
-
-                    // Type compatibility check
-                    const isRunMatch = pType === 'RUN' && (aType === 'running' || aType === 'walking' || aType === 'other');
-                    const isStrengthMatch = pType === 'STRENGTH' && aType === 'strength';
-                    const isBikeMatch = pType === 'BIKE' && aType === 'cycling';
-                    const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
-
-                    if (!isRunMatch && !isStrengthMatch && !isBikeMatch && !isHyroxMatch) {
-                        return { actual, score: 0, reason: `Inkompatibel typ: ${pType} vs ${aType}` };
-                    }
-
-                    // Calculate match score (0-100)
-                    let score = 50; // Base score for type match on same date
-                    const reasons: string[] = [`Matchande träningstyp (${pType})`];
-
-                    // Duration similarity bonus (up to +20 points)
-                    const plannedDuration = planned.estimatedDistance ? planned.estimatedDistance * 6 : 45;
-                    const actualDuration = actual.durationMinutes || 0;
-                    if (actualDuration > 0 && plannedDuration > 0) {
-                        const durationDiff = Math.abs(actualDuration - plannedDuration) / plannedDuration;
-                        if (durationDiff <= 0.40) { // More lenient duration diff (40%)
-                            const bonus = Math.round(20 * (1 - durationDiff / 0.40));
-                            score += bonus;
-                            reasons.push(`Liknande längd (+${bonus}p)`);
-                        }
-                    }
-
-                    // Time proximity bonus (up to +15 points)
-                    if (planned.startTime && actual.date.includes('T')) {
-                        const plannedHM = planned.startTime.split(':').map(Number);
-                        const actualTime = actual.date.split('T')[1];
-                        if (actualTime && actualTime.includes(':')) {
-                            const actualHM = actualTime.split(':').map(Number);
-                            const plannedMinutes = (plannedHM[0] || 0) * 60 + (plannedHM[1] || 0);
-                            const actualMinutes = (actualHM[0] || 0) * 60 + (actualHM[1] || 0);
-                            const timeDiffMinutes = Math.abs(plannedMinutes - actualMinutes);
-                            if (timeDiffMinutes <= 240) { // Within 4 hours
-                                const bonus = Math.round(15 * (1 - timeDiffMinutes / 240));
-                                score += bonus;
-                                reasons.push(`Tidsnära (+${bonus}p, diff: ${timeDiffMinutes}m)`);
-                            }
-                        } else {
-                            // Actual activity has no time - give a bonus for being "date-only" to help auto-matching
-                            score += 15;
-                            reasons.push("Ingen specifik tid på loggat pass (+15p)");
-                        }
-                    } else if (!planned.startTime) {
-                        // No specific time planned - give a generic bonus for "anytime today"
-                        score += 15;
-                        reasons.push("Ingen specifik tid planerad (+15p)");
-                    }
-
-                    // Title similarity bonus (+10)
-                    if (planned.title && actual.title) {
-                        const pTitle = planned.title.toLowerCase();
-                        const aTitle = actual.title.toLowerCase();
-                        if (pTitle.includes(aTitle) || aTitle.includes(pTitle)) {
-                            score += 10;
-                            reasons.push("Titel-matchning (+10p)");
-                        }
-                    }
-
-                    return { actual, score, reason: reasons.join(", ") };
-                })
-                .filter(c => c.score > 0)
-                .sort((a, b) => b.score - a.score);
-
-            // Bonus: If there is exactly one compatible activity today, give it a "Unique Candidate" bonus
-            if (candidates.length === 1 && candidates[0].score >= 50) {
-                candidates[0].score += 10;
-                candidates[0].reason += ", Ensam kandidat idag (+10p)";
-            }
-
-            const bestMatch = candidates[0];
-            // Require at least 60 score to auto-reconcile
-            if (bestMatch && bestMatch.score >= 60) {
-                hasChanges = true;
-                usedActivityIds.add(bestMatch.actual.id);
-                console.log(`[DataContext] Auto-matched: "${planned.title}" -> "${bestMatch.actual.type}" (Score: ${bestMatch.score})`);
-                return {
-                    ...planned,
-                    status: 'COMPLETED' as const,
-                    completedDate: bestMatch.actual.date,
-                    actualDistance: bestMatch.actual.distance || planned.estimatedDistance,
-                    actualTimeSeconds: (bestMatch.actual.durationMinutes || 0) * 60,
-                    externalId: bestMatch.actual.id,
-                    reconciliation: {
-                        score: bestMatch.score,
-                        matchReason: bestMatch.reason,
-                        bestCandidateId: bestMatch.actual.id,
-                        reconciledAt: new Date().toISOString()
-                    }
-                };
-            } else if (bestMatch) {
-                // Store candidate info even if not a strong enough match
-                // but ONLY if it changed from what was there before
-                if (planned.reconciliation?.bestCandidateId !== bestMatch.actual.id || planned.reconciliation?.score !== bestMatch.score) {
-                    hasChanges = true;
-                    console.log(`[DataContext] candidate for "${planned.title}": ${bestMatch.score}% - ${bestMatch.reason}`);
-                    return {
-                        ...planned,
-                        reconciliation: {
-                            score: bestMatch.score,
-                            matchReason: bestMatch.reason,
-                            bestCandidateId: bestMatch.actual.id,
-                            reconciledAt: new Date().toISOString()
-                        }
-                    };
-                }
-            }
-
-            return planned;
-        });
-
-        if (hasChanges) {
-            const newlyChanged = updatedPlanned.filter((p, i) => {
-                const old = plannedActivities[i];
-                return p.status !== old.status || p.reconciliation?.score !== old.reconciliation?.score;
-            });
-
-            console.log(`[DataContext] Auto-reconciliation found ${newlyChanged.length} changes.`);
-            setPlannedActivities(updatedPlanned);
-
-            // Persist changes to storage
-            newlyChanged.forEach(p => {
-                skipAutoSave.current = true;
-                storageService.savePlannedActivity(p).catch(e => console.error("Failed to persist reconciliation update:", e));
-            });
-        }
-    }, [unifiedActivities, plannedActivities, isLoaded, skipAutoSave]);
 
     const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
         // Use startsWith to match YYYY-MM-DD even if activity has time time YYYY-MM-DDTHH:mm:ss
@@ -1190,7 +1049,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const savePlannedActivities = useCallback((newActivities: PlannedActivity[]) => {
+    const bulkSavePlannedActivities = useCallback((newActivities: PlannedActivity[]) => {
         setPlannedActivities(prev => {
             const ids = new Set(newActivities.map(a => a.id));
             const filtered = prev.filter(a => !ids.has(a.id));
@@ -1229,14 +1088,23 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
 
                 // Automatically add to exercise log
+                const mappedType: ExerciseType = 
+                    completed.type === 'RUN' ? 'running' :
+                    completed.type === 'BIKE' ? 'cycling' :
+                    completed.type === 'STRENGTH' ? 'strength' :
+                    completed.type === 'HYROX' ? 'hyrox' : 'running';
+
                 addExercise({
                     date: completed.completedDate!,
-                    type: 'running',
+                    type: mappedType,
                     durationMinutes: Math.round((actualTime || (completed.estimatedDistance * 300)) / 60), // fallback to 5min/km
                     intensity: feedback === 'HARD' || feedback === 'TOO_HARD' ? 'high' : 'moderate',
-                    caloriesBurned: calculateExerciseCalories('running', (actualTime || (completed.estimatedDistance * 300)) / 60, 'moderate'),
+                    caloriesBurned: calculateExerciseCalories(mappedType, (actualTime || (completed.estimatedDistance * 300)) / 60, 'moderate'),
                     distance: actualDist || completed.estimatedDistance,
-                    notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`
+                    notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`,
+                    title: completed.title,
+                    subType: completed.category === 'RACE' ? 'race' : (completed.type === 'RUN' && completed.category === 'INTERVALS' ? 'interval' : 'default'),
+                    raceDetails: completed.raceDetails
                 });
             }
 
@@ -1427,6 +1295,173 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
     }, [exerciseEntries, plannedActivities, strengthSessions, unifiedActivities, updateExercise, updatePlannedActivity, updateStrengthSession]);
 
+    // ============================================
+    // Automatic Reconciliation
+    // ============================================
+
+    useEffect(() => {
+        if (!isLoaded || plannedActivities.length === 0 || unifiedActivities.length === 0) return;
+
+        let hasChanges = false;
+        const usedActivityIds = new Set<string>();
+        
+        // 1. First Pass: Collect IDs of activities already claimed by COMPLETED plans
+        plannedActivities.forEach(p => {
+            if (p.status === 'COMPLETED' && p.externalId) {
+                usedActivityIds.add(p.externalId);
+            }
+        });
+
+        // 2. Second Pass: Try to reconcile remaining PLANNED activities
+        const updatedPlanned = plannedActivities.map(planned => {
+            if (planned.status !== 'PLANNED' || planned.autoMatchDisabled) return planned;
+
+            // Find matching activity on same date with matching type
+            const candidates = unifiedActivities
+                .filter(actual => !usedActivityIds.has(actual.id))
+                .map(actual => {
+                    const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
+                    if (!sameDate) return { actual, score: 0, reason: "Annat datum" };
+
+                    // Type mapping for reconciliation
+                    const pType = planned.type;
+                    const aType = actual.type;
+
+                    // Type compatibility check
+                    const isRunMatch = pType === 'RUN' && (aType === 'running' || aType === 'walking' || aType === 'other');
+                    const isStrengthMatch = pType === 'STRENGTH' && aType === 'strength';
+                    const isBikeMatch = pType === 'BIKE' && aType === 'cycling';
+                    const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
+
+                    if (!isRunMatch && !isStrengthMatch && !isBikeMatch && !isHyroxMatch) {
+                        return { actual, score: 0, reason: `Inkompatibel typ: ${pType} vs ${aType}` };
+                    }
+
+                    // Calculate match score (0-100)
+                    let score = 50; // Base score for type match on same date
+                    const reasons: string[] = [`Matchande träningstyp (${pType})`];
+
+                    // Duration similarity bonus (up to +20 points)
+                    const plannedDuration = planned.estimatedDistance ? planned.estimatedDistance * 6 : 45;
+                    const actualDuration = actual.durationMinutes || 0;
+                    if (actualDuration > 0 && plannedDuration > 0) {
+                        const durationDiff = Math.abs(actualDuration - plannedDuration) / plannedDuration;
+                        if (durationDiff <= 0.40) { // More lenient duration diff (40%)
+                            const bonus = Math.round(20 * (1 - durationDiff / 0.40));
+                            score += bonus;
+                            reasons.push(`Liknande längd (+${bonus}p)`);
+                        }
+                    }
+
+                    // Time proximity bonus (up to +15 points)
+                    if (planned.startTime && actual.date.includes('T')) {
+                        const plannedHM = planned.startTime.split(':').map(Number);
+                        const actualTime = actual.date.split('T')[1];
+                        if (actualTime && actualTime.includes(':')) {
+                            const actualHM = actualTime.split(':').map(Number);
+                            const plannedMinutes = (plannedHM[0] || 0) * 60 + (plannedHM[1] || 0);
+                            const actualMinutes = (actualHM[0] || 0) * 60 + (actualHM[1] || 0);
+                            const timeDiffMinutes = Math.abs(plannedMinutes - actualMinutes);
+                            if (timeDiffMinutes <= 240) { // Within 4 hours
+                                const bonus = Math.round(15 * (1 - timeDiffMinutes / 240));
+                                score += bonus;
+                                reasons.push(`Tidsnära (+${bonus}p, diff: ${timeDiffMinutes}m)`);
+                            }
+                        } else {
+                            // Actual activity has no time - give a bonus for being "date-only" to help auto-matching
+                            score += 15;
+                            reasons.push("Ingen specifik tid på loggat pass (+15p)");
+                        }
+                    } else if (!planned.startTime) {
+                        // No specific time planned - give a generic bonus for "anytime today"
+                        score += 15;
+                        reasons.push("Ingen specifik tid planerad (+15p)");
+                    }
+
+                    // Title similarity bonus (+10)
+                    if (planned.title && actual.title) {
+                        const pTitle = planned.title.toLowerCase();
+                        const aTitle = actual.title.toLowerCase();
+                        if (pTitle.includes(aTitle) || aTitle.includes(pTitle)) {
+                            score += 10;
+                            reasons.push("Titel-matchning (+10p)");
+                        }
+                    }
+
+                    return { actual, score, reason: reasons.join(", ") };
+                })
+                .filter(c => c.score > 0)
+                .sort((a, b) => b.score - a.score);
+
+            // Bonus: If there is exactly one compatible activity today, give it a "Unique Candidate" bonus
+            if (candidates.length === 1 && candidates[0].score >= 50) {
+                candidates[0].score += 10;
+                candidates[0].reason += ", Ensam kandidat idag (+10p)";
+            }
+
+            const bestMatch = candidates[0];
+            // Require at least 60 score to auto-reconcile
+            if (bestMatch && bestMatch.score >= 60) {
+                hasChanges = true;
+                usedActivityIds.add(bestMatch.actual.id);
+                console.log(`[DataContext] Auto-matched: "${planned.title}" -> "${bestMatch.actual.type}" (Score: ${bestMatch.score})`);
+                return {
+                    ...planned,
+                    status: 'COMPLETED' as const,
+                    completedDate: bestMatch.actual.date,
+                    actualDistance: bestMatch.actual.distance || planned.estimatedDistance,
+                    actualTimeSeconds: (bestMatch.actual.durationMinutes || 0) * 60,
+                    externalId: bestMatch.actual.id,
+                    reconciliation: {
+                        score: bestMatch.score,
+                        matchReason: bestMatch.reason,
+                        bestCandidateId: bestMatch.actual.id,
+                        reconciledAt: new Date().toISOString()
+                    }
+                };
+            } else if (bestMatch) {
+                // Store candidate info even if not a strong enough match
+                // but ONLY if it changed from what was there before
+                if (planned.reconciliation?.bestCandidateId !== bestMatch.actual.id || planned.reconciliation?.score !== bestMatch.score) {
+                    hasChanges = true;
+                    console.log(`[DataContext] candidate for "${planned.title}": ${bestMatch.score}% - ${bestMatch.reason}`);
+                    return {
+                        ...planned,
+                        reconciliation: {
+                            score: bestMatch.score,
+                            matchReason: bestMatch.reason,
+                            bestCandidateId: bestMatch.actual.id,
+                            reconciledAt: new Date().toISOString()
+                        }
+                    };
+                }
+            }
+
+            return planned;
+        });
+
+        if (hasChanges) {
+            const newlyChanged = updatedPlanned.filter((p, i) => {
+                const old = plannedActivities[i];
+                // Check if meaningful fields changed
+                return p.status !== old.status || 
+                       p.externalId !== old.externalId ||
+                       p.reconciliation?.score !== old.reconciliation?.score ||
+                       p.reconciliation?.bestCandidateId !== old.reconciliation?.bestCandidateId;
+            });
+
+            if (newlyChanged.length > 0) {
+                console.log(`[DataContext] Auto-reconciliation found ${newlyChanged.length} changes. Saving bulk.`);
+                setPlannedActivities(updatedPlanned);
+
+                // Use bulk save instead of individual loop
+                skipAutoSave.current = true;
+                storageService.savePlannedActivities(newlyChanged).catch(e => console.error("Failed to persist reconciliation updates:", e));
+            }
+        }
+    }, [unifiedActivities, plannedActivities, isLoaded, skipAutoSave]);
+
+    console.log('[useActivityContext] Returning hook values');
     return {
         // State
         exerciseEntries,
@@ -1478,7 +1513,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         generateCoachPlan: generateCoachPlanAction,
         deletePlannedActivity,
         updatePlannedActivity,
-        savePlannedActivities,
+        bulkSavePlannedActivities,
         completePlannedActivity,
         addCoachGoal,
         activateCoachGoal,

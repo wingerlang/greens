@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Calendar, X, Target, Clock, Timer, Plus } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry, generateId } from '../../../models/types.ts';
-import { normalizeRaceTitle, isTrailRace, formatRaceDateCompact, MONTH_MAP } from './utils.ts';
+import { normalizeRaceTitle, isTrailRace, getAvgElevation, formatRaceDateCompact, MONTH_MAP } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/formatters.ts';
 import { calculateVDOT } from '../../../utils/runningCalculator.ts';
 import { calculateAdjustedRaceTime } from '../../../utils/racePlannerCalculators.ts';
@@ -59,6 +59,15 @@ export function AddRaceModal({
     // Populate form if editing
     useEffect(() => {
         if (activityToEdit) {
+            const currentElev = activityToEdit.raceDetails?.elevationGain;
+            let autoElev = '';
+            
+            // If elevation is missing but we have history, auto-fill it
+            if (!currentElev && activityToEdit.title) {
+                const avg = getAvgElevation(activityToEdit.title, activityToEdit.estimatedDistance, races);
+                if (avg) autoElev = avg.toString();
+            }
+
             setForm({
                 title: activityToEdit.title,
                 date: activityToEdit.date,
@@ -69,7 +78,7 @@ export function AddRaceModal({
                 isRegistered: activityToEdit.raceDetails?.isRegistered ?? true,
                 isVirtual: activityToEdit.raceDetails?.isVirtual ?? false,
                 isTrail: activityToEdit.raceDetails?.isTrail ?? false,
-                elevationGain: activityToEdit.raceDetails?.elevationGain?.toString() || '',
+                elevationGain: currentElev?.toString() || autoElev || '',
                 goalA: activityToEdit.raceDetails?.goals?.a || '',
                 goalB: activityToEdit.raceDetails?.goals?.b || '',
                 goalC: activityToEdit.raceDetails?.goals?.c || '',
@@ -80,7 +89,7 @@ export function AddRaceModal({
                 totalParticipants: activityToEdit.raceDetails?.totalParticipants?.toString() || ''
             });
         }
-    }, [activityToEdit]);
+    }, [activityToEdit, races]);
 
     // Close on ESC
     useEffect(() => {
@@ -192,12 +201,16 @@ export function AddRaceModal({
                                         </div>
                                         <button
                                             onClick={() => {
+                                                const dist = parseFloat(form.distance) || suggestedRace.distance || 0;
+                                                const avgElev = getAvgElevation(form.title, dist, races);
+
                                                 setForm(prev => ({
                                                     ...prev,
                                                     distance: suggestedRace.distance?.toString() || prev.distance,
                                                     location: suggestedRace.location || prev.location,
                                                     isVirtual: (suggestedRace.tags || []).includes('virtual'),
-                                                    isTrail: (suggestedRace.tags || []).includes('trail') || isTrailRace(suggestedRace.title || '')
+                                                    isTrail: (suggestedRace.tags || []).includes('trail') || isTrailRace(suggestedRace.title || ''),
+                                                    elevationGain: avgElev?.toString() || prev.elevationGain || suggestedRace.elevationGain?.toString() || suggestedRace.raceDetails?.elevationGain?.toString() || ''
                                                 }));
                                                 setSuggestedRace(null);
                                             }}

@@ -10,7 +10,7 @@ import {
     WEEKDAYS,
     Weekday
 } from '../models/types.ts';
-import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle, Heart } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
 import { getPlannedRaceTime, calcPace } from '../components/training/races/utils.ts';
@@ -30,10 +30,14 @@ export function TrainingPlanningPage() {
         savePlannedActivities,
         deletePlannedActivity,
         updatePlannedActivity,
+        deleteExercise,
+        deleteStrengthSession,
+        updateExercise,
         universalActivities = [],
         unifiedActivities = [],
         currentUser,
-        reorderActivity
+        reorderActivity,
+        isLoading
     } = useData();
 
     const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
@@ -41,6 +45,107 @@ export function TrainingPlanningPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<PlannedActivity | null>(null);
     const [draggedOverDate, setDraggedOverDate] = useState<string | null>(null);
+    const [swappingActivityId, setSwappingActivityId] = useState<string | null>(null);
+    const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
+
+    const handleMoveToDate = (id: string, newDate: string) => {
+        const act = plannedActivities.find(a => a.id === id);
+        if (act) {
+            updatePlannedActivity(id, { date: newDate, autoMatchDisabled: true });
+            notificationService.notify('success', `Passet flyttat till ${newDate}`);
+        } else {
+            // Check if it's a logged activity
+            updateExercise(id, { date: newDate });
+            notificationService.notify('success', `Loggat pass flyttat till ${newDate}`);
+        }
+        setMovingActivityId(null);
+    };
+
+    const handleDelete = (event: { type: 'planned' | 'actual', id: string, data: any }) => {
+        if (!confirm('Är du säker på att du vill ta bort passet?')) return;
+        
+        if (event.type === 'planned') {
+            deletePlannedActivity(event.id);
+        } else if (event.data.type === 'strength') {
+            deleteStrengthSession(event.id);
+        } else {
+            deleteExercise(event.id);
+        }
+        notificationService.notify('info', 'Passet har tagits bort.');
+    };
+
+    const handleMoveAllToNextWeek = () => {
+        const start = new Date(currentWeekStart);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const endStr = end.toISOString().split('T')[0];
+
+        const activitiesToMove = plannedActivities.filter(a => 
+            a.date >= currentWeekStart && 
+            a.date <= endStr && 
+            a.status === 'PLANNED'
+        );
+
+        if (activitiesToMove.length === 0) {
+            notificationService.notify('info', 'Inga planerade pass att flytta denna vecka.');
+            return;
+        }
+
+        const updated = activitiesToMove.map(a => {
+            const date = new Date(a.date);
+            date.setDate(date.getDate() + 7);
+            return {
+                ...a,
+                date: date.toISOString().split('T')[0],
+                autoMatchDisabled: true
+            };
+        });
+
+        savePlannedActivities(updated);
+        notificationService.notify('success', `${activitiesToMove.length} pass flyttade till nästa vecka!`);
+    };
+
+    const handleSwapActivities = (targetId: string) => {
+        if (!swappingActivityId || swappingActivityId === targetId) {
+            setSwappingActivityId(null);
+            return;
+        }
+
+        const source = plannedActivities.find(a => a.id === swappingActivityId);
+        const target = plannedActivities.find(a => a.id === targetId);
+
+        if (source && target) {
+            const sourceDate = source.date;
+            const targetDate = target.date;
+
+            // Helper to reset reconciliation if date or status needs fixing
+            const processUpdate = (act: PlannedActivity, newDate: string): PlannedActivity => {
+                const isDateChanged = act.date !== newDate;
+                const updated = { ...act, date: newDate };
+                if (isDateChanged) {
+                    updated.autoMatchDisabled = true; // Disable auto-reconciliation when manually moved
+                }
+                if (act.status === 'COMPLETED' || act.reconciliation || act.externalId) {
+                    updated.status = 'PLANNED';
+                    updated.reconciliation = undefined; // Use undefined instead of null for consistency with types
+                    updated.externalId = undefined;
+                    updated.completedDate = undefined;
+                    updated.actualDistance = undefined;
+                    updated.actualTimeSeconds = undefined;
+                }
+                return updated;
+            };
+
+            const updatedSource = processUpdate(source, targetDate);
+            const updatedTarget = processUpdate(target, sourceDate);
+
+            // Use bulk update to ensure atomicity and avoid multiple re-renders/saves
+            savePlannedActivities([updatedSource, updatedTarget]);
+
+            notificationService.notify('success', 'Passen har bytt plats och nollställts!');
+        }
+        setSwappingActivityId(null);
+    };
 
     // Keyboard Navigation & ESC handler
     React.useEffect(() => {
@@ -60,10 +165,14 @@ export function TrainingPlanningPage() {
                     handleWeekChange(1);
                 }
             }
+
+            if (e.key === 'Escape' && swappingActivityId) {
+                setSwappingActivityId(null);
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isModalOpen, currentWeekStart]);
+    }, [isModalOpen, currentWeekStart, swappingActivityId]);
 
     // Navigation
     const handleWeekChange = (offset: number) => {
@@ -99,7 +208,10 @@ export function TrainingPlanningPage() {
         const endStr = getISODate(weekEnd);
 
         // All completed sessions from unifiedActivities
-        const weekCompleted = unifiedActivities.filter((a: any) => a.date >= startStr && a.date <= endStr);
+        const weekCompleted = unifiedActivities.filter((a: any) => {
+            const d = a.date.split('T')[0];
+            return d >= startStr && d <= endStr;
+        });
 
         // Running stats
         const runningActivities = weekCompleted.filter((a: any) => a.type === 'running');
@@ -119,7 +231,6 @@ export function TrainingPlanningPage() {
         );
         const plannedRunning = plannedThisWeek.filter((p: any) =>
             p.type === 'RUN' ||
-            p.title?.toLowerCase().includes('löpning') ||
             p.category === 'EASY' || p.category === 'INTERVALS' || p.category === 'TEMPO' ||
             p.category === 'LONG_RUN' || p.category === 'RECOVERY' || p.category === 'RACE' || p.isRace
         );
@@ -128,7 +239,7 @@ export function TrainingPlanningPage() {
         );
 
         // Other Cardio stats (not running or strength)
-        const otherActivities = weekCompleted.filter((a: any) => a.type !== 'running' && a.type !== 'strength' && a.type !== 'REST');
+        const otherActivities = weekCompleted.filter((a: any) => a.type !== 'running' && a.type !== 'strength' && a.type !== 'REST' && a.type !== 'rest');
         const otherSessions = otherActivities.length;
         const otherTime = otherActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
 
@@ -155,6 +266,11 @@ export function TrainingPlanningPage() {
             // 3. Parse "XXmin" or "XX min" from description
             const minMatch = p.description?.match(/(\d+)\s*min/i);
             if (minMatch) return parseInt(minMatch[1]);
+            // 4. Final Fallback: Use 5:30 min/km for runs/races with distance but no duration
+            if (p.estimatedDistance > 0 && (p.type === 'RUN' || p.isRace || p.category === 'RACE')) {
+                return p.estimatedDistance * 5.5;
+            }
+
             return 0;
         };
 
@@ -229,6 +345,25 @@ export function TrainingPlanningPage() {
         return calculateWeeklyStats(getISODate(lastWeekStart));
     }, [currentWeekStart, unifiedActivities, plannedActivities]);
 
+    const monthWeeklyAvg = useMemo(() => {
+        const now = new Date(currentWeekStart);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        const monthActivities = unifiedActivities.filter(a => {
+            const d = a.date.split('T')[0];
+            return d >= getISODate(startOfMonth) && d <= getISODate(endOfMonth) && a.type === 'running';
+        });
+
+        const totalKm = monthActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+        
+        const daysInMonth = endOfMonth.getDate();
+        const elapsedDays = now.getMonth() === new Date().getMonth() ? new Date().getDate() : daysInMonth;
+        const weeks = elapsedDays / 7;
+        
+        return weeks > 0 ? totalKm / weeks : 0;
+    }, [currentWeekStart, unifiedActivities]);
+
     // Interference Analysis
     const weeklyWarnings = useMemo(() => {
         const startStr = getISODate(new Date(currentWeekStart));
@@ -236,9 +371,11 @@ export function TrainingPlanningPage() {
         end.setDate(end.getDate() + 6);
         const endStr = getISODate(end);
 
-        // Filter and map to compatible format
         const relevantHistory = unifiedActivities
-            .filter((a: any) => a.date >= startStr && a.date <= endStr)
+            .filter((a: any) => {
+                const d = a.date.split('T')[0];
+                return d >= startStr && d <= endStr;
+            })
             .map((a: any) => ({ ...a, _source: 'HISTORY', _id: a.id }));
 
         const relevantPlan = plannedActivities
@@ -274,7 +411,6 @@ export function TrainingPlanningPage() {
                 let unitLabel = '';
 
                 // Extract Target
-                // Priority: KM > Sessions > Tonnage
                 const kmTarget = goal.targets?.find(t => t.unit === 'km')?.value;
                 const sessionTarget = goal.targets?.find(t => ['sessions', 'pass', 'x/v'].some(u => t.unit?.toLowerCase().includes(u)))?.value
                     || goal.targets?.find(t => ['sessions', 'pass', 'x/v'].some(u => t.unit?.toLowerCase().includes(u)))?.count;
@@ -287,8 +423,8 @@ export function TrainingPlanningPage() {
                     unitLabel = 'km';
                 } else if (tonTarget) {
                     target = tonTarget;
-                    current = weeklyStats.strength.tonnage / 1000; // Assuming tons
-                    planned = 0; // No forecast for tonnage yet
+                    current = weeklyStats.strength.tonnage / 1000;
+                    planned = 0;
                     unitLabel = 'ton';
                 } else if (sessionTarget) {
                     target = sessionTarget;
@@ -302,16 +438,13 @@ export function TrainingPlanningPage() {
                         current = weeklyStats.running.sessions;
                         planned = Math.max(0, weeklyStats.forecast.runningSessions - current);
                     } else {
-                        // Total
                         current = weeklyStats.running.sessions + weeklyStats.strength.sessions;
-                        // For forecast total, we sum them
                         const forecastTotal = weeklyStats.forecast.runningSessions + weeklyStats.forecast.strengthSessions;
                         planned = Math.max(0, forecastTotal - current);
                     }
                     unitLabel = 'pass';
                 }
 
-                // Color coding
                 const isStrength = goal.name.toLowerCase().includes('styrka');
                 const isRunning = goal.name.toLowerCase().includes('löpning') || kmTarget;
                 const colorClass = isStrength ? 'bg-purple-500' : (isRunning ? 'bg-emerald-500' : 'bg-indigo-500');
@@ -330,7 +463,6 @@ export function TrainingPlanningPage() {
                     plannedClass
                 };
             })
-            // Filter out goals with 0 target to avoid division by zero or weird UI
             .filter(g => g.target > 0);
     }, [performanceGoals, weeklyStats]);
 
@@ -344,16 +476,15 @@ export function TrainingPlanningPage() {
     const handleSaveActivity = (activity: PlannedActivity) => {
         if (editingActivity) {
             updatePlannedActivity(editingActivity.id, activity);
-            notificationService.notify('success', 'Aktiviteten uppdateraf och sparad till databasen!');
+            notificationService.notify('success', 'Aktiviteten uppdaterad!');
         } else {
             savePlannedActivities([activity]);
-            notificationService.notify('success', 'Ny aktivitet sparad till databasen!');
+            notificationService.notify('success', 'Ny aktivitet sparad!');
         }
         setIsModalOpen(false);
         setEditingActivity(null);
     };
 
-    // UI Helper: Format duration as hh:mm
     const formatDurationHHMM = (minutes: number) => {
         if (!minutes) return '00:00';
         const totalMinutes = Math.round(minutes);
@@ -362,19 +493,22 @@ export function TrainingPlanningPage() {
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     };
 
-    // Helper: Update URL params
     const updateUrlParams = (params: Record<string, string>) => {
         const searchParams = new URLSearchParams(window.location.search);
         Object.entries(params).forEach(([key, value]) => {
             searchParams.set(key, value);
         });
-        const newUrl = window.location.pathname + '?' + searchParams.toString() + window.location.hash;
-        window.history.replaceState({}, '', newUrl);
-        // Force re-render/logic run via popstate or just rely on Layout.tsx listening to URL
-        // To be safe, we can navigate(current + search) but we want to avoid refresh.
-        // Since we are using react-router in Layout.tsx, using navigate() with search params is best.
         navigate('?' + searchParams.toString(), { replace: true });
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 flex flex-col items-center justify-center gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm font-black uppercase tracking-widest text-slate-500 animate-pulse">Laddar Träningsplanering...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-white">
@@ -382,7 +516,6 @@ export function TrainingPlanningPage() {
                 <TrainingPeriodBanner />
             </div>
 
-            {/* Header */}
             <div className="max-w-[1400px] mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -408,7 +541,6 @@ export function TrainingPlanningPage() {
                 </div>
             </div>
 
-            {/* Weekly Summary & Goals Widget */}
             <div className="max-w-[1400px] mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 0. Föregående Vecka (Historical) */}
                 <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm opacity-80">
@@ -429,9 +561,7 @@ export function TrainingPlanningPage() {
                                 {lastWeeklyStats.running.sessions} pass
                             </div>
                         </div>
-
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
-
                         <div className="flex flex-col flex-1 min-w-[70px]">
                             <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">💪 Styrka</div>
                             <div className="flex items-baseline gap-2">
@@ -444,9 +574,7 @@ export function TrainingPlanningPage() {
                                 {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton
                             </div>
                         </div>
-
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
-
                         <div className="flex flex-col flex-1 min-w-[70px]">
                             <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">🚴 Cardio</div>
                             <div className="flex items-baseline gap-2">
@@ -477,16 +605,15 @@ export function TrainingPlanningPage() {
                                     <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
                                 </span>
                             </div>
-                            <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
+                            <div className="text-sm font-medium text-slate-500 flex items-center gap-2 flex-wrap">
                                 <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
                                 <span className="text-slate-300">•</span>
                                 <span>{formatDurationHHMM(weeklyStats.running.time)}{weeklyStats.forecast.runningTime > weeklyStats.running.time ? ` / ${formatDurationHHMM(weeklyStats.forecast.runningTime)}` : ''}</span>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">Snitt: {monthWeeklyAvg.toFixed(1)} km/v</span>
                             </div>
                         </div>
-
-                        {/* Divider */}
                         <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
-
                         <div className="flex flex-col flex-1">
                             <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">💪 Styrka</div>
                             <div className="flex items-baseline gap-2">
@@ -499,26 +626,7 @@ export function TrainingPlanningPage() {
                                 {(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton
                             </div>
                         </div>
-
-                        {/* Divider */}
-                        <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
-
-                        <div className="flex flex-col flex-1">
-                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">🚴 Cardio</div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-black text-slate-900 dark:text-white">
-                                    {weeklyStats.other.sessions}
-                                    <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.otherSessions} pass</span>
-                                </span>
-                            </div>
-                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
-                                {formatDurationHHMM(weeklyStats.other.time)}
-                                {weeklyStats.forecast.otherTime > weeklyStats.other.time ? ` / ${formatDurationHHMM(weeklyStats.forecast.otherTime)}` : ''}
-                            </div>
-                        </div>
                     </div>
-
-                    {/* Total Training Time Summary */}
                     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Clock size={14} className="text-indigo-500" />
@@ -544,9 +652,17 @@ export function TrainingPlanningPage() {
                             <Target size={16} className="text-indigo-500" />
                             <span className="text-sm font-black uppercase tracking-wider text-slate-500">Mål & Prognos</span>
                         </div>
-                        {/* Forecast Mini-Summary */}
-                        <div className="flex gap-2 text-xs uppercase font-black text-slate-400">
-                            <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500 fill-amber-500" /> {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleMoveAllToNextWeek}
+                                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-500 transition-colors flex items-center gap-1.5"
+                                title="Flytta alla planerade pass till nästa vecka"
+                            >
+                                <ChevronRight size={12} /> Flytta v.
+                            </button>
+                            <div className="flex gap-2 text-xs uppercase font-black text-slate-400">
+                                <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500 fill-amber-500" /> {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
+                            </div>
                         </div>
                     </div>
 
@@ -557,67 +673,36 @@ export function TrainingPlanningPage() {
                             {goalProgress.map((goal) => {
                                 const currentPct = Math.min(100, (goal.current / goal.target) * 100);
                                 const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
-
                                 const isActuallyMet = goal.current >= goal.target;
                                 const isProjectedMet = (goal.current + goal.planned) >= goal.target;
-
-                                // Over-performance calculation
                                 const overPerformance = Math.max(0, goal.current - goal.target);
-                                const isOverPerforming = overPerformance > 0;
 
                                 return (
                                     <div key={goal.id}>
                                         <div className="flex justify-between text-xs font-black uppercase mb-1">
                                             <span className="text-slate-500 dark:text-slate-400 truncate pr-2 flex items-center gap-1.5">
                                                 {goal.name}
-                                                {isActuallyMet ? (
-                                                    <Check size={12} className="text-emerald-500 stroke-[3]" />
-                                                ) : isProjectedMet ? (
-                                                    <Check size={12} className="text-emerald-500/50 stroke-[3]" />
-                                                ) : null}
+                                                {isActuallyMet ? <Check size={12} className="text-emerald-500 stroke-[3]" /> : (isProjectedMet ? <Check size={12} className="text-emerald-500/50 stroke-[3]" /> : null)}
                                             </span>
-                                            <span className={isActuallyMet ? 'text-emerald-500' : isProjectedMet ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500'}>
-                                                {/* Logic for Over-Performance Display */}
-                                                {isOverPerforming ? (
+                                            <span className={isActuallyMet ? 'text-emerald-500' : 'text-slate-500'}>
+                                                {overPerformance > 0 ? (
                                                     <span className="flex items-center gap-1">
                                                         <span>{goal.target} {goal.unit}</span>
-                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[10px]">+{(goal.current - goal.target).toFixed(1)}</span>
+                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[10px]">+{overPerformance.toFixed(1)}</span>
                                                     </span>
                                                 ) : (
                                                     <>
-                                                        {typeof goal.current === 'number' && !Number.isInteger(goal.current) ? goal.current.toFixed(1) : goal.current}
+                                                        {goal.current.toFixed(goal.unit === 'km' ? 1 : 0)}
                                                         <span className="text-slate-300 mx-1">/</span>
                                                         {goal.target} {goal.unit}
                                                     </>
                                                 )}
-                                                {goal.planned > 0 && !isActuallyMet && (
-                                                    <span className="text-slate-400 ml-1 italic font-medium">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
-                                                )}
                                             </span>
                                         </div>
                                         <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex relative">
-                                            {/* Completed Segment (Solid) */}
-                                            <div
-                                                className={`h-full transition-all ${isActuallyMet ? 'bg-emerald-500' : goal.colorClass}`}
-                                                style={{ width: `${currentPct}%` }}
-                                            />
-                                            {/* Planned Segment (Striped/Dashed) */}
+                                            <div className={`h-full transition-all ${isActuallyMet ? 'bg-emerald-500' : goal.colorClass}`} style={{ width: `${currentPct}%` }} />
                                             {plannedPct > 0 && (
-                                                <div
-                                                    className={`h-full transition-all ${goal.plannedClass}`}
-                                                    style={{
-                                                        width: `${plannedPct}%`,
-                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)'
-                                                    }}
-                                                />
-                                            )}
-
-                                            {/* Over-performance Indicator (Bonus Bar) */}
-                                            {isOverPerforming && (
-                                                <div
-                                                    className="absolute right-0 top-0 bottom-0 w-1 bg-amber-400 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.5)]"
-                                                    title="Målet överträffat!"
-                                                />
+                                                <div className={`h-full transition-all ${goal.plannedClass}`} style={{ width: `${plannedPct}%`, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)' }} />
                                             )}
                                         </div>
                                     </div>
@@ -631,68 +716,37 @@ export function TrainingPlanningPage() {
             {/* Calendar Grid */}
             <div className="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
                 {weekDates.map((day) => {
-                    // 1. Get all planned activities for this day
                     const dayPlanned = plannedActivities.filter(a => a.date.split('T')[0] === day.date);
-
-                    // 2. Get all actual activities for this day
                     const dayActualRaw = unifiedActivities.filter(a => a.date.split('T')[0] === day.date);
+                    const matchedActualIds = new Set(dayPlanned.filter(p => p.status === 'COMPLETED' && p.externalId).map(p => p.externalId!));
 
-                    // 3. Deduplicate: Find which actual IDs are already represented by a matched plan
-                    const matchedActualIds = new Set(
-                        dayPlanned
-                            .filter(p => p.status === 'COMPLETED' && p.externalId)
-                            .map(p => p.externalId!)
-                    );
-
-                    // 4. Create unified list of events
                     const allEvents = [
-                        ...dayPlanned.map(p => ({
-                            type: 'planned' as const,
-                            id: p.id,
-                            time: p.startTime || (p.status === 'COMPLETED' && p.completedDate?.includes('T') ? p.completedDate.split('T')[1].substring(0, 5) : undefined),
-                            data: p
-                        })),
-                        ...dayActualRaw
-                            .filter(a => !matchedActualIds.has(a.id))
-                            .map(a => ({
-                                type: 'actual' as const,
-                                id: a.id,
-                                time: a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : undefined,
-                                data: a
-                            }))
+                        ...dayPlanned.map(p => ({ type: 'planned' as const, id: p.id, time: p.startTime || (p.status === 'COMPLETED' && p.completedDate?.includes('T') ? p.completedDate.split('T')[1].substring(0, 5) : undefined), data: p })),
+                        ...dayActualRaw.filter(a => !matchedActualIds.has(a.id)).map(a => ({ type: 'actual' as const, id: a.id, time: a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : undefined, data: a }))
                     ].sort((a, b) => {
-                        const aOrder = a.data.order !== undefined ? a.data.order : 999;
-                        const bOrder = b.data.order !== undefined ? b.data.order : 999;
-                        
+                        const aData = a.data as any;
+                        const bData = b.data as any;
+                        const aOrder = aData.order !== undefined ? aData.order : 999;
+                        const bOrder = bData.order !== undefined ? bData.order : 999;
                         if (aOrder !== bOrder) return aOrder - bOrder;
-
-                        const aIsLogged = a.type === 'actual' || (a.type === 'planned' && a.data.status === 'COMPLETED');
-                        const bIsLogged = b.type === 'actual' || (b.type === 'planned' && b.data.status === 'COMPLETED');
-                        
+                        const aIsLogged = a.type === 'actual' || (a.type === 'planned' && aData.status === 'COMPLETED');
+                        const bIsLogged = b.type === 'actual' || (b.type === 'planned' && bData.status === 'COMPLETED');
                         if (aIsLogged && !bIsLogged) return -1;
                         if (!aIsLogged && bIsLogged) return 1;
-
                         const timeA = a.time || '23:59';
                         const timeB = b.time || '23:59';
                         return timeA.localeCompare(timeB);
-                    });
+                    }) as { type: 'planned' | 'actual', id: string, time?: string, data: any }[];
 
-                    // Summary calculations (can still use raw lists for stats)
                     const dayKm = dayActualRaw.reduce((sum, a) => sum + (a.distance || 0), 0);
                     const dayTime = dayActualRaw.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
-
                     const isToday = day.date === getISODate();
                     const isPast = day.date < getISODate();
                     const warning = weeklyWarnings.find(w => w.date.split('T')[0] === day.date);
 
                     return (
                         <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${warning ? 'border-amber-400 ring-1 ring-amber-400/50' : (isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800'))} relative group shadow-sm transition-all`}>
-                            {/* Background Date */}
-                            <div className="absolute bottom-4 right-4 text-7xl font-black text-slate-100 dark:text-slate-800/20 select-none z-0 pointer-events-none">
-                                {day.date.split('-')[2]}
-                            </div>
-
-                            {/* Header */}
+                            <div className="absolute bottom-4 right-4 text-7xl font-black text-slate-100 dark:text-slate-800/20 select-none z-0 pointer-events-none">{day.date.split('-')[2]}</div>
                             <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${warning ? 'bg-amber-500/10 dark:bg-amber-900/20' : (isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50'))} rounded-t-2xl z-10 relative`}>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
@@ -705,50 +759,33 @@ export function TrainingPlanningPage() {
                                                 <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[100] border border-white/10">
                                                     <div className="font-black text-amber-400 uppercase mb-1">{warning.message}</div>
                                                     <div className="opacity-80 leading-tight">{warning.suggestion}</div>
-                                                    <div className="absolute top-full right-3 border-8 border-transparent border-t-slate-800"></div>
                                                 </div>
                                             </div>
                                         )}
-                                        <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                                            {day.date.split('-')[2]}
-                                        </span>
+                                        <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>{day.date.split('-')[2]}</span>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
-                                        {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
-                                        {dayTime > 0 && <span>⏱️ {formatDurationHHMM(dayTime)}</span>}
-                                    </div>
-                                    <div className="text-[9px] font-black text-slate-400/70">
-                                        {allEvents.length > 0 && (
-                                            <span>
-                                                {formatDurationHHMM(allEvents.reduce((sum, e) => {
-                                                    const d = e.data as any;
-                                                    return sum + (d.durationMinutes || 0);
-                                                }, 0))} | {allEvents.filter(e => {
-                                                    const d = e.data as any;
-                                                    return d.type !== 'REST' && d.category !== 'REST';
-                                                }).length} pass
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
+                                                        {(dayKm || 0) > 0 && <span>🏃 {(dayKm || 0).toFixed(1)} km</span>}
+                                                        {(dayTime || 0) > 0 && <span>⏱️ {formatDurationHHMM(dayTime || 0)}</span>}
+                                                    </div>
+                                                    <div className="text-[9px] font-black text-slate-400/70">
+                                                        {allEvents.length > 0 && <span>{formatDurationHHMM(allEvents.reduce((sum, e) => sum + (e.data.durationMinutes || 0), 0))} | {allEvents.filter(e => (e.data as any).type !== 'REST' && (e.data as any).category !== 'REST').length} pass</span>}
+                                                    </div>
+                                                </div>
                             </div>
 
-                            {/* Activities */}
-                            <div
+                            <div 
                                 className={`flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar transition-colors ${draggedOverDate === day.date ? 'bg-blue-500/5 ring-2 ring-blue-500/20 rounded-b-2xl' : ''}`}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDraggedOverDate(day.date);
-                                }}
+                                onDragOver={(e) => { e.preventDefault(); setDraggedOverDate(day.date); }}
                                 onDragLeave={() => setDraggedOverDate(null)}
                                 onDrop={(e) => {
                                     e.preventDefault();
                                     setDraggedOverDate(null);
                                     const activityId = e.dataTransfer.getData('activityId');
                                     if (activityId) {
-                                        updatePlannedActivity(activityId, { date: day.date });
+                                        updatePlannedActivity(activityId, { date: day.date, autoMatchDisabled: true });
                                         notificationService.notify('success', `Passet flyttat till ${day.date}`);
                                     }
                                 }}
@@ -763,294 +800,167 @@ export function TrainingPlanningPage() {
                                         const act = event.data;
                                         const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
                                         const isCompleted = act.status === 'COMPLETED';
-                                        const isPlanned = act.status === 'PLANNED';
                                         const isSkipped = act.status === 'SKIPPED';
                                         const isChanged = act.status === 'CHANGED';
 
                                         return (
-                                            <React.Fragment key={act.id}>
-                                                {showSeparator && (
-                                                    <div className="w-full flex items-center justify-center py-1 opacity-60">
-                                                        <div className="w-full border-t-2 border-dashed border-slate-300 dark:border-slate-700"></div>
-                                                    </div>
-                                                )}
-                                                <div
+                                            <>
+                                                {showSeparator && <div className="w-full flex items-center justify-center py-1 opacity-60"><div className="w-full border-t-2 border-dashed border-slate-300 dark:border-slate-700"></div></div>}
+                                                <div 
+                                                    key={act.id}
                                                     draggable={!isCompleted}
-                                                onDragStart={(e) => {
-                                                    if (isCompleted) return;
-                                                    e.dataTransfer.setData('activityId', act.id);
-                                                    e.dataTransfer.effectAllowed = 'move';
-                                                }}
-                                                onClick={() => handleOpenModal(day.date, act)}
-                                                className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 
-                                                    ${isPlanned ? 'border-dashed' : 'border-solid'} 
-                                                    ${isCompleted ? 'border-slate-300 dark:border-slate-700' : ''} 
-                                                    ${isSkipped ? 'opacity-40 grayscale border-slate-200 dark:border-slate-800' : ''}
-                                                    ${isChanged ? 'border-amber-400 dark:border-amber-600 shadow-[0_0_10px_rgba(251,191,36,0.1)]' : ''} 
-                                                    ${isRace
-                                                        ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
-                                                        : act.type === 'REST' || act.category === 'REST'
-                                                            ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                                                            : act.type === 'STRENGTH' || act.category === 'STRENGTH'
-                                                                ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700'
-                                                                : act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox')
-                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700'
-                                                                    : act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType
-                                                                        ? 'bg-cyan-50 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-900/30 hover:border-cyan-300 dark:hover:border-cyan-700'
-                                                                        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
-                                                    }`}
-                                            >
-                                                <div className="relative mb-1">
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-full ${isRace ? 'text-amber-600 dark:text-amber-400' :
-                                                        act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
-                                                            act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
-                                                                act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
-                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? 'text-cyan-600 dark:text-cyan-400' :
-                                                                        'text-emerald-600 dark:text-emerald-400'
-                                                        }`}>
-                                                        <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
-                                                        <span className="leading-tight">
-                                                            {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
-                                                                act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                                    act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : (act.title?.toLowerCase().includes('innebandy') ? '🏒 ' : '⚡ ')) + act.title :
-                                                                        ((act.type === 'RUN' ? '🏃 ' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪 ' : '📅 '))) + act.title}
-                                                        </span>
-                                                    </span>
-
-                                                    {/* Actions Overlay: Visible on Hover */}
-                                                                 <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover/card:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
-                                                                    {allEvents.length > 1 && (
-                                                                        <>
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'up'); }}
-                                                                                className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                                                title="Flytta upp"
-                                                                            >
-                                                                                <LucideChevronUp size={12} />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'down'); }}
-                                                                                className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                                                                                title="Flytta ner"
-                                                                            >
-                                                                                <LucideChevronDown size={12} />
-                                                                            </button>
-                                                                        </>
-                                                                    )}
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                                        className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
-                                                                        title="Ta bort"
-                                                                    >
-                                                                        <X size={12} />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                            {isRace && act.title && (() => {
-                                                                const idx = sortedRaces.findIndex((r: any) => r.id === act.id);
-                                                                const prev = idx > 0 ? sortedRaces[idx - 1] : null;
-                                                                const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
-                                                                const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
-                                                                const daysNext = next ? getDaysBetween(act.date, next.date) : null;
-
-                                                                return (
-                                                                    <span className="font-bold block mb-0.5">
-                                                                        {act.title} 
-                                                                        {act.estimatedDistance > 0 && (
-                                                                            <span className="text-amber-600 dark:text-amber-400 ml-1">
-                                                                                ({act.estimatedDistance.toFixed(1)} km)
-                                                                            </span>
-                                                                        )}
-                                                                        {(daysPrev !== null || daysNext !== null) && (
-                                                                            <span className="flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">
-                                                                                {daysPrev !== null && <span>⏮️ {daysPrev} dgr sen förra</span>}
-                                                                                {daysNext !== null && <span>⏭️ {daysNext} dgr till nästa</span>}
-                                                                            </span>
-                                                                        )}
-                                                                    </span>
-                                                                );
-                                                            })()}
-                                                            {act.description || (isCompleted ? (act.reconciliation?.matchReason?.includes('Liknande') ? 'Loggat pass' : 'Pass genomfört') : isSkipped ? 'Passet blev aldrig av' : '')}
-                                                        </p>
-
-                                                        {/* Developer Insights */}
-                                                        {(currentUser?.role === 'developer' || currentUser?.role === 'admin') && act.reconciliation && (
-                                                            <div className="mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-800/50 text-[9px] font-mono text-slate-400">
-                                                                <div className="flex justify-between items-center mb-0.5">
-                                                                    <span className={act.reconciliation.score! >= 60 ? 'text-emerald-500' : 'text-amber-500'}>
-                                                                        Match: {act.reconciliation.score}%
-                                                                    </span>
-                                                                    {act.reconciliation.reconciledAt && (
-                                                                        <span>{act.reconciliation.reconciledAt?.split('T')[1].substring(0, 5)}</span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="italic leading-[1.1] text-[8px] opacity-70">
-                                                                    {act.reconciliation.matchReason}
-                                                                </p>
-                                                                {act.externalId && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            updateUrlParams({ activityId: act.externalId! });
-                                                                        }}
-                                                                        className="mt-1 flex items-center gap-1 text-blue-500 hover:underline"
-                                                                    >
-                                                                        <Activity size={8} /> Visa källa: {act.externalId.substring(0, 8)}
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Time Indicator - only if explicit time exists  */}
-                                                        {event.time && (
-                                                            <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 opacity-60`}>
-                                                                <Clock size={9} />
-                                                                {event.time}
-                                                            </div>
-                                                        )}
-                                                        {isRace && (act.estimatedDistance > 0) && (() => {
-                                                            const pTime = getPlannedRaceTime(act);
-                                                            const pPace = calcPace(act.estimatedDistance, pTime);
-                                                            if (!pTime) return null;
-                                                            return (
-                                                                <div className="mt-1.5 flex items-center gap-1.5">
-                                                                    <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-1.5 py-0.5 rounded text-[9px] font-black font-mono">
-                                                                        {formatDurationHHMM(pTime)}
-                                                                    </div>
-                                                                    {pPace !== '-' && (
-                                                                        <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded text-[9px] font-black font-mono">
-                                                                            {pPace}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                        <div className="flex flex-col gap-1 mt-1">
-                                                            {/* Stats */}
-                                                            <div className="flex flex-wrap gap-x-3 gap-y-1">
-                                                                {(act.estimatedDistance || 0) > 0 && (
-                                                                    <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
-                                                                        <Activity size={10} />
-                                                                        {Number(act.estimatedDistance).toFixed(1)} km
-                                                                    </div>
-                                                                )}
-                                                                {act.durationMinutes !== undefined && act.durationMinutes > 0 && (
-                                                                    <div className="text-[10px] font-bold flex items-center gap-1 text-slate-500">
-                                                                        <Clock size={10} />
-                                                                        {formatDurationHHMM(act.durationMinutes)}
-                                                                    </div>
-                                                                )}
-                                                                {act.tonnage && act.tonnage > 0 && (
-                                                                    <div className={`text-[10px] font-bold flex items-center gap-1 text-slate-500`}>
-                                                                        <Dumbbell size={10} />
-                                                                        {(act.tonnage / 1000).toFixed(1)}t
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            {act.muscleGroups && act.muscleGroups.length > 0 && (
-                                                                <div className={`text-[10px] font-medium flex flex-wrap gap-1 text-slate-400`}>
-                                                                    {act.muscleGroups.slice(0, 3).map((m: any) => (
-                                                                        <span key={m} className={`px-1 rounded bg-slate-100 dark:bg-slate-800`}>
-                                                                            {({
-                                                                                legs: 'Ben',
-                                                                                chest: 'Bröst',
-                                                                                back: 'Rygg',
-                                                                                arms: 'Armar',
-                                                                                shoulders: 'Axlar',
-                                                                                core: 'Core'
-                                                                            } as Record<string, string>)[m] || m}
-                                                                        </span>
-                                                                    ))}
-                                                                    {act.muscleGroups.length > 3 && <span>+</span>}
-                                                                </div>
-                                                            )}
-                                                            {/* Race Goals Display */}
-                                                            {isRace && act.raceDetails?.goals && (act.raceDetails.goals.a || act.raceDetails.goals.b || act.raceDetails.goals.c) && (
-                                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                                    {act.raceDetails.goals.a && <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">A: {act.raceDetails.goals.a}</span>}
-                                                                    {act.raceDetails.goals.b && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">B: {act.raceDetails.goals.b}</span>}
-                                                                    {act.raceDetails.goals.c && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">C: {act.raceDetails.goals.c}</span>}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    </React.Fragment>
-                                                );
-                                            } else {
-                                                // Actual Activity (Unmatched)
-                                                const actual = event.data;
-                                                return (
-                                                    <div
-                                                        key={actual.id}
-                                                        onClick={() => updateUrlParams({ activityId: actual.id })}
-                                                        className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
-                                                            ${actual.type === 'strength'
-                                                                ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30'
-                                                                : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'
-                                                            }`}
-                                                    >
-                                                        <div className="flex justify-between items-start mb-1">
-                                                            <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 
-                                                                ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                                                {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}
-                                                                {(actual.source === 'strava' || actual.source === 'merged') && (
-                                                                    <span className="text-[#FC4C02]" title="Strava">🔥</span>
-                                                                )}
+                                                    onDragStart={(e) => { e.dataTransfer.setData('activityId', act.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                    onClick={() => swappingActivityId ? handleSwapActivities(act.id) : handleOpenModal(day.date, act)}
+                                                    className={`relative p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col gap-2 
+                                                        ${isRace ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 ring-1 ring-amber-400/20' : 
+                                                          (act.type === 'REST' || act.category === 'REST' ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800' :
+                                                          (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' :
+                                                          (act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30' :
+                                                          'bg-slate-50 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800')))}
+                                                        ${isCompleted ? 'opacity-60 grayscale-[0.3]' : ''} 
+                                                        ${isSkipped ? 'opacity-40' : ''}
+                                                        ${swappingActivityId === act.id ? 'ring-2 ring-blue-500' : ''}
+                                                    `}
+                                                >
+                                                    <div className="relative mb-1">
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-full ${isRace ? 'text-amber-600 dark:text-amber-400' : (act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' : (act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' : (act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? 'text-cyan-600 dark:text-cyan-400' : 'text-emerald-600 dark:text-emerald-400'))))}`}>
+                                                            <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
+                                                            <span className="leading-tight">
+                                                                {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' : 
+                                                                 act.type === 'REST' || act.category === 'REST' ? '💤 Vila' : 
+                                                                 act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : (act.title?.toLowerCase().includes('innebandy') ? '🏒 ' : '⚡ ')) + act.title : 
+                                                                 ((act.type === 'RUN' ? '🏃 ' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪 ' : '📅 '))) + act.title}
                                                             </span>
-                                                            {event.time && (
-                                                                <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 opacity-60">
-                                                                    <Clock size={9} />
-                                                                    {event.time}
-                                                                </span>
+                                                        </span>
+                                                        <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover/card:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
+                                                            <button onClick={(e) => { e.stopPropagation(); setMovingActivityId(movingActivityId === act.id ? null : act.id); }} className={`p-1 transition-colors ${movingActivityId === act.id ? 'text-blue-500 font-bold' : 'text-slate-400 hover:text-blue-500'}`} title="Flytta"><Calendar size={12} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); setSwappingActivityId(swappingActivityId === act.id ? null : act.id); }} className={`p-1 transition-colors ${swappingActivityId === act.id ? 'text-blue-500 font-bold' : 'text-slate-400 hover:text-blue-500'}`} title="Byt plats"><RefreshCcw size={12} /></button>
+                                                            {allEvents.length > 1 && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'up'); }} className="p-1 text-slate-400 hover:text-blue-500" title="Upp"><LucideChevronUp size={12} /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); reorderActivity(act.id, 'down'); }} className="p-1 text-slate-400 hover:text-blue-500" title="Ner"><LucideChevronDown size={12} /></button>
+                                                                </>
                                                             )}
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
-                                                                {actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}
-                                                            </h4>
-                                                        </div>
-                                                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                                            {(actual.distance ?? 0) > 0 && (
-                                                                <span className="text-xs text-slate-500 font-medium">🏃 {actual.distance?.toFixed(1)} km</span>
-                                                            )}
-                                                            {actual.durationMinutes > 0 && (
-                                                                <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes)}</span>
-                                                            )}
-                                                            {(actual.tonnage ?? 0) > 0 && (
-                                                                <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>
-                                                            )}
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(event); }} className="p-1 text-slate-400 hover:text-rose-500" title="Ta bort"><X size={12} /></button>
                                                         </div>
                                                     </div>
-                                                );
-                                            }
-                                        })}
 
+                                                    {movingActivityId === act.id && (
+                                                        <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-blue-900/50 animate-in fade-in slide-in-from-top-1" onClick={e => e.stopPropagation()}>
+                                                            <div className="text-[9px] font-black uppercase text-slate-500 mb-2">Flytta till datum:</div>
+                                                            <input 
+                                                                type="date" 
+                                                                defaultValue={act.date}
+                                                                onChange={(e) => handleMoveToDate(act.id, e.target.value)}
+                                                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs text-slate-700 dark:text-slate-200"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                        {isRace ? (() => {
+                                                            const idx = sortedRaces.findIndex((r: any) => r.id === act.id);
+                                                            const prev = idx > 0 ? sortedRaces[idx - 1] : null;
+                                                            const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
+                                                            const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
+                                                            const daysNext = next ? getDaysBetween(act.date, next.date) : null;
+                                                            return <span className="font-bold block mb-0.5">{act.title}{act.estimatedDistance > 0 && <span className="text-amber-600 dark:text-amber-400 ml-1">({act.estimatedDistance.toFixed(1)} km)</span>}{(daysPrev !== null || daysNext !== null) && <span className="hidden group-hover/card:flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">{daysPrev !== null && <span>⏮️ {daysPrev} dgr sen</span>}{daysNext !== null && <span>⏭️ {daysNext} dgr kvar</span>}</span>}</span>;
+                                                        })() : (
+                                                            <>
+                                                                {act.title}
+                                                                {act.estimatedDistance > 0 && !isRace && <span className="text-slate-500 ml-1">({act.estimatedDistance.toFixed(1)} km)</span>}
+                                                            </>
+                                                        )}
+                                                    </p>
+                                                    {(act.durationMinutes || 0) > 0 && <span className="text-[10px] text-slate-400 font-bold block mt-0.5">⏱️ {formatDurationHHMM(act.durationMinutes || 0)}</span>}
+                                                    {act.description && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 line-clamp-2 leading-tight">{act.description}</p>}
 
-                                        {allEvents.length === 0 && (
-                                            <div className="py-8 flex flex-col items-center justify-center opacity-20 pointer-events-none border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
-                                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2">
-                                                    <Activity size={20} className="text-slate-400" />
+                                                    {/* Developer Insights (Ignorera match) at Bottom */}
+                                                    {(act.reconciliation || act.externalId) && (
+                                                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/50 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                                            <div className="flex items-center justify-between text-[8px] font-black uppercase text-slate-400 mb-1">
+                                                                <span>Data-matchning</span>
+                                                                {act.reconciliation?.score != null && <span className="text-emerald-500">{Math.round(act.reconciliation.score)}% Match</span>}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                <div className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[8px] font-bold text-slate-500">Källa: {act.reconciliation?.source || 'Okänd'}</div>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); updatePlannedActivity(act.id, { status: 'PLANNED', reconciliation: undefined, externalId: undefined, autoMatchDisabled: true }); notificationService.notify('info', 'Matchning ignorerad.'); }}
+                                                                    className="ml-auto text-rose-500 hover:text-rose-600 text-[8px] font-black uppercase underline"
+                                                                >
+                                                                    Ignorera match
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Vila</span>
+                                            </>
+                                        );
+                                    } else {
+                                        const actual = event.data;
+                                        return (
+                                            <div 
+                                                key={actual.id}
+                                                onClick={() => updateUrlParams({ activityId: actual.id })}
+                                                className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
+                                                    ${actual.type === 'strength' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'}
+                                                `}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                        {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}{actual.source === 'strava' && <span className="text-[#FC4C02]">🔥</span>}
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={(e) => { e.stopPropagation(); setMovingActivityId(movingActivityId === actual.id ? null : actual.id); }} className={`p-0.5 transition-colors ${movingActivityId === actual.id ? 'text-blue-500 font-bold' : 'text-slate-400 hover:text-blue-500'}`} title="Flytta"><Calendar size={10} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); reorderActivity(actual.id, 'up'); }} className="p-0.5 text-slate-400 hover:text-blue-500" title="Flytta upp"><LucideChevronUp size={10} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); reorderActivity(actual.id, 'down'); }} className="p-0.5 text-slate-400 hover:text-blue-500" title="Flytta ner"><LucideChevronDown size={10} /></button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(event); }} 
+                                                                className="p-0.5 text-slate-400 hover:text-rose-500 ml-1" 
+                                                                title="Ta bort"
+                                                            >
+                                                                <X size={10} />
+                                                            </button>
+                                                        </div>
+                                                        {event.time && <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 opacity-60"><Clock size={9} />{event.time}</span>}
+                                                    </div>
+                                                    {movingActivityId === actual.id && (
+                                                        <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-blue-900/50 absolute left-0 right-0 z-50 shadow-xl" onClick={e => e.stopPropagation()}>
+                                                            <div className="text-[9px] font-black uppercase text-slate-500 mb-2">Flytta till datum:</div>
+                                                            <input 
+                                                                type="date" 
+                                                                defaultValue={actual.date.split('T')[0]}
+                                                                onChange={(e) => handleMoveToDate(actual.id, e.target.value)}
+                                                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs text-slate-700 dark:text-slate-200"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2"><h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}</h4></div>
+                                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                                    {(actual.distance || 0) > 0 && <span className="text-xs text-slate-500 font-medium">🏃 {(actual.distance || 0).toFixed(1)} km</span>}
+                                                    {(actual.durationMinutes || 0) > 0 && <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes || 0)}</span>}
+                                                    {(actual.tonnage || 0) > 0 && <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>}
+                                                </div>
                                             </div>
-                                        )}
+                                        );
+                                    }
+                                })}
 
-                                        <button
-                                            onClick={() => {
-                                                if (isPast) {
-                                                    updateUrlParams({ registerDate: day.date, registerInput: 'löpning' });
-                                                } else {
-                                                    handleOpenModal(day.date);
-                                                }
-                                            }}
-                                            className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                        >
-                                            <Plus size={20} />
-                                            <span className="text-[10px] font-bold uppercase tracking-wide">
-                                                {isPast ? 'Registrera' : 'Planera'}
-                                            </span>
-                                        </button>
+                                {allEvents.length === 0 && (
+                                    <div className="py-8 flex flex-col items-center justify-center opacity-20 pointer-events-none border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2"><Activity size={20} className="text-slate-400" /></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Vila</span>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => handleOpenModal(day.date)}
+                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                >
+                                    <Plus size={20} />
+                                    <span className="text-[10px] font-bold uppercase tracking-wide">Planera</span>
+                                </button>
                             </div>
                         </div>
                     );
@@ -1063,22 +973,12 @@ export function TrainingPlanningPage() {
                 selectedDate={selectedDate}
                 editingActivity={editingActivity}
                 onSave={handleSaveActivity}
-                onDelete={(id) => {
-                    deletePlannedActivity(id);
-                    notificationService.notify('info', 'Aktiviteten raderad.');
-                    setIsModalOpen(false);
-                    setEditingActivity(null);
-                }}
+                onDelete={(id) => { deletePlannedActivity(id); setIsModalOpen(false); }}
                 weeklyStats={weeklyStats}
                 goalProgress={goalProgress}
             />
 
-            {/* Deep Stats Analysis */}
-            <WeeklyStatsAnalysis
-                weekStart={currentWeekStart}
-                weeklyStats={weeklyStats}
-            />
-
+            <WeeklyStatsAnalysis weekStart={currentWeekStart} weeklyStats={weeklyStats} />
         </div>
     );
 }

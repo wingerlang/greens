@@ -136,11 +136,53 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 return new Response(JSON.stringify({ error: "Activity not found on Strava" }), { status: 404, headers });
             }
 
-            return new Response(JSON.stringify({ splits: detailedActivity.splits_metric || [], laps: detailedActivity.laps || [] }), { headers });
+            return new Response(JSON.stringify({ 
+                splits: detailedActivity.splits_metric || [], 
+                laps: detailedActivity.laps || [],
+                description: detailedActivity.description || "",
+                name: detailedActivity.name || ""
+            }), { headers });
 
         } catch (e) {
-            console.error("Fetch splits failed", e);
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
+            console.error("❌ [STRAVA API] Fetch splits failed:", e);
+            return new Response(JSON.stringify({ 
+                error: e instanceof Error ? e.message : "Unknown error",
+                details: "Failed to fetch activity details from Strava API"
+            }), { status: 500, headers });
+        }
+    }
+
+    // Fetch activity kudos
+    if (url.pathname.match(/^\/api\/strava\/activities\/[^\/]+\/kudos$/) && method === "GET") {
+        try {
+            const parts = url.pathname.split('/');
+            const activityIdStr = parts[4];
+            const sanitizedIdStr = activityIdStr.replace('strava_', '');
+            
+            if (!sanitizedIdStr) {
+                return new Response(JSON.stringify({ error: "Invalid activity ID" }), { status: 400, headers });
+            }
+
+            const stravaTokens = await getStravaTokens(user.id);
+            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                accessToken = refreshed.accessToken;
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
+            }
+
+            const kudos = await strava.getStravaKudos(sanitizedIdStr, accessToken);
+            return new Response(JSON.stringify({ kudos }), { headers });
+
+        } catch (e) {
+            console.error("❌ [STRAVA API] Fetch kudos failed:", e);
+            return new Response(JSON.stringify({ 
+                error: e instanceof Error ? e.message : "Unknown error",
+                details: "Failed to fetch athlete kudos from Strava API"
+            }), { status: 500, headers });
         }
     }
 

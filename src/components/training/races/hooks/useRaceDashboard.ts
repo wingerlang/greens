@@ -142,18 +142,34 @@ export function useRaceDashboard({
         return items.sort((a, b) => {
             let valA: any;
             let valB: any;
-            if (sortConfig.key === 'placement') {
+            const key = sortConfig.key;
+
+            if (key === 'placement') {
                 valA = a.raceDetails?.placement || 999999;
                 valB = b.raceDetails?.placement || 999999;
-            } else if (sortConfig.key === 'distance') {
+            } else if (key === 'distance') {
                 valA = a.distance || 0;
                 valB = b.distance || 0;
+            } else if (key === 'elevation' || key === 'elevationGain') {
+                valA = a.elevationGain || a.raceDetails?.elevationGain || 0;
+                valB = b.elevationGain || b.raceDetails?.elevationGain || 0;
+            } else if (key === 'stifa') {
+                valA = (a.elevationGain || a.raceDetails?.elevationGain || 0) / (a.distance || 1);
+                valB = (b.elevationGain || b.raceDetails?.elevationGain || 0) / (b.distance || 1);
+            } else if (key === 'durationMinutes') {
+                valA = a.durationMinutes || 0;
+                valB = b.durationMinutes || 0;
+            } else if (key === 'notes' || key === 'title') {
+                valA = (a.title || a.notes || '').toLowerCase();
+                valB = (b.title || b.notes || '').toLowerCase();
             } else {
-                valA = a[sortConfig.key as keyof ExerciseEntry];
-                valB = b[sortConfig.key as keyof ExerciseEntry];
+                valA = (a as any)[key];
+                valB = (b as any)[key];
             }
-            if (valA === undefined) valA = 0;
-            if (valB === undefined) valB = 0;
+
+            if (valA === undefined || valA === null) valA = '';
+            if (valB === undefined || valB === null) valB = '';
+
             if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
@@ -219,13 +235,15 @@ export function useRaceDashboard({
 
         const racesWithPlacement = races.filter(r => r.raceDetails?.placement);
         const goldCount = racesWithPlacement.filter(r => r.raceDetails?.placement === 1).length;
+        const silverCount = racesWithPlacement.filter(r => r.raceDetails?.placement === 2).length;
+        const bronzeCount = racesWithPlacement.filter(r => r.raceDetails?.placement === 3).length;
         const podiumCount = racesWithPlacement.filter(r => r.raceDetails?.placement! <= 3).length;
         const percentiles = racesWithPlacement.filter(r => r.raceDetails?.totalParticipants).map(r => (r.raceDetails!.placement! / r.raceDetails!.totalParticipants!) * 100);
         
         return {
             totalDistance, count: races.length, 
             chartData: Object.entries(grouped).map(([date, d]) => ({ date, ...d })).sort((a,b) => a.date.localeCompare(b.date)),
-            goldCount, podiumCount,
+            goldCount, silverCount, bronzeCount, podiumCount,
             top10Count: percentiles.filter(p => p <= 10).length,
             avgPercent: percentiles.length ? percentiles.reduce((a,b)=>a+b,0)/percentiles.length : 0
         };

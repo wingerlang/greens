@@ -8,6 +8,8 @@ import {
     type Season,
     CATEGORY_LABELS,
     UNIT_LABELS,
+    getISODate,
+    generateId,
 } from '../../models/types.ts';
 import { parseNutritionText, extractFromJSONLD, cleanProductName, extractBrand, extractPackagingWeight } from '../../utils/nutrition/index.ts';
 
@@ -98,6 +100,9 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
         alcohol: 0
     });
     const [isDragging, setIsDragging] = useState(false);
+    const [purchasePrice, setPurchasePrice] = useState<number | ''>('');
+    const [purchaseDate, setPurchaseDate] = useState(getISODate());
+    const [registerPurchase, setRegisterPurchase] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -153,11 +158,15 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                 alcohol: Number((((editingItem.extendedDetails?.alcohol || 0) * portion) / 100).toFixed(2))
             });
             setInputMode('per100g');
+            setPurchasePrice(editingItem.lastPurchasedPrice || '');
+            setPurchaseDate(getISODate());
+            setRegisterPurchase(false);
+            setParseError(null);
         } else {
-            setAlias('');
             setFormData(EMPTY_FORM);
-            setPortionValues({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, caffeine: 0, alcohol: 0 });
-            setInputMode('per100g');
+            setPurchasePrice('');
+            setPurchaseDate(getISODate());
+            setRegisterPurchase(false);
             setParseError(null);
         }
     }, [isOpen, editingItem, foodAliases]);
@@ -166,20 +175,58 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const finalFormData = {
+        
+        let finalFormData = {
             ...formData,
             aliases: alias.split(',').map(s => s.trim()).filter(Boolean)
         };
+
+        // If registering a purchase, update latest price/date
+        if (registerPurchase && purchasePrice !== '') {
+            finalFormData.lastPurchasedPrice = Number(purchasePrice);
+            finalFormData.lastPurchasedDate = purchaseDate;
+        }
 
         if (editingItem) {
             updateFoodItem(editingItem.id, finalFormData);
             if (alias !== (foodAliases[editingItem.id] || '')) {
                 updateFoodAlias(editingItem.id, alias);
             }
+            
+            // Add to purchase log if requested
+            if (registerPurchase && purchasePrice !== '') {
+                addPurchaseLog({
+                    id: generateId(),
+                    foodItemId: editingItem.id,
+                    date: purchaseDate,
+                    price: Number(purchasePrice),
+                    quantity: 1,
+                    packageSize: formData.packageWeight || 0,
+                    unit: formData.unit
+                });
+            }
         } else {
-            addFoodItem(finalFormData);
+            const newItem = addFoodItem(finalFormData);
+            if (registerPurchase && purchasePrice !== '' && newItem) {
+                addPurchaseLog({
+                    id: generateId(),
+                    foodItemId: newItem.id,
+                    date: purchaseDate,
+                    price: Number(purchasePrice),
+                    quantity: 1,
+                    packageSize: formData.packageWeight || 0,
+                    unit: formData.unit
+                });
+            }
         }
         onClose();
+    };
+
+    const updatePricePerUnit = (price: number | '', weight: number) => {
+        if (price !== '' && price > 0 && weight > 0) {
+            const pUnit = (price / (weight / 1000));
+            setFormData(prev => ({ ...prev, pricePerUnit: Math.round(pUnit * 10) / 10 }));
+        }
     };
 
     const updateNutrition = (field: keyof typeof portionValues, value: number) => {
@@ -708,26 +755,54 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                                 </h3>
                                 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Inköpspris</label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                placeholder="t.ex. 25.90"
-                                                onChange={(e) => {
-                                                    const price = Number(e.target.value);
-                                                    const weight = formData.packageWeight || 0;
-                                                    if (price > 0 && weight > 0) {
-                                                        const pUnit = (price / (weight / 1000));
-                                                        setFormData(prev => ({ ...prev, pricePerUnit: Math.round(pUnit * 10) / 10 }));
-                                                    }
-                                                }}
-                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">KR</span>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Inköpspris</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={purchasePrice}
+                                                    placeholder="t.ex. 25.90"
+                                                    onChange={(e) => {
+                                                        const price = e.target.value === '' ? '' : Number(e.target.value);
+                                                        setPurchasePrice(price);
+                                                        updatePricePerUnit(price, formData.packageWeight || 0);
+                                                    }}
+                                                    className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">KR</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3 p-3 bg-slate-900/50 rounded-xl border border-slate-700/30">
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={registerPurchase}
+                                                        onChange={e => setRegisterPurchase(e.target.checked)}
+                                                        className="peer sr-only"
+                                                    />
+                                                    <div className="w-10 h-5 bg-slate-800 rounded-full border border-slate-700 peer-checked:bg-blue-500 peer-checked:border-blue-400 transition-all shadow-inner" />
+                                                    <div className="absolute left-1 top-1 w-3 h-3 bg-slate-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-transform" />
+                                                </div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 group-hover:text-slate-300 transition-colors">Logga Inköp</span>
+                                            </label>
+
+                                            {registerPurchase && (
+                                                <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <input
+                                                        type="date"
+                                                        value={purchaseDate}
+                                                        onChange={e => setPurchaseDate(e.target.value)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+
                                     <div>
                                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Förpackning</label>
                                         <div className="relative">
@@ -737,6 +812,7 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                                                 onChange={(e) => {
                                                     const weight = Number(e.target.value);
                                                     setFormData(prev => ({ ...prev, packageWeight: weight }));
+                                                    updatePricePerUnit(purchasePrice, weight);
                                                 }}
                                                 placeholder="t.ex. 400"
                                                 className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"

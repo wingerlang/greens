@@ -31,8 +31,32 @@ export const normalizeRaceTitle = (title: string) => {
     // 4. Remove emojis and special chars
     normalized = normalized.replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
     normalized = normalized.replace(/['"()]/g, '');
-    // 5. Cleanup whitespace
+// 5. Cleanup whitespace
     return normalized.replace(/\s+/g, ' ').trim();
+};
+
+export const getAvgElevation = (title: string, distance: number, history: ExerciseEntry[]) => {
+    const normTitle = normalizeRaceTitle(title);
+    if (!normTitle) return null;
+    
+    const matches = history.filter(h => {
+        const hTitle = normalizeRaceTitle(h.title || h.notes || '');
+        const hDist = h.distance || 0;
+        const titleMatch = hTitle === normTitle;
+        // If distance is explicitly set, check it. Otherwise just match title.
+        const distMatch = !distance || !hDist || Math.abs(hDist - distance) / distance < 0.15;
+        return titleMatch && distMatch;
+    });
+
+    if (matches.length === 0) return null;
+
+    const elevs = matches
+        .map(m => m.elevationGain || m.raceDetails?.elevationGain || 0)
+        .filter(e => e > 0);
+    
+    if (elevs.length === 0) return null;
+    
+    return Math.round(elevs.reduce((a, b) => a + b, 0) / elevs.length);
 };
 
 export const formatRaceDateCompact = (dateString: string) => {
@@ -41,7 +65,7 @@ export const formatRaceDateCompact = (dateString: string) => {
 };
 
 export const calcPace = (distValues: number | undefined, minutes: number | undefined) => {
-    if (!distValues || distValues <= 0 || !minutes) return '-';
+    if (!distValues || distValues <= 0 || !minutes || minutes <= 0) return '-';
     const paceDec = minutes / distValues;
     const pMin = Math.floor(paceDec);
     const pSec = Math.round((paceDec - pMin) * 60);
@@ -49,12 +73,18 @@ export const calcPace = (distValues: number | undefined, minutes: number | undef
     return `${pMin}:${pSec.toString().padStart(2, '0')}/km`;
 };
 
+export const calcStifa = (distKm: number | undefined, elevM: number | undefined) => {
+    if (!distKm || distKm <= 0 || !elevM || elevM <= 0) return '-';
+    // STIFA = elevation (m) / distance (km)
+    return Math.round(elevM / distKm).toString();
+};
+
 export const parseRaceGoal = (goalStr: string | undefined): number | null => {
     if (!goalStr) return null;
     const s = goalStr.toLowerCase();
     
-    // 1. Try HH:MM:SS or HH:MM (e.g., "1:43:00", "01:22", "1h43m")
-    const timeMatch = s.match(/\b(\d{1,2})[:h](\d{2})(?:[:m](\d{2}))?\b/);
+    // 1. HH:MM:SS or HH:MM (e.g., "1:43:00", "01:22")
+    const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
     if (timeMatch) {
         const h = parseInt(timeMatch[1]);
         const m = parseInt(timeMatch[2]);
@@ -62,29 +92,38 @@ export const parseRaceGoal = (goalStr: string | undefined): number | null => {
         return h * 60 + m + sec / 60;
     }
 
-    // 2. Try "X h Y min" or "Xh Ym"
+    // 2. Patterns like "1h 45min", "2h", "103m"
+    // Use individual matches for h and m to be flexible with order and junk text
     const hMatch = s.match(/(\d+)\s*h/);
-    const mMatch = s.match(/(\d+)\s*min/);
+    const mMatch = s.match(/(\d+)\s*m/); // matches 'm' and 'min'
+    
     if (hMatch || mMatch) {
         const h = hMatch ? parseInt(hMatch[1]) : 0;
         const m = mMatch ? parseInt(mMatch[1]) : 0;
-        return h * 60 + m;
+        
+        // Safety check: if we matched 'm' but it looks like a year (e.g., 2024), skip it
+        // (Though \s*m usually prevents this)
+        if (h > 0 || (m > 0 && m < 1000)) {
+            return h * 60 + m;
+        }
     }
-
-    // 3. Try "X min"
-    const minMatch = s.match(/(\d+)\s*(min|minuter)/);
-    if (minMatch) return parseInt(minMatch[1]);
 
     return null;
 };
 
 export const getPlannedRaceTime = (race: PlannedActivity): number | undefined => {
-    if (race.durationMinutes) return race.durationMinutes;
-    // Check realistic goal B first, then dream goal A
+    // For races, explicit goals should always take priority over the generic durationMinutes
+    // which might just be a default value (like 5:30 min/km fallback)
     const goalB = parseRaceGoal(race.raceDetails?.goals?.b);
     if (goalB) return goalB;
     const goalA = parseRaceGoal(race.raceDetails?.goals?.a);
     if (goalA) return goalA;
+    const goalC = parseRaceGoal(race.raceDetails?.goals?.c);
+    if (goalC) return goalC;
+
+    // Use manual duration if set and no goals matched
+    if (race.durationMinutes) return race.durationMinutes;
+    
     return undefined;
 };
 

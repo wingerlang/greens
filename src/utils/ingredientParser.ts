@@ -134,6 +134,9 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
     }
 
     // No quantity found, assume 1 unit
+    // But only if it's not just a number (prevents "2" from matching nothing)
+    if (/^\d+[.,]?\d*\s*$/.test(trimmed)) return null;
+
     return {
         quantity: 1,
         unit: 'pcs',
@@ -157,7 +160,10 @@ export function parseIngredients(text: string): ParsedIngredient[] {
  * Uses fuzzy matching on name
  */
 export function matchToFoodItem(parsed: ParsedIngredient, foodItems: FoodItem[]): FoodItem | null {
-    const searchName = parsed.name.toLowerCase();
+    const searchName = parsed.name.toLowerCase().trim();
+
+    // Prevent matching on numbers only or very short strings (avoids "22" matching "falukorv 22%")
+    if (!searchName || /^\d+[.,]?\d*\s*$/.test(searchName) || searchName.length < 2) return null;
 
     // Try exact match first
     let match = foodItems.find(f => f.name.toLowerCase() === searchName);
@@ -169,12 +175,17 @@ export function matchToFoodItem(parsed: ParsedIngredient, foodItems: FoodItem[])
     );
     if (match) return match;
 
-    // Try partial match (ingredient contains food name or vice versa)
-    match = foodItems.find(f =>
-        searchName.includes(f.name.toLowerCase()) ||
-        f.name.toLowerCase().includes(searchName) ||
-        f.aliases?.some(a => searchName.includes(a.toLowerCase()) || a.toLowerCase().includes(searchName))
-    );
+    // Try partial match (prioritize starting with the query)
+    match = foodItems.find(f => f.name.toLowerCase().startsWith(searchName));
+    if (match) return match;
+
+    // Try more aggressive partial match (ingredient contains food name or vice versa)
+    // But be careful: don't match if the food item name is essentially just a number/unit
+    match = foodItems.find(f => {
+        const itemLower = f.name.toLowerCase();
+        if (itemLower.length < 3) return false;
+        return searchName.includes(itemLower) || itemLower.includes(searchName);
+    });
     if (match) return match;
 
     // Try matching description
@@ -185,11 +196,12 @@ export function matchToFoodItem(parsed: ParsedIngredient, foodItems: FoodItem[])
 
     // Try first word match
     const firstWord = searchName.split(/\s+/)[0];
-    match = foodItems.find(f =>
-        f.name.toLowerCase().startsWith(firstWord) ||
-        f.name.toLowerCase().includes(firstWord) ||
-        f.aliases?.some(a => a.toLowerCase().startsWith(firstWord))
-    );
+    if (firstWord.length >= 3) {
+        match = foodItems.find(f =>
+            f.name.toLowerCase().startsWith(firstWord) ||
+            f.aliases?.some(a => a.toLowerCase().startsWith(firstWord))
+        );
+    }
 
     return match || null;
 }

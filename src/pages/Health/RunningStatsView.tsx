@@ -5,7 +5,7 @@ import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { isCompetition, formatTime } from '../../utils/activityUtils.ts';
 import { getBestEffortsForActivity, PERFORMANCE_TARGETS } from '../../utils/performanceEngine.ts';
 import { ActivityDetailModal } from '../../components/activities/ActivityDetailModal.tsx';
-import { PBAnalysisModal } from '../../components/training/PBAnalysisModal.tsx';
+import { PrepAnalysisModal } from '../../components/training/PrepAnalysisModal.tsx';
 import { Trophy, Clock, Zap, Target, History, CalendarDays, TrendingUp, Medal, ArrowRight, BarChart3 } from 'lucide-react';
 
 interface RunningStatsViewProps {
@@ -816,8 +816,11 @@ export function RunningStatsView({
             )}
 
             {selectedPBForAnalysis && (
-                <PBAnalysisModal
-                    pbEvent={selectedPBForAnalysis}
+                <PrepAnalysisModal
+                    event={{
+                        ...selectedPBForAnalysis,
+                        title: selectedPBForAnalysis.activity.title || selectedPBForAnalysis.activity.notes || selectedPBForAnalysis.bucketLabel
+                    }}
                     allActivities={exerciseEntries}
                     onClose={() => setSelectedPBForAnalysis(null)}
                 />

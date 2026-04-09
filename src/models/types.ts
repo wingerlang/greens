@@ -1307,6 +1307,18 @@ export interface ActivityPerformanceSection {
 }
 
 /**
+ * Strava Athlete (Social)
+ */
+export interface StravaAthlete {
+    firstname: string;
+    lastname: string;
+    profile: string; // Avatar URL
+    city?: string;
+    state?: string;
+    country?: string;
+}
+
+/**
  * Best Effort (Best Move) from Strava/Third-parties
  * e.g. "5k", "10k", "1 mile"
  */
@@ -1457,14 +1469,15 @@ export interface PlannedActivity {
 
     hyroxFocus?: 'hybrid' | 'strength' | 'cardio';
     startTime?: string; // HH:mm
-    createdAt?: string; // ISO Date
+    createdAt?: string;
     includesRunning?: boolean;
-
+    autoMatchDisabled?: boolean;
     reconciliation?: {
         score?: number;
         matchReason?: string;
         bestCandidateId?: string;
         reconciledAt?: string;
+        source?: string;
     };
 
     // Race Specific Details (Metadata)

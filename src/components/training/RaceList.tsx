@@ -9,7 +9,7 @@ import { Trophy, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';
 
 // Modulära komponenter och hooks
 import { useRaceDashboard } from './races/hooks/useRaceDashboard.ts';
-import { UpcomingRaceCard, UpcomingRaceCardCompact } from './races/UpcomingRaceCards.tsx';
+import { UpcomingRaceCard, UpcomingRaceCardCompact, UpcomingRaceCardList } from './races/UpcomingRaceCards.tsx';
 import { TimelineTable } from './races/TimelineTable.tsx';
 import { SeriesCard } from './races/SeriesCard.tsx';
 import { AddRaceModal, BulkAddRaceModal } from './races/RaceModals.tsx';
@@ -79,9 +79,11 @@ export function RaceList(props: RaceListProps) {
                     <div className={upcomingViewMode === 'cozy' ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8" : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"}>
                         {upcomingRaces.map(r => (
                             upcomingViewMode === 'cozy' ? (
-                                <UpcomingRaceCard key={r.id} race={r} historyRaces={races} onUpdate={handleSaveRace} onDelete={handleDeleteRace} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
-                            ) : (
+                                <UpcomingRaceCard key={r.id} race={r} historyRaces={races} allActivities={props.exerciseEntries} onUpdate={handleSaveRace} onDelete={handleDeleteRace} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
+                            ) : upcomingViewMode === 'compact' ? (
                                 <UpcomingRaceCardCompact key={r.id} race={r} historyRaces={races} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
+                            ) : (
+                                <UpcomingRaceCardList key={r.id} race={r} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
                             )
                         ))}
                     </div>
@@ -108,7 +110,7 @@ export function RaceList(props: RaceListProps) {
                         <button onClick={() => setFilterPodium(!filterPodium)} className={`p-4 rounded-2xl border transition-all ${filterPodium ? 'bg-amber-500 border-amber-400 text-slate-950' : 'bg-slate-950/50 border-white/10 text-slate-400 hover:text-white'}`} title="Visa endast pallplatser"><Medal size={20} /></button>
                         <button onClick={() => {
                             const csv = ['Datum,Titel,Distans,Tid,Placering'].concat(races.map(r => `${r.date},${r.title || r.notes},${r.distance || ''},${r.durationMinutes},${r.raceDetails?.placement || ''}`)).join('\n');
-                            navigator.clipboard.clipboard.writeText(csv);
+                            navigator.clipboard.writeText(csv);
                         }} className="p-4 bg-slate-950/50 hover:bg-slate-800 text-slate-500 hover:text-white rounded-2xl border border-white/10 transition-all"><CopyIcon size={20} /></button>
                     </div>
                 </div>

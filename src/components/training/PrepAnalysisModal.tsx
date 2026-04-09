@@ -1,52 +1,53 @@
 import React, { useMemo, useState } from 'react';
-import { ExerciseEntry } from '../../models/types.ts';
+import { ExerciseEntry, PlannedActivity } from '../../models/types.ts';
 import {
     X, Medal, Zap, Activity, Clock, TrendingUp, TrendingDown,
     Mountain, Coffee, Timer, Sparkles, RefreshCw, Trophy,
-    Shield, Target, Heart, ChevronRight, ChevronLeft, MapPin, Star, Trophy as TrophyIcon
+    Shield, Target, Heart, ChevronRight, ChevronLeft, MapPin, Star, Trophy as TrophyIcon,
+    BarChart3
 } from 'lucide-react';
 import { formatTime, isCompetition } from '../../utils/activityUtils.ts';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ComposedChart, Line, Scatter, CartesianGrid } from 'recharts';
 import { useData } from '../../context/DataContext.tsx';
 import { useNavigate } from 'react-router-dom';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
-import { ExerciseSubType } from '../../models/types.ts';
 
-interface PBEvent {
+interface PrepEvent {
     id: string;
     date: string;
+    title: string;
     distance: number;
-    durationSeconds: number;
-    durationFormatted: string;
-    bucketLabel: string;
+    durationSeconds?: number;
+    durationFormatted?: string;
+    bucketLabel?: string;
     previousDurationSeconds?: number;
     improvementSeconds?: number;
     isRace: boolean;
-    activity: ExerciseEntry;
+    activity?: ExerciseEntry | PlannedActivity;
 }
 
-interface PBAnalysisModalProps {
-    pbEvent: PBEvent;
+interface PrepAnalysisModalProps {
+    event: PrepEvent;
     allActivities: ExerciseEntry[];
     onClose: () => void;
 }
 
-export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisModalProps) {
+export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysisModalProps) {
     const navigate = useNavigate();
     const [timeframeWeeks, setTimeframeWeeks] = useState(12);
     const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
-    const { weightEntries, calculateDailyNutrition, exerciseEntries } = useData();
+    const { weightEntries, calculateDailyNutrition } = useData();
 
-    // 1. Setup the dynamic window leading UP TO the PB date
+    // 1. Setup the dynamic window leading UP TO the event date
     const analysisWindow = useMemo(() => {
-        const pbDate = new Date(pbEvent.date).getTime();
+        const eventDate = new Date(event.date).getTime();
         const timeframeMs = timeframeWeeks * 7 * 24 * 60 * 60 * 1000;
-        const startDateMs = pbDate - timeframeMs;
+        const startDateMs = eventDate - timeframeMs;
 
-        // Filter activities that happened in the timeframe strictly before or on the PB day
+        // Filter activities that happened in the timeframe strictly before or on the event day
         const windowActivities = allActivities.filter(a => {
             const time = new Date(a.date).getTime();
-            return time >= startDateMs && time <= pbDate;
+            return time >= startDateMs && time <= eventDate;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         let totalRunVolumeKm = 0;
@@ -77,23 +78,22 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         let fastestRun: ExerciseEntry | null = null;
 
         // Weekly Volume chart data
-        const weeklyVolume: Record<string, number> = {};
-        const weeklyHealth: Record<string, { kcalTotal: number; weightSum: number; weightCount: number; strengthCount: number; raceCount: number; maxRaceDistance: number }> = {};
+        const weeklyHealth: Record<string, { kcalTotal: number; weightSum: number; weightCount: number; strengthCount: number; raceCount: number; maxRaceDistance: number; raceList: { title: string; distance: number }[] }> = {};
 
         for (let i = 0; i < timeframeWeeks; i++) {
             const weekKey = `Vecka -${timeframeWeeks - i}`;
             weeklyVolume[weekKey] = 0;
-            weeklyHealth[weekKey] = { kcalTotal: 0, weightSum: 0, weightCount: 0, strengthCount: 0, raceCount: 0, maxRaceDistance: 0 };
+            weeklyHealth[weekKey] = { kcalTotal: 0, weightSum: 0, weightCount: 0, strengthCount: 0, raceCount: 0, maxRaceDistance: 0, raceList: [] };
         }
 
         // Pre-fill days for kcal
         for (let i = 0; i < timeframeWeeks * 7; i++) {
-            const dateMs = pbDate - i * 24 * 60 * 60 * 1000;
+            const dateMs = eventDate - i * 24 * 60 * 60 * 1000;
             const dateStr = new Date(dateMs).toISOString().split('T')[0];
-            const weeksBeforePB = Math.floor(i / 7);
+            const weeksBeforeEvent = Math.floor(i / 7);
 
-            if (weeksBeforePB < timeframeWeeks) {
-                const weekKey = `Vecka -${weeksBeforePB + 1}`;
+            if (weeksBeforeEvent < timeframeWeeks) {
+                const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
                 if (weeklyHealth[weekKey]) {
                     const nut = calculateDailyNutrition(dateStr);
                     if (nut && nut.calories > 0) {
@@ -105,18 +105,18 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
 
         windowActivities.forEach(act => {
             const actTimeMs = new Date(act.date).getTime();
-            const daysBeforePB = Math.floor((pbDate - actTimeMs) / (1000 * 60 * 60 * 24));
-            const weeksBeforePB = Math.floor(daysBeforePB / 7);
+            const daysBeforeEvent = Math.floor((eventDate - actTimeMs) / (1000 * 60 * 60 * 24));
+            const weeksBeforeEvent = Math.floor(daysBeforeEvent / 7);
 
             // Weekly aggregation
-            if (weeksBeforePB < timeframeWeeks) {
-                const weekKey = `Vecka -${weeksBeforePB + 1}`;
+            if (weeksBeforeEvent < timeframeWeeks) {
+                const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
                 const isRunning = act.type.toLowerCase().includes('run') || act.type.toLowerCase().includes('löpning');
                 const isRace = isCompetition(act);
 
                 if (isRunning) {
-                    // STICKT LOGIC: If this is the PB activity itself, don't count it towards "Training Preparation"
-                    if (act.id !== pbEvent.id) {
+                    // STICKT LOGIC: If this is the event activity itself, don't count it towards "Training Preparation"
+                    if (act.id !== event.id) {
                         weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + (act.distance || 0);
                     }
                     if (isRace) {
@@ -125,6 +125,10 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         if (dist > (weeklyHealth[weekKey].maxRaceDistance || 0)) {
                             weeklyHealth[weekKey].maxRaceDistance = dist;
                         }
+                        weeklyHealth[weekKey].raceList.push({
+                            title: act.title || act.notes || 'Tävling',
+                            distance: dist
+                        });
                     }
                 }
                 if (act.type.toLowerCase().includes('strength') || act.type.toLowerCase().includes('styrka') || act.type.toLowerCase() === 'weighttraining') {
@@ -144,46 +148,40 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             if (isRace && isRunning) races.push(act);
 
             if (isRunning && act.distance && act.durationMinutes) {
-                // DON'T include PB itself in these "lead-up" counters
-                if (act.id === pbEvent.id) return;
+                // DON'T include event itself in these "lead-up" counters
+                if (act.id === event.id) return;
 
                 totalRunVolumeKm += act.distance;
                 totalRunTimeMin += act.durationMinutes;
                 totalElevationGain += (act.elevationGain || 0);
                 totalRunCount++;
 
-                const isQuality = act.title?.toLowerCase().includes('intervall') ||
+                const isQuality = !isRace && (
+                    act.title?.toLowerCase().includes('intervall') ||
                     act.notes?.toLowerCase().includes('intervall') ||
                     act.title?.toLowerCase().includes('tempo') ||
                     act.title?.toLowerCase().includes('tröskel') ||
-                    act.subType === 'interval' || 
-                    act.subType === 'tempo' || 
-                    act.subType === 'race';
+                    act.subType === 'interval' ||
+                    act.subType === 'tempo'
+                );
 
-                if (!isRace) {
-                    const enriched = { ...act, isQuality: !!isQuality };
+                if (isRace) {
+                    // Handled above in races list
+                } else if (isQuality) {
+                    qualityCount++;
+                    qualitySessions.push(act);
+                    const enriched = { ...act, isQuality: true };
                     trainingRuns.push(enriched);
-                }
-                
-                const pace = (act.durationMinutes * 60) / act.distance;
-                if (pace < fastestPaceSecPerKm && pace > 120) {
-                    fastestPaceSecPerKm = pace;
-                    fastestRun = act;
-                }
-                if ((act.elevationGain || 0) > maxElevationInOneRun) {
-                    maxElevationInOneRun = act.elevationGain || 0;
-                }
-
-                if (!isRace) {
-                    if (isQuality) {
-                        qualityCount++;
-                        qualitySessions.push(act);
-                    } else if (act.distance >= 14) {
-                        if (act.distance >= 40) ultraLongRunCount++;
-                        else if (act.distance >= 20) longRunCount++;
-                        else longerDistCount++;
+                } else {
+                    const enriched = { ...act, isQuality: false };
+                    trainingRuns.push(enriched);
+                    
+                    if (act.distance >= 14) {
+                        if (act.distance >= 40) ultraLongRunCount += 1;
+                        else if (act.distance >= 20) longRunCount += 1;
+                        else longerDistCount += 1;
                     } else {
-                        distanceCount++;
+                        distanceCount += 1;
                     }
                 }
             } else {
@@ -198,19 +196,15 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             }
         });
 
-        // Add Weight Entries
-        weightEntries.forEach(w => {
-            const wTimeMs = new Date(w.date).getTime();
-            if (wTimeMs >= startDateMs && wTimeMs <= pbDate) {
-                const daysBeforePB = Math.floor((pbDate - wTimeMs) / (1000 * 60 * 60 * 24));
-                const weeksBeforePB = Math.floor(daysBeforePB / 7);
-                if (weeksBeforePB < timeframeWeeks) {
-                    const weekKey = `Vecka -${weeksBeforePB + 1}`;
-                    if (weeklyHealth[weekKey]) {
-                        weeklyHealth[weekKey].weightSum += w.weight;
-                        weeklyHealth[weekKey].weightCount++;
-                    }
-                }
+        // Fastest Pace - ensure we check the runs that were pushed to trainingRuns
+        trainingRuns.forEach(act => {
+            const pace = (act.durationMinutes * 60) / act.distance;
+            if (pace < fastestPaceSecPerKm && pace > 120) {
+                fastestPaceSecPerKm = pace;
+                fastestRun = act;
+            }
+            if ((act.elevationGain || 0) > maxElevationInOneRun) {
+                maxElevationInOneRun = act.elevationGain || 0;
             }
         });
 
@@ -219,14 +213,19 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             .sort((a, b) => (b.distance || 0) - (a.distance || 0))
             .slice(0, 3);
 
-        // Fastest Run (Exclude Top Long and PB)
-        trainingRuns.forEach(act => {
-            if (act.id === pbEvent.id) return;
-            if (top3LongRuns.length > 0 && act.id === top3LongRuns[0].id) return;
-            const paceSec = (act.durationMinutes * 60) / (act.distance || 1);
-            if (act.distance && act.distance >= 3 && paceSec < fastestPaceSecPerKm) {
-                fastestPaceSecPerKm = paceSec;
-                fastestRun = act;
+        // Add Weight Entries
+        weightEntries.forEach(w => {
+            const wTimeMs = new Date(w.date).getTime();
+            if (wTimeMs >= startDateMs && wTimeMs <= eventDate) {
+                const daysBeforeEvent = Math.floor((eventDate - wTimeMs) / (1000 * 60 * 60 * 24));
+                const weeksBeforeEvent = Math.floor(daysBeforeEvent / 7);
+                if (weeksBeforeEvent < timeframeWeeks) {
+                    const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
+                    if (weeklyHealth[weekKey]) {
+                        weeklyHealth[weekKey].weightSum += w.weight;
+                        weeklyHealth[weekKey].weightCount++;
+                    }
+                }
             }
         });
 
@@ -278,21 +277,38 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
         if (longestStreak >= 5) pros.push(`Stark kontinuitet i träningen (max-streak: ${longestStreak} dagar)`);
         if (restDays < timeframeWeeks) cons.push("Väldigt få vilodagar (potentiell underåterhämtning)");
 
-        const rawChartData = Object.keys(weeklyVolume).sort((a, b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1])).map(key => ({
+        const rawChartData = Object.keys(weeklyVolume).sort((a, b) => {
+            const numA = parseInt(a.split('-')[1]);
+            const numB = parseInt(b.split('-')[1]);
+            return numA - numB;
+        }).map(key => ({
             week: key,
             vol: Math.round(weeklyVolume[key] * 10) / 10,
             raceCount: weeklyHealth[key].raceCount,
             maxRaceDistance: weeklyHealth[key].maxRaceDistance,
+            raceList: weeklyHealth[key].raceList,
             weight: weeklyHealth[key].weightCount > 0 ? Math.round((weeklyHealth[key].weightSum / weeklyHealth[key].weightCount) * 10) / 10 : null,
             kcal: weeklyHealth[key].kcalTotal > 0 ? Math.round(weeklyHealth[key].kcalTotal / 7) : null
         }));
 
-        const weightDataPoints = weightEntries.filter(w => new Date(w.date).getTime() >= startDateMs && new Date(w.date).getTime() <= pbDate);
+        const weightDataPoints = weightEntries.filter(w => new Date(w.date).getTime() >= startDateMs && new Date(w.date).getTime() <= eventDate);
         const hasHealthData = weightDataPoints.length >= 3;
 
-        const longRunsList = trainingRuns.filter(r => (r.distance || 0) >= 20 && !(r as any).isQuality);
-        const longerDistList = trainingRuns.filter(r => (r.distance || 0) >= 14 && (r.distance || 0) < 20 && !(r as any).isQuality);
-        const easyRunsList = trainingRuns.filter(r => (r.distance || 0) < 14 && !(r as any).isQuality); // For "Andra Distans" OR Recovery subtiling if needed
+        const longRunsList = windowActivities.filter(r => {
+            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
+            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval';
+            return isRun && (r.distance || 0) >= 20 && r.id !== event.id && !isCompetition(r) && !isQuality;
+        });
+        const longerDistList = windowActivities.filter(r => {
+            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
+            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval' || r.subType === 'tempo';
+            return isRun && (r.distance || 0) >= 14 && (r.distance || 0) < 20 && r.id !== event.id && !isCompetition(r) && !isQuality;
+        });
+        const easyRunsList = windowActivities.filter(r => {
+            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
+            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval' || r.subType === 'tempo';
+            return isRun && (r.distance || 0) < 14 && r.id !== event.id && !isCompetition(r) && !isQuality;
+        });
 
         return {
             top3LongRuns, fastestRun: fastestRun as ExerciseEntry | null,
@@ -313,7 +329,7 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             totalRunCount,
             totalRunVolumeKm
         };
-    }, [pbEvent, allActivities, timeframeWeeks, weightEntries, calculateDailyNutrition]);
+    }, [event, allActivities, timeframeWeeks, weightEntries, calculateDailyNutrition]);
 
     const formatPace = (secPerKm: number) => {
         if (!isFinite(secPerKm) || secPerKm <= 0) return '-';
@@ -323,9 +339,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
     };
 
     const ActivityRow = ({ r, icon }: { r: ExerciseEntry; icon: React.ReactNode }) => {
-        const [dYear, dMonth, dDay] = r.date.split('-');
-        const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
-        const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
         const paceSec = r.durationMinutes > 0 ? (r.durationMinutes * 60) / (r.distance || 1) : 0;
 
         return (
@@ -348,6 +361,7 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <span>{r.date.substring(0, 10)}</span>
                             {r.distance && (
                                 <span className={`text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider ${
+                                    isCompetition(r) ? 'bg-red-500/20 text-red-500' :
                                     r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'bg-amber-500/20 text-amber-500' :
                                     r.subType === 'tempo' || r.title?.toLowerCase().includes('tempo') ? 'bg-yellow-500/20 text-yellow-500' :
                                     (r as any).isQuality ? 'bg-orange-500/20 text-orange-400' :
@@ -357,20 +371,11 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                                     r.distance <= 7 ? 'bg-indigo-500/20 text-indigo-400' :
                                     'bg-slate-500/20 text-slate-400'
                                 }`}>
-                                    {r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'Intervall' :
+                                    {isCompetition(r) ? 'Tävling' :
+                                     r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'Intervall' :
                                      r.subType === 'tempo' || r.title?.toLowerCase().includes('tempo') ? 'Tempo' :
                                      (r as any).isQuality ? 'Kvalitét' :
                                      r.distance >= 40 ? 'Överlångt' : r.distance >= 20 ? 'Långpass' : r.distance >= 14 ? 'Längre Distans' : r.distance <= 7 ? 'Återhämtning' : 'Distans'}
-                                </span>
-                            )}
-                            {isCompetition(r) && (
-                                <span className="bg-red-500/20 text-red-500 text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider">
-                                    Tävling
-                                </span>
-                            )}
-                            {isCompetition(r) && r.distance && r.distance >= 45 && (
-                                <span className="bg-fuchsia-500/20 text-fuchsia-400 text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider">
-                                    Ultra
                                 </span>
                             )}
                         </div>
@@ -403,10 +408,14 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <span className="text-xs text-slate-400">Volym:</span>
                             <span className="text-xs font-black text-white">{data.vol} km</span>
                         </div>
-                        {data.raceCount > 0 && (
-                            <div className="flex justify-between gap-8">
-                                <span className="text-xs text-amber-500">Tävling:</span>
-                                <span className="text-xs font-black text-amber-400">{data.maxRaceDistance} km</span>
+                        {data.raceList && data.raceList.length > 0 && (
+                            <div className="pt-1.5 border-t border-white/5 mt-1.5">
+                                {data.raceList.map((race: any, i: number) => (
+                                    <div key={i} className="flex justify-between gap-4 mb-0.5 last:mb-0">
+                                        <span className="text-[10px] font-black text-amber-500 truncate max-w-[80px]">{race.title}</span>
+                                        <span className="text-[10px] font-black text-amber-400">{race.distance} km</span>
+                                    </div>
+                                ))}
                             </div>
                         )}
                         {data.weight && (
@@ -433,15 +442,9 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
             metadata: {
                 generateDate: new Date().toISOString(),
                 timeframeWeeks: timeframeWeeks,
-                pbDate: pbEvent.date.substring(0, 10),
+                eventDate: event.date.substring(0, 10),
             },
-            pbEvent: {
-                title: pbEvent.activity?.title || pbEvent.bucketLabel,
-                distance: pbEvent.distance,
-                durationSeconds: pbEvent.durationSeconds,
-                pace: formatPace(pbEvent.durationSeconds / pbEvent.distance),
-                date: pbEvent.date.substring(0, 10)
-            },
+            event: { ...event, activity: undefined },
             summaryStats: {
                 totalVolumeKm: Math.round(analysisWindow.totalRunVolumeKm),
                 avgWeeklyVolKm: Math.round(analysisWindow.avgWeeklyVol),
@@ -459,36 +462,13 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                 cyclingCount: analysisWindow.cyclingCount,
                 doubleDaysCount: analysisWindow.doubleDaysCount
             },
-            distributionCounts: {
-                races: analysisWindow.races.length,
-                quality: analysisWindow.qualityCount,
-                longRuns: analysisWindow.longRunCount,
-                longerDistans: analysisWindow.longerDistCount,
-                distans: analysisWindow.distanceCount
-            },
-            races: analysisWindow.races.map(r => ({
-                date: r.date.substring(0, 10),
-                title: r.title || r.type,
-                distance: r.distance,
-                pace: r.durationMinutes > 0 ? formatPace((r.durationMinutes * 60) / (r.distance || 1)) : '-',
-                heartRateAvg: r.heartRateAvg,
-                elevationGain: r.elevationGain
-            })),
-            top3LongRuns: analysisWindow.top3LongRuns.map(r => ({
-                date: r.date.substring(0, 10),
-                title: r.title || r.type,
-                distance: r.distance,
-                pace: r.durationMinutes > 0 ? formatPace((r.durationMinutes * 60) / (r.distance || 1)) : '-'
-            })),
             weeklyTrends: analysisWindow.chartData,
-            weightStats: analysisWindow.weightDataPoints ? analysisWindow.weightDataPoints.map(w => ({
-                date: w.date.substring(0, 10),
-                weight: w.weight
-            })) : undefined
         };
         navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
         alert('All synlig data har kopierats till urklipp i JSON-format!');
     };
+
+    const isFutureEvent = new Date(event.date) > new Date();
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -498,23 +478,32 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                 <div className="bg-slate-900 border-b border-white/5 px-6 py-2 flex justify-between items-center sticky top-0 z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.1)] shrink-0">
-                            {pbEvent.isRace ? <Medal size={16} /> : <Zap size={16} />}
+                            {event.isRace ? <Medal size={16} /> : <Zap size={16} />}
                         </div>
                         <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4">
-                            <h2 className="text-base font-black text-white">
-                                {pbEvent.bucketLabel} Rekord
+                            <h2 className="text-base font-black text-white truncate max-w-[200px] md:max-w-md">
+                                {event.bucketLabel || event.title} {event.bucketLabel ? 'Rekord' : 'Analys'}
                             </h2>
                             <div className="flex items-center gap-3">
-                                <span className="text-xl font-black text-amber-400 font-mono">
-                                    {pbEvent.durationFormatted}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-medium font-mono">
-                                    ({formatPace(pbEvent.durationSeconds / pbEvent.distance)})
-                                </span>
-                                {pbEvent.improvementSeconds && pbEvent.improvementSeconds > 0 && (
+                                {event.durationFormatted && (
+                                    <span className="text-xl font-black text-amber-400 font-mono">
+                                        {event.durationFormatted}
+                                    </span>
+                                )}
+                                {event.durationSeconds && event.distance && (
+                                    <span className="text-[10px] text-slate-500 font-medium font-mono">
+                                        ({formatPace(event.durationSeconds / event.distance)})
+                                    </span>
+                                )}
+                                {event.improvementSeconds && event.improvementSeconds > 0 && (
                                     <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 bg-emerald-400/10 px-1.5 py-0.5 rounded">
                                         <TrendingDown size={10} />
-                                        {formatTime(pbEvent.improvementSeconds)}
+                                        {formatTime(event.improvementSeconds)}
+                                    </span>
+                                )}
+                                {isFutureEvent && (
+                                    <span className="text-[10px] font-bold text-blue-400 flex items-center gap-1 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 uppercase tracking-widest">
+                                        Kommande
                                     </span>
                                 )}
                             </div>
@@ -530,7 +519,7 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                             <div className="bg-amber-500/10 p-1 rounded-sm border border-amber-500/20"><Activity size={12} className="text-amber-500" /></div> JSON
                         </button>
                         <div className="hidden lg:block text-[10px] font-bold text-slate-500 uppercase">
-                            Analys t.o.m. {pbEvent.date.substring(0, 10)}
+                            Analys t.o.m. {event.date.substring(0, 10)}
                         </div>
                         <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg shrink-0">
                             <X size={18} />
@@ -539,7 +528,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-                    {/* Compact Metrics Bar */}
                     {/* Compact Metrics Bar */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl flex flex-col justify-between">
@@ -591,16 +579,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         </div>
                     </div>
 
-                    <div className="hidden flex flex-col md:flex-row gap-2 justify-between items-center bg-slate-800/20 p-2 rounded-xl border border-white/5">
-                        <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-1">
-                            {[4, 8, 12, 16].map(weeks => (
-                                <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-3 py-1 text-[9px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
-                            ))}
-                        </div>
-                        <div className="text-[9px] font-black text-slate-600 uppercase flex items-center gap-2"><Activity size={10} className="text-amber-500" /> Data fram till {pbEvent.date.substring(0, 10)}</div>
-                    </div>
-
-                    {/* 1. Mängd & Formtoppning (Narrower) */}
                     <div className="max-w-xl mx-auto w-full bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl">
                         <div className="flex justify-between items-baseline">
                             <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><TrendingUp size={12} className="text-blue-500" /> Mängd & Formtoppning</h3>
@@ -617,7 +595,6 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         </div>
                     </div>
 
-                    {/* 2. Variation, Frekvens & Passfördelning (Full Width Flex) */}
                     <div className="bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl flex flex-col md:flex-row justify-between gap-4 items-center">
                         <div>
                             <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2 mb-2"><RefreshCw size={12} className="text-indigo-500" /> Variation & Frekvens</h3>
@@ -707,7 +684,7 @@ export function PBAnalysisModal({ pbEvent, allActivities, onClose }: PBAnalysisM
                         </div>
                     </div>
 
-                    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-4`}>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl h-64 flex flex-col">
                             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center justify-between">
                                 <div className="flex items-center gap-2"><TrendingUp size={12} className="text-emerald-500" /> Volym & Tävlingsdistans</div>

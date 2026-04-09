@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
-import { UniversalActivity } from '../../models/types.ts';
+import { UniversalActivity, StravaAthlete } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 import { SimilarWorkouts } from './SimilarWorkouts.tsx';
@@ -33,6 +33,9 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
     const [isDeleting, setIsDeleting] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [activeTab, setActiveTab] = useState<'DETAILS' | 'ANALYSIS'>('DETAILS');
+    const [showKudos, setShowKudos] = useState(false);
+    const [kudos, setKudos] = useState<StravaAthlete[]>([]);
+    const [loadingKudos, setLoadingKudos] = useState(false);
 
     // ESC key to close
     useEffect(() => {
@@ -193,6 +196,24 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
         }
     };
 
+    const fetchKudos = async (externalId: string) => {
+        if (!token) return;
+        setLoadingKudos(true);
+        try {
+            const res = await fetch(`/api/strava/activities/${externalId}/kudos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setKudos(data.kudos || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch kudos:', error);
+        } finally {
+            setLoadingKudos(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div
@@ -258,7 +279,7 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                     <p className="text-[9px] uppercase font-black text-orange-400 flex items-center gap-1 group-hover:text-orange-300">
                                         Strava Data ↗
                                     </p>
-                                    <p className="text-white font-bold text-xs">{stravaActivity.performance.notes || stravaActivity.plan?.title || 'Strava Activity'}</p>
+                                    <p className="text-white font-bold text-xs whitespace-pre-wrap">{stravaActivity.performance.notes || stravaActivity.plan?.title || 'Strava Activity'}</p>
                                     <p className="text-[9px] text-orange-200/60 mt-0.5">{stravaActivity.plan?.title}</p>
                                 </div>
                             </div>
@@ -287,12 +308,55 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                     </div>
                                 )}
                                 {stravaActivity.performance.kudosCount !== undefined && stravaActivity.performance.kudosCount > 0 && (
-                                    <div>
+                                    <div 
+                                        className="relative"
+                                        onMouseEnter={() => {
+                                            if (stravaActivity?.performance?.source?.externalId && kudos.length === 0 && !loadingKudos) {
+                                                fetchKudos(stravaActivity.performance.source.externalId);
+                                            }
+                                        }}
+                                    >
                                         <p className="text-[8px] uppercase font-bold text-slate-500">Kudos</p>
-                                        <p className="text-sm font-black text-white flex items-center gap-1 justify-end">
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowKudos(!showKudos);
+                                            }}
+                                            className="text-sm font-black text-white flex items-center gap-1 justify-end hover:text-orange-400 transition-colors"
+                                        >
                                             {stravaActivity.performance.kudosCount}
                                             <span className="text-orange-400 text-[10px] ml-1">👍</span>
-                                        </p>
+                                        </button>
+
+                                        {showKudos && (
+                                            <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in zoom-in-95 duration-200">
+                                                <div className="flex justify-between items-center mb-2 px-1">
+                                                    <span className="text-[10px] font-black uppercase text-slate-400">Kudos från</span>
+                                                    <button onClick={() => setShowKudos(false)} className="text-slate-500 hover:text-white">✕</button>
+                                                </div>
+                                                <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                                    {loadingKudos ? (
+                                                        <div className="py-4 flex justify-center">
+                                                            <div className="w-4 h-4 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
+                                                        </div>
+                                                    ) : kudos.length > 0 ? (
+                                                        kudos.map((athlete, i) => (
+                                                            <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                                                                <img src={athlete.profile} alt="" className="w-6 h-6 rounded-full border border-white/10" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-[10px] font-bold text-white truncate">{athlete.firstname} {athlete.lastname}</p>
+                                                                    {(athlete.city || athlete.country) && (
+                                                                        <p className="text-[8px] text-slate-500 truncate">{athlete.city}{athlete.city && athlete.country ? ', ' : ''}{athlete.country}</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">Inga detaljer tillgängliga</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

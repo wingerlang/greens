@@ -1,6 +1,6 @@
 import { Target, Medal } from 'lucide-react';
 import { ExerciseEntry, UniversalActivity, PlannedActivity } from '../../../models/types.ts';
-import { formatRaceDateCompact, isTrailRace, isUltraRace, getDistanceStyle, calcPace } from './utils.ts';
+import { formatRaceDateCompact, isTrailRace, isUltraRace, getDistanceStyle, calcPace, calcStifa, getAvgElevation } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/formatters.ts';
 
 interface TimelineTableProps {
@@ -35,6 +35,8 @@ export function TimelineTable({
                     <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('notes')}>Tävling <SortIcon colKey="notes" /></th>
                     <th className="px-3 py-1.5 text-left cursor-pointer hover:text-white" onClick={() => handleSort('location')}>Plats <SortIcon colKey="location" /></th>
                     <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('distance')}>Distans <SortIcon colKey="distance" /></th>
+                    <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('elevation')}>HM <SortIcon colKey="elevation" /></th>
+                    <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('stifa')}>STIFA <SortIcon colKey="stifa" /></th>
                     <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('durationMinutes')}>Tid <SortIcon colKey="durationMinutes" /></th>
                     <th className="px-3 py-1.5 text-right">Tempo</th>
                     <th className="px-3 py-1.5 text-right cursor-pointer hover:text-white" onClick={() => handleSort('placement')}>Placering <SortIcon colKey="placement" /></th>
@@ -48,6 +50,8 @@ export function TimelineTable({
                     const isTrail = isTrailRace(race.title);
                     const isUltra = isUltraRace(race.title, race.estimatedDistance);
                     const distStyle = getDistanceStyle(race.estimatedDistance);
+                    const estElev = !race.raceDetails?.elevationGain ? getAvgElevation(race.title, race.estimatedDistance, races) : null;
+                    const displayElev = race.raceDetails?.elevationGain || estElev;
                     const isVirtual = race.raceDetails?.isVirtual;
 
                     return (
@@ -81,6 +85,12 @@ export function TimelineTable({
                                     </span>
                                 ) : '-'}
                             </td>
+                            <td className={`px-3 py-1.5 text-right font-mono text-[10px] ${estElev ? 'text-amber-500/80' : 'text-slate-400'}`}>
+                                {displayElev ? `${displayElev}m${estElev ? '*' : ''}` : '-'}
+                            </td>
+                            <td className={`px-3 py-1.5 text-right font-mono text-[10px] ${estElev ? 'text-amber-500/60' : 'text-slate-500'}`}>
+                                {calcStifa(race.estimatedDistance, displayElev || undefined)}
+                            </td>
                             <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
                             <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
                             <td className="px-3 py-1.5 text-right font-mono text-emerald-500">-</td>
@@ -108,22 +118,24 @@ export function TimelineTable({
                     
                     const placement = race.raceDetails?.placement;
                     const isPodium = placement && placement <= 3;
+                    const isWin = placement === 1;
 
                     return (
                         <tr
                             key={race.id}
-                            className="hover:bg-white/5 transition-colors cursor-pointer group"
+                            className={`hover:bg-white/5 transition-colors cursor-pointer group ${isWin ? 'bg-amber-500/5' : ''}`}
                             onClick={() => setSelectedActivity(race)}
                         >
-                            <td className="px-3 py-1.5 border-l-2 border-l-transparent group-hover:border-l-amber-500 whitespace-nowrap">
+                            <td className={`px-3 py-1.5 border-l-2 transition-colors whitespace-nowrap ${isWin ? 'border-l-amber-500' : 'border-l-transparent group-hover:border-l-amber-500'}`}>
                                 <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-xs font-bold text-slate-300">{formatRaceDateCompact(race.date)}</span>
+                                    <span className={`font-mono text-xs font-bold ${isWin ? 'text-amber-400' : 'text-slate-300'}`}>{formatRaceDateCompact(race.date)}</span>
                                     <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
                                 </div>
                             </td>
                             <td className="px-3 py-1.5">
-                                <div className="font-bold text-white group-hover:text-amber-500 transition-colors flex items-center gap-1.5 flex-wrap text-xs">
+                                <div className={`font-bold transition-colors flex items-center gap-1.5 flex-wrap text-xs ${isWin ? 'text-amber-400 group-hover:text-amber-300' : 'text-white group-hover:text-amber-500'}`}>
                                     <span className="truncate max-w-[200px]">{title}</span>
+                                    {isWin && <Trophy size={10} className="text-amber-400" />}
                                     {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest">Ultra</span>}
                                     {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
                                 </div>
@@ -137,6 +149,12 @@ export function TimelineTable({
                                         {race.distance.toFixed(1)} km
                                     </span>
                                 ) : '-'}
+                            </td>
+                            <td className="px-3 py-1.5 text-right text-slate-300 font-mono text-[10px]">
+                                {(race.elevationGain || race.raceDetails?.elevationGain) ? `${race.elevationGain || race.raceDetails.elevationGain}m` : '-'}
+                            </td>
+                            <td className="px-3 py-1.5 text-right text-slate-500 font-mono text-[10px]">
+                                {calcStifa(race.distance, race.elevationGain || race.raceDetails?.elevationGain)}
                             </td>
                             <td className="px-3 py-1.5 text-right font-mono text-emerald-500 font-bold whitespace-nowrap">{formatActivityDuration(race.durationMinutes)}</td>
                             <td className="px-3 py-1.5 text-right font-mono text-slate-500 text-[10px] whitespace-nowrap">{calcPace(race.distance, race.durationMinutes)}</td>

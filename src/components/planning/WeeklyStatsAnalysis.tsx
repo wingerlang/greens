@@ -66,7 +66,7 @@ export function WeeklyStatsAnalysis({
             z4_5: total > 0 ? (z4_5 / total) * 100 : 0,
             totalTime: total
         };
-    }, [exerciseEntries, weekStart, settings.birthYear]);
+    }, [unifiedActivities, weekStart, settings.birthYear]);
 
     // 2. Volume Comparison (vs 4-week Average)
     const volumeAnalysis = useMemo(() => {
@@ -93,7 +93,7 @@ export function WeeklyStatsAnalysis({
             pctDiff,
             status: pctDiff > 20 ? 'Aggressive' : pctDiff > 10 ? 'Progressive' : pctDiff < -10 ? 'Deload' : 'Maintenance'
         };
-    }, [exerciseEntries, weekStart, weeklyStats]);
+    }, [unifiedActivities, weekStart, weeklyStats]);
 
     // 3. Automated Weekly Review Insights
     const reviewInsights = useMemo(() => {

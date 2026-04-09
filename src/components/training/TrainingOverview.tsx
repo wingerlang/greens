@@ -100,6 +100,8 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
 
         const maxEnergySession = yearExercises.reduce((max, e) => (e.caloriesBurned || 0) > (max.caloriesBurned || 0) ? e : max, {} as ExerciseEntry);
+        
+        const weeksInCurrentMonth = (new Date()).getDate() / 7;
 
         return {
             year: {
@@ -111,7 +113,12 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             month: {
                 distance: sumDistance(monthExercises),
                 time: sumDuration(monthExercises),
-                count: count(monthExercises)
+                count: count(monthExercises),
+                weeklyAvg: {
+                    distance: weeksInCurrentMonth > 0 ? sumDistance(monthExercises) / weeksInCurrentMonth : 0,
+                    time: weeksInCurrentMonth > 0 ? sumDuration(monthExercises) / weeksInCurrentMonth : 0,
+                    count: weeksInCurrentMonth > 0 ? count(monthExercises) / weeksInCurrentMonth : 0
+                }
             },
             lastMonth: {
                 distance: sumDistance(lastMonthExercises),
@@ -260,14 +267,19 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                         </div>
                     </div>
 
-                    <div className="mt-6 pt-6 border-t border-white/5">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Snitt per pass denna månad</div>
-                        <div className="flex gap-4">
-                            <div>
+                    <div className="mt-6 pt-6 border-t border-white/5 grid grid-cols-2 gap-4">
+                        <div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Snitt per pass</div>
+                            <div className="flex gap-4">
                                 <div className="text-lg font-bold text-white">{stats.month.count > 0 ? (stats.month.distance / stats.month.count).toFixed(1).replace('.', ',') : 0} km</div>
-                            </div>
-                            <div>
                                 <div className="text-lg font-bold text-white">{stats.month.count > 0 ? Math.round(stats.month.time / stats.month.count) : 0} min</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold text-sky-500 uppercase mb-2">Snitt per vecka</div>
+                            <div className="flex gap-4">
+                                <div className="text-lg font-bold text-sky-400">{stats.month.weeklyAvg.distance.toFixed(1).replace('.', ',')} km</div>
+                                <div className="text-lg font-bold text-sky-400">{stats.month.weeklyAvg.count.toFixed(1).replace('.', ',')} p</div>
                             </div>
                         </div>
                     </div>

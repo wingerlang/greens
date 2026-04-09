@@ -400,6 +400,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                         {formatActivityDuration(ex.durationMinutes)}
                                                         {ex.intensity && ` • ${ex.intensity}`}
                                                     </p>
+                                                    {ex.notes && (
+                                                        <p className="text-[10px] text-slate-500 mt-2 italic line-clamp-2 max-w-[250px] whitespace-pre-wrap">
+                                                            {ex.notes}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -426,6 +431,14 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                         <p className="text-white font-mono font-bold">{(ex.tonnage / 1000).toFixed(1)} ton</p>
                                                     </div>
                                                 ) : null}
+                                                {(ex as any)._mergeData?.universalActivity?.performance?.kudosCount > 0 && (
+                                                    <div>
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Kudos</p>
+                                                        <p className="text-orange-400 font-mono font-bold flex items-center gap-1">
+                                                            👍 {(ex as any)._mergeData.universalActivity.performance.kudosCount}
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 {(ex.caloriesBurned ?? 0) > 0 && (
                                                     <div>
                                                         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Kalorier</p>

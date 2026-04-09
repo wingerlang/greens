@@ -467,7 +467,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                             colorClass = 'border-amber-400 text-amber-100 bg-amber-500/20 hover:bg-amber-500/30';
                                                         }
 
-                                                        const shortVal = ex.distance ? `${Math.round(ex.distance)}k` : `${Math.round(ex.durationMinutes)}m`;
+                                                        const displayName = ex.title || typeName;
+                                                        const isLongName = displayName.length > 20;
 
                                                         return (
                                                             <div key={ex.id}
@@ -478,15 +479,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         search: `?activityId=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                     }, { replace: true });
                                                                 }}
-                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md`}>
-                                                                <span className="font-bold flex items-center min-w-0 shrink truncate z-10">
+                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md ${isLongName ? 'pb-1' : ''}`}>
+                                                                <span className={`font-bold flex items-center min-w-0 shrink z-10 ${isLongName ? 'w-full mb-0.5' : 'truncate'}`}>
                                                                     <div className="opacity-70 shrink-0 z-0 scale-[1.1]">{icon}</div>
-                                                                    <span className="flex items-center gap-0.5 truncate leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95">
+                                                                    <span className={`flex items-center gap-0.5 leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95 ${isLongName ? '' : 'truncate'}`}>
                                                                         {(ex.subType === 'interval' || ex.subType === 'tempo' || ex.title?.toLowerCase().includes('intervall')) && <span className="text-amber-400 shrink-0">⚡</span>}
-                                                                        <span className="truncate">{ex.title || typeName}</span>
+                                                                        <span className={isLongName ? '' : 'truncate'}>{displayName}</span>
                                                                     </span>
                                                                 </span>
-                                                                <div className="flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 ml-auto whitespace-nowrap">
+                                                                <div className={`flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 whitespace-nowrap ${isLongName ? 'pl-4' : 'ml-auto'}`}>
                                                                     {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
                                                                     {ex.distance !== undefined && ex.distance > 0 && <span className="opacity-30">•</span>}
                                                                     <div className="hidden group-hover/ex:flex items-center gap-0.5 ml-1">
@@ -503,6 +504,26 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                             <LucideChevronDown size={10} />
                                                                         </button>
                                                                     </div>
+                                                                    {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
+                                                                        <>
+                                                                            <span className="opacity-30">•</span>
+                                                                            <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<span className="text-[7px] opacity-70">❤️</span></span>
+                                                                        </>
+                                                                    )}
+                                                                    {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (isRun || isLongName) && (
+                                                                        <>
+                                                                            <span className="opacity-30">•</span>
+                                                                            <span className="text-sky-400">
+                                                                                {(() => {
+                                                                                    const paceDecimal = ex.durationMinutes / ex.distance;
+                                                                                    const mins = Math.floor(paceDecimal);
+                                                                                    const secs = Math.round((paceDecimal - mins) * 60);
+                                                                                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                                                                })()}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                    <span className="opacity-30">•</span>
                                                                     <span>{Math.round(ex.durationMinutes)}m</span>
                                                                 </div>
 
@@ -582,6 +603,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                             )}
                                                                         </div>
 
+                                                                        {ex.notes && (
+                                                                            <div className="mt-3 pt-2 border-t border-white/5">
+                                                                                <p className="text-[10px] text-slate-400 leading-relaxed italic whitespace-pre-wrap line-clamp-3">
+                                                                                    {ex.notes}
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
+
                                                                         <div className="mt-3 text-[10px] text-sky-400/80 text-right font-bold pt-2 border-t border-sky-500/10">
                                                                             Klicka för dagsvy & detaljer
                                                                         </div>
@@ -612,9 +641,33 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     >
                                                         <Activity className="w-3.5 h-3.5 stroke-[3]" />
                                                         <div className="flex items-baseline gap-1">
-                                                            <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5 font-bold uppercase">km</span></span>
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5 font-bold uppercase">km</span></span>
+                                                                {(() => {
+                                                                    const now = new Date();
+                                                                    const isCurrentWeek = week.some(d => d.dateStr === todayStr);
+                                                                    if (isCurrentWeek) {
+                                                                        const dayOfWeek = now.getDay() || 7; // 1-7 (Mon-Sun)
+                                                                        const projected = (weekRunDist / dayOfWeek) * 7;
+                                                                        return <span className="text-[7.5px] text-emerald-500/60 leading-none">Proj: {Math.round(projected)}k</span>;
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">pass</span></span>
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">p</span></span>
+                                                                {(() => {
+                                                                    const now = new Date();
+                                                                    const isCurrentWeek = week.some(d => d.dateStr === todayStr);
+                                                                    if (isCurrentWeek) {
+                                                                        const dayOfWeek = now.getDay() || 7;
+                                                                        const projectedFreq = (runExercises.length / dayOfWeek) * 7;
+                                                                        return <span className="text-[7.5px] text-slate-500 leading-none">{projectedFreq.toFixed(1)}/v</span>;
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
                                                             <span className="text-[10px]">
                                                                 {(() => {

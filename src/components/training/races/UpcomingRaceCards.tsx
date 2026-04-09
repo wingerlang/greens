@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Calendar, MapPin, Trophy, Target, CheckSquare, Clock, ChevronDown, ChevronUp, ExternalLink, Pencil, X } from 'lucide-react';
+import { Calendar, MapPin, Trophy, Target, CheckSquare, Clock, ChevronDown, ChevronUp, ExternalLink, Pencil, X, Trees } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry } from '../../../models/types.ts';
-import { normalizeRaceTitle, isTrailRace, isUltraRace, getDistanceStyle, formatRaceDateCompact, calcPace, getPlannedRaceTime } from './utils.ts';
+import { normalizeRaceTitle, isTrailRace, isUltraRace, getDistanceStyle, formatRaceDateCompact, calcPace, getPlannedRaceTime, getAvgElevation } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/formatters.ts';
+import { BarChart3 } from 'lucide-react';
+import { PrepAnalysisModal } from '../PrepAnalysisModal.tsx';
 
 interface UpcomingRaceCardProps {
     race: PlannedActivity;
     historyRaces?: ExerciseEntry[];
+    allActivities?: ExerciseEntry[];
     onUpdate: (r: PlannedActivity) => void;
     onDelete: (id: string) => void;
     onEdit: (r: PlannedActivity) => void;
@@ -15,6 +18,7 @@ interface UpcomingRaceCardProps {
 export function UpcomingRaceCard({
     race,
     historyRaces = [],
+    allActivities = [],
     onUpdate,
     onDelete,
     onEdit
@@ -22,6 +26,7 @@ export function UpcomingRaceCard({
     const [isGoalsExpanded, setIsGoalsExpanded] = useState(false);
     const [isChecklistExpanded, setIsChecklistExpanded] = useState(false);
     const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+    const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
 
     const historySummary = useMemo(() => {
         const normTitle = normalizeRaceTitle(race.title);
@@ -45,6 +50,15 @@ export function UpcomingRaceCard({
             pb: pb
         };
     }, [race.title, race.estimatedDistance, historyRaces]);
+
+    const elevationInfo = useMemo(() => {
+        if (race.raceDetails?.elevationGain) return { value: race.raceDetails.elevationGain, isEstimate: false };
+        
+        const avg = getAvgElevation(race.title, race.estimatedDistance, historyRaces);
+        if (avg) return { value: avg, isEstimate: true };
+        
+        return null;
+    }, [race.title, race.estimatedDistance, race.raceDetails?.elevationGain, historyRaces]);
 
     const daysLeft = useMemo(() => {
         const diff = new Date(race.date).getTime() - new Date().getTime();
@@ -114,7 +128,7 @@ END:VCALENDAR`;
                                     </span>
                                 )}
                                 {isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
-                                {isTrail && !isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">Trail</span>}
+                                {isTrail && !isUltra && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1"><Trees size={10} /> Trail</span>}
                             </div>
                             <h3 className="text-2xl font-black text-white leading-tight mb-3">{race.title}</h3>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-400">
@@ -144,17 +158,28 @@ END:VCALENDAR`;
             {/* Content Body */}
             <div className="p-5 space-y-5 flex-1 bg-slate-900/50">
                 {/* Distance & Info Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                    <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center ${distStyle}`}>
-                        <div className="text-xs uppercase font-bold mb-1 opacity-70">Distans</div>
-                        <div className="text-xl font-black">{race.estimatedDistance > 0 ? `${race.estimatedDistance} km` : '?'}</div>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className={`p-2 rounded-xl border flex flex-col justify-center items-center text-center ${distStyle}`}>
+                        <div className="text-[10px] uppercase font-bold mb-0.5 opacity-70">Distans</div>
+                        <div className="text-base font-black">{race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '?'}</div>
                     </div>
-                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center relative overflow-hidden">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Måltid</div>
-                        <div className="text-xl font-black text-white font-mono tabular-nums">{plannedTime ? formatActivityDuration(plannedTime) : 'TBD'}</div>
+                    <div className="bg-slate-950/50 p-2 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Måltid</div>
+                        <div className="text-base font-black text-white font-mono tabular-nums">{plannedTime ? formatActivityDuration(plannedTime) : 'TBD'}</div>
                         {plannedPace !== '-' && (
-                            <div className="absolute top-1 right-2 text-[8px] font-black uppercase text-slate-600 bg-white/5 px-1 rounded-sm border border-white/5">
+                            <div className="absolute top-1 right-2 text-[7px] font-black uppercase text-slate-600 bg-white/5 px-1 rounded-sm border border-white/5">
                                 {plannedPace}
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-slate-950/50 p-2 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Höjd</div>
+                        <div className={`text-base font-black font-mono tabular-nums ${elevationInfo?.isEstimate ? 'text-amber-500/80' : 'text-white'}`}>
+                            {elevationInfo ? `${elevationInfo.value}m` : '?'}
+                        </div>
+                        {elevationInfo?.isEstimate && (
+                            <div className="absolute top-1 right-2 text-[7px] font-black uppercase text-amber-600/60 bg-amber-500/5 px-1 rounded-sm border border-amber-500/10">
+                                Est.
                             </div>
                         )}
                     </div>
@@ -293,6 +318,13 @@ END:VCALENDAR`;
                     <Calendar size={14} /> ICS
                 </button>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsAnalysisOpen(true)}
+                        className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold"
+                        title="Visa träningsanalys inför detta lopp"
+                    >
+                        <BarChart3 size={16} /> Analys
+                    </button>
                     {race.raceUrl && (
                         <a
                             href={race.raceUrl}
@@ -320,6 +352,21 @@ END:VCALENDAR`;
                     </button>
                 </div>
             </div>
+
+            {isAnalysisOpen && (
+                <PrepAnalysisModal
+                    event={{
+                        id: race.id,
+                        date: race.date,
+                        title: race.title,
+                        distance: race.estimatedDistance,
+                        isRace: true,
+                        activity: race
+                    }}
+                    allActivities={allActivities}
+                    onClose={() => setIsAnalysisOpen(false)}
+                />
+            )}
         </div>
     );
 }
@@ -365,6 +412,13 @@ export function UpcomingRaceCardCompact({
     const plannedTime = getPlannedRaceTime(race);
     const plannedPace = calcPace(race.estimatedDistance, plannedTime);
 
+    const elevationInfo = useMemo(() => {
+        if (race.raceDetails?.elevationGain) return { value: race.raceDetails.elevationGain, isEstimate: false };
+        const avg = getAvgElevation(race.title, race.estimatedDistance, historyRaces);
+        if (avg) return { value: avg, isEstimate: true };
+        return null;
+    }, [race.title, race.estimatedDistance, race.raceDetails?.elevationGain, historyRaces]);
+
     return (
         <div
             onClick={() => onEdit(race)}
@@ -372,14 +426,16 @@ export function UpcomingRaceCardCompact({
         >
             <div>
                 <div className="flex gap-1.5 mb-2 items-center flex-wrap">
-                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase shadow-sm">{daysLeft} dagar</span>
+                    <span className="bg-amber-500/10 text-amber-500 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-500/20 uppercase shadow-sm flex items-center gap-1">
+                        <Calendar size={10} /> {daysLeft} dagar
+                    </span>
                     {historySummary && (
                         <span className="flex items-center gap-1 text-blue-400 font-black text-[9px] uppercase bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
                             <Trophy size={10} /> {historySummary.count}x
                         </span>
                     )}
                     {isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-1.5 py-0.5 rounded shadow-[0_0_10px_rgba(217,70,239,0.2)]">Ultra</span>}
-                    {isTrail && !isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">Trail</span>}
+                    {isTrail && !isUltra && <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-0.5"><Trees size={10} /> Trail</span>}
                 </div>
                 <h4 className="text-white font-bold leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2 text-sm mb-1">{race.title}</h4>
                 <div className="text-emerald-400/80 text-[10px] font-bold uppercase tracking-wide">{formatRaceDateCompact(race.date)}</div>
@@ -391,6 +447,11 @@ export function UpcomingRaceCardCompact({
                     <span className="truncate">{race.raceDetails?.logistics?.location || 'Mål'}</span>
                 </span>
                 <div className="flex gap-1.5 items-center">
+                    {elevationInfo && (
+                        <span className={`text-[10px] font-black font-mono ${elevationInfo.isEstimate ? 'text-amber-500/60' : 'text-slate-500'}`}>
+                            {elevationInfo.value}m
+                        </span>
+                    )}
                     {plannedTime && (
                          <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-white font-mono tabular-nums leading-none mb-0.5">{formatActivityDuration(plannedTime)}</span>
@@ -401,6 +462,64 @@ export function UpcomingRaceCardCompact({
                         {race.estimatedDistance > 0 ? `${race.estimatedDistance}km` : '-'}
                     </span>
                 </div>
+            </div>
+        </div>
+    );
+}
+export function UpcomingRaceCardList({
+    race,
+    onEdit
+}: {
+    race: PlannedActivity,
+    onEdit: (r: PlannedActivity) => void
+}) {
+    const daysLeft = useMemo(() => {
+        const diff = new Date(race.date).getTime() - new Date().getTime();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }, [race.date]);
+
+    const isTrail = isTrailRace(race.title);
+    const distStyle = getDistanceStyle(race.estimatedDistance);
+    const plannedTime = getPlannedRaceTime(race);
+
+    return (
+        <div 
+            onClick={() => onEdit(race)}
+            className="col-span-full bg-slate-900/50 border border-white/5 rounded-2xl p-4 md:p-6 hover:bg-slate-800 transition-all cursor-pointer group flex items-center justify-between gap-6"
+        >
+            <div className="flex items-center gap-6 min-w-0 flex-1">
+                <div className="hidden md:flex flex-col items-center justify-center bg-slate-950 rounded-xl p-3 border border-white/5 min-w-[80px]">
+                    <div className="text-2xl font-black text-white">{new Date(race.date).getDate()}</div>
+                    <div className="text-[10px] font-black uppercase text-amber-500">{new Intl.DateTimeFormat('sv-SE', { month: 'short' }).format(new Date(race.date))}</div>
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                        <h4 className="text-xl font-black text-white group-hover:text-amber-500 transition-colors truncate">{race.title}</h4>
+                        {isTrail && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1"><Trees size={12} /> Trail</span>}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
+                        <span className="flex items-center gap-1.5"><Calendar size={14} className="text-slate-600" /> {race.date}</span>
+                        {race.raceDetails?.logistics?.location && (
+                            <span className="flex items-center gap-1.5"><MapPin size={14} className="text-slate-600" /> {race.raceDetails.logistics.location}</span>
+                        )}
+                        <span className="flex items-center gap-1.5 text-amber-500/80"><Clock size={14} /> {daysLeft} dagar kvar</span>
+                    </div>
+                </div>
+            </div>
+            <div className="flex items-center gap-6 shrink-0">
+                {plannedTime && (
+                    <div className="hidden sm:flex flex-col items-end">
+                        <div className="text-[10px] font-black text-slate-500 uppercase">Måltid</div>
+                        <div className="text-xl font-black text-white font-mono">{formatActivityDuration(plannedTime)}</div>
+                    </div>
+                )}
+                <div className={`p-3 rounded-xl border text-center min-w-[90px] ${distStyle}`}>
+                    <div className="text-[10px] font-black uppercase opacity-60">Distans</div>
+                    <div className="text-lg font-black">{race.estimatedDistance}km</div>
+                </div>
+                <button className="p-3 bg-slate-950 rounded-xl border border-white/5 text-slate-500 group-hover:text-amber-500 transition-colors">
+                    <Pencil size={18} />
+                </button>
             </div>
         </div>
     );

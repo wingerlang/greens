@@ -173,8 +173,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         // Sync food drafts from intent - only sync quantity if explicitly parsed (not default 100g)
         if (intent.type === 'food' && (lockedFood || lockedRecipe || lockedQuickMeal)) {
             const foodData = intent.data;
-            const hasExplicitQuantity = !!(foodData.quantity &&
-                (foodData.quantity !== 100 || (foodData.unit && foodData.unit !== 'g')));
+            const hasExplicitQuantity = foodData.quantity !== undefined;
             if (hasExplicitQuantity && typeof foodData.quantity === 'number') {
                 setDraftFoodQuantity(foodData.quantity);
             }
@@ -1435,7 +1434,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                         placeholder={isSlashMode ? "Navigera till..." : "Sök mat, logga vikt, / navigera..."}
                         value={input}
                         onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleExecute()}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                handleExecute();
+                            } else if (e.key === 'Backspace' && !input) {
+                                // Unlock if backspacing on empty input
+                                setLockedFood(null);
+                                setLockedQuickMeal(null);
+                                setLockedRecipe(null);
+                                setLockedPurchaseFood(null);
+                            }
+                        }}
                     />
                     {showFeedback && lastLoggedItem && (
                         <div className="absolute top-full left-0 right-0 z-50 p-4 bg-slate-800 border-b border-white/5 shadow-xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">

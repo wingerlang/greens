@@ -43,6 +43,7 @@ export interface StravaActivity {
     start_date_local: string;
     elapsed_time: number;      // seconds
     moving_time: number;       // seconds
+    description?: string;
     distance: number;          // meters
     total_elevation_gain: number; // meters
     workout_type?: number;    // 0=default, 1=race, 2=long run, 3=intervals (Run)
@@ -316,6 +317,14 @@ export async function getStravaActivityDetail(activityId: number, accessToken: s
     return stravaFetch<StravaActivity>(`/activities/${activityId}?include_all_efforts=true`, accessToken);
 }
 
+/**
+ * Get kudos for an activity
+ */
+export async function getStravaKudos(activityId: string, accessToken: string): Promise<StravaAthlete[]> {
+    const kudos = await stravaFetch<StravaAthlete[]>(`/activities/${activityId}/kudos`, accessToken);
+    return kudos || [];
+}
+
 // ==========================================
 // Data Mapping
 // ==========================================
@@ -587,7 +596,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
 
         activityType: mapStravaType(activity.type, activity.name),
         startTimeLocal: activity.start_date_local, // Full ISO for time-of-day analysis
-        notes: activity.name,
+        notes: activity.description || "",
         subType: mapStravaSubType(activity.type, activity.workout_type),
         excludeFromStats: activity.excludeFromStats,
         splits: mapStravaType(activity.type, activity.name) !== 'strength' ? activity.splits_metric?.map(s => ({
@@ -631,6 +640,12 @@ export function createUniversalFromStrava(activity: StravaActivity, userId: stri
         userId,
         date: activity.start_date_local.split('T')[0],
         status: 'COMPLETED',
+        plan: {
+            title: activity.name,
+            activityType: performance.activityType || 'other',
+            distanceKm: performance.distanceKm || 0,
+            description: "" // Original plan description
+        },
         performance,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

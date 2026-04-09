@@ -38,12 +38,13 @@ const EMPTY_FORM: RecipeFormState = {
 interface RecipeCardProps {
     recipe: Recipe;
     foodItems: FoodItem[];
+    nutritionViewMode: 'portion' | '100g';
     onOpen: (recipe: Recipe) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
     onCook: (recipe: Recipe) => void;
 }
 
-const RecipeCard = memo(({ recipe, foodItems, onOpen, onDelete, onCook }: RecipeCardProps) => {
+const RecipeCard = memo(({ recipe, foodItems, nutritionViewMode, onOpen, onDelete, onCook }: RecipeCardProps) => {
     const estimate = useMemo(() => {
         if (recipe.ingredientsText) {
             return calculateRecipeEstimate(recipe.ingredientsText, foodItems);
@@ -53,67 +54,156 @@ const RecipeCard = memo(({ recipe, foodItems, onOpen, onDelete, onCook }: Recipe
 
     const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
 
+    const nutritionValues = useMemo(() => {
+        if (!estimate) return null;
+        const factor = nutritionViewMode === '100g' 
+            ? (estimate.totalWeight > 0 ? 100 / estimate.totalWeight : 1 / recipe.servings)
+            : (1 / recipe.servings);
+            
+        return {
+            kcal: Math.round(estimate.calories * factor),
+            protein: Math.round(estimate.protein * factor),
+            price: Math.round(estimate.price * (nutritionViewMode === '100g' ? factor : (1 / recipe.servings)))
+        };
+    }, [estimate, nutritionViewMode, recipe.servings]);
+
     return (
         <div
             className="recipe-card"
             onClick={() => onOpen(recipe)}
         >
-            <div className="recipe-card-header">
-                <h3>{recipe.name}</h3>
+            <div className="card-top">
+                <div className="card-info">
+                    <h3>{recipe.name}</h3>
+                    <div className="card-meta-row">
+                        {totalTime > 0 && <span className="time">⏱️ {totalTime}m</span>}
+                        <span className="servings">🍽️ {recipe.servings}p</span>
+                        <span className="meal-type">{MEAL_TYPE_LABELS[recipe.mealType || 'dinner']}</span>
+                    </div>
+                </div>
                 <button
-                    className="delete-btn"
+                    className="card-delete-btn"
                     onClick={(e) => onDelete(e, recipe.id)}
-                    title="Ta bort"
                 >
                     ×
                 </button>
             </div>
 
-            <p className="recipe-description">{recipe.description}</p>
-
-            <div className="recipe-meta">
-                {totalTime > 0 && <span>⏱️ {totalTime} min</span>}
-                <span>🍽️ {recipe.servings} port</span>
-                {recipe.mealType && (
-                    <span className="meal-badge">{MEAL_TYPE_LABELS[recipe.mealType]}</span>
-                )}
-            </div>
-
-            {estimate && (
-                <div className="recipe-nutrition">
-                    <div className="nutrition-item calories">
-                        <span className="value">{Math.round(estimate.calories / recipe.servings)}</span>
-                        <span className="label">kcal</span>
+            {nutritionValues && (
+                <div className="card-nutrition-row">
+                    <div className="nut-chip kcal">
+                        <span className="v">{nutritionValues.kcal}</span>
+                        <span className="l">kcal</span>
                     </div>
-                    <div className="nutrition-item">
-                        <span className="value">{Math.round(estimate.protein / recipe.servings)}g</span>
-                        <span className="label">protein</span>
+                    <div className="nut-chip protein">
+                        <span className="v">{nutritionValues.protein}g</span>
+                        <span className="l">P</span>
                     </div>
-                    <div className="nutrition-item">
-                        <span className="value">{Math.round(estimate.price / recipe.servings)} kr</span>
-                        <span className="label">pris</span>
-                    </div>
-                    <div className="nutrition-item co2">
-                        <span className="value">{(estimate.co2 / recipe.servings).toFixed(1)}</span>
-                        <span className="label">kg CO₂</span>
+                    <div className="nut-chip price">
+                        <span className="v">{nutritionValues.price} kr</span>
+                        <span className="l">{nutritionViewMode === '100g' ? '/100g' : '/port'}</span>
                     </div>
                 </div>
             )}
-
-            <div className="recipe-actions">
-                <button
-                    className="btn btn-primary btn-sm"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onCook(recipe);
-                    }}
-                >
-                    🍳 Laga
-                </button>
-            </div>
         </div>
     );
 });
+
+interface RecipeViewModalProps {
+    recipe: Recipe;
+    foodItems: FoodItem[];
+    onClose: () => void;
+    onEdit: () => void;
+    onCook: () => void;
+}
+
+const RecipeViewModal = ({ recipe, foodItems, onClose, onEdit, onCook }: RecipeViewModalProps) => {
+    const estimate = useMemo(() => {
+        return calculateRecipeEstimate(recipe.ingredientsText || '', foodItems, {}, recipe.instructionsText, recipe.name);
+    }, [recipe, foodItems]);
+
+    const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal recipe-view-modal shadow-2xl wider" onClick={e => e.stopPropagation()}>
+                <div className="view-modal-header">
+                    <div className="title-area">
+                        <span className="category-tag">{MEAL_TYPE_LABELS[recipe.mealType || 'dinner']}</span>
+                        <h2>{recipe.name}</h2>
+                        <p className="description">{recipe.description}</p>
+                    </div>
+                    <div className="header-actions">
+                        <button className="icon-btn" onClick={onEdit} title="Redigera">✍️</button>
+                        <button className="close-btn" onClick={onClose}>×</button>
+                    </div>
+                </div>
+
+
+                <div className="view-modal-body">
+                    <RecipeNutritionPreview
+                        servings={recipe.servings}
+                        totalCalories={estimate.calories}
+                        totalProtein={estimate.protein}
+                        totalCarbs={estimate.carbs}
+                        totalFat={estimate.fat}
+                        totalWeight={estimate.totalWeight}
+                        recipeServings={recipe.servings}
+                    />
+
+                    <div className="view-details-grid">
+                        <section className="detail-section ingredients-section">
+                            <div className="section-card-header">
+                                <span className="icon">🛒</span>
+                                <h3>Ingredienser</h3>
+                            </div>
+                            <div className="ingredients-list-premium">
+                                {estimate.matchedIngredients.map((mi, idx) => (
+                                    <div key={idx} className="ing-item-premium">
+                                        <div className="qty-badge">{mi.quantity}{mi.unit}</div>
+                                        <div className="name-wrapper">
+                                            {mi.foodItem ? (
+                                                <a href={`/database?id=${mi.foodItem.id}`} target="_blank" className="ing-link-premium">
+                                                    {mi.name}
+                                                </a>
+                                            ) : (
+                                                <span className="unmatched">{mi.name}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="price-footer-premium">
+                                <span className="label">Totalkostnad:</span>
+                                <span className="val">{estimate.price} kr</span>
+                            </div>
+                        </section>
+
+                        <section className="detail-section instructions-section">
+                            <div className="section-card-header">
+                                <span className="icon">👨‍🍳</span>
+                                <h3>Instruktioner</h3>
+                            </div>
+                            <div className="instructions-list-premium">
+                                {recipe.instructions.map((step, idx) => (
+                                    <div key={idx} className="step-item-premium">
+                                        <div className="step-count">{idx + 1}</div>
+                                        <div className="step-text">{step}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div className="view-modal-footer-premium">
+                    <button className="btn btn-secondary-outline" onClick={onClose}>Stäng</button>
+                    <button className="btn btn-primary-glow btn-wide" onClick={onCook}>Börja Laga</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export function RecipesPage() {
     const { recipes, addRecipe, updateRecipe, deleteRecipe, foodItems } = useData();
@@ -137,6 +227,10 @@ export function RecipesPage() {
         }
     }, [searchParams]);
 
+    const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
+    const [nutritionViewMode, setNutritionViewMode] = useState<'portion' | '100g'>('portion');
+    const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
+    const [manualMatches, setManualMatches] = useState<Record<string, string>>({});
     const [debouncedIngredients, setDebouncedIngredients] = useState(formData.ingredientsText);
     const [isCalculating, setIsCalculating] = useState(false);
 
@@ -158,7 +252,7 @@ export function RecipesPage() {
                     matchedIngredients: [], activeTime: 0, passiveTime: 0 
                 };
             }
-            return calculateRecipeEstimate(debouncedIngredients, foodItems, {}, formData.instructionsText, formData.name);
+            return calculateRecipeEstimate(debouncedIngredients, foodItems, manualMatches, formData.instructionsText, formData.name);
         } catch (error) {
             console.error("Failed to calculate recipe estimate:", error);
             return { 
@@ -225,6 +319,11 @@ export function RecipesPage() {
         const newValue = linesBefore.join('\n') + textAfterCursor;
         setFormData({ ...formData, ingredientsText: newValue });
         setSuggestions([]);
+
+        // Record the manual match to make it "sticky"
+        // We use the suggestion name (lowercase) as the key
+        const matchKey = suggestion.name.toLowerCase();
+        setManualMatches(prev => ({ ...prev, [matchKey]: suggestion.id }));
         
         // Focus back on textarea after some time
         setTimeout(() => {
@@ -265,9 +364,13 @@ export function RecipesPage() {
                 priceCategory: recipe.priceCategory || 'medium',
                 seasons: recipe.seasons || [],
             });
+            // Try to recover any previous matches if they were stored in the recipe
+            // (Requires future-proofing the Recipe type, but we can pre-set it here)
+            setManualMatches((recipe as any).manualMatches || {});
         } else {
             setEditingRecipe(null);
             setFormData(EMPTY_FORM);
+            setManualMatches({});
         }
         setIsFormOpen(true);
     }, []);
@@ -276,25 +379,17 @@ export function RecipesPage() {
         setIsFormOpen(false);
         setEditingRecipe(null);
         setFormData(EMPTY_FORM);
+        setManualMatches({});
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
         const recipeData = {
-            name: formData.name,
-            description: formData.description,
-            servings: formData.servings,
-            prepTime: formData.prepTime,
-            cookTime: formData.cookTime,
-            mealType: formData.mealType,
-            ingredientsText: formData.ingredientsText,
-            instructionsText: formData.instructionsText,
-            totalWeight: formData.totalWeight || liveEstimate.totalWeight,
-            priceCategory: formData.priceCategory,
-            seasons: formData.seasons,
+            ...formData,
             ingredients: [],
             instructions: formData.instructionsText.split('\n').filter(line => line.trim()),
+            manualMatches, // Save the sticky matches
         };
 
         if (editingRecipe) {
@@ -320,9 +415,41 @@ export function RecipesPage() {
                     <h1>Recept</h1>
                     <p className="page-subtitle">{recipes.length} veganska recept</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => handleOpenForm()}>
-                    + Nytt recept
-                </button>
+                <div className="header-actions">
+                    <div className="view-controls">
+                        <div className="control-group">
+                            <button 
+                                className={`control-btn ${displayMode === 'grid' ? 'active' : ''}`}
+                                onClick={() => setDisplayMode('grid')}
+                            >
+                                ⊞
+                            </button>
+                            <button 
+                                className={`control-btn ${displayMode === 'list' ? 'active' : ''}`}
+                                onClick={() => setDisplayMode('list')}
+                            >
+                                ☰
+                            </button>
+                        </div>
+                        <div className="control-group">
+                            <button 
+                                className={`control-btn ${nutritionViewMode === 'portion' ? 'active' : ''}`}
+                                onClick={() => setNutritionViewMode('portion')}
+                            >
+                                Port
+                            </button>
+                            <button 
+                                className={`control-btn ${nutritionViewMode === '100g' ? 'active' : ''}`}
+                                onClick={() => setNutritionViewMode('100g')}
+                            >
+                                100g
+                            </button>
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={() => handleOpenForm()}>
+                        + Nytt recept
+                    </button>
+                </div>
             </header>
 
             {recipes.length === 0 ? (
@@ -334,13 +461,14 @@ export function RecipesPage() {
                     </button>
                 </div>
             ) : (
-                <div className="recipes-grid">
+                <div className={`recipes-${displayMode}`}>
                     {recipes.map(recipe => (
                         <RecipeCard
                             key={recipe.id}
                             recipe={recipe}
                             foodItems={foodItems}
-                            onOpen={handleOpenForm}
+                            nutritionViewMode={nutritionViewMode}
+                            onOpen={() => setViewingRecipe(recipe)}
                             onDelete={handleDelete}
                             onCook={openRecipe}
                         />
@@ -348,108 +476,137 @@ export function RecipesPage() {
                 </div>
             )}
 
+            {/* Recipe Details View Modal */}
+            {viewingRecipe && (
+                <RecipeViewModal 
+                    recipe={viewingRecipe}
+                    foodItems={foodItems}
+                    onClose={() => setViewingRecipe(null)}
+                    onEdit={() => {
+                        handleOpenForm(viewingRecipe);
+                        setViewingRecipe(null);
+                    }}
+                    onCook={() => {
+                        openRecipe(viewingRecipe);
+                        setViewingRecipe(null);
+                    }}
+                />
+            )}
+
             {/* Recipe Form Modal */}
             {isFormOpen && (
                 <div className="modal-overlay" onClick={handleCloseForm}>
-                    <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
+                    <div className="modal modal-compact" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header compact">
                             <h2>✨ {editingRecipe ? 'Redigera Recept' : 'Skapa Recept'}</h2>
                             <button className="close-btn" onClick={handleCloseForm}>×</button>
                         </div>
 
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label>NAMN PÅ RÄTTEN</label>
-                                    <input
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        placeholder="t.ex. Stekt Ris med Tofu"
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>BESKRIVNING</label>
-                                    <input
-                                        type="text"
-                                        value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        placeholder="Kort beskrivning"
-                                    />
+                        <form onSubmit={handleSubmit} className="compact-form">
+                            <div className="section-group compact">
+                                <div className="form-grid-compact">
+                                    <div className="form-group">
+                                        <label>Namn</label>
+                                        <input
+                                            type="text"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            placeholder="Namn..."
+                                            required
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Kort beskrivning</label>
+                                        <input
+                                            type="text"
+                                            value={formData.description}
+                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                            placeholder="Beskrivning..."
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="form-row form-row-4">
+                            <div className="form-grid-3 compact-margin">
                                 <div className="form-group">
-                                    <label>AKTIV TID (MIN)</label>
+                                    <label>Aktiv (m)</label>
                                     <input
                                         type="number"
                                         value={formData.prepTime}
                                         onChange={(e) => setFormData({ ...formData, prepTime: Number(e.target.value) })}
-                                        min="0"
+                                        className="compact-input"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>PASSIV TID (MIN)</label>
+                                    <label>Passiv (m)</label>
                                     <input
                                         type="number"
                                         value={formData.cookTime}
                                         onChange={(e) => setFormData({ ...formData, cookTime: Number(e.target.value) })}
-                                        min="0"
+                                        className="compact-input"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>TYP</label>
-                                    <div className="meal-type-buttons">
-                                        {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map(type => (
-                                            <button
-                                                key={type}
-                                                type="button"
-                                                className={`type-btn ${formData.mealType === type ? 'active' : ''}`}
-                                                onClick={() => setFormData({ ...formData, mealType: type })}
-                                            >
-                                                {MEAL_TYPE_LABELS[type]}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>PORTIONER</label>
+                                    <label>Portioner</label>
                                     <input
                                         type="number"
                                         value={formData.servings}
                                         onChange={(e) => setFormData({ ...formData, servings: Number(e.target.value) || 4 })}
-                                        min="1"
-                                        max="20"
+                                        className="compact-input"
                                     />
                                 </div>
                             </div>
 
-                            <div className="form-group">
-                                <div className="label-row">
-                                    <label>INGREDIENSER (EN PER RAD)</label>
-                                    <div className="live-estimate">
-                                        <span className="estimate-item">🔥 {liveEstimate.calories} kcal</span>
-                                        <span className="estimate-item">💪 {Math.round(liveEstimate.protein)}g</span>
-                                        <span className="estimate-item price">💰 {liveEstimate.price} kr</span>
-                                        <span className="estimate-item co2">♻️ {liveEstimate.co2.toFixed(1)} kg</span>
+                            <div className="section-group compact">
+                                <div className="form-grid-2">
+                                    <div className="form-group">
+                                        <label>Måltid</label>
+                                        <div className="meal-type-grid compact">
+                                            {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map(type => (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    className={`type-chip mini ${formData.mealType === type ? 'active' : ''}`}
+                                                    onClick={() => setFormData({ ...formData, mealType: type })}
+                                                >
+                                                    {MEAL_TYPE_LABELS[type].charAt(0)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Prisnivå</label>
+                                        <select
+                                            value={formData.priceCategory}
+                                            onChange={(e) => setFormData({ ...formData, priceCategory: e.target.value as PriceCategory })}
+                                            className="compact-input"
+                                        >
+                                            <option value="budget">💰 Budget</option>
+                                            <option value="medium">⚖️ Medium</option>
+                                            <option value="premium">💎 Premium</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="section-group compact content-section">
+                                <div className="label-row compact">
+                                    <label>Ingredienser</label>
+                                    <div className="live-stats-mini">
+                                        <span>🔥 {liveEstimate.calories}</span>
+                                        <span>💪 {Math.round(liveEstimate.protein)}g</span>
+                                        <span>💰 {liveEstimate.price}kr</span>
                                     </div>
                                 </div>
                                 <div className="textarea-container">
                                     <textarea
                                         ref={textareaRef}
-                                        className="ingredients-textarea"
+                                        className="ingredients-textarea compact"
                                         value={formData.ingredientsText}
                                         onChange={handleTextareaChange}
                                         onKeyDown={handleKeyDown}
-                                        placeholder={`4 port ris (gärna kallt)
-400g fast tofu
-1 påse wokgrönsaker
-Soja
-Sesamolja
-1 vitlöksklyfta`}
-                                        rows={6}
+                                        placeholder="400g tofu..."
+                                        rows={4}
                                     />
                                     {suggestions.length > 0 && (
                                         <div className="ingredient-suggestions">
@@ -525,9 +682,15 @@ Sesamolja
                                         </div>
                                     </div>
                                 )}
+                                <textarea
+                                    className="instructions-textarea compact"
+                                    value={formData.instructionsText}
+                                    onChange={(e) => setFormData({ ...formData, instructionsText: e.target.value })}
+                                    placeholder="Instruktioner..."
+                                    rows={3}
+                                />
                             </div>
 
-                            {/* Shared Nutrition Preview Component */}
                             <RecipeNutritionPreview
                                 servings={formData.servings}
                                 totalCalories={liveEstimate.calories}
@@ -544,8 +707,7 @@ Sesamolja
                                 }}
                             />
 
-                            <div className="form-group">
-                                <label>INSTRUKTIONER (EN PER RAD)</label>
+                            <div className="section-group">
                                 <textarea
                                     className="instructions-textarea"
                                     value={formData.instructionsText}
@@ -557,10 +719,10 @@ I samma panna: tillsätt grönsaker och pressad vitlök.`}
                                 />
                             </div>
 
-                            <h3 className="form-section-title">Smart Plan Data</h3>
-                            <div className="form-row">
+                            <div className="section-group">
+                                <h4 className="section-subtitle">Smarta Planeringsdata</h4>
                                 <div className="form-group">
-                                    <label>PRISNIVÅ</label>
+                                    <label>Prisnivå</label>
                                     <select
                                         value={formData.priceCategory}
                                         onChange={(e) => setFormData({ ...formData, priceCategory: e.target.value as PriceCategory })}
@@ -574,7 +736,7 @@ I samma panna: tillsätt grönsaker och pressad vitlök.`}
                             </div>
 
                             <div className="form-group">
-                                <label>PASSAR I SÄSONG</label>
+                                <label>Passar i säsong</label>
                                 <div className="checkbox-grid">
                                     {([
                                         { id: 'winter', label: 'Vinter ❄️' },

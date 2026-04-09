@@ -523,13 +523,35 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                         <span className="text-red-400">{row.categories.cardio.hrCount > 0 ? Math.round(row.categories.cardio.hrSum / row.categories.cardio.hrCount) : '-'} bpm</span>
                                                         <span className="text-slate-600">•</span>
                                                         <span className="text-slate-500">{row.categories.cardio.count || '-'} p</span>
+                                                        {row.categories.cardio.distance > 0 && (() => {
+                                                            const now = new Date();
+                                                            const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
+                                                            const weeksElapsed = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
+                                                            return (
+                                                                <>
+                                                                    <span className="text-slate-600 ml-1.5 opacity-30">|</span>
+                                                                    <span className="text-emerald-500/60 font-bold ml-1">{(row.categories.cardio.distance / weeksElapsed).toFixed(1)}/v</span>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
-                                                    <div className="p-2 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                    <div className="p-2 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center justify-end gap-1.5">
                                                         <span className="text-indigo-400 font-bold">{row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
-                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-600">•</span>
                                                         <span className="text-slate-300">{row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}</span>
-                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-600">•</span>
                                                         <span className="text-slate-500">{row.categories.strength.count || '-'} pass</span>
+                                                        {(() => {
+                                                            const now = new Date();
+                                                            const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
+                                                            const weeksElapsed = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
+                                                            return (
+                                                                <>
+                                                                    <span className="text-slate-600 ml-1.5 opacity-30">|</span>
+                                                                    <span className="text-indigo-500/60 font-bold ml-1">{(row.categories.strength.tonnage / (weeksElapsed * 1000)).toFixed(1)}t/v</span>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                     <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other">
                                                         {row.categories.other.duration > 0 ? (
@@ -584,44 +606,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                     </div>
                                                     <div className="p-3 flex flex-col justify-center gap-1.5 relative group/dist cursor-help">
                                                         {row.total.duration > 0 ? (
-                                                            <>
-                                                                <div className="flex w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                                    <div className="bg-emerald-500" style={{ width: `${(row.categories.cardio.duration / row.total.duration) * 100}%` }} />
-                                                                    <div className="bg-indigo-500" style={{ width: `${(row.categories.strength.duration / row.total.duration) * 100}%` }} />
-                                                                    <div className="bg-slate-500" style={{ width: `${(row.categories.other.duration / row.total.duration) * 100}%` }} />
-                                                                </div>
-                                                                <div className="flex justify-between text-[9px] font-mono font-bold">
-                                                                    <span className="text-emerald-500/70">{row.categories.cardio.duration > 0 ? Math.round((row.categories.cardio.duration / row.total.duration) * 100) + '%' : ''}</span>
-                                                                    <span className="text-indigo-500/70">{row.categories.strength.duration > 0 ? Math.round((row.categories.strength.duration / row.total.duration) * 100) + '%' : ''}</span>
-                                                                    <span className="text-slate-500/70">{row.categories.other.duration > 0 ? Math.round((row.categories.other.duration / row.total.duration) * 100) + '%' : ''}</span>
-                                                                </div>
-
-                                                                {/* Distribution Hover Modal */}
-                                                                <div className="absolute top-full right-0 mt-2 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/dist:opacity-100 group-hover/dist:translate-y-0 transition-all duration-300 z-[110]">
-                                                                    <div className="text-[10px] font-black uppercase tracking-widest text-white mb-3 border-b border-white/10 pb-2">Tidsfördelning</div>
-                                                                    <div className="space-y-2.5">
-                                                                        {[
-                                                                            { label: 'Kondition', color: 'bg-emerald-500', val: row.categories.cardio.duration, count: row.categories.cardio.count },
-                                                                            { label: 'Styrka', color: 'bg-indigo-500', val: row.categories.strength.duration, count: row.categories.strength.count },
-                                                                            { label: 'Övrigt', color: 'bg-slate-500', val: row.categories.other.duration, count: row.categories.other.count }
-                                                                        ].map(cat => (
-                                                                            <div key={cat.label} className="flex flex-col gap-1">
-                                                                                <div className="flex justify-between items-center text-[10px]">
-                                                                                    <div className="flex items-center gap-1.5">
-                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${cat.color}`} />
-                                                                                        <span className="text-slate-300 font-bold">{cat.label}</span>
-                                                                                    </div>
-                                                                                    <span className="font-mono text-white">{Math.round((cat.val / row.total.duration) * 100)}%</span>
-                                                                                </div>
-                                                                                <div className="flex justify-between text-[8px] text-slate-500 px-3">
-                                                                                    <span>{cat.count} pass</span>
-                                                                                    <span>{fmtDur(cat.val)}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </>
+                                                            <div className="text-emerald-400 font-black text-lg">
+                                                                {fmtDur(row.total.duration)}
+                                                            </div>
                                                         ) : (
                                                             <div className="text-center text-slate-600 text-[10px]">-</div>
                                                         )}
@@ -658,7 +645,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">pass</span>
                                             </div>
                                             <div className="p-2 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
-                                                <span className="text-[11px] font-bold">{fmtDur(row.total.duration)}</span>
+                                                <span className="text-[13px] font-black text-white">{fmtDur(row.total.duration)}</span>
                                                 <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">h:m</span>
                                             </div>
                                             <div className="p-2 text-right font-mono text-emerald-400/80 flex items-center justify-end gap-1">

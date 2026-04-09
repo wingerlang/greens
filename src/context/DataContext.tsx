@@ -158,7 +158,7 @@ export function DataProvider({ children }: DataProviderProps) {
         addGoal, updateGoal, deleteGoal, getGoalsForCycle,
         addTrainingPeriod, updateTrainingPeriod, deleteTrainingPeriod,
         updateCoachConfig, generateCoachPlan,
-        deletePlannedActivity, updatePlannedActivity, savePlannedActivities, completePlannedActivity,
+        deletePlannedActivity, updatePlannedActivity, bulkSavePlannedActivities, completePlannedActivity,
         addCoachGoal, activateCoachGoal, deleteCoachGoal, reorderActivity,
         // Race Defs
         raceDefinitions, addRaceDefinition, updateRaceDefinition, deleteRaceDefinition,
@@ -598,7 +598,7 @@ export function DataProvider({ children }: DataProviderProps) {
         generateCoachPlan,
         deletePlannedActivity,
         updatePlannedActivity,
-        savePlannedActivities,
+        savePlannedActivities: bulkSavePlannedActivities,
         completePlannedActivity,
         addCoachGoal,
         activateCoachGoal,

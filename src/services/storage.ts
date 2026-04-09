@@ -230,41 +230,69 @@ export class LocalStorageService implements StorageService {
     }
 
     async save(data: AppData, options?: { skipApi?: boolean }): Promise<void> {
+        let localSaved = false;
         try {
-            // 1. Save Local
-            // console.log('[Storage] Saving to localStorage:', { weeklyPlansCount: data.weeklyPlans?.length });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-            // 2. Sync to API if logged in (and not skipped)
-            if (options?.skipApi) return;
-
-            const token = getToken();
-            if (token && ENABLE_CLOUD_SYNC) {
-                // Critical: Strict wait for "Save Profile"
-                try {
-                    const res = await fetch('/api/data', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    if (res.ok) {
-                        notificationService.notify('success', 'Data sparad till servern');
-                    } else {
-                        notificationService.notify('error', 'Kunde inte spara data till servern');
-                    }
-                } catch (e) {
-                    console.error('[Storage] Failed to sync to API:', e);
-                    notificationService.notify('error', 'Nätverksfel vid sparning');
-                }
+            // 1. Save Local (Compacted to save space)
+            // Default 365 days retention to keep a full year of history locally
+            const compacted = this.compactLocal(data, 365);
+            const json = JSON.stringify(compacted);
+            
+            // Debug: Check size
+            if (json.length > 4.5 * 1024 * 1024) {
+                console.warn(`[Storage] Data size is reaching localStorage limits: ${(json.length / 1024 / 1024).toFixed(2)} MB`);
+                // If dangerously close, try more aggressive (180 days)
+                const aggressive = this.compactLocal(data, 180);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(aggressive));
+                localSaved = true;
+            } else {
+                localStorage.setItem(STORAGE_KEY, json);
+                localSaved = true;
             }
-
         } catch (e) {
-            console.error('Failed to save to storage:', e);
-            notificationService.notify('error', 'Kunde inte spara lokalt');
+            console.error('[Storage] Failed to save to localStorage:', e);
+            // If it's a QuotaExceededError, try an emergency compaction
+            if (e instanceof Error && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.message?.toLowerCase().includes('quota'))) {
+                try {
+                    const veryCompacted = this.compactLocal(data, 60); // only 60 days of logs locally
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(veryCompacted));
+                    notificationService.notify('info', 'Lokalt lagringsutrymme nästan fullt. Gammal historik finns sparad i molnet.');
+                    localSaved = true;
+                } catch (e2) {
+                    notificationService.notify('info', 'Lokalt lagringsutrymme fullt. Synkar enbart till servern.');
+                }
+            } else {
+                notificationService.notify('error', 'Kunde inte spara lokalt');
+            }
+        }
+
+        // 2. Sync to API if logged in (and not skipped)
+        if (options?.skipApi) return;
+
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    if (localSaved) {
+                        notificationService.notify('success', 'Data sparad');
+                    } else {
+                        notificationService.notify('success', 'Data sparad på servern');
+                    }
+                } else {
+                    notificationService.notify('error', 'Kunde inte spara data till servern');
+                }
+            } catch (e) {
+                console.error('[Storage] Failed to sync to API:', e);
+                notificationService.notify('error', 'Nätverksfel vid sparning');
+            }
         }
     }
 
@@ -1160,6 +1188,31 @@ export class LocalStorageService implements StorageService {
             } catch (e) {
                 console.error('[Storage] Purchase sync failed:', e);
             }
+        }
+    }
+    compactLocal(data: AppData, days: number = 365): AppData {
+        try {
+            const limit = new Date();
+            limit.setDate(limit.getDate() - days);
+            const limitStr = limit.toISOString().split('T')[0];
+
+            return {
+                ...data,
+                // Truncate historical logs but KEEP manual/planned activities and metadata
+                universalActivities: (data.universalActivities || []).filter(a => a.date >= limitStr),
+                plannedActivities: data.plannedActivities || [], // NEVER truncate plans
+                mealEntries: (data.mealEntries || []).filter(m => m.date >= limitStr),
+                weightEntries: (data.weightEntries || []).filter(w => w.date >= limitStr),
+                // Ensure all other metadata is preserved
+                recipes: data.recipes || [],
+                foodItems: data.foodItems || [],
+                performanceGoals: data.performanceGoals || [],
+                raceDefinitions: data.raceDefinitions || [],
+                tours: data.tours || []
+            };
+        } catch (e) {
+            console.error('[Storage] Compaction failed:', e);
+            return data;
         }
     }
 }

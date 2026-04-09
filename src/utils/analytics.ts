@@ -8,7 +8,8 @@ import {
     type ExerciseType,
     type ExerciseIntensity,
     type NutritionSummary,
-    getISODate
+    getISODate,
+    UniversalActivity
 } from '../models/types.ts';
 
 // ============================================
@@ -217,9 +218,16 @@ export function calculateExerciseCalories(
     type: ExerciseType,
     duration: number,
     intensity: ExerciseIntensity,
-    weight: number
+    weight: number,
+    notes?: string
 ): number {
-    // MET values
+    // 1. Try to parse power from notes if available (cycling/cardio)
+    if (notes) {
+        const powerCalories = parsePowerCalories(notes);
+        if (powerCalories > 0) return Math.round(powerCalories);
+    }
+
+    // 2. MET values
     const METS: any = {
         running: { low: 6, moderate: 8, high: 11, ultra: 14 },
         cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
@@ -228,11 +236,43 @@ export function calculateExerciseCalories(
         swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
         yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
         hyrox: { low: 6, moderate: 8, high: 10, ultra: 12 },
+        hybrid: { low: 4, moderate: 6, high: 8, ultra: 10 },
+        recovery: { low: 2, moderate: 3, high: 4, ultra: 5 },
+        cardio: { low: 5, moderate: 7, high: 9, ultra: 11 },
+        climbing: { low: 5, moderate: 7.5, high: 10, ultra: 12 },
+        football: { low: 6, moderate: 8, high: 10, ultra: 12 },
         other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
     };
 
-    const met = METS[type][intensity];
+    const met = METS[type]?.[intensity] || METS.other[intensity];
     return Math.round(met * weight * (duration / 60));
+}
+
+/**
+ * Parses power logs from Strava descriptions.
+ * Format: "45min @ 215w" or "5m @ 170 watt" or "10 min: 200w"
+ * Returns total calories (approx 1 kJ = 1 kcal)
+ */
+export function parsePowerCalories(notes: string): number {
+    if (!notes) return 0;
+    
+    // Regex matches: 45min @ 215w, 45 m @ 215 watt, 45 min: 215w, etc.
+    // Group 1: Duration, Group 2: Unit (min/m), Group 3: Power
+    const regex = /(\d+)\s*(min|m)?\s*[@:]\s*(\d+)\s*(?:w|watt)/gi;
+    let totalKcal = 0;
+    let match;
+
+    while ((match = regex.exec(notes)) !== null) {
+        const durationMin = parseInt(match[1]);
+        const watts = parseInt(match[3]);
+        
+        // kJ = Watts * seconds / 1000
+        // kcal ≈ kJ (assuming ~24% human efficiency)
+        const kcal = (watts * durationMin * 60) / 1000;
+        totalKcal += kcal;
+    }
+
+    return totalKcal;
 }
 
 export function calculateHeartRateCalories(

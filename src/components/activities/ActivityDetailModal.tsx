@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
+import { ExerciseEntry, UniversalActivity, StravaAthlete } from '../../models/types.ts';
 import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -404,6 +404,10 @@ export function ActivityDetailModal({
     const perf = currentUniversal?.performance || (currentActivity as any).performance || (currentActivity as any)._mergeData?.universalActivity?.performance;
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
+    const [showKudos, setShowKudos] = useState(false);
+    const [kudos, setKudos] = useState<StravaAthlete[]>([]);
+    const [loadingKudos, setLoadingKudos] = useState(false);
+    const [isForcingFetch, setIsForcingFetch] = useState(false);
 
     // Make tabs linkable by parsing the selectedActivityId (if available) for a tab suffix.
     // E.g. activityId="123/splits" means tab="splits" for activity "123"
@@ -470,13 +474,13 @@ export function ActivityDetailModal({
     const [hoveredExtractEffort, setHoveredExtractEffort] = useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
 
     // Local title state for immediate optimistic updates
-    const [displayTitle, setDisplayTitle] = useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type || 'Aktivitet');
+    const [displayTitle, setDisplayTitle] = useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.type || 'Aktivitet');
 
     // Sync display title if prop/current changes
     useEffect(() => {
-        const t = currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || currentActivity.type;
+        const t = currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.type;
         if (t) setDisplayTitle(t);
-    }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.notes, currentActivity.type]);
+    }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.type]);
 
     // Sync startKm from notes for Edit Form
     useEffect(() => {
@@ -793,6 +797,24 @@ export function ActivityDetailModal({
         }
     }, [isEditing, parsedWorkout]);
 
+    const fetchKudos = async (externalId: string) => {
+        if (!token) return;
+        setLoadingKudos(true);
+        try {
+            const res = await fetch(`/api/strava/activities/${externalId}/kudos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setKudos(data.kudos || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch kudos:', error);
+        } finally {
+            setLoadingKudos(false);
+        }
+    };
+
     // Get original activities for merged view
     const originalActivities = React.useMemo(() => {
         // 1. Try standard lookup via IDs
@@ -941,7 +963,7 @@ export function ActivityDetailModal({
 
         // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
         // but it's good practice to log if it's there. The backend handles the cookie.
-        if (effectivelyStrava && !isStrengthLike && externalId && needsFetch && fetchSplitsResult === 'idle' && !isFetchingSplits) {
+        if (effectivelyStrava && !isStrengthLike && externalId && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -957,10 +979,12 @@ export function ActivityDetailModal({
                     if (res.ok) {
                         const data = await res.json();
                         console.log("Strava response data:", data);
-                        if ((data.splits && data.splits.length > 0) || (data.laps && data.laps.length > 0)) {
-
-                            // Transform strava splits to our format
-                            const mappedSplits = data.splits.map((s: any) => ({
+                        
+                        // We consider it a success if we get splits, laps OR a description
+                        if ((data.splits && data.splits.length > 0) || (data.laps && data.laps.length > 0) || data.description || data.name) {
+                            
+                            // Map Splits
+                            const mappedSplits = (data.splits || []).map((s: any) => ({
                                 split: s.split,
                                 distance: s.distance,
                                 elapsedTime: s.elapsed_time,
@@ -971,10 +995,7 @@ export function ActivityDetailModal({
                                 paceZone: s.pace_zone
                             }));
 
-                            console.log("Fetched strava splits, saving to activity:", mappedSplits);
-
-                            // Update local UI immediately via updateExercise
-                            // Map laps
+                            // Map Laps
                             const mappedLaps = (data.laps || []).map((l: any) => ({
                                 name: l.name,
                                 elapsedTime: l.elapsed_time,
@@ -986,10 +1007,23 @@ export function ActivityDetailModal({
                                 split: l.split
                             }));
 
-                            updateExercise(activity.id, { splits: mappedSplits, laps: mappedLaps } as any);
+                            // Prepare updates for local UI
+                            const updates: any = { splits: mappedSplits, laps: mappedLaps };
+                            
+                            if (data.description && (!activity.notes || activity.notes === activity.type || activity.notes === "" || isForcingFetch)) {
+                                updates.notes = data.description;
+                            }
+                            
+                            if (data.name && (isForcingFetch || !displayTitle || displayTitle === activity.type || displayTitle === activity.notes)) {
+                                updates.title = data.name;
+                                setDisplayTitle(data.name);
+                            }
+
+                            // Update local UI state
+                            updateExercise(activity.id, updates);
                             setFetchSplitsResult('success');
 
-                            // Then persist to backend in the background
+                            // Persist to backend
                             const dateParam = activity.date.split('T')[0];
                             await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
                                 method: 'PATCH',
@@ -998,22 +1032,29 @@ export function ActivityDetailModal({
                                     'Authorization': `Bearer ${token}`
                                 },
                                 body: JSON.stringify({
+                                    title: updates.title, // Persist title if updated
                                     performance: {
                                         ...(perf || {}),
                                         splits: mappedSplits,
-                                        laps: mappedLaps
+                                        laps: mappedLaps,
+                                        notes: updates.notes || perf?.notes || activity.notes
                                     }
                                 })
                             });
                         } else {
-                            console.log("No splits found in Strava API response");
+                            console.log("No detailed data found in Strava API response");
                             setFetchSplitsResult('error');
                         }
                     } else if (res.status === 404) {
                         console.warn("Strava splits not found (404)");
                         setFetchSplitsResult('error');
                     } else {
-                        console.error("❌ ActivityDetailModal: Split fetch failed with status:", res.status);
+                        const errorData = await res.json().catch(() => ({}));
+                        console.error("❌ ActivityDetailModal: Split fetch failed:", {
+                            status: res.status,
+                            error: errorData.error,
+                            details: errorData.details
+                        });
                         setFetchSplitsResult('error');
                     }
                 } catch (err) {
@@ -1021,6 +1062,7 @@ export function ActivityDetailModal({
                     setFetchSplitsResult('error');
                 } finally {
                     setIsFetchingSplits(false);
+                    setIsForcingFetch(false);
                 }
             };
 
@@ -1171,7 +1213,7 @@ export function ActivityDetailModal({
         if (isTrulyMerged && originalActivities.length > 0) {
             const stravaSource = originalActivities.find(a => a.performance?.source?.source === 'strava');
             const currentTitle = universalActivity?.plan?.title || activity.title;
-            const stravaTitle = stravaSource?.plan?.title || stravaSource?.performance?.notes;
+            const stravaTitle = stravaSource?.plan?.title || stravaSource?.title || (stravaSource?.performance?.activityType ? `Strava ${stravaSource.performance.activityType}` : 'Strava Activity');
 
             // If we have a Strava title, and the current title is likely a default/fallback (or just different),
             // we update it. We check if it's NOT already the Strava title.
@@ -2340,31 +2382,61 @@ export function ActivityDetailModal({
                                                 <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
                                                     <span>🔥</span> Strava-data
                                                 </h4>
-                                                {(() => {
-                                                    let stravaLink = null;
-                                                    if (activity.source === 'strava' && activity.externalId) {
-                                                        stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                                    } else if (isTrulyMerged) {
-                                                        const stravaOriginals = originalActivities
-                                                            .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
-                                                            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
-                                                        if (stravaOriginals.length > 0) {
-                                                            const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
-                                                            stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        disabled={isFetchingSplits}
+                                                        onClick={() => {
+                                                            setIsForcingFetch(true);
+                                                            setFetchSplitsResult('idle');
+                                                        }}
+                                                        className={`text-[9px] font-black uppercase border px-2 py-1 rounded-lg transition-all flex items-center gap-1 ${isFetchingSplits ? 'bg-white/10 border-white/10 text-slate-500 cursor-not-allowed' : 'text-[#FC4C02]/60 hover:text-[#FC4C02] border-[#FC4C02]/20 hover:bg-[#FC4C02]/10'}`}
+                                                        title="Hämta om data från Strava"
+                                                    >
+                                                        {isFetchingSplits ? (
+                                                            <>
+                                                                <div className="w-2 h-2 border border-[#FC4C02]/20 border-t-[#FC4C02] rounded-full animate-spin" />
+                                                                Synkar...
+                                                            </>
+                                                        ) : (
+                                                            <>↻ Synka om</>
+                                                        )}
+                                                    </button>
+                                                    {(() => {
+                                                        let stravaLink = null;
+                                                        if (activity.source === 'strava' && activity.externalId) {
+                                                            stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
+                                                        } else if (isTrulyMerged) {
+                                                            const stravaOriginals = originalActivities
+                                                                .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                                                .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                                            if (stravaOriginals.length > 0) {
+                                                                const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                                stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                            }
                                                         }
-                                                    }
-                                                    return stravaLink ? (
-                                                        <a
-                                                            href={stravaLink}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-[10px] font-bold text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
-                                                        >
-                                                            Öppna i Strava ↗
-                                                        </a>
-                                                    ) : null;
-                                                })()}
+                                                        return stravaLink ? (
+                                                            <a
+                                                                href={stravaLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-[10px] font-black text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
+                                                            >
+                                                                Öppna ↗
+                                                            </a>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
                                             </div>
+
+                                            {/* Activity Notes / Description */}
+                                            {(perf?.notes || activity.notes) && (
+                                                <div className="bg-white/5 rounded-xl p-3 border border-white/5 shadow-inner">
+                                                    <p className="text-[10px] text-slate-500 uppercase font-black mb-2 opacity-50 tracking-widest">Beskrivning</p>
+                                                    <p className="text-sm text-slate-300 whitespace-pre-wrap italic leading-relaxed font-medium">
+                                                        {perf?.notes || activity.notes}
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {/* Hero Stats */}
                                             <div className="grid grid-cols-3 gap-4 border-b border-[#FC4C02]/10 pb-5">
@@ -2512,10 +2584,56 @@ export function ActivityDetailModal({
                                                                 </div>
                                                             )}
                                                             {(perf?.kudosCount || 0) > 0 && (
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-pink-400">❤️</span>
-                                                                    <span className="text-lg font-black text-white">{perf.kudosCount}</span>
-                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
+                                                                <div 
+                                                                    className="relative"
+                                                                    onMouseEnter={() => {
+                                                                        const targetId = perf?.source?.externalId || activity.externalId;
+                                                                        if (targetId && kudos.length === 0 && !loadingKudos) {
+                                                                            fetchKudos(targetId.toString());
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setShowKudos(!showKudos);
+                                                                        }}
+                                                                        className="flex items-center gap-1.5 hover:text-orange-400 transition-colors"
+                                                                    >
+                                                                        <span className="text-pink-400">❤️</span>
+                                                                        <span className="text-lg font-black text-white">{perf.kudosCount}</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
+                                                                    </button>
+
+                                                                    {showKudos && (
+                                                                        <div className="absolute top-full left-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in zoom-in-95 duration-200">
+                                                                            <div className="flex justify-between items-center mb-2 px-1">
+                                                                                <span className="text-[10px] font-black uppercase text-slate-400">Kudos från</span>
+                                                                                <button onClick={() => setShowKudos(false)} className="text-slate-500 hover:text-white">✕</button>
+                                                                            </div>
+                                                                            <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar text-left">
+                                                                                {loadingKudos ? (
+                                                                                    <div className="py-4 flex justify-center">
+                                                                                        <div className="w-4 h-4 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
+                                                                                    </div>
+                                                                                ) : kudos.length > 0 ? (
+                                                                                    kudos.map((athlete, i) => (
+                                                                                        <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                                                                                            <img src={athlete.profile} alt="" className="w-6 h-6 rounded-full border border-white/10" />
+                                                                                            <div className="flex-1 min-w-0">
+                                                                                                <p className="text-[10px] font-bold text-white truncate">{athlete.firstname} {athlete.lastname}</p>
+                                                                                                {(athlete.city || athlete.country) && (
+                                                                                                    <p className="text-[8px] text-slate-500 truncate">{athlete.city}{athlete.city && athlete.country ? ', ' : ''}{athlete.country}</p>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">Inga detaljer tillgängliga</p>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
