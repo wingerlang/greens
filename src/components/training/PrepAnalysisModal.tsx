@@ -11,20 +11,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ComposedCh
 import { useData } from '../../context/DataContext.tsx';
 import { useNavigate } from 'react-router-dom';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
-
-interface PrepEvent {
-    id: string;
-    date: string;
-    title: string;
-    distance: number;
-    durationSeconds?: number;
-    durationFormatted?: string;
-    bucketLabel?: string;
-    previousDurationSeconds?: number;
-    improvementSeconds?: number;
-    isRace: boolean;
-    activity?: ExerciseEntry | PlannedActivity;
-}
+import { usePrepAggregation, PrepEvent } from './hooks/usePrepAggregation.ts';
 
 interface PrepAnalysisModalProps {
     event: PrepEvent;
@@ -35,307 +22,49 @@ interface PrepAnalysisModalProps {
 export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysisModalProps) {
     const navigate = useNavigate();
     const [timeframeWeeks, setTimeframeWeeks] = useState(12);
+    const [comparisonEvent, setComparisonEvent] = useState<PrepEvent | null>(null);
+    const [showSelector, setShowSelector] = useState(false);
     const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
     const { weightEntries, calculateDailyNutrition } = useData();
 
-    // 1. Setup the dynamic window leading UP TO the event date
-    const analysisWindow = useMemo(() => {
-        const eventDate = new Date(event.date).getTime();
-        const timeframeMs = timeframeWeeks * 7 * 24 * 60 * 60 * 1000;
-        const startDateMs = eventDate - timeframeMs;
+    // Setup the dynamic window leading UP TO the event date
+    const analysisWindow = usePrepAggregation(event, allActivities, timeframeWeeks);
+    const compWindow = usePrepAggregation(comparisonEvent || event, allActivities, timeframeWeeks);
 
-        // Filter activities that happened in the timeframe strictly before or on the event day
-        const windowActivities = allActivities.filter(a => {
-            const time = new Date(a.date).getTime();
-            return time >= startDateMs && time <= eventDate;
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        let totalRunVolumeKm = 0;
-        let totalRunTimeMin = 0;
-        let totalActiveTimeMin = 0; // Total time all sports
-        let totalElevationGain = 0;
-        let maxElevationInOneRun = 0;
-        let totalRunCount = 0;
-
-        let qualityCount = 0; // Intervals, tempo, thresholds
-        let longerDistCount = 0; // 14-20km (Längre Distans)
-        let longRunCount = 0; // 20-40km (Långpass)
-        let ultraLongRunCount = 0; // 40km+ (Överlångt)
-        let distanceCount = 0; // Everything else
-
-        let strengthCount = 0;
-        let cyclingCount = 0;
-        let otherCount = 0;
-
-        const sessionsPerDay: Record<string, number> = {};
-        const activeDays = new Set<string>();
-
-        const races: ExerciseEntry[] = [];
-        const qualitySessions: ExerciseEntry[] = [];
-        const trainingRuns: ExerciseEntry[] = [];
-
-        let fastestPaceSecPerKm = Infinity;
-        let fastestRun: ExerciseEntry | null = null;
-
-        // Weekly Volume chart data
-        const weeklyHealth: Record<string, { kcalTotal: number; weightSum: number; weightCount: number; strengthCount: number; raceCount: number; maxRaceDistance: number; raceList: { title: string; distance: number }[] }> = {};
-
-        for (let i = 0; i < timeframeWeeks; i++) {
-            const weekKey = `Vecka -${timeframeWeeks - i}`;
-            weeklyVolume[weekKey] = 0;
-            weeklyHealth[weekKey] = { kcalTotal: 0, weightSum: 0, weightCount: 0, strengthCount: 0, raceCount: 0, maxRaceDistance: 0, raceList: [] };
-        }
-
-        // Pre-fill days for kcal
-        for (let i = 0; i < timeframeWeeks * 7; i++) {
-            const dateMs = eventDate - i * 24 * 60 * 60 * 1000;
-            const dateStr = new Date(dateMs).toISOString().split('T')[0];
-            const weeksBeforeEvent = Math.floor(i / 7);
-
-            if (weeksBeforeEvent < timeframeWeeks) {
-                const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
-                if (weeklyHealth[weekKey]) {
-                    const nut = calculateDailyNutrition(dateStr);
-                    if (nut && nut.calories > 0) {
-                        weeklyHealth[weekKey].kcalTotal += nut.calories;
-                    }
-                }
-            }
-        }
-
-        windowActivities.forEach(act => {
-            const actTimeMs = new Date(act.date).getTime();
-            const daysBeforeEvent = Math.floor((eventDate - actTimeMs) / (1000 * 60 * 60 * 24));
-            const weeksBeforeEvent = Math.floor(daysBeforeEvent / 7);
-
-            // Weekly aggregation
-            if (weeksBeforeEvent < timeframeWeeks) {
-                const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
-                const isRunning = act.type.toLowerCase().includes('run') || act.type.toLowerCase().includes('löpning');
-                const isRace = isCompetition(act);
-
-                if (isRunning) {
-                    // STICKT LOGIC: If this is the event activity itself, don't count it towards "Training Preparation"
-                    if (act.id !== event.id) {
-                        weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + (act.distance || 0);
-                    }
-                    if (isRace) {
-                        weeklyHealth[weekKey].raceCount++;
-                        const dist = act.distance || 0;
-                        if (dist > (weeklyHealth[weekKey].maxRaceDistance || 0)) {
-                            weeklyHealth[weekKey].maxRaceDistance = dist;
-                        }
-                        weeklyHealth[weekKey].raceList.push({
-                            title: act.title || act.notes || 'Tävling',
-                            distance: dist
-                        });
-                    }
-                }
-                if (act.type.toLowerCase().includes('strength') || act.type.toLowerCase().includes('styrka') || act.type.toLowerCase() === 'weighttraining') {
-                    weeklyHealth[weekKey].strengthCount++;
-                }
-            }
-
-            // Frequency/Double Days
-            const dateStr = act.date.substring(0, 10);
-            sessionsPerDay[dateStr] = (sessionsPerDay[dateStr] || 0) + 1;
-            activeDays.add(dateStr);
-            totalActiveTimeMin += (act.durationMinutes || 0);
-
-            const isRunning = act.type.toLowerCase().includes('run') || act.type.toLowerCase().includes('löpning');
-            const isRace = isCompetition(act);
-
-            if (isRace && isRunning) races.push(act);
-
-            if (isRunning && act.distance && act.durationMinutes) {
-                // DON'T include event itself in these "lead-up" counters
-                if (act.id === event.id) return;
-
-                totalRunVolumeKm += act.distance;
-                totalRunTimeMin += act.durationMinutes;
-                totalElevationGain += (act.elevationGain || 0);
-                totalRunCount++;
-
-                const isQuality = !isRace && (
-                    act.title?.toLowerCase().includes('intervall') ||
-                    act.notes?.toLowerCase().includes('intervall') ||
-                    act.title?.toLowerCase().includes('tempo') ||
-                    act.title?.toLowerCase().includes('tröskel') ||
-                    act.subType === 'interval' ||
-                    act.subType === 'tempo'
-                );
-
-                if (isRace) {
-                    // Handled above in races list
-                } else if (isQuality) {
-                    qualityCount++;
-                    qualitySessions.push(act);
-                    const enriched = { ...act, isQuality: true };
-                    trainingRuns.push(enriched);
-                } else {
-                    const enriched = { ...act, isQuality: false };
-                    trainingRuns.push(enriched);
-                    
-                    if (act.distance >= 14) {
-                        if (act.distance >= 40) ultraLongRunCount += 1;
-                        else if (act.distance >= 20) longRunCount += 1;
-                        else longerDistCount += 1;
-                    } else {
-                        distanceCount += 1;
-                    }
-                }
-            } else {
-                const lowType = act.type.toLowerCase();
-                if (lowType.includes('strength') || lowType.includes('styrka') || lowType === 'weighttraining') {
-                    strengthCount++;
-                } else if (lowType.includes('cycle') || lowType.includes('cykel') || lowType === 'virtualride' || lowType === 'ride') {
-                    cyclingCount++;
-                } else {
-                    otherCount++;
-                }
-            }
-        });
-
-        // Fastest Pace - ensure we check the runs that were pushed to trainingRuns
-        trainingRuns.forEach(act => {
-            const pace = (act.durationMinutes * 60) / act.distance;
-            if (pace < fastestPaceSecPerKm && pace > 120) {
-                fastestPaceSecPerKm = pace;
-                fastestRun = act;
-            }
-            if ((act.elevationGain || 0) > maxElevationInOneRun) {
-                maxElevationInOneRun = act.elevationGain || 0;
-            }
-        });
-
-        // Calculate Longest Runs (Top 3)
-        const top3LongRuns = [...trainingRuns]
-            .sort((a, b) => (b.distance || 0) - (a.distance || 0))
-            .slice(0, 3);
-
-        // Add Weight Entries
-        weightEntries.forEach(w => {
-            const wTimeMs = new Date(w.date).getTime();
-            if (wTimeMs >= startDateMs && wTimeMs <= eventDate) {
-                const daysBeforeEvent = Math.floor((eventDate - wTimeMs) / (1000 * 60 * 60 * 24));
-                const weeksBeforeEvent = Math.floor(daysBeforeEvent / 7);
-                if (weeksBeforeEvent < timeframeWeeks) {
-                    const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
-                    if (weeklyHealth[weekKey]) {
-                        weeklyHealth[weekKey].weightSum += w.weight;
-                        weeklyHealth[weekKey].weightCount++;
-                    }
-                }
-            }
-        });
-
-        // Averages
-        const avgWeeklyVol = totalRunVolumeKm / timeframeWeeks;
-        let lastWeekVol = 0;
-        let prevWeeksVolAvg = 0;
-        if (timeframeWeeks > 1) {
-            lastWeekVol = weeklyVolume['Vecka -1'] || 0;
-            const prevTotal = Object.entries(weeklyVolume)
-                .filter(([k]) => k !== 'Vecka -1')
-                .reduce((sum, [, v]) => sum + v, 0);
-            prevWeeksVolAvg = prevTotal / (timeframeWeeks - 1);
-        }
-
-        const avgPaceSecPerKm = totalRunCount > 0 ? (totalRunTimeMin * 60) / totalRunVolumeKm : 0;
-        const doubleDaysCount = Object.values(sessionsPerDay).filter(count => count > 1).length;
-        const avgSessionsPerWeek = Object.keys(sessionsPerDay).length / timeframeWeeks;
-        const totalDaysInPeriod = timeframeWeeks * 7;
-        const restDays = totalDaysInPeriod - activeDays.size;
-
-        // Longest Streak
-        const sortedActiveDays = Array.from(activeDays).sort();
-        let longestStreak = 0;
-        let currentStreak = 0;
-        let lastDate: Date | null = null;
-        sortedActiveDays.forEach(dateStr => {
-            const d = new Date(dateStr);
-            if (!lastDate) { currentStreak = 1; } else {
-                const diffDays = Math.ceil(Math.abs(d.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-                if (diffDays === 1) currentStreak++; else currentStreak = 1;
-            }
-            if (currentStreak > longestStreak) longestStreak = currentStreak;
-            lastDate = d;
-        });
-
-        const peakVolumeWeek = Math.max(0, ...Object.values(weeklyVolume));
-        const consistencyScore = (activeDays.size / totalDaysInPeriod) * 100;
-        const qualityVol = qualitySessions.reduce((sum, s) => sum + (s.distance || 0), 0);
-        const qualityRatio = totalRunVolumeKm > 0 ? (qualityVol / totalRunVolumeKm) * 100 : 0;
-
-        // Pros & Cons
-        const pros: string[] = [];
-        const cons: string[] = [];
-        if (longRunCount >= 3) pros.push("Bra uthållighetsgrund med regelbundna långpass"); else cons.push("Få långpass i perioden, potentiellt svag uthållighetsbas");
-        if (qualityCount >= Math.floor(timeframeWeeks / 2)) pros.push("Konsekvent upprätthållande av kvalitetspass/fart"); else cons.push("Avsaknad av kontinuitet i kvalitetspass");
-        if (strengthCount >= Math.floor(timeframeWeeks * 0.5)) pros.push("Bra skadeförebyggande rutin (styrke/alternativ träning)"); else if (strengthCount === 0) cons.push("Ingen styrketräning loggad (ökad skaderisk)");
-        if (timeframeWeeks > 1 && lastWeekVol < prevWeeksVolAvg * 0.85) pros.push("Tydlig och vältajmad formtoppning (Tapering)"); else if (timeframeWeeks > 1 && lastWeekVol > prevWeeksVolAvg * 1.05) cons.push("Ingen tapering genomförd sista veckan");
-        if (longestStreak >= 5) pros.push(`Stark kontinuitet i träningen (max-streak: ${longestStreak} dagar)`);
-        if (restDays < timeframeWeeks) cons.push("Väldigt få vilodagar (potentiell underåterhämtning)");
-
-        const rawChartData = Object.keys(weeklyVolume).sort((a, b) => {
-            const numA = parseInt(a.split('-')[1]);
-            const numB = parseInt(b.split('-')[1]);
-            return numA - numB;
-        }).map(key => ({
-            week: key,
-            vol: Math.round(weeklyVolume[key] * 10) / 10,
-            raceCount: weeklyHealth[key].raceCount,
-            maxRaceDistance: weeklyHealth[key].maxRaceDistance,
-            raceList: weeklyHealth[key].raceList,
-            weight: weeklyHealth[key].weightCount > 0 ? Math.round((weeklyHealth[key].weightSum / weeklyHealth[key].weightCount) * 10) / 10 : null,
-            kcal: weeklyHealth[key].kcalTotal > 0 ? Math.round(weeklyHealth[key].kcalTotal / 7) : null
-        }));
-
-        const weightDataPoints = weightEntries.filter(w => new Date(w.date).getTime() >= startDateMs && new Date(w.date).getTime() <= eventDate);
-        const hasHealthData = weightDataPoints.length >= 3;
-
-        const longRunsList = windowActivities.filter(r => {
-            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
-            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval';
-            return isRun && (r.distance || 0) >= 20 && r.id !== event.id && !isCompetition(r) && !isQuality;
-        });
-        const longerDistList = windowActivities.filter(r => {
-            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
-            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval' || r.subType === 'tempo';
-            return isRun && (r.distance || 0) >= 14 && (r.distance || 0) < 20 && r.id !== event.id && !isCompetition(r) && !isQuality;
-        });
-        const easyRunsList = windowActivities.filter(r => {
-            const isRun = r.type.toLowerCase().includes('run') || r.type.toLowerCase().includes('löpning');
-            const isQuality = r.title?.toLowerCase().includes('intervall') || r.notes?.toLowerCase().includes('intervall') || r.subType === 'interval' || r.subType === 'tempo';
-            return isRun && (r.distance || 0) < 14 && r.id !== event.id && !isCompetition(r) && !isQuality;
-        });
-
-        return {
-            top3LongRuns, fastestRun: fastestRun as ExerciseEntry | null,
-            races: races.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            qualityCount, distanceCount, longRunCount, longerDistCount, ultraLongRunCount,
-            totalElevationGain, maxElevationInOneRun, fastestPaceSecPerKm, totalActiveTimeMin, restDays, activeDaysCount: activeDays.size, totalDaysInPeriod,
-            longRunsList: longRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            longerDistList: longerDistList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            easyRunsList: easyRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            avgWeeklyVol, lastWeekVol, prevWeeksVolAvg, avgPaceSecPerKm,
-            strengthCount, cyclingCount, otherCount, doubleDaysCount, avgSessionsPerWeek,
-            chartData: rawChartData, hasHealthData,
-            weightDataPoints: weightDataPoints.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            windowActivities, longestStreak, peakVolumeWeek, consistencyScore, qualityRatio,
-            pros, cons,
-            qualitySessions: qualitySessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            totalRunTimeMin,
-            totalRunCount,
-            totalRunVolumeKm
-        };
-    }, [event, allActivities, timeframeWeeks, weightEntries, calculateDailyNutrition]);
+    const isComparing = !!comparisonEvent;
 
     const formatPace = (secPerKm: number) => {
         if (!isFinite(secPerKm) || secPerKm <= 0) return '-';
         const m = Math.floor(secPerKm / 60);
         const s = Math.round(secPerKm % 60);
         return `${m}:${s.toString().padStart(2, '0')}/km`;
+    };
+
+    const DiffBadge = ({ v1, v2, higherIsBetter = true, type = 'number' }: { v1: number, v2: number, higherIsBetter?: boolean, type?: 'number' | 'pace' | 'percent' }) => {
+        if (!isComparing) return null;
+        if (v1 === v2) return null;
+
+        let diff = v1 - v2;
+        if (type === 'pace') {
+            // Lower pace is better (faster)
+            // If current pace is 300s/km and old is 310s/km, diff is -10. 
+            // In our logic, lower is better, so -10 is GOOD.
+            diff = v2 - v1; // 310 - 300 = +10 (Good)
+        }
+
+        const isGood = higherIsBetter ? diff > 0 : diff < 0;
+        const absDiff = Math.abs(v1 - v2);
+
+        let label = '';
+        if (type === 'pace') label = `${Math.floor(absDiff / 60)}:${Math.round(absDiff % 60).toString().padStart(2, '0')}`;
+        else if (type === 'percent') label = `${absDiff.toFixed(0)}%`;
+        else label = absDiff.toFixed(1);
+
+        return (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${isGood ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                {diff > 0 ? '+' : '-'}{label}
+            </span>
+        );
     };
 
     const ActivityRow = ({ r, icon }: { r: ExerciseEntry; icon: React.ReactNode }) => {
@@ -385,12 +114,6 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     <div className="text-xs font-black text-white">{r.distance?.toFixed(1)} <span className="text-[9px] opacity-40">km</span></div>
                     <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
                         <span>{formatPace(paceSec)}</span>
-                        {r.heartRateAvg !== undefined && r.heartRateAvg > 0 && (
-                            <span className="flex items-center gap-0.5 text-rose-400">
-                                <Heart size={10} className="stroke-[2.5]" />
-                                {Math.round(r.heartRateAvg)}
-                            </span>
-                        )}
                     </div>
                 </div>
             </div>
@@ -405,9 +128,15 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     <p className="text-[10px] font-black text-slate-500 uppercase mb-2">{label}</p>
                     <div className="space-y-1.5">
                         <div className="flex justify-between gap-8">
-                            <span className="text-xs text-slate-400">Volym:</span>
+                            <span className="text-xs text-emerald-500">{isComparing ? 'Aktuell:' : 'Volym:'}</span>
                             <span className="text-xs font-black text-white">{data.vol} km</span>
                         </div>
+                        {isComparing && (
+                            <div className="flex justify-between gap-8">
+                                <span className="text-xs text-indigo-400">Jämförelse:</span>
+                                <span className="text-xs font-black text-slate-400">{data.compVol} km</span>
+                            </div>
+                        )}
                         {data.raceList && data.raceList.length > 0 && (
                             <div className="pt-1.5 border-t border-white/5 mt-1.5">
                                 {data.raceList.map((race: any, i: number) => (
@@ -418,18 +147,6 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                                 ))}
                             </div>
                         )}
-                        {data.weight && (
-                            <div className="flex justify-between gap-8">
-                                <span className="text-xs text-slate-400">Vikt:</span>
-                                <span className="text-xs font-black text-white">{data.weight} kg</span>
-                            </div>
-                        )}
-                        {data.kcal && (
-                            <div className="flex justify-between gap-8">
-                                <span className="text-xs text-rose-400">Snitt Kcal:</span>
-                                <span className="text-xs font-black text-rose-300">{data.kcal}</span>
-                            </div>
-                        )}
                     </div>
                 </div>
             );
@@ -437,89 +154,80 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
         return null;
     };
 
-    const handleExportJson = () => {
-        const exportData = {
-            metadata: {
-                generateDate: new Date().toISOString(),
-                timeframeWeeks: timeframeWeeks,
-                eventDate: event.date.substring(0, 10),
-            },
-            event: { ...event, activity: undefined },
-            summaryStats: {
-                totalVolumeKm: Math.round(analysisWindow.totalRunVolumeKm),
-                avgWeeklyVolKm: Math.round(analysisWindow.avgWeeklyVol),
-                totalRuns: analysisWindow.totalRunCount,
-                totalRunTimeHours: Math.floor(analysisWindow.totalRunTimeMin / 60),
-                avgPace: formatPace(analysisWindow.avgPaceSecPerKm),
-                totalElevationGain: Math.round(analysisWindow.totalElevationGain),
-                maxElevationInOneRun: Math.round(analysisWindow.maxElevationInOneRun),
-                consistencyScore: Math.round(analysisWindow.consistencyScore),
-                activeDaysCount: analysisWindow.activeDaysCount,
-                totalDaysInPeriod: analysisWindow.totalDaysInPeriod,
-                longestStreakDays: analysisWindow.longestStreak,
-                peakVolumeWeekKm: (analysisWindow.peakVolumeWeek || 0).toFixed(1),
-                strengthCount: analysisWindow.strengthCount,
-                cyclingCount: analysisWindow.cyclingCount,
-                doubleDaysCount: analysisWindow.doubleDaysCount
-            },
-            weeklyTrends: analysisWindow.chartData,
-        };
-        navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
-        alert('All synlig data har kopierats till urklipp i JSON-format!');
-    };
+    const mergedChartData = useMemo(() => {
+        if (!isComparing) return analysisWindow.chartData;
+        return analysisWindow.chartData.map((d, i) => ({
+            ...d,
+            compVol: compWindow.chartData[i]?.vol || 0
+        }));
+    }, [analysisWindow.chartData, compWindow.chartData, isComparing]);
 
-    const isFutureEvent = new Date(event.date) > new Date();
+    const potentialComparisonEvents = useMemo(() => {
+        const races = allActivities.filter(isCompetition).map(act => ({
+            id: act.id,
+            date: act.date,
+            title: act.title || act.name || 'Race',
+            distance: act.distance || 0,
+            isRace: true,
+            activity: act
+        }));
+        return races.sort((a, b) => b.date.localeCompare(a.date)).filter(s => s.id !== event.id);
+    }, [allActivities, event.id]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
             <div className="relative w-full max-w-7xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-300">
                 {/* Header */}
-                <div className="bg-slate-900 border-b border-white/5 px-6 py-2 flex justify-between items-center sticky top-0 z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.1)] shrink-0">
-                            {event.isRace ? <Medal size={16} /> : <Zap size={16} />}
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4">
-                            <h2 className="text-base font-black text-white truncate max-w-[200px] md:max-w-md">
-                                {event.bucketLabel || event.title} {event.bucketLabel ? 'Rekord' : 'Analys'}
-                            </h2>
-                            <div className="flex items-center gap-3">
-                                {event.durationFormatted && (
-                                    <span className="text-xl font-black text-amber-400 font-mono">
-                                        {event.durationFormatted}
-                                    </span>
-                                )}
-                                {event.durationSeconds && event.distance && (
-                                    <span className="text-[10px] text-slate-500 font-medium font-mono">
-                                        ({formatPace(event.durationSeconds / event.distance)})
-                                    </span>
-                                )}
-                                {event.improvementSeconds && event.improvementSeconds > 0 && (
-                                    <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 bg-emerald-400/10 px-1.5 py-0.5 rounded">
-                                        <TrendingDown size={10} />
-                                        {formatTime(event.improvementSeconds)}
-                                    </span>
-                                )}
-                                {isFutureEvent && (
-                                    <span className="text-[10px] font-bold text-blue-400 flex items-center gap-1 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 uppercase tracking-widest">
-                                        Kommande
-                                    </span>
-                                )}
+                <div className="bg-slate-900 border-b border-white/5 px-6 py-2 flex justify-between items-center sticky top-0 z-10 gap-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+                                {event.isRace ? <Medal size={16} /> : <Zap size={16} />}
+                            </div>
+                            <div className="flex flex-col">
+                                <h2 className="text-xs font-black text-white truncate max-w-[150px]">
+                                    {event.bucketLabel || event.title}
+                                </h2>
+                                <span className="text-[10px] text-slate-500 font-mono italic">{event.date.substring(0,10)}</span>
                             </div>
                         </div>
+
+                        {isComparing && (
+                            <>
+                                <div className="text-slate-700 font-black text-[10px]">VS</div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
+                                        <Medal size={16} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <h2 className="text-xs font-black text-white truncate max-w-[150px]">
+                                            {comparisonEvent?.title}
+                                        </h2>
+                                        <span className="text-[10px] text-slate-500 font-mono italic">{comparisonEvent?.date.substring(0,10)}</span>
+                                    </div>
+                                    <button onClick={() => setComparisonEvent(null)} className="p-1 text-slate-500 hover:text-rose-500">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {!isComparing && (
+                            <button 
+                                onClick={() => setShowSelector(!showSelector)}
+                                className="ml-4 px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all flex items-center gap-1.5"
+                            >
+                                <RefreshCw size={12} /> Jämför träningsprep
+                            </button>
+                        )}
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div className="flex items-center gap-3 shrink-0">
                         <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-0.5 scale-90">
                             {[4, 8, 12, 16].map(weeks => (
                                 <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
                             ))}
-                        </div>
-                        <button onClick={handleExportJson} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-white/10 rounded-lg flex items-center gap-1 text-[10px] font-black uppercase tracking-wider" title="Exportera JSON till urklipp">
-                            <div className="bg-amber-500/10 p-1 rounded-sm border border-amber-500/20"><Activity size={12} className="text-amber-500" /></div> JSON
-                        </button>
-                        <div className="hidden lg:block text-[10px] font-bold text-slate-500 uppercase">
-                            Analys t.o.m. {event.date.substring(0, 10)}
                         </div>
                         <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg shrink-0">
                             <X size={18} />
@@ -527,127 +235,158 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                {showSelector && (
+                    <div className="bg-slate-950 border-b border-white/5 p-4 flex flex-col gap-2 animate-in slide-in-from-top duration-300">
+                        <div className="flex justify-between items-center px-2">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Välj lopp eller PB att jämföra med</span>
+                            <button onClick={() => setShowSelector(false)} className="text-[10px] font-black text-slate-400 hover:text-white uppercase">Avbryt</button>
+                        </div>
+                        <div className="flex gap-2 p-2 overflow-x-auto custom-scrollbar">
+                            {potentialComparisonEvents.slice(0, 15).map(e => (
+                                <button 
+                                    key={e.id}
+                                    onClick={() => {
+                                        setComparisonEvent(e as any);
+                                        setShowSelector(false);
+                                    }}
+                                    className="flex-shrink-0 bg-slate-900 border border-white/10 hover:border-amber-500/50 p-2 rounded-xl text-left w-48 transition-all hover:bg-slate-800"
+                                >
+                                    <div className="text-[10px] font-black text-white truncate mb-1">{e.title}</div>
+                                    <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono">
+                                        <span>{e.date.substring(0, 10)}</span>
+                                        <span className="font-bold text-slate-400">{e.distance}km</span>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
                     {/* Compact Metrics Bar */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl flex flex-col justify-between">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Volym (Totalt & Snitt)</div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-black text-white">{Math.round(analysisWindow.totalRunVolumeKm)} <span className="text-[10px] font-bold text-slate-500">km</span></span>
-                                <span className="text-xs text-slate-400">({Math.round(analysisWindow.avgWeeklyVol)} km/v)</span>
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Volym (Totalt)</div>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-xl font-black text-white">{Math.round(analysisWindow.totalRunVolumeKm)} <span className="text-[10px] font-bold text-slate-500">km</span></span>
+                                </div>
+                                <DiffBadge v1={analysisWindow.totalRunVolumeKm} v2={compWindow.totalRunVolumeKm} />
                             </div>
-                            <div className="text-[10px] text-slate-400 mt-1 flex gap-1 items-center">
+                            {isComparing && (
+                                <div className="text-[9px] text-slate-600 mt-1">Jämförelse: {Math.round(compWindow.totalRunVolumeKm)} km</div>
+                            )}
+                            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
                                 <span>{analysisWindow.totalRunCount} pass</span>
-                                <span>•</span>
-                                <span>{Math.floor(analysisWindow.totalRunTimeMin / 60)}h {Math.round(analysisWindow.totalRunTimeMin % 60)}m</span>
+                                {analysisWindow.warmupCount > 0 && (
+                                    <div className="group/wu relative">
+                                        <span className="text-rose-400 bg-rose-400/10 px-1 py-0.25 rounded cursor-help font-black">+{analysisWindow.warmupCount}</span>
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/wu:opacity-100 transition-opacity pointer-events-none z-[250]">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Identifierat som upp/nerjogg</p>
+                                            <div className="space-y-1">
+                                                {analysisWindow.warmups.map((w : any, i : number) => (
+                                                    <div key={i} className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-slate-300 truncate max-w-[100px]">{w.title || w.type}</span>
+                                                        <span className="text-slate-500 font-mono">{w.distance?.toFixed(1)}km</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="mt-2 pt-1 border-t border-white/5 text-[9px] text-slate-600 italic">Dessa har räknats i volym och snitt-tempo, men undantagits från antal pass.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                <span className="text-slate-700">•</span>
+                                <span>{Math.round(analysisWindow.avgWeeklyVol)} km/v</span>
                             </div>
                         </div>
 
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Zap size={12} className="text-amber-500" /> Snitt-tempo</div>
-                            <div className="text-xl font-black text-white">{formatPace(analysisWindow.avgPaceSecPerKm)}</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-black text-white">{formatPace(analysisWindow.avgPaceSecPerKm)}</span>
+                                <DiffBadge v1={analysisWindow.avgPaceSecPerKm} v2={compWindow.avgPaceSecPerKm} higherIsBetter={false} type="pace" />
+                            </div>
                             <div className="text-[9px] text-slate-500 mt-1">
-                                {analysisWindow.fastestPaceSecPerKm < Infinity && (
-                                    <span>Topp: <span className="font-bold text-amber-400">{formatPace(analysisWindow.fastestPaceSecPerKm)}</span></span>
+                                {isComparing ? (
+                                    <span>Jämförelse: {formatPace(compWindow.avgPaceSecPerKm)}</span>
+                                ) : (
+                                    <span>Snitt över hela perioden</span>
                                 )}
                             </div>
                         </div>
 
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Mountain size={12} className="text-rose-500" /> Totalt Höjd</div>
-                            <div className="text-xl font-black text-rose-400">{Math.round(analysisWindow.totalElevationGain)} <span className="text-[10px] font-bold text-slate-500">m+</span></div>
-                            <div className="text-[9px] text-slate-500 mt-1">
-                                {analysisWindow.maxElevationInOneRun > 0 && (
-                                    <span>Max/pass: <span className="font-bold text-rose-400">{Math.round(analysisWindow.maxElevationInOneRun)} m</span></span>
-                                )}
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Mountain size={12} className="text-rose-500" /> Höjdmeter</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-black text-rose-400">{Math.round(analysisWindow.totalElevationGain)} <span className="text-[10px] font-bold text-slate-500">m+</span></span>
+                                <DiffBadge v1={analysisWindow.totalElevationGain} v2={compWindow.totalElevationGain} />
                             </div>
+                            {isComparing && (
+                                <div className="text-[9px] text-rose-900/30 mt-1">Samma period tidigare: {Math.round(compWindow.totalElevationGain)} m+</div>
+                            )}
                         </div>
 
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><TrendingUp size={12} className="text-emerald-500" /> Kontinuitet</div>
-                            <div className="text-xl font-black text-emerald-400">{Math.round(analysisWindow.consistencyScore)}%</div>
-                            <div className="text-[9px] text-slate-500 mt-1 flex flex-wrap gap-1 leading-tight">
-                                <span>{analysisWindow.totalDaysInPeriod}d totalt</span>
-                                <span className="opacity-50">•</span>
-                                <span className="text-emerald-400">{analysisWindow.activeDaysCount} träningsdagar</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-black text-emerald-400">{Math.round(analysisWindow.consistencyScore)}%</span>
+                                <DiffBadge v1={analysisWindow.consistencyScore} v2={compWindow.consistencyScore} type="percent" />
+                            </div>
+                            <div className="text-[9px] text-slate-500 mt-1 leading-tight">
+                                {isComparing ? (
+                                    <span>Jämfört med: {Math.round(compWindow.consistencyScore)}%</span>
+                                ) : (
+                                    <span>{analysisWindow.activeDaysCount} träningsdagar</span>
+                                )}
                             </div>
                         </div>
 
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><TrophyIcon size={12} className="text-indigo-500" /> Toppvecka</div>
-                            <div className="text-xl font-black text-indigo-400">{(analysisWindow.peakVolumeWeek || 0).toFixed(1)} <span className="text-[10px] font-bold text-slate-500">km</span></div>
-                        </div>
-                    </div>
-
-                    <div className="max-w-xl mx-auto w-full bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl">
-                        <div className="flex justify-between items-baseline">
-                            <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><TrendingUp size={12} className="text-blue-500" /> Mängd & Formtoppning</h3>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-xs font-black text-slate-400">Sista veckan:</span>
-                                <span className="text-lg font-black text-white">{(analysisWindow.lastWeekVol || 0).toFixed(1)} <span className="text-xs font-bold text-slate-500">km</span></span>
-                                {analysisWindow.prevWeeksVolAvg > 0 && (
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                        {analysisWindow.lastWeekVol < analysisWindow.prevWeeksVolAvg ? '-' : '+'}
-                                        {(Math.abs((((analysisWindow.lastWeekVol - analysisWindow.prevWeeksVolAvg) / analysisWindow.prevWeeksVolAvg) * 100)) || 0).toFixed(0)}%
-                                    </span>
-                                )}
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><TrophyIcon size={12} className="text-indigo-500" /> Kvalitétpass</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-black text-indigo-400">{analysisWindow.qualityCount} <span className="text-[10px] font-bold text-slate-500">st</span></span>
+                                <DiffBadge v1={analysisWindow.qualityCount} v2={compWindow.qualityCount} />
                             </div>
+                            {isComparing && (
+                                <div className="text-[9px] text-slate-600 mt-1">Tidigare: {compWindow.qualityCount} st</div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="bg-slate-900/50 border border-white/5 p-3 px-4 rounded-xl flex flex-col md:flex-row justify-between gap-4 items-center">
-                        <div>
-                            <h3 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2 mb-2"><RefreshCw size={12} className="text-indigo-500" /> Variation & Frekvens</h3>
+                    {isComparing && (
+                        <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center md:text-left">
+                                <div className="flex items-center gap-2 mb-1"><Star size={12} /> Jämförelse av huvudnycklar</div>
+                                <div className="text-slate-600 lowercase font-mono italic">Visar differens i sifferdata för hela perioden</div>
+                            </div>
                             <div className="flex gap-4">
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] text-slate-500 font-black uppercase">Styrka</span>
-                                    <span className="text-lg font-black text-amber-500">{analysisWindow.strengthCount} <span className="text-[10px] text-slate-600">st</span></span>
+                                <div className="text-center px-4 border-r border-indigo-500/10 last:border-0">
+                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Långpass (20km+)</div>
+                                    <div className="flex items-baseline gap-2 justify-center">
+                                        <span className="text-xl font-black text-white">{analysisWindow.longRunCount}</span>
+                                        <DiffBadge v1={analysisWindow.longRunCount} v2={compWindow.longRunCount} />
+                                    </div>
+                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {compWindow.longRunCount}</div>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] text-slate-500 font-black uppercase">Cykling</span>
-                                    <span className="text-lg font-black text-blue-400">{analysisWindow.cyclingCount} <span className="text-[10px] text-slate-600">st</span></span>
+                                <div className="text-center px-4 border-r border-indigo-500/10 last:border-0">
+                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Styrkepass</div>
+                                    <div className="flex items-baseline gap-2 justify-center">
+                                        <span className="text-xl font-black text-white">{analysisWindow.strengthCount}</span>
+                                        <DiffBadge v1={analysisWindow.strengthCount} v2={compWindow.strengthCount} />
+                                    </div>
+                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {compWindow.strengthCount}</div>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] text-slate-500 font-black uppercase">Dubbelpass</span>
-                                    <span className="text-lg font-black text-white">{analysisWindow.doubleDaysCount} <span className="text-[10px] text-slate-600">st</span></span>
+                                <div className="text-center px-4 last:border-0">
+                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Snitt Volym/vecka</div>
+                                    <div className="flex items-baseline gap-2 justify-center">
+                                        <span className="text-xl font-black text-white">{Math.round(analysisWindow.avgWeeklyVol)}</span>
+                                        <DiffBadge v1={analysisWindow.avgWeeklyVol} v2={compWindow.avgWeeklyVol} />
+                                    </div>
+                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {Math.round(compWindow.avgWeeklyVol)}</div>
                                 </div>
                             </div>
                         </div>
-
-                        <div className="flex flex-col md:flex-row items-center gap-4">
-                            <div className="text-right">
-                                <div className="text-[10px] font-black text-slate-500 uppercase mb-1 text-center md:text-right">Passfördelning</div>
-                                <div className="flex gap-1.5 flex-wrap justify-center">
-                                    <div className="bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded text-center">
-                                        <div className="text-xs font-black text-amber-500">{analysisWindow.races.length}</div>
-                                        <div className="text-[8px] font-bold text-amber-600 uppercase">Tävl</div>
-                                    </div>
-                                    <div className="bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded text-center">
-                                        <div className="text-xs font-black text-blue-400">{analysisWindow.qualityCount}</div>
-                                        <div className="text-[8px] font-bold text-blue-500 uppercase">Kval</div>
-                                    </div>
-                                    <div className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded text-center">
-                                        <div className="text-xs font-black text-emerald-400">{analysisWindow.longRunCount}</div>
-                                        <div className="text-[8px] font-bold text-emerald-500 uppercase">Lång</div>
-                                    </div>
-                                    <div className="bg-sky-500/10 border border-sky-500/20 px-2 py-1 rounded text-center">
-                                        <div className="text-xs font-black text-sky-400">{analysisWindow.longerDistCount || 0}</div>
-                                        <div className="text-[8px] font-bold text-sky-500 uppercase">Längre</div>
-                                    </div>
-                                    <div className="bg-slate-800/50 px-2 py-1 rounded text-center">
-                                        <div className="text-xs font-black text-white">{analysisWindow.distanceCount}</div>
-                                        <div className="text-[8px] font-bold text-slate-500 uppercase">Dist</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-indigo-500/5 border border-indigo-500/10 p-2 rounded-xl text-center min-w-[75px]">
-                                <div className="text-[8px] font-bold text-indigo-400 uppercase mb-0.5">Längsta Streak</div>
-                                <div className="text-lg font-black text-white leading-none">{analysisWindow.longestStreak}</div>
-                                <div className="text-[8px] font-bold text-slate-500 uppercase">Dagar</div>
-                            </div>
-                        </div>
-                    </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                         <div className="bg-slate-900/50 border border-white/5 p-3 rounded-xl flex flex-col max-h-[350px]">
@@ -687,22 +426,31 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl h-64 flex flex-col">
                             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center justify-between">
-                                <div className="flex items-center gap-2"><TrendingUp size={12} className="text-emerald-500" /> Volym & Tävlingsdistans</div>
+                                <div className="flex items-center gap-2"><TrendingUp size={12} className="text-emerald-500" /> {isComparing ? 'Jämförelse av Träningsvolym' : 'Volym & Tävlingsdistans'}</div>
                             </h3>
                             <div className="flex-1 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={analysisWindow.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                    <ComposedChart data={mergedChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                                         <defs>
                                             <linearGradient id="volGradient" x1="0" y1="0" x2="0" y2="1">
                                                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
                                                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                                             </linearGradient>
+                                            {isComparing && (
+                                                <linearGradient id="compGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                                </linearGradient>
+                                            )}
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
                                         <XAxis dataKey="week" hide />
                                         <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
                                         <Tooltip content={<CustomTooltip />} />
                                         <Area type="monotone" dataKey="vol" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#volGradient)" />
+                                        {isComparing && (
+                                            <Area type="monotone" dataKey="compVol" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" fillOpacity={0.2} fill="url(#compGradient)" />
+                                        )}
                                         <Scatter dataKey="vol" shape={(props: any) => {
                                             const { cx, cy, payload } = props;
                                             if (payload.raceCount > 0) {

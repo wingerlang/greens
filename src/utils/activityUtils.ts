@@ -20,6 +20,23 @@ export function isCompetition(activity: UniversalActivity | any): boolean {
 }
 
 /**
+ * Checks if an activity is a warmup or cooldown.
+ */
+export function isWarmupOrCooldown(activity: any): boolean {
+    const title = (activity.plan?.title || activity.name || activity.title || '').toLowerCase();
+    const notes = (activity.performance?.notes || activity.notes || '').toLowerCase();
+    const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
+    
+    return subType === 'warmup' || 
+           subType === 'cooldown' || 
+           title.includes('uppjogg') || 
+           title.includes('nerjogg') || 
+           title.includes('warmup') || 
+           title.includes('cooldown') ||
+           title.includes('nervärmning');
+}
+
+/**
  * Formats seconds into human-readable time (H:MM:SS or M:SS).
  */
 export function formatTime(seconds: number): string {

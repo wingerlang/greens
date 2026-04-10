@@ -4,6 +4,7 @@ import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 import { useData } from '../../context/DataContext.tsx';
+import { isWarmupOrCooldown } from '../../utils/activityUtils.ts';
 
 interface TrainingCalendarProps {
     monthIndex: number; // 0-11
@@ -181,7 +182,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             return sum + (isRun ? (e.distance || 0) : 0);
         }, 0);
         const duration = countableExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
-        const count = countableExercises.length;
+        
+        const sessions = countableExercises.filter(e => !isWarmupOrCooldown(e));
+        const warmups = countableExercises.filter(e => isWarmupOrCooldown(e));
+        
+        const count = sessions.length;
+        const warmupCount = warmups.length;
         const tonnage = countableExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
 
         const today = new Date();
@@ -205,7 +211,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             return acc;
         }, {} as Record<string, number>);
 
-        const countDist = countableExercises.reduce((acc, e) => {
+        const countDist = sessions.reduce((acc, e) => {
             acc[e.type] = (acc[e.type] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
@@ -216,7 +222,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             : 0;
         const inactiveDays = Math.max(0, daysPassedForStats - uniqueActiveDays);
 
-        return { distance, duration, count, tonnage, timeDist, countDist, perWeek, freqPercent, timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays };
+        return { 
+            distance, duration, count, warmupCount, warmups, 
+            tonnage, timeDist, countDist, perWeek, freqPercent, 
+            timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays 
+        };
     }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
 
     if (monthIndex < 0) return null;
@@ -384,11 +394,13 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     </span>
                                                     <div className="flex items-center gap-1 group/dayinfo relative">
                                                         {hasExercise && (() => {
+                                                            const sessions = date.exercises.filter(e => !isWarmupOrCooldown(e));
+                                                            const warmCount = date.exercises.filter(e => isWarmupOrCooldown(e)).length;
                                                             const totMins = Math.round(date.exercises.reduce((sum, e) => sum + e.durationMinutes, 0));
                                                             const timeStr = totMins >= 60 ? `${Math.floor(totMins / 60)}h${totMins % 60}m` : `${totMins}m`;
                                                             return (
                                                                 <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold bg-white/5 px-1 py-0.5 rounded-sm cursor-help transition-colors hover:text-slate-200 hover:bg-white/10">
-                                                                    {date.exercises.length} pass • {timeStr}
+                                                                    {sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''} pass • {timeStr}
                                                                 </span>
                                                             );
                                                         })()}
@@ -399,7 +411,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                             <div className={`absolute mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 transition-all duration-300 translate-y-2 group-hover/dayinfo:translate-y-0 z-[9999] hidden md:block pointer-events-none scale-95 group-hover/dayinfo:scale-100`} style={{ left: '50%', transform: 'translateX(-50%)', top: '100%' }}>
                                                                 <div className="text-xs text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
                                                                     <span>{date.day} {monthName}</span>
-                                                                    <span>{date.exercises.length} pass</span>
+                                                                    {(() => {
+                                                                        const sessions = date.exercises.filter(e => !isWarmupOrCooldown(e));
+                                                                        const warmCount = date.exercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                        return <span>{sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''} pass</span>;
+                                                                    })()}
                                                                 </div>
 
                                                                 <div className="flex flex-col gap-2 mb-2 pb-2 border-b border-white/5 text-xs">
@@ -877,7 +893,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     <div className="flex items-center justify-between w-full px-1 bg-white/5 rounded py-0.5 hover:bg-white/10 transition-colors text-[9px] font-bold">
                                                         <span className="text-slate-500 uppercase font-black tracking-widest leading-none">TOT</span>
                                                         <div className="flex items-center gap-1 text-[9px] font-bold leading-none">
-                                                            <span className="text-slate-400">{weekExercises.length}p</span>
+                                                            {(() => {
+                                                                const sessions = weekExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                const warmCount = weekExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                return <span className="text-slate-400">{sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''}p</span>;
+                                                            })()}
                                                             <span className="text-slate-500 opacity-60">•</span>
                                                             <span className="text-slate-300 font-mono">
                                                                 {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h` : ''}
@@ -898,7 +918,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     >
                                                         <div className="text-xs text-slate-400 font-bold mb-2 pb-2 border-b border-white/10 flex justify-between">
                                                             <span>Alla pass v. {weekNumberStr.replace('v. ', '')}</span>
-                                                            <span className="text-slate-500">{weekExercises.length} pass</span>
+                                                            {(() => {
+                                                                const sessions = weekExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                const warmCount = weekExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                return <span className="text-slate-500">{sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''} pass</span>;
+                                                            })()}
                                                         </div>
                                                         <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                                             {weekExercises.map((e, idx) => {
@@ -978,7 +1002,27 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             <span className="text-[10px] font-bold text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">{stats.freqPercent}% aktiva dagar</span>
                         </div>
                         <div className="flex items-end justify-between mb-4">
-                            <p className="text-4xl font-black text-white leading-none">{stats.count} <span className="text-lg font-bold text-slate-500">pass</span></p>
+                            <div className="flex items-baseline gap-1">
+                                <p className="text-4xl font-black text-white leading-none">{stats.count}</p>
+                                <span className="text-lg font-bold text-slate-500 mr-2">pass</span>
+                                {stats.warmupCount > 0 && (
+                                    <div className="group/wu relative">
+                                        <span className="text-sm font-black text-rose-400 bg-rose-400/10 px-1.5 py-0.5 rounded cursor-help">+{stats.warmupCount}</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/wu:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Identifierat som upp/nerjogg</p>
+                                            <div className="space-y-1">
+                                                {stats.warmups.map((w : any, i : number) => (
+                                                    <div key={i} className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-slate-300 truncate max-w-[100px]">{w.title || w.type}</span>
+                                                        <span className="text-slate-500 font-mono">{w.distance?.toFixed(1)}km</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="mt-2 pt-1 border-t border-white/5 text-[9px] text-slate-600 italic">Undantagits från antal pass men räknas i totala stats.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-white/5">
                             <div>

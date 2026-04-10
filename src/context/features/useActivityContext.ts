@@ -489,6 +489,19 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         break;
                     }
                 }
+
+                // 🚨 USER REQUEST: Prioritize Strava Name for merged activities
+                const stravaOrgId = u.mergeInfo.originalActivityIds?.find(id => id.startsWith('strava-') || id.startsWith('strava_') || !id.includes('-'));
+                const stravaActivityId = u.mergeInfo.stravaActivityId || stravaOrgId;
+                if (stravaActivityId) {
+                    const stravaActivity = universalActivities.find(a => a.id === stravaActivityId || a.id === stravaActivityId.replace('strava-', '').replace('strava_', ''));
+                    if (stravaActivity) {
+                        const stravaTitle = stravaActivity.plan?.title || stravaActivity.performance?.notes;
+                        if (stravaTitle) {
+                            e.title = stravaTitle;
+                        }
+                    }
+                }
             }
 
             return {
@@ -767,6 +780,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     avgHeartRate: match.heartRateAvg || perf?.avgHeartRate || (se as any).heartRateAvg || (se as any).avgHeartRate,
                     maxHeartRate: match.heartRateMax || perf?.maxHeartRate || (se as any).heartRateMax || (se as any).maxHeartRate,
                     subType: match.subType,
+                    title: match.title || se.title,
                     _mergeData: {
                         strava: match,
                         strength: se,

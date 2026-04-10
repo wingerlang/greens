@@ -36,6 +36,8 @@ export interface SegmentedSplits {
         totalRecoveryKm: number;
         avgIntervalPace: number;
         avgRecoveryPace: number;
+        avgWarmupPace: number;
+        avgCooldownPace: number;
         avgIntervalHR?: number;
         avgRecoveryHR?: number;
         fastestIntervalPace: number;
@@ -77,16 +79,35 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
 
     if (firstFastIdx === -1) return null; // No intervals detected
 
+    // 2. Adjust lastFastIdx or identify a trailing recovery
+    // If there's a split immediately after the last fast one that is "short" (< 600m)
+    // and it's not the very last split, it's likely the final recovery of the set.
+    let effectiveLastFastIdx = lastFastIdx;
+    if (lastFastIdx < splits.length - 1) {
+        const nextSplit = splits[lastFastIdx + 1];
+        const isTrailingShort = nextSplit.distance < 600;
+        const existsMoreLaps = lastFastIdx + 1 < splits.length - 1;
+        
+        if (isTrailingShort && existsMoreLaps) {
+            effectiveLastFastIdx = lastFastIdx + 1;
+        }
+    }
+
     const classified: ClassifiedSplit[] = splits.map((s, idx) => {
         let role: ClassifiedSplit['role'] = 'unknown';
 
         if (idx < firstFastIdx) {
             role = 'warmup';
-        } else if (idx > lastFastIdx) {
+        } else if (idx > effectiveLastFastIdx) {
             role = 'cooldown';
         } else {
             // Mid-section: Alternate based on threshold
             role = isFast[idx] ? 'interval' : 'recovery';
+            
+            // Special case for the trailing recovery we just identified
+            if (idx === lastFastIdx + 1 && effectiveLastFastIdx === lastFastIdx + 1) {
+                role = 'recovery';
+            }
         }
 
         return { ...s, role };
@@ -146,8 +167,10 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
             cooldownKm: classified.filter(s => s.role === 'cooldown').reduce((s, sp) => s + sp.distance / 1000, 0),
             totalIntervalKm: finalIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
             totalRecoveryKm: finalRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0),
-            avgIntervalPace: finalIntervalSplits.length > 0 ? finalIntervalSplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalIntervalSplits.length : 0,
-            avgRecoveryPace: finalRecoverySplits.length > 0 ? finalRecoverySplits.reduce((s, sp) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / finalRecoverySplits.length : 0,
+            avgIntervalPace: getWeightedPace(finalIntervalSplits),
+            avgRecoveryPace: getWeightedPace(finalRecoverySplits),
+            avgWarmupPace: getWeightedPace(classified.filter(s => s.role === 'warmup')),
+            avgCooldownPace: getWeightedPace(classified.filter(s => s.role === 'cooldown')),
             avgIntervalHR: finalIntervalSplits.some(s => s.averageHeartrate) ? 
                 Math.round(finalIntervalSplits.reduce((s, sp) => s + (sp.averageHeartrate || 0), 0) / finalIntervalSplits.filter(s => s.averageHeartrate).length) : undefined,
             avgRecoveryHR: finalRecoverySplits.some(s => s.averageHeartrate) ?
@@ -158,10 +181,18 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     };
 }
 
+function getWeightedPace(splits: KmSplit[]): number {
+    if (splits.length === 0) return 0;
+    const totalTime = splits.reduce((s, sp) => s + sp.movingTime, 0);
+    const totalDistKm = splits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    if (totalDistKm <= 0) return 0;
+    return totalTime / totalDistKm;
+}
+
 function finalizeGroup(group: any) {
     return {
         ...group,
-        avgPace: group.intervalSplits.reduce((s: any, sp: any) => s + sp.movingTime / (Math.max(sp.distance, 1) / 1000), 0) / group.intervalSplits.length,
+        avgPace: getWeightedPace(group.intervalSplits),
         avgHR: group.intervalSplits.some((sp: any) => sp.averageHeartrate) ?
             group.intervalSplits.reduce((s: any, sp: any) => s + (sp.averageHeartrate || 0), 0) / group.intervalSplits.filter((sp: any) => sp.averageHeartrate).length : undefined
     };

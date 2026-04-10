@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
+import { isWarmupOrCooldown } from '../../utils/activityUtils.ts';
 import { EXERCISE_TYPES } from './ExerciseModal.tsx';
 import { TrainingCalendar } from './TrainingCalendar.tsx';
 import { MonthlyTrainingTable } from './MonthlyTrainingTable.tsx';
@@ -76,7 +77,15 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             return sum + (e.distance || 0);
         }, 0);
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
-        const count = (exs: ExerciseEntry[]) => exs.length;
+        const count = (exs: ExerciseEntry[]) => {
+            const sessions = exs.filter(e => !isWarmupOrCooldown(e));
+            const warmups = exs.filter(e => isWarmupOrCooldown(e));
+            return {
+                total: sessions.length,
+                warmups: warmups.length,
+                warmupList: warmups
+            };
+        };
 
         const longestRun = yearExercises.filter(e => ((e.type as string) === 'running' || (e.type as string) === 'löpning' || (e.type as string).includes('cycl')) && !e.excludeFromStats).reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
 
@@ -125,7 +134,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 time: sumDuration(lastMonthExercises),
                 count: count(lastMonthExercises)
             },
-            byType: Object.entries(yearExercises.reduce((acc, e) => {
+            byType: Object.entries(yearExercises.filter(e => !isWarmupOrCooldown(e)).reduce((acc, e) => {
                 acc[e.type] = (acc[e.type] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>)).sort((a, b) => b[1] - a[1]),
@@ -231,7 +240,27 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Tid totalt</div>
                         </div>
                         <div>
-                            <div className="text-3xl font-black text-sky-400">{stats.year.count} <span className="text-sm font-bold text-sky-500/50">pass</span></div>
+                            <div className="flex items-baseline gap-1.5">
+                                <div className="text-3xl font-black text-sky-400">{stats.year.count.total} <span className="text-sm font-bold text-sky-500/50">pass</span></div>
+                                {stats.year.count.warmups > 0 && (
+                                    <div className="group/wu relative">
+                                        <span className="text-sm font-black text-rose-400 bg-rose-400/10 px-1.5 py-0.5 rounded cursor-help">+{stats.year.count.warmups}</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/wu:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Upp/nerjogg (År)</p>
+                                            <p className="text-[9px] text-slate-400 mb-2">Dessa har undantagits från antal pass men räknas i totala stats.</p>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
+                                                {stats.year.count.warmupList.slice(0, 10).map((w : any, i : number) => (
+                                                    <div key={i} className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-slate-300 truncate max-w-[100px]">{w.title || w.type}</span>
+                                                        <span className="text-slate-500 font-mono">{w.distance?.toFixed(1)}km</span>
+                                                    </div>
+                                                ))}
+                                                {stats.year.count.warmupList.length > 10 && <p className="text-[8px] text-slate-600 text-center">...och {stats.year.count.warmupList.length - 10} till</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Antal pass</div>
                         </div>
                     </div>
@@ -278,8 +307,14 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                         <div>
                             <div className="text-[10px] font-bold text-sky-500 uppercase mb-2">Snitt per vecka</div>
                             <div className="flex gap-4">
-                                <div className="text-lg font-bold text-sky-400">{stats.month.weeklyAvg.distance.toFixed(1).replace('.', ',')} km</div>
-                                <div className="text-lg font-bold text-sky-400">{stats.month.weeklyAvg.count.toFixed(1).replace('.', ',')} p</div>
+                                <div className="text-lg font-bold text-sky-400">
+                                    {stats.month.weeklyAvg.distance.toFixed(1).replace('.', ',')} km
+                                </div>
+                                <div className="text-lg font-bold text-sky-400">
+                                    {stats.month.weeklyAvg.count.total.toFixed(1).replace('.', ',')}
+                                    {stats.month.weeklyAvg.count.warmups > 0 && <span className="text-xs text-rose-400/60 ml-0.5">+{stats.month.weeklyAvg.count.warmups.toFixed(1)}</span>}
+                                    <span className="ml-1">p</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -290,9 +325,9 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     <div className="absolute top-0 right-0 p-4 opacity-[0.03] text-[100px] leading-none select-none group-hover:opacity-[0.06] transition-opacity">👟</div>
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Aktivitetsfördelning</h3>
                     <div className="space-y-3">
-                        {stats.byType.slice(0, 5).map(([type, count]) => {
+                        {stats.byType.slice(0, 5).map(([type, countValue]) => {
                             const info = EXERCISE_TYPES.find(t => t.type === type);
-                            const percent = Math.round((count / stats.year.count) * 100);
+                            const percent = Math.round((countValue / stats.year.count.total) * 100);
                             return (
                                 <div key={type} className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">

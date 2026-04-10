@@ -129,15 +129,14 @@ function SectionCard({
     if (splits.length === 0) return null;
 
     return (
-        <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
-            <div className={`px-4 py-2.5 border-b border-white/10 ${accentClass}`}>
+        <div className="bg-slate-900/40 rounded-xl border border-white/5 overflow-hidden">
+            <div className={`px-3 py-1.5 border-b border-white/5 ${accentClass}`}>
                 <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-black uppercase tracking-wider text-white">{title}</div>
-                    <div className="text-[10px] text-slate-200/80 font-semibold">{splits.length} lap(s)</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-white/90">{title}</div>
+                    <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">{splits.length} {splits.length === 1 ? 'lap' : 'laps'}</div>
                 </div>
-                {subtitle && <div className="text-[10px] text-slate-200/70 mt-0.5">{subtitle}</div>}
             </div>
-            <div className="px-4 py-2.5">
+            <div className="px-3 py-2">
                 <SplitRows splits={splits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} />
             </div>
         </div>
@@ -155,20 +154,14 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
     const fastestPace = Math.min(...allPaces);
     const slowestPace = Math.max(...allPaces);
 
-    // Dynamisk pace-uträkning ifall backenden saknar det
-    const avgWarmupPace = warmupSplits.length > 0
-        ? warmupSplits.reduce((acc, s) => acc + s.movingTime / (Math.max(s.distance, 1) / 1000), 0) / warmupSplits.length
-        : 0;
-
-    const avgCooldownPace = cooldownSplits.length > 0
-        ? cooldownSplits.reduce((acc, s) => acc + s.movingTime / (Math.max(s.distance, 1) / 1000), 0) / cooldownSplits.length
-        : 0;
+    // Använd förberäknade snitt-tempon från segmenteringen (viktat snitt total tid / total distans)
+    const { avgWarmupPace, avgCooldownPace } = summary;
 
     const bestEfforts = getBestEffortsForActivity(activity);
 
     return (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
+        <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between px-2">
                 <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
                     {isSustained ? 'Tempoanalys (Strava laps)' : 'Intervallanalys (Strava laps)'}
                 </h3>
@@ -246,44 +239,42 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
                 highlightRange={highlightRange}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-3 px-2 md:px-4">
                 {intervalGroups.map((group) => (
-                    <div key={group.number} className="bg-slate-900/50 rounded-2xl border border-amber-500/20 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/15">
-                            <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                                {isSustained ? 'Effort: Huvuddel' : `Intervallblock ${group.number}`}
+                    <div key={group.number} className="bg-slate-900/40 rounded-xl border border-amber-500/10 overflow-hidden shadow-lg shadow-black/40">
+                        <div className="flex items-center justify-between px-4 py-1.5 bg-amber-500/5 border-b border-white/5">
+                            <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest shrink-0">
+                                {isSustained ? 'Effort: Huvuddel' : `Block ${group.number}`}
                             </div>
 
-                            <div className="text-[10px] font-semibold text-slate-200">
-                                {formatPaceSec(group.avgPace)}/km
-                                {group.avgHR ? ` • ${Math.round(group.avgHR)} bpm` : ''}
+                            <div className="text-[10px] font-mono font-bold text-slate-400 flex items-center gap-3">
+                                <span className="text-amber-300/80 bg-amber-500/10 px-1.5 py-0.5 rounded leading-none">
+                                    {formatPaceSec(group.avgPace)}/km
+                                </span>
+                                {group.avgHR && <span className="opacity-40 font-black tracking-tighter">{Math.round(group.avgHR)} BPM</span>}
                             </div>
                         </div>
-                        <div className="px-4 py-2.5 flex flex-col md:flex-row gap-4 md:items-start">
-                            <div className="flex-1">
+                        <div className="px-4 py-2 flex flex-col md:flex-row gap-4 items-center">
+                            <div className="flex-1 w-full">
                                 <SplitRows splits={group.intervalSplits} fastestPace={fastestPace} slowestPace={slowestPace} highlightRange={highlightRange} fastestIntervalPace={summary.fastestIntervalPace} />
                             </div>
+                            
                             {group.recoverySplits.length > 0 && (
-                                <div className="border-t md:border-t-0 md:border-l border-white/5 pt-2 md:pt-0 md:pl-3 mt-2 md:mt-0 flex items-center gap-2 max-w-sm">
-                                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider shrink-0">VILA</div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {group.recoverySplits.map(s => {
-                                            const pace = s.movingTime / (Math.max(s.distance, 1) / 1000);
-                                            const roundedMeters = Math.round(s.distance / 10) * 10;
-                                            const isUnderKm = roundedMeters < 1000;
-                                            return (
-                                                <div key={s.split} className="flex items-center gap-1 py-0.5 text-[10px] text-slate-300 px-1.5 bg-white/10 hover:bg-white/20 transition-all rounded border border-white/5">
-                                                    <span className="text-slate-500 font-mono">#{s.split}</span>
-                                                    {isUnderKm ? (
-                                                        <span className="font-bold text-white">{roundedMeters}m</span>
-                                                    ) : (
-                                                        <span className="font-bold text-white">{(s.distance / 1000).toFixed(2)}k</span>
-                                                    )}
-                                                    <span className="text-amber-400 font-mono font-bold">{formatPaceSec(pace)}</span>
-                                                    {s.averageHeartrate && <span className="text-rose-400 font-black ml-0.5">{Math.round(s.averageHeartrate)}</span>}
-                                                </div>
-                                            );
-                                        })}
+                                <div className="flex items-center gap-2 shrink-0 py-1.5 px-3 bg-white/[0.03] border border-white/5 rounded-lg md:min-w-[120px]">
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">Återhämtning</div>
+                                        <div className="flex flex-col gap-1">
+                                            {group.recoverySplits.map(s => {
+                                                const roundedMeters = Math.round(s.distance / 10) * 10;
+                                                const isUnderKm = roundedMeters < 1000;
+                                                return (
+                                                    <div key={s.split} className="flex items-center justify-between gap-3 text-[10px] text-slate-400 font-mono">
+                                                        <span className="font-bold text-slate-300">{isUnderKm ? `${roundedMeters}m` : `${(s.distance / 1000).toFixed(2)}k`}</span>
+                                                        <span className="text-amber-500/50">{formatPaceSec(s.movingTime / (Math.max(s.distance, 1) / 1000))}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             )}
