@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 import { useData } from '../../context/DataContext.tsx';
@@ -523,7 +523,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                     {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
                                                                         <>
                                                                             <span className="opacity-30">•</span>
-                                                                            <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<span className="text-[7px] opacity-70">❤️</span></span>
+                                                                            <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<Heart className="w-2 h-2 text-red-500/70 inline-block ml-0.5" /></span>
                                                                         </>
                                                                     )}
                                                                     {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (isRun || isLongName) && (
@@ -719,7 +719,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                  {e.distance && <span className="text-slate-500">•</span>}
                                                                                  <span className="text-sky-400">{Math.round(e.durationMinutes)}m</span>
                                                                                  {e.heartRateAvg && <span className="text-slate-500">•</span>}
-                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400/90 flex items-center gap-0.5">{Math.round(e.heartRateAvg)}<Heart className="w-2 h-2 text-amber-500/50" /></span>}
                                                                                  <span className="text-slate-500">•</span>
                                                                                  <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
                                                                              </div>
@@ -777,7 +777,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                  {(e.tonnage || 0) > 0 && <span className="text-slate-500">•</span>}
                                                                                  {(e.tonnage || 0) > 0 && <span className="text-indigo-400">{(e.tonnage! / 1000).toFixed(1)}t</span>}
                                                                                  {e.heartRateAvg && <span className="text-slate-500">•</span>}
-                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400/90 flex items-center gap-0.5">{Math.round(e.heartRateAvg)}<Heart className="w-2 h-2 text-amber-500/50" /></span>}
                                                                                  <span className="text-slate-500">•</span>
                                                                                  <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
                                                                              </div>
@@ -840,7 +840,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                              <div className="text-right shrink-0 flex items-center gap-1 font-mono text-[10px] font-bold">
                                                                                  <span className="text-sky-400">{valueStr}</span>
                                                                                  {e.heartRateAvg && <span className="text-slate-500">•</span>}
-                                                                                 {e.heartRateAvg && <span className="text-amber-400">{Math.round(e.heartRateAvg)}❤️</span>}
+                                                                                 {e.heartRateAvg && <span className="text-amber-400/90 flex items-center gap-0.5">{Math.round(e.heartRateAvg)}<Heart className="w-2 h-2 text-amber-500/50" /></span>}
                                                                                  <span className="text-slate-500">•</span>
                                                                                  <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
                                                                              </div>

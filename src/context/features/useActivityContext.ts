@@ -627,6 +627,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 title: w.name || w.title || (finalType === 'hybrid' ? 'Hybridpass' : 'Styrkepass'),
                 notes: w.notes,
                 source: 'strength',
+                startTime: w.date.includes('T') ? w.date.split('T')[1].substring(0, 5) : undefined,
                 createdAt: w.createdAt || new Date().toISOString(),
                 subType: w.subType,
                 hyroxStats: (w as any).hyroxStats,
@@ -727,37 +728,53 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 match = compatibleCandidates.find(c => c.id === sw.mergeInfo?.stravaActivityId);
             }
 
-            // 3. Otherwise try auto-matching
+            // 3. Otherwise try auto-matching with score
             if (!match) {
-                // Filter out already merged ones
                 const availableCandidates = compatibleCandidates.filter(c => !mergedStravaIds.has(c.id));
+                const scoredMatches = availableCandidates.map(c => {
+                    let score = 0;
+                    
+                    // A) Start Time Check (HUGE weight)
+                    if (se.startTime && c.startTime) {
+                        const [sh, sm] = se.startTime.split(':').map(Number);
+                        const [ch, cm] = c.startTime.split(':').map(Number);
+                        const diffMin = Math.abs((sh * 60 + sm) - (ch * 60 + cm));
+                        if (diffMin <= 15) score += 100;
+                        else if (diffMin <= 30) score += 50;
+                        else if (diffMin > 120) score -= 200; // Likely different workouts
+                    }
 
-                // Find best match among available compatible candidates
-                // 1. "Tight" match: By approximate duration (within 15 mins) - moving time
-                match = availableCandidates.find(c => Math.abs((c.durationMinutes || 0) - (se.durationMinutes || 0)) <= 15);
+                    // B) Duration proximity
+                    const durDiff = Math.abs((c.durationMinutes || 0) - (se.durationMinutes || 0));
+                    if (durDiff <= 5) score += 50;
+                    else if (durDiff <= 15) score += 30;
+                    else if (durDiff > 45) score -= 100;
 
-                // 2. "Loose" match: By approximate duration (within 45 mins) - BUT ONLY if it's a very good type match
-                // Generic Styrka vs "Cardio" is okay to be loose. Styrka vs "Cycling" is NOT okay to be loose.
-                if (!match) {
-                    match = availableCandidates.find(c => {
-                        const isDurationOkay = Math.abs((c.durationMinutes || 0) - (se.durationMinutes || 0)) <= 45;
-                        const cTypeStr = (c.type || '').toLowerCase();
-                        const isGenericStrava = cTypeStr === 'cardio' || cTypeStr === 'workout' || cTypeStr === 'other';
-                        const isExactTypeMatch = c.type === se.type;
-                        
-                        return isDurationOkay && (isGenericStrava || isExactTypeMatch);
+                    // C) Title logic
+                    const seTitle = (se.title || '').toLowerCase();
+                    const cTitle = (c.title || '').toLowerCase();
+                    
+                    const keywords = ['push', 'pull', 'legs', 'ben', 'bröst', 'rygg', 'axlar', 'armar', 'intervall', 'tempo', 'distans', 'långpass', 'cross', 'sim', 'cykel', 'gym', 'styrka'];
+                    keywords.forEach(kw => {
+                        if (seTitle.includes(kw) && cTitle.includes(kw)) score += 60;
                     });
-                }
 
-                // 3. Also compare against elapsed time (Strava rest periods can inflate the gap)
-                //    e.g. Strava moving time=68min but elapsed=96min, StrengthLog duration=96min
-                if (!match) {
-                    match = availableCandidates.find(c => {
-                        const elapsedSec = (c as any)._mergeData?.universalActivity?.performance?.elapsedTimeSeconds;
-                        if (!elapsedSec) return false;
-                        const elapsedMin = elapsedSec / 60;
-                        return Math.abs(elapsedMin - (se.durationMinutes || 0)) <= 20; // 20m tolerance on elapsed
-                    });
+                    // Anti-match patterns (avoid cross-merging mismatched sessions)
+                    if (cTitle.includes('cross') && seTitle.includes('push')) score -= 500;
+                    if (cTitle.includes('cross') && seTitle.includes('pull')) score -= 500;
+                    if (cTitle.includes('cross') && seTitle.includes('legs')) score -= 500;
+                    if (cTitle.includes('push') && seTitle.includes('cross')) score -= 500;
+                    
+                    // D) Type Exact Match
+                    if (c.type === se.type) score += 20;
+
+                    return { candidate: c, score };
+                })
+                .filter(m => m.score > 0)
+                .sort((a, b) => b.score - a.score);
+
+                if (scoredMatches.length > 0) {
+                    match = scoredMatches[0].candidate;
                 }
             }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { formatActivityDuration } from '../../utils/formatters.ts';
@@ -9,6 +9,7 @@ import { Trophy, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';
 
 // Modulära komponenter och hooks
 import { useRaceDashboard } from './races/hooks/useRaceDashboard.ts';
+import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { UpcomingRaceCard, UpcomingRaceCardCompact, UpcomingRaceCardList } from './races/UpcomingRaceCards.tsx';
 import { TimelineTable } from './races/TimelineTable.tsx';
 import { SeriesCard } from './races/SeriesCard.tsx';
@@ -29,6 +30,19 @@ export function RaceList(props: RaceListProps) {
     const { plannedActivities, savePlannedActivities, deletePlannedActivity, currentUser, updateCurrentUser } = useData();
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
 
+    const allHistoryActivities = useMemo(() => {
+        const entryKeys = new Set(props.exerciseEntries.map(e => `${e.date.split('T')[0]}_${(e.distance || 0).toFixed(2)}`));
+        const stravaEntries = props.universalActivities
+            .filter(ua => {
+                const dist = ua.performance?.distanceKm || 0;
+                const key = `${ua.date.split('T')[0]}_${dist.toFixed(2)}`;
+                return !entryKeys.has(key);
+            })
+            .map(mapUniversalToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null);
+        return [...props.exerciseEntries, ...stravaEntries];
+    }, [props.exerciseEntries, props.universalActivities]);
+
     const {
         searchQuery, setSearchQuery,
         sortConfig, handleSort,
@@ -43,7 +57,8 @@ export function RaceList(props: RaceListProps) {
         upcomingRaces, races, raceSeries, stats,
         handleSaveRace, handleSaveBulk, handleDeleteRace
     } = useRaceDashboard({ 
-        ...props, 
+        ...props,
+        exerciseEntries: allHistoryActivities,
         plannedActivities, 
         savePlannedActivities, 
         deletePlannedActivity, 
@@ -79,7 +94,7 @@ export function RaceList(props: RaceListProps) {
                     <div className={upcomingViewMode === 'cozy' ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8" : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"}>
                         {upcomingRaces.map(r => (
                             upcomingViewMode === 'cozy' ? (
-                                <UpcomingRaceCard key={r.id} race={r} historyRaces={races} allActivities={props.exerciseEntries} onUpdate={handleSaveRace} onDelete={handleDeleteRace} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
+                                <UpcomingRaceCard key={r.id} race={r} historyRaces={races} allActivities={allHistoryActivities} onUpdate={handleSaveRace} onDelete={handleDeleteRace} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
                             ) : upcomingViewMode === 'compact' ? (
                                 <UpcomingRaceCardCompact key={r.id} race={r} historyRaces={races} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />
                             ) : (

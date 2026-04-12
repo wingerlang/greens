@@ -304,7 +304,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
     }, [data]);
 
     return (
-        <div className="bg-slate-900 border border-white/10 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-slate-900 border border-white/10 rounded-xl shadow-sm">
             {/* Tabs */}
             <div className="flex gap-2 p-4 border-b border-white/5 bg-slate-900/50 overflow-x-auto">
                 {[
@@ -354,9 +354,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-[150px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
+            <div className="grid grid-cols-[120px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
                 <div className="p-2"></div> {/* Month col */}
-                <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
+                <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                     <div className="text-center p-2 text-white/90">
                         {activeTab === 'all' ? 'Sammanställning' :
                             activeTab === 'running' ? 'Löpning' :
@@ -369,7 +369,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Sub-Header */}
-            <div className="grid grid-cols-[150px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5">
+            <div className="grid grid-cols-[120px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5">
                 <div className="p-2 flex items-center gap-2 text-slate-400">
                     {selectionMode && (
                         <div
@@ -390,7 +390,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     Månad
                     {activeTab !== 'all' && <span className="text-[8px] opacity-60 ml-1">(Filtrerat)</span>}
                 </div>
-                <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
+                <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                     {/* Specific Stats Columns */}
                     <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                         {activeTab === 'all' ? (
@@ -485,10 +485,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }}
-                                    className={`grid grid-cols-[150px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
+                                    className={`grid grid-cols-[120px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
                                         } ${selectedMonths.has(row.period) ? 'bg-sky-500/10' : ''}`}
                                 >
-                                    <div className="p-2 text-slate-400 font-medium group-hover:text-white flex items-center gap-2 overflow-hidden shrink-0 border-r border-white/5">
+                                    <div className="p-1 px-2 text-slate-400 font-medium group-hover:text-white flex items-center gap-2 overflow-hidden shrink-0 border-r border-white/5">
                                         {selectionMode ? (
                                             <div
                                                 onClick={(e) => handleToggleMonthSelection(row.period, e)}
@@ -508,7 +508,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         </div>
                                         {!selectionMode && <span className="opacity-0 group-hover:opacity-100 text-[10px] text-sky-400 transition-opacity whitespace-nowrap ml-auto px-1">↗</span>}
                                     </div>
-                                    <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5 pointer-events-none">
+                                    <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                                         {/* Specific Data */}
                                         <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                                             {activeTab === 'all' ? (
@@ -553,7 +553,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                             );
                                                         })()}
                                                     </div>
-                                                    <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other">
+                                                    <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other pointer-events-auto">
                                                         {row.categories.other.duration > 0 ? (
                                                             <>
                                                                 <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
@@ -561,44 +561,18 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other:text-sky-400 transition-colors" />
                                                                 </span>
 
-                                                                {/* Premium Hover Modal */}
-                                                                <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/other:opacity-100 group-hover/other:translate-y-0 group-hover/other:pointer-events-auto transition-all duration-300 z-[100] text-left">
-                                                                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
-                                                                        <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300">
-                                                                            <Info className="w-4 h-4" />
-                                                                        </div>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Övrig Träning</span>
-                                                                            <span className="text-[9px] text-slate-500 font-bold">{months[row.monthIdx]} {row.year}</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-3">
+                                                                {/* Compact Hover Modal */}
+                                                                <div className="absolute bottom-full right-0 mb-1 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-2xl opacity-0 translate-y-1 pointer-events-none group-hover/other:opacity-100 group-hover/other:translate-y-0 group-hover/other:pointer-events-auto transition-all duration-200 z-[100] text-left">
+                                                                    <div className="text-[9px] font-black uppercase tracking-tighter text-slate-500 mb-1.5 pb-1 border-b border-white/10">Pass: {months[row.monthIdx]}</div>
+                                                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
                                                                         {Object.entries(row.categories.other.breakdown)
                                                                             .sort((a, b) => b[1].duration - a[1].duration)
                                                                             .map(([k, v]) => (
-                                                                                <div key={k} className="flex flex-col gap-1.5">
-                                                                                    <div className="flex justify-between items-center text-[11px]">
-                                                                                        <span className="capitalize font-bold text-slate-200">{k}</span>
-                                                                                        <span className="font-mono text-white bg-white/5 px-1.5 py-0.5 rounded">{fmtDur(v.duration)}</span>
-                                                                                    </div>
-                                                                                    <div className="flex justify-between items-center text-[9px]">
-                                                                                        <span className="text-slate-500">{v.count} pass</span>
-                                                                                        <span className="text-slate-400">{Math.round((v.duration / row.categories.other.duration) * 100)}%</span>
-                                                                                    </div>
-                                                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                                                                        <div
-                                                                                            className="h-full bg-sky-500/50 rounded-full"
-                                                                                            style={{ width: `${(v.duration / row.categories.other.duration) * 100}%` }}
-                                                                                        />
-                                                                                    </div>
+                                                                                <div key={k} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/[0.03] last:border-0">
+                                                                                    <span className="capitalize text-slate-300 truncate pr-2">{k}</span>
+                                                                                    <span className="font-mono text-white whitespace-nowrap">{v.count}p · {fmtDur(v.duration)}</span>
                                                                                 </div>
                                                                             ))}
-                                                                    </div>
-
-                                                                    <div className="mt-4 pt-3 border-t border-white/5 flex justify-between items-center text-[10px]">
-                                                                        <span className="text-slate-500 font-bold">Totalt Övrigt</span>
-                                                                        <span className="text-sky-400 font-black">{fmtDur(row.categories.other.duration)}</span>
                                                                     </div>
                                                                 </div>
                                                             </>
@@ -640,21 +614,21 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         </div>
                                         {/* Total Data */}
                                         <div className="grid grid-cols-4 bg-slate-900/40 border-l border-white/5 relative overflow-hidden group-hover:bg-slate-900/60 transition-colors">
-                                            <div className="p-2 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
-                                                <span className="text-[11px] font-bold">{row.total.count || '-'}</span>
-                                                <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">pass</span>
+                                            <div className="p-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
+                                                <span className="text-[10px] font-bold">{row.total.count || '-'}</span>
+                                                <span className="text-[7px] text-slate-600 uppercase font-black tracking-tighter">p</span>
                                             </div>
-                                            <div className="p-2 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
-                                                <span className="text-[13px] font-black text-white">{fmtDur(row.total.duration)}</span>
-                                                <span className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">h:m</span>
+                                            <div className="p-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
+                                                <span className="text-[11px] font-black text-white">{fmtDur(row.total.duration)}</span>
+                                                <span className="text-[7px] text-slate-600 uppercase font-black tracking-tighter">t</span>
                                             </div>
-                                            <div className="p-2 text-right font-mono text-emerald-400/80 flex items-center justify-end gap-1">
-                                                <span className="text-[11px] font-bold">{row.total.distance > 0 ? row.total.distance.toFixed(0) : '-'}</span>
-                                                <span className="text-[8px] text-emerald-900 uppercase font-black tracking-tighter">km</span>
+                                            <div className="p-1 text-right font-mono text-emerald-400/80 flex items-center justify-end gap-0.5">
+                                                <span className="text-[10px] font-bold">{row.total.distance > 0 ? Math.round(row.total.distance) : '-'}</span>
+                                                <span className="text-[7px] text-emerald-900 uppercase font-black tracking-tighter">km</span>
                                             </div>
-                                            <div className="p-2 text-right font-mono text-indigo-400/80 flex items-center justify-end gap-1">
-                                                <span className="text-[11px] font-bold">{row.total.tonnage > 0 ? (row.total.tonnage / 1000).toFixed(0) : '-'}</span>
-                                                <span className="text-[8px] text-indigo-900 uppercase font-black tracking-tighter">ton</span>
+                                            <div className="p-1 text-right font-mono text-indigo-400/80 flex items-center justify-end gap-0.5">
+                                                <span className="text-[10px] font-bold">{row.total.tonnage > 0 ? Math.round(row.total.tonnage / 1000) : '-'}</span>
+                                                <span className="text-[7px] text-indigo-900 uppercase font-black tracking-tighter">t</span>
                                             </div>
                                         </div>
                                     </div>
@@ -681,9 +655,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 })()}
 
                 {/* Footer Totals */}
-                <div className="grid grid-cols-[150px_1fr] text-sm font-bold bg-white/5 border-t border-white/10">
+                <div className="grid grid-cols-[120px_1fr] text-sm font-bold bg-white/5 border-t border-white/10 italic">
                     <div className="p-2 text-white">Totalt:</div>
-                    <div className="grid grid-cols-[1fr_300px] divide-x divide-white/5">
+                    <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                         <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
                             {activeTab === 'all' ? (
                                 <>
@@ -709,44 +683,18 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                     <Info className="w-3 h-3 text-slate-500 group-hover/other-total:text-sky-400 transition-colors" />
                                                 </span>
 
-                                                {/* Premium Hover Modal */}
-                                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/other-total:opacity-100 group-hover/other-total:translate-y-0 group-hover/other-total:pointer-events-auto transition-all duration-300 z-[100] text-left">
-                                                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
-                                                        <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300">
-                                                            <Info className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Total Övrig Träning</span>
-                                                            <span className="text-[9px] text-slate-500 font-bold">Helår {year}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-3">
+                                                {/* Compact Hover Modal */}
+                                                <div className="absolute bottom-full right-0 mb-1 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-2xl opacity-0 translate-y-1 pointer-events-none group-hover/other-total:opacity-100 group-hover/other-total:translate-y-0 group-hover/other-total:pointer-events-auto transition-all duration-200 z-[100] text-left">
+                                                    <div className="text-[9px] font-black uppercase tracking-tighter text-slate-500 mb-1.5 pb-1 border-b border-white/10">Pass: Helår {year}</div>
+                                                    <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
                                                         {Object.entries(totals.categories.other.breakdown)
                                                             .sort((a, b) => b[1].duration - a[1].duration)
                                                             .map(([k, v]) => (
-                                                                <div key={k} className="flex flex-col gap-1.5">
-                                                                    <div className="flex justify-between items-center text-[11px]">
-                                                                        <span className="capitalize font-bold text-slate-200">{k}</span>
-                                                                        <span className="font-mono text-white bg-white/5 px-1.5 py-0.5 rounded">{fmtDur(v.duration)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center text-[9px]">
-                                                                        <span className="text-slate-500">{v.count} pass</span>
-                                                                        <span className="text-slate-400">{Math.round((v.duration / totals.categories.other.duration) * 100)}%</span>
-                                                                    </div>
-                                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                                                        <div
-                                                                            className="h-full bg-sky-500/50 rounded-full"
-                                                                            style={{ width: `${(v.duration / totals.categories.other.duration) * 100}%` }}
-                                                                        />
-                                                                    </div>
+                                                                <div key={k} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/[0.03] last:border-0">
+                                                                    <span className="capitalize text-slate-300 truncate pr-2">{k}</span>
+                                                                    <span className="font-mono text-white whitespace-nowrap">{v.count}p · {fmtDur(v.duration)}</span>
                                                                 </div>
                                                             ))}
-                                                    </div>
-
-                                                    <div className="mt-4 pt-3 border-t border-white/5 flex justify-between items-center text-[10px]">
-                                                        <span className="text-slate-500 font-bold">Totalt Övrigt</span>
-                                                        <span className="text-sky-400 font-black">{fmtDur(totals.categories.other.duration)}</span>
                                                     </div>
                                                 </div>
                                             </>
@@ -766,30 +714,24 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                     <span className="text-slate-500/70">{totals.categories.other.duration > 0 ? Math.round((totals.categories.other.duration / totals.total.duration) * 100) + '%' : ''}</span>
                                                 </div>
 
-                                                {/* Distribution Hover Modal (Footer) */}
-                                                <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/dist-total:opacity-100 group-hover/dist-total:translate-y-0 transition-all duration-300 z-[110]">
-                                                    <div className="text-[10px] font-black uppercase tracking-widest text-white mb-3 border-b border-white/10 pb-2">Total Tidsfördelning</div>
-                                                    <div className="space-y-2.5">
-                                                        {[
-                                                            { label: 'Kondition', color: 'bg-emerald-500', val: totals.categories.cardio.duration, count: totals.categories.cardio.count },
-                                                            { label: 'Styrka', color: 'bg-indigo-500', val: totals.categories.strength.duration, count: totals.categories.strength.count },
-                                                            { label: 'Övrigt', color: 'bg-slate-500', val: totals.categories.other.duration, count: totals.categories.other.count }
-                                                        ].map(cat => (
-                                                            <div key={cat.label} className="flex flex-col gap-1">
-                                                                <div className="flex justify-between items-center text-[10px]">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <div className={`w-1.5 h-1.5 rounded-full ${cat.color}`} />
-                                                                        <span className="text-slate-300 font-bold">{cat.label}</span>
-                                                                    </div>
-                                                                    <span className="font-mono text-white">{Math.round((cat.val / totals.total.duration) * 100)}%</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-[8px] text-slate-500 px-3">
-                                                                    <span>{cat.count} pass</span>
-                                                                    <span>{fmtDur(cat.val)}</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                                {/* Compact Distribution Hover Modal (Footer) */}
+                                                <div className="absolute bottom-full right-0 mb-1 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-2xl opacity-0 translate-y-1 pointer-events-none group-hover/dist-total:opacity-100 group-hover/dist-total:translate-y-0 transition-all duration-200 z-[110]">
+                                                     <div className="text-[9px] font-black uppercase tracking-tighter text-slate-500 mb-1.5 pb-1 border-b border-white/10">Tidsfördelning ({year})</div>
+                                                     <div className="space-y-1">
+                                                         {[
+                                                             { label: 'Kondition', color: 'bg-emerald-500', val: totals.categories.cardio.duration, count: totals.categories.cardio.count },
+                                                             { label: 'Styrka', color: 'bg-indigo-500', val: totals.categories.strength.duration, count: totals.categories.strength.count },
+                                                             { label: 'Övrigt', color: 'bg-slate-500', val: totals.categories.other.duration, count: totals.categories.other.count }
+                                                         ].map(cat => (
+                                                             <div key={cat.label} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/[0.03] last:border-0">
+                                                                 <div className="flex items-center gap-1.5 min-w-0">
+                                                                     <div className={`w-1 h-1 rounded-full shrink-0 ${cat.color}`} />
+                                                                     <span className="text-slate-300 truncate">{cat.label}</span>
+                                                                 </div>
+                                                                 <span className="font-mono text-white whitespace-nowrap">{cat.count}p · {Math.round((cat.val / totals.total.duration) * 100)}%</span>
+                                                              </div>
+                                                         ))}
+                                                     </div>
                                                 </div>
                                             </>
                                         ) : (

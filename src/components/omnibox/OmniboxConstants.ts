@@ -19,7 +19,7 @@ export const NAVIGATION_ROUTES = [
     { path: '/tools/race-planner', label: 'Race Planner', aliases: ['raceplan', 'planner', 'lopp', 'marathon', 'halvmarathon', 'lidingö', 'vasaloppet'], icon: '📝' },
     { path: '/tools/pace', label: 'Pace Converter', aliases: ['pace', 'tempo', 'km/min', 'min/km', 'konvertera', 'hastighet'], icon: '⏱️' },
     { path: '/tools/cooper', label: 'Coopers Test', aliases: ['cooper', 'vo2max', '12min', 'konditionstest'], icon: '👟' },
-    { path: '/tools/hr', label: 'Pulszoner', aliases: ['puls', 'hr', 'heartrate', 'zoner', 'zones', 'karvonen'], icon: '💓' },
+    { path: '/tools/hr', label: 'Pulszoner', aliases: ['puls', 'hr', 'heartrate', 'zoner', 'zones', 'karvonen'], icon: '⏱️' },
     { path: '/tools/power', label: 'Energiberäknare', aliases: ['power', 'watt', 'cykling', 'energi', 'kaloriförbrukning'], icon: '⚡' },
     { path: '/tools/hyrox', label: 'Hyrox Predictor', aliases: ['hyrox', 'roxzone', 'wallballs', 'burpees', 'skierg', 'row'], icon: '👊' },
     { path: '/tools/health', label: 'Hälsokalkylator', aliases: ['hälsa', 'bmi', 'bmr', 'tdee', 'vikt', 'kroppsfett'], icon: '⚕️' },

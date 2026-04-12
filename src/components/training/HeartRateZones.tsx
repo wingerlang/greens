@@ -3,6 +3,7 @@
  * Visualizes time spent in different HR zones for running activities.
  */
 import React, { useMemo } from 'react';
+import { Heart } from 'lucide-react';
 
 export interface HeartRateZonesProps {
     avgHeartRate: number;
@@ -56,7 +57,7 @@ export function HeartRateZones({ avgHeartRate, maxHeartRate, duration, age = 30 
         <div className="bg-slate-900/50 border border-white/5 rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-lg">❤️</span>
+                    <Heart className="w-4 h-4 text-red-500/70" />
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Pulszon</h3>
                 </div>
                 <div className="text-right">
@@ -156,7 +157,7 @@ export function HeartRateZoneBadge({ avgHeartRate, maxHeartRate, age = 30 }: { a
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
             style={{ backgroundColor: `${zone.color}20`, color: zone.color }}
         >
-            ❤️ {zone.name} · {avgHeartRate} bpm
+            <Heart className="w-2.5 h-2.5" /> {zone.name} · {avgHeartRate} bpm
         </span>
     );
 }

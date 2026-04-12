@@ -9,6 +9,7 @@ import {
 import { formatTime, isCompetition } from '../../utils/activityUtils.ts';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ComposedChart, Line, Scatter, CartesianGrid } from 'recharts';
 import { useData } from '../../context/DataContext.tsx';
+import { normalizeRaceTitle } from './races/utils.ts';
 import { useNavigate } from 'react-router-dom';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
 import { usePrepAggregation, PrepEvent } from './hooks/usePrepAggregation.ts';
@@ -39,57 +40,53 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
         const s = Math.round(secPerKm % 60);
         return `${m}:${s.toString().padStart(2, '0')}/km`;
     };
-
-    const DiffBadge = ({ v1, v2, higherIsBetter = true, type = 'number' }: { v1: number, v2: number, higherIsBetter?: boolean, type?: 'number' | 'pace' | 'percent' }) => {
+    const DiffBadge = ({ v1, v2, higherIsBetter = true, type = 'number' }: { v1: number, v2: number, higherIsBetter?: boolean, type?: 'number' | 'pace' | 'percent' | 'time' }) => {
         if (!isComparing) return null;
         if (v1 === v2) return null;
 
-        let diff = v1 - v2;
-        if (type === 'pace') {
-            // Lower pace is better (faster)
-            // If current pace is 300s/km and old is 310s/km, diff is -10. 
-            // In our logic, lower is better, so -10 is GOOD.
-            diff = v2 - v1; // 310 - 300 = +10 (Good)
-        }
-
-        const isGood = higherIsBetter ? diff > 0 : diff < 0;
+        const isGood = type === 'pace' ? v1 < v2 : (higherIsBetter ? v1 > v2 : v1 < v2);
         const absDiff = Math.abs(v1 - v2);
 
         let label = '';
         if (type === 'pace') label = `${Math.floor(absDiff / 60)}:${Math.round(absDiff % 60).toString().padStart(2, '0')}`;
         else if (type === 'percent') label = `${absDiff.toFixed(0)}%`;
+        else if (type === 'time') label = `${Math.floor(absDiff / 60)}h ${Math.round(absDiff % 60)}m`;
         else label = absDiff.toFixed(1);
 
+        const pct = v2 > 0 ? Math.round((absDiff / v2) * 100) : null;
+
         return (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${isGood ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                {diff > 0 ? '+' : '-'}{label}
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 leading-none ${isGood ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                <span>{v1 > v2 ? '+' : v1 < v2 ? '-' : ''}{label}</span>
+                {pct !== null && <span className="opacity-40 font-mono">({pct}%)</span>}
             </span>
         );
     };
 
     const ActivityRow = ({ r, icon }: { r: ExerciseEntry; icon: React.ReactNode }) => {
         const paceSec = r.durationMinutes > 0 ? (r.durationMinutes * 60) / (r.distance || 1) : 0;
+        const isCycling = r.type?.toLowerCase().includes('cycle') || r.type?.toLowerCase().includes('cykel') || r.type?.toLowerCase() === 'virtualride';
 
         return (
             <div
                 key={r.id}
-                className="flex justify-between items-center bg-white/5 rounded-lg p-2 hover:bg-white/10 cursor-pointer transition-colors border border-white/[0.03] hover:border-white/10"
+                className="flex justify-between items-center bg-white/5 rounded-2xl p-3 hover:bg-white/10 cursor-pointer transition-all border border-white/5 hover:border-white/10 group"
                 onClick={() => {
                     setSelectedDetailId(r.id);
                 }}
             >
-                <div className="overflow-hidden flex items-center gap-2">
-                    <div className="p-1 rounded bg-slate-800 text-slate-300">
+                <div className="overflow-hidden flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-110 transition-transform">
                         {icon}
                     </div>
                     <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate" title={r.title || r.type}>
+                        <div className="text-xs font-black text-white truncate group-hover:text-amber-400 transition-colors" title={r.title || r.type}>
                             {r.title || r.type}
                         </div>
-                        <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1 flex-wrap">
-                            <span>{r.date.substring(0, 10)}</span>
+                        <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="font-bold">{r.date.substring(0, 10)}</span>
                             {r.distance && (
-                                <span className={`text-[8px] font-black px-1.5 py-0.25 rounded-sm uppercase tracking-wider ${
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
                                     isCompetition(r) ? 'bg-red-500/20 text-red-500' :
                                     r.subType === 'interval' || r.title?.toLowerCase().includes('intervall') ? 'bg-amber-500/20 text-amber-500' :
                                     r.subType === 'tempo' || r.title?.toLowerCase().includes('tempo') ? 'bg-yellow-500/20 text-yellow-500' :
@@ -110,10 +107,18 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                         </div>
                     </div>
                 </div>
-                <div className="text-right flex flex-col items-end">
-                    <div className="text-xs font-black text-white">{r.distance?.toFixed(1)} <span className="text-[9px] opacity-40">km</span></div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
-                        <span>{formatPace(paceSec)}</span>
+                <div className="text-right flex flex-col items-end justify-center min-w-[80px]">
+                    <div className="flex flex-col items-end">
+                        <div className="flex items-baseline gap-1">
+                             <span className="text-xs font-black text-white">{r.distance ? r.distance.toFixed(1) : '-'}</span>
+                             <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">km</span>
+                        </div>
+                        <div className="text-[10px] font-black text-indigo-300/80 font-mono leading-none">
+                            {r.durationMinutes ? `${Math.floor(r.durationMinutes / 60)}h ${Math.floor(r.durationMinutes % 60)}m` : '-'}
+                        </div>
+                    </div>
+                    <div className="text-[9px] text-slate-500 font-mono font-bold mt-1 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                        {isCycling ? (r.distance && r.durationMinutes ? (r.distance / (r.durationMinutes / 60)).toFixed(1) + ' km/h' : '-') : formatPace(paceSec)}
                     </div>
                 </div>
             </div>
@@ -163,16 +168,34 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
     }, [analysisWindow.chartData, compWindow.chartData, isComparing]);
 
     const potentialComparisonEvents = useMemo(() => {
-        const races = allActivities.filter(isCompetition).map(act => ({
-            id: act.id,
-            date: act.date,
-            title: act.title || act.name || 'Race',
-            distance: act.distance || 0,
-            isRace: true,
-            activity: act
-        }));
-        return races.sort((a, b) => b.date.localeCompare(a.date)).filter(s => s.id !== event.id);
-    }, [allActivities, event.id]);
+        const normTarget = normalizeRaceTitle(event.title);
+        
+        const races = allActivities.filter(isCompetition).map(act => {
+            const actTitle = act.title || act.name || 'Race';
+            const isMatch = normalizeRaceTitle(actTitle) === normTarget && normTarget !== '';
+            
+            return {
+                id: act.id,
+                date: act.date,
+                title: actTitle,
+                distance: act.distance || 0,
+                durationMinutes: act.durationMinutes,
+                placement: act.raceDetails?.placement,
+                averageSpeed: act.averageSpeed || (act.distance && act.durationMinutes ? (act.distance / (act.durationMinutes / 60)) : undefined),
+                isRace: true,
+                isExactSeriesMatch: isMatch,
+                activity: act
+            };
+        });
+
+        return races.sort((a, b) => {
+            // Prioritize exact series matches
+            if (a.isExactSeriesMatch && !b.isExactSeriesMatch) return -1;
+            if (!a.isExactSeriesMatch && b.isExactSeriesMatch) return 1;
+            // Then sort by date
+            return b.date.localeCompare(a.date);
+        }).filter(s => s.id !== event.id);
+    }, [allActivities, event.id, event.title]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -225,8 +248,8 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
 
                     <div className="flex items-center gap-3 shrink-0">
                         <div className="flex items-center bg-slate-950/80 rounded-lg border border-white/5 p-0.5 scale-90">
-                            {[4, 8, 12, 16].map(weeks => (
-                                <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks}v</button>
+                            {[4, 8, 12, 16, 26].map(weeks => (
+                                <button key={weeks} onClick={() => setTimeframeWeeks(weeks)} className={`px-2 py-0.5 text-[8px] font-black uppercase rounded transition-all ${timeframeWeeks === weeks ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{weeks === 26 ? '6m' : weeks + 'v'}</button>
                             ))}
                         </div>
                         <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg shrink-0">
@@ -249,12 +272,26 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                                         setComparisonEvent(e as any);
                                         setShowSelector(false);
                                     }}
-                                    className="flex-shrink-0 bg-slate-900 border border-white/10 hover:border-amber-500/50 p-2 rounded-xl text-left w-48 transition-all hover:bg-slate-800"
+                                    className={`flex-shrink-0 border p-2 rounded-xl text-left w-48 transition-all hover:bg-slate-800 ${
+                                        e.isExactSeriesMatch 
+                                            ? 'bg-amber-500/10 border-amber-500/50 hover:border-amber-400' 
+                                            : 'bg-slate-900 border-white/10 hover:border-white/20'
+                                    }`}
                                 >
-                                    <div className="text-[10px] font-black text-white truncate mb-1">{e.title}</div>
-                                    <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono">
+                                    <div className="flex justify-between items-start mb-1 gap-2">
+                                        <div className="text-[10px] font-black text-white truncate">{e.title}</div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {e.placement && <div className="text-[8px] bg-amber-500 text-slate-950 px-1 rounded font-black">#{e.placement}</div>}
+                                            {e.isExactSeriesMatch && <Trophy size={10} className="text-amber-400" />}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono mb-1">
                                         <span>{e.date.substring(0, 10)}</span>
                                         <span className="font-bold text-slate-400">{e.distance}km</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[8px] text-slate-400 font-bold uppercase tracking-tighter pt-1 border-t border-white/5">
+                                        <span>{e.durationMinutes ? `${Math.floor(e.durationMinutes / 60)}h ${Math.floor(e.durationMinutes % 60)}m` : '-'}</span>
+                                        <span>{e.averageSpeed ? e.averageSpeed.toFixed(1) + ' km/h' : '-'}</span>
                                     </div>
                                 </button>
                             ))}
@@ -266,15 +303,17 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     {/* Compact Metrics Bar */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl flex flex-col justify-between">
-                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Volym (Totalt)</div>
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Activity size={12} className="text-blue-500" /> Volym (Löpning)</div>
                             <div className="flex items-center gap-2">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-xl font-black text-white">{Math.round(analysisWindow.totalRunVolumeKm)} <span className="text-[10px] font-bold text-slate-500">km</span></span>
                                 </div>
                                 <DiffBadge v1={analysisWindow.totalRunVolumeKm} v2={compWindow.totalRunVolumeKm} />
                             </div>
-                            {isComparing && (
-                                <div className="text-[9px] text-slate-600 mt-1">Jämförelse: {Math.round(compWindow.totalRunVolumeKm)} km</div>
+                            {analysisWindow.totalCyclingVolumeKm > 0 && (
+                                <div className="text-[9px] text-emerald-500 font-bold mt-1 bg-emerald-500/10 px-1.5 py-0.5 rounded inline-block">
+                                    + {Math.round(analysisWindow.totalCyclingVolumeKm)} km cykling
+                                </div>
                             )}
                             <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
                                 <span>{analysisWindow.totalRunCount} pass</span>
@@ -300,6 +339,24 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                             </div>
                         </div>
 
+                        <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl flex flex-col justify-between">
+                            <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Timer size={12} className="text-amber-500" /> Total Träningstid</div>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="text-xl font-black text-white">{Math.floor(analysisWindow.totalActiveTimeMin / 60)}</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase">timmar</span>
+                                    <span className="text-xl font-black text-white">{Math.round(analysisWindow.totalActiveTimeMin % 60)}</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase">min</span>
+                                </div>
+                                <DiffBadge v1={analysisWindow.totalActiveTimeMin} v2={compWindow.totalActiveTimeMin} />
+                            </div>
+                            <div className="text-[9px] text-slate-500 mt-1 flex gap-2">
+                                <span>🏃 {Math.floor(analysisWindow.totalRunTimeMin / 60)}h {Math.round(analysisWindow.totalRunTimeMin % 60)}m</span>
+                                {analysisWindow.totalCyclingTimeMin > 0 && <span>🚲 {Math.floor(analysisWindow.totalCyclingTimeMin / 60)}h {Math.round(analysisWindow.totalCyclingTimeMin % 60)}m</span>}
+                                {analysisWindow.totalOtherTimeMin > 0 && <span>💪 {Math.floor(analysisWindow.totalOtherTimeMin / 60)}h {Math.round(analysisWindow.totalOtherTimeMin % 60)}m</span>}
+                            </div>
+                        </div>
+
                         <div className="bg-slate-900/50 border border-white/10 p-3 rounded-2xl">
                             <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-1"><Zap size={12} className="text-amber-500" /> Snitt-tempo</div>
                             <div className="flex items-center gap-2">
@@ -310,7 +367,7 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                                 {isComparing ? (
                                     <span>Jämförelse: {formatPace(compWindow.avgPaceSecPerKm)}</span>
                                 ) : (
-                                    <span>Snitt över hela perioden</span>
+                                    <span>Snitt-tempo (endast löpning)</span>
                                 )}
                             </div>
                         </div>
@@ -354,35 +411,97 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                     </div>
 
                     {isComparing && (
-                        <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center md:text-left">
-                                <div className="flex items-center gap-2 mb-1"><Star size={12} /> Jämförelse av huvudnycklar</div>
-                                <div className="text-slate-600 lowercase font-mono italic">Visar differens i sifferdata för hela perioden</div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {/* Goals vs Actuals Box */}
+                            <div className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-2xl flex flex-col gap-3">
+                                <div className="flex justify-between items-start">
+                                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Target size={12} /> Mål vs Utfall ({comparisonEvent?.title})
+                                    </div>
+                                    {comparisonEvent?.placement && (
+                                        <div className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-lg shadow-amber-500/10">
+                                            <TrophyIcon size={10} /> Position #{comparisonEvent.placement}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-all cursor-help relative" title="Din faktiska tid på loppet. Om du hade ett uppsatt mål visas det under.">
+                                        <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Faktisk Tid</div>
+                                        <div className="text-xl font-black text-white">
+                                            {comparisonEvent?.durationMinutes ? `${Math.floor(comparisonEvent.durationMinutes / 60)}h ${Math.floor(comparisonEvent.durationMinutes % 60)}m` : '-'}
+                                        </div>
+                                        {comparisonEvent?.activity?.raceDetails?.goalTime && (
+                                            <div className="text-[9px] text-indigo-400 font-bold mt-1 flex items-center gap-1 bg-indigo-500/10 px-1.5 py-0.5 rounded -mx-1">
+                                                <Shield size={8} /> Mål: {comparisonEvent.activity.raceDetails.goalTime}
+                                            </div>
+                                        )}
+                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Sparkles size={10} className="text-amber-500" />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-all cursor-help" title="Snitthastighet (inkl. pauser) och motsvarande tempo per km.">
+                                        <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Snitthastighet</div>
+                                        <div className="text-xl font-black text-white">
+                                             {comparisonEvent?.averageSpeed ? comparisonEvent.averageSpeed.toFixed(1) : '-'} <span className="text-xs text-slate-600">km/h</span>
+                                        </div>
+                                        <div className="text-[9px] text-amber-500/80 font-bold mt-1 flex items-center gap-1 bg-amber-500/5 px-1.5 py-0.5 rounded -mx-1">
+                                            <Zap size={8} /> {formatPace((comparisonEvent?.durationMinutes || 0) * 60 / (comparisonEvent?.distance || 1))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-indigo-500/10 p-2 rounded-xl text-[9px] text-indigo-300 italic border border-indigo-500/10">
+                                    <span className="font-black uppercase not-italic mr-1">TIPS:</span> 
+                                    Jämför "Actual" nedan mot hur det kändes då för att se om du är starkare nu.
+                                </div>
                             </div>
-                            <div className="flex gap-4">
-                                <div className="text-center px-4 border-r border-indigo-500/10 last:border-0">
-                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Långpass (20km+)</div>
-                                    <div className="flex items-baseline gap-2 justify-center">
-                                        <span className="text-xl font-black text-white">{analysisWindow.longRunCount}</span>
-                                        <DiffBadge v1={analysisWindow.longRunCount} v2={compWindow.longRunCount} />
-                                    </div>
-                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {compWindow.longRunCount}</div>
+
+                            {/* Summary Comparison Table */}
+                            <div className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                                    <BarChart3 size={12} className="text-emerald-500" /> Jämförelse av Förberedelser
                                 </div>
-                                <div className="text-center px-4 border-r border-indigo-500/10 last:border-0">
-                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Styrkepass</div>
-                                    <div className="flex items-baseline gap-2 justify-center">
-                                        <span className="text-xl font-black text-white">{analysisWindow.strengthCount}</span>
-                                        <DiffBadge v1={analysisWindow.strengthCount} v2={compWindow.strengthCount} />
-                                    </div>
-                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {compWindow.strengthCount}</div>
-                                </div>
-                                <div className="text-center px-4 last:border-0">
-                                    <div className="text-[9px] text-slate-600 font-bold uppercase mb-1 whitespace-nowrap">Snitt Volym/vecka</div>
-                                    <div className="flex items-baseline gap-2 justify-center">
-                                        <span className="text-xl font-black text-white">{Math.round(analysisWindow.avgWeeklyVol)}</span>
-                                        <DiffBadge v1={analysisWindow.avgWeeklyVol} v2={compWindow.avgWeeklyVol} />
-                                    </div>
-                                    <div className="text-[8px] text-slate-700 font-mono mt-0.5">vs {Math.round(compWindow.avgWeeklyVol)}</div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-[10px]">
+                                        <thead>
+                                            <tr className="border-b border-white/5">
+                                                <th className="text-left font-bold text-slate-500 pb-2 uppercase tracking-tighter">Metrik</th>
+                                                <th className="text-center font-black text-emerald-400 pb-2" title="Data från de senaste veckorna inför ditt kommande lopp.">NU (Aktuell)</th>
+                                                <th className="text-center font-black text-indigo-400 pb-2 whitespace-nowrap" title={`Data från samma antal veckor inför ${comparisonEvent?.title}.`}>INFÖR ({comparisonEvent?.title.substring(0,10)}...)</th>
+                                                <th className="text-right font-bold text-slate-500 pb-2 uppercase tracking-tighter whitespace-nowrap">Diff</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/[0.02]">
+                                            {[
+                                                { label: 'Total Träningstid', v1: analysisWindow.totalActiveTimeMin, v2: compWindow.totalActiveTimeMin, unit: 'h', tooltip: 'Total tid spenderad på ALL träning.' },
+                                                { label: 'Volym (Löpning)', v1: analysisWindow.totalRunVolumeKm, v2: compWindow.totalRunVolumeKm, unit: 'km', tooltip: 'Total löpvolym under perioden.' },
+                                                { label: 'Snitt Volym/vecka', v1: (analysisWindow.totalRunVolumeKm / timeframeWeeks), v2: (compWindow.totalRunVolumeKm / timeframeWeeks), unit: 'km/v', tooltip: 'Genomsnittlig veckovolym (km/v).' },
+                                                { label: 'Antal Pass (Löp)', v1: analysisWindow.totalRunCount, v2: compWindow.totalRunCount, unit: 'st', tooltip: 'Antal löppass.' },
+                                                { label: 'Kvalitétspass', v1: analysisWindow.qualityCount, v2: compWindow.qualityCount, unit: 'st', tooltip: 'Antal intervall- eller tempopass.' },
+                                                { label: 'Långpass (20km+)', v1: analysisWindow.longRunCount, v2: compWindow.longRunCount, unit: 'st', tooltip: 'Antal pass längre än 20km.' },
+                                                { label: 'Snitt-tempo (Löp)', v1: analysisWindow.avgPaceSecPerKm, v2: compWindow.avgPaceSecPerKm, unit: 'p', lowerIsBetter: true, tooltip: 'Tempo för all löpning.' },
+                                                { label: 'Alt. Träning (Cardio)', v1: analysisWindow.totalAltTimeMin, v2: compWindow.totalAltTimeMin, unit: 'h', tooltip: 'Cykling eller alternativ cardio.', icon: <Zap size={8} className="text-emerald-500" /> },
+                                                { label: 'Styrkepass', v1: analysisWindow.strengthCount, v2: compWindow.strengthCount, unit: 'st', tooltip: 'Antal loggade styrkepass.' },
+                                            ].map((row, i) => (
+                                                <tr key={i} className="group hover:bg-white/[0.02] cursor-help" title={row.tooltip}>
+                                                    <td className="py-1 text-slate-400 font-bold group-hover:text-white transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                                                        {row.icon} {row.label}
+                                                    </td>
+                                                    <td className="py-1 text-center font-black text-white">
+                                                        {row.unit === 'h' ? `${Math.floor(row.v1/60)}h ${Math.round(row.v1 % 60)}m` : row.unit === 'p' ? formatPace(row.v1) : Math.round(row.v1)}
+                                                        {row.unit === 'km/v' && <span className="text-[8px] text-slate-600 ml-0.5">v</span>}
+                                                    </td>
+                                                    <td className="py-1 text-center font-black text-slate-400">
+                                                        {row.unit === 'h' ? `${Math.floor(row.v2/60)}h ${Math.round(row.v2 % 60)}m` : row.unit === 'p' ? formatPace(row.v2) : Math.round(row.v2)}
+                                                        {row.unit === 'km/v' && <span className="text-[8px] text-slate-600 ml-0.5">v</span>}
+                                                    </td>
+                                                    <td className="py-1 text-right font-mono flex justify-end">
+                                                        <DiffBadge v1={row.v1} v2={row.v2} higherIsBetter={!row.lowerIsBetter} type={row.unit === 'h' ? 'time' : row.unit === 'p' ? 'pace' : 'number'} />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>

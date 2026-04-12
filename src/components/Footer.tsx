@@ -65,7 +65,7 @@ export function Footer() {
                 {/* Bottom Bar */}
                 <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-[10px] text-slate-600">
-                        © {currentYear} Greens. Byggd med ❤️ och 🥦
+                        © {currentYear} Greens. Byggd med 🥦 och passion
                     </p>
 
                     <div className="flex items-center gap-4">

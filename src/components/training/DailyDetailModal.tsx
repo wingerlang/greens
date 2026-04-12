@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle } from 'lucide-react';
+import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle, Heart } from 'lucide-react';
 import { formatActivityDuration } from '../../utils/formatters.ts';
 import { formatSpeed } from '../../utils/dateUtils.ts';
 import { useData } from '../../context/DataShared.ts';
@@ -452,7 +452,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                     <div>
                                                         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Snittpuls</p>
                                                         <p className="text-rose-400 font-mono font-bold flex items-center gap-1">
-                                                            ♥ {Math.round(ex.heartRateAvg)}
+                                                            <Heart className="w-3 h-3 text-rose-500/70" /> {Math.round(ex.heartRateAvg)}
                                                         </p>
                                                     </div>
                                                 ) : null}

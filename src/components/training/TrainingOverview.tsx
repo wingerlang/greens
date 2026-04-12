@@ -126,7 +126,10 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 weeklyAvg: {
                     distance: weeksInCurrentMonth > 0 ? sumDistance(monthExercises) / weeksInCurrentMonth : 0,
                     time: weeksInCurrentMonth > 0 ? sumDuration(monthExercises) / weeksInCurrentMonth : 0,
-                    count: weeksInCurrentMonth > 0 ? count(monthExercises) / weeksInCurrentMonth : 0
+                    count: {
+                        total: weeksInCurrentMonth > 0 ? count(monthExercises).total / weeksInCurrentMonth : 0,
+                        warmups: weeksInCurrentMonth > 0 ? count(monthExercises).warmups / weeksInCurrentMonth : 0
+                    }
                 }
             },
             lastMonth: {
@@ -225,7 +228,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     </div>
                     <div className="space-y-4">
                         <div>
-                            <div className="text-3xl font-black text-white">{stats.year.distance.toFixed(1).replace('.', ',')} <span className="text-sm font-bold text-slate-500">km</span></div>
+                            <div className="text-3xl font-black text-white">{(stats.year.distance || 0).toFixed(1).replace('.', ',')} <span className="text-sm font-bold text-slate-500">km</span></div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Distans totalt</div>
                         </div>
                         <div>
@@ -275,10 +278,10 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <div className="text-2xl font-black text-white">{stats.month.distance.toFixed(1).replace('.', ',')} <span className="text-xs text-slate-500">km</span></div>
+                            <div className="text-2xl font-black text-white">{(stats.month.distance || 0).toFixed(1).replace('.', ',')} <span className="text-xs text-slate-500">km</span></div>
                             <div className="flex items-center gap-1 mt-1">
                                 <span className={`text-[10px] font-bold ${stats.month.distance >= stats.lastMonth.distance ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {stats.month.distance >= stats.lastMonth.distance ? '▲' : '▼'} {(Math.abs(stats.month.distance - stats.lastMonth.distance)).toFixed(1).replace('.', ',')} km
+                                    {stats.month.distance >= stats.lastMonth.distance ? '▲' : '▼'} {(Math.abs(stats.month.distance - (stats.lastMonth.distance || 0))).toFixed(1).replace('.', ',')} km
                                 </span>
                                 <span className="text-[9px] text-slate-600">vs förra</span>
                             </div>
@@ -308,11 +311,11 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                             <div className="text-[10px] font-bold text-sky-500 uppercase mb-2">Snitt per vecka</div>
                             <div className="flex gap-4">
                                 <div className="text-lg font-bold text-sky-400">
-                                    {stats.month.weeklyAvg.distance.toFixed(1).replace('.', ',')} km
+                                    {(stats.month.weeklyAvg.distance || 0).toFixed(1).replace('.', ',')} km
                                 </div>
                                 <div className="text-lg font-bold text-sky-400">
-                                    {stats.month.weeklyAvg.count.total.toFixed(1).replace('.', ',')}
-                                    {stats.month.weeklyAvg.count.warmups > 0 && <span className="text-xs text-rose-400/60 ml-0.5">+{stats.month.weeklyAvg.count.warmups.toFixed(1)}</span>}
+                                    {(stats.month.weeklyAvg.count?.total || 0).toFixed(1).replace('.', ',')}
+                                    {(stats.month.weeklyAvg.count?.warmups || 0) > 0 && <span className="text-xs text-rose-400/60 ml-0.5">+{(stats.month.weeklyAvg.count?.warmups || 0).toFixed(1)}</span>}
                                     <span className="ml-1">p</span>
                                 </div>
                             </div>

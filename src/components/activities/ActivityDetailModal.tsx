@@ -17,7 +17,9 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award } from 'lucide-react';
+import { isCompetition } from '../../utils/activityUtils.ts';
+import { normalizeRaceTitle } from '../training/races/utils.ts';
 
 // Expandable Exercise Component - click to show sets
 const ExpandableExercise = React.memo(({ exercise }: { exercise: any }) => {
@@ -914,6 +916,24 @@ export function ActivityDetailModal({
             .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 5);
     }, [activity, allActivities]);
+
+    const isRace = React.useMemo(() => isCompetition(activity), [activity]);
+
+    const raceHighscores = React.useMemo(() => {
+        if (!isRace) return [];
+        const normTitle = normalizeRaceTitle(displayTitle);
+        if (!normTitle) return [];
+        
+        return allActivities
+            .filter(a => {
+                if (a.id === activity.id) return false;
+                if (!isCompetition(a)) return false;
+                const aTitle = a.title || a.notes || (a as any).name || '';
+                return normalizeRaceTitle(aTitle) === normTitle;
+            })
+            .sort((a, b) => a.durationMinutes - b.durationMinutes)
+            .slice(0, 5);
+    }, [isRace, displayTitle, allActivities, activity.id]);
 
 
     const [isFetchingSplits, setIsFetchingSplits] = useState(false);
@@ -2729,7 +2749,7 @@ export function ActivityDetailModal({
                                                     <div className="flex items-center gap-2">
                                                         {(parentUniversal.performance.prCount || 0) > 0 && <span className="text-orange-400 font-bold">⚡ {parentUniversal.performance.prCount}</span>}
                                                         {(parentUniversal.performance.achievementCount || 0) > 0 && <span className="text-yellow-400 font-bold">🏆 {parentUniversal.performance.achievementCount}</span>}
-                                                        {(parentUniversal.performance.kudosCount || 0) > 0 && <span className="text-pink-400 font-bold">❤️ {parentUniversal.performance.kudosCount}</span>}
+                                                        {(parentUniversal.performance.kudosCount || 0) > 0 && <span className="text-pink-400 font-bold flex items-center gap-1"><Heart className="w-3.5 h-3.5 fill-pink-500/10" /> {parentUniversal.performance.kudosCount}</span>}
                                                     </div>
                                                     <p className="text-xs text-slate-500 uppercase mt-1">Prestationer</p>
                                                 </div>
@@ -2830,7 +2850,7 @@ export function ActivityDetailModal({
                                 {/* Simple HR display fallback (for strength or merged) - Only show if Strava Card is NOT shown */}
                                 {(perf?.avgHeartRate || perf?.maxHeartRate) && activity.type?.toLowerCase() === 'strength' && !showStravaCard && (
                                     <div className="bg-red-950/30 border border-red-500/20 rounded-xl p-4 w-fit">
-                                        <h3 className="text-xs font-bold text-red-400 uppercase mb-2">❤️ Puls</h3>
+                                        <h3 className="text-xs font-bold text-red-400 uppercase mb-2 flex items-center gap-2"><Heart className="w-3.5 h-3.5" /> Puls</h3>
                                         <div className="flex gap-6">
                                             {perf?.avgHeartRate && (
                                                 <div>
@@ -2963,7 +2983,7 @@ export function ActivityDetailModal({
                                                                 <td className="px-4 py-3">
                                                                     {split.averageHeartrate ? (
                                                                         <span className="text-rose-400 font-mono text-xs flex items-center gap-1">
-                                                                            ❤️ {Math.round(split.averageHeartrate)}
+                                                                            <Heart className="w-2.5 h-2.5 text-rose-500/50" /> {Math.round(split.averageHeartrate)}
                                                                         </span>
                                                                     ) : (
                                                                         <span className="text-slate-600">-</span>
@@ -3023,95 +3043,170 @@ export function ActivityDetailModal({
 
                         {/* COMPARISON TAB */}
                         {activeTab === 'compare' && (
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">⚖️ Jämför med liknande pass</h3>
-                                    <span className="text-[10px] text-slate-500 uppercase font-mono">Baserat på distans (+/- 25%)</span>
-                                </div>
+                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {/* RACE HIGHSCORES SECTION */}
+                                {isRace && raceHighscores.length > 0 && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Trophy size={16} /> Historiska resultat i {normalizeRaceTitle(displayTitle)}
+                                            </h3>
+                                            <span className="text-[10px] text-slate-500 uppercase font-mono">Din personliga topplista</span>
+                                        </div>
 
-                                {similarActivities.length > 0 ? (
-                                    <div className="bg-slate-800/50 rounded-xl overflow-hidden border border-white/5">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-slate-950/50">
-                                                <tr>
-                                                    <th className="px-4 py-3 text-left text-slate-500 font-bold uppercase text-[10px]">Datum</th>
-                                                    <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</th>
-                                                    {activity.elevationGain !== undefined && <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Höjd</th>}
-                                                    <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Puls</th>
-                                                    <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Greens</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-white/5 font-mono">
-                                                <tr className="bg-indigo-500/15 group relative">
-                                                    <td className="px-4 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-white font-bold">{formatSwedishDate(activity.date)}</span>
-                                                            <span className="text-[10px] text-indigo-400 font-bold uppercase">Detta pass</span>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {raceHighscores.slice(0, 3).map((a, idx) => {
+                                                const aPaceSec = a.distance ? (a.durationMinutes * 60 / a.distance) : 0;
+                                                const isFaster = a.durationMinutes < activity.durationMinutes;
+                                                const timeDiff = Math.abs(a.durationMinutes - activity.durationMinutes);
+                                                
+                                                return (
+                                                    <div key={a.id} className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800/60 transition-all group">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black ${
+                                                            idx === 0 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                                            idx === 1 ? 'bg-slate-300/20 text-slate-300 border border-white/20' :
+                                                            'bg-orange-700/20 text-orange-400 border border-orange-700/30'
+                                                        }`}>
+                                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
                                                         </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-right">
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="text-white font-bold">{
-                                                                activity.distance
-                                                                    ? (activity.type === 'cycling'
-                                                                        ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
-                                                                        : formatPace((activity.durationMinutes * 60) / activity.distance)
-                                                                    )
-                                                                    : '-'
-                                                            }</span>
-                                                            <span className="text-[9px] text-slate-500 uppercase">{activity.distance} km</span>
+                                                        
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 mb-0.5">
+                                                                <span className="text-white font-black">{formatSwedishDate(a.date)}</span>
+                                                                <span className="text-[10px] text-slate-500 uppercase font-mono">{a.distance} km</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="text-xl font-black text-indigo-300 font-mono">
+                                                                    {formatDuration(a.durationMinutes * 60)}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 font-mono italic">
+                                                                    {aPaceSec ? formatPace(aPaceSec) : '-'}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </td>
-                                                    {activity.elevationGain !== undefined && (
-                                                        <td className="px-4 py-4 text-right text-emerald-400 font-bold">{Math.round(activity.elevationGain)}m</td>
-                                                    )}
-                                                    <td className="px-4 py-4 text-right text-rose-400 font-bold">{perf?.avgHeartRate ? Math.round(perf.avgHeartRate) : '-'}</td>
-                                                    <td className="px-4 py-4 text-right">
-                                                        <span className="bg-indigo-500 text-white text-[10px] font-black px-2 py-1 rounded">
-                                                            {calculatePerformanceScore(activity) || '-'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                                {similarActivities.map(a => {
-                                                    const aPaceSec = a.distance ? (a.durationMinutes * 60 / a.distance) : 0;
-                                                    const aScore = calculatePerformanceScore(a);
-                                                    return (
-                                                        <tr key={a.id} className="hover:bg-white/5 transition-colors">
-                                                            <td className="px-4 py-4">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-slate-300">{formatSwedishDate(a.date)}</span>
-                                                                    <span className="text-[10px] text-slate-500 uppercase">{getRelativeTime(a.date)}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-4 text-right">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="text-slate-300">{aPaceSec ? (activity.type === 'cycling' ? formatSpeed(aPaceSec) : formatPace(aPaceSec)) : '-'}</span>
-                                                                    <span className="text-[9px] text-slate-500 uppercase">{a.distance} km</span>
-                                                                </div>
-                                                            </td>
-                                                            {activity.elevationGain !== undefined && (
-                                                                <td className="px-4 py-4 text-right text-slate-400">{Math.round(a.elevationGain || 0)}m</td>
-                                                            )}
-                                                            <td className="px-4 py-4 text-right text-slate-400">{a.heartRateAvg ? Math.round(a.heartRateAvg) : '-'}</td>
-                                                            <td className="px-4 py-4 text-right">
-                                                                <span className={`text-[10px] font-black px-2 py-1 rounded ${aScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                                                    aScore >= 60 ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-500/20 text-slate-400'
-                                                                    }`}>
-                                                                    {aScore || '-'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-12 bg-slate-800/30 rounded-2xl border border-dashed border-white/5">
-                                        <span className="text-3xl block mb-2 opacity-50">🔍</span>
-                                        <div className="text-slate-500 italic text-sm">Inga liknande pass inom +/- 25% distans hittades.</div>
+
+                                                        <div className="text-right shrink-0">
+                                                            <div className={`text-xs font-black uppercase flex items-center gap-1 justify-end ${isFaster ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                {isFaster ? '-' : '+'} {formatDuration(timeDiff * 60)}
+                                                            </div>
+                                                            <div className="text-[9px] text-slate-600 uppercase font-bold mt-1">
+                                                                {isFaster ? 'Snabbare än idag' : 'Långsammare'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        {raceHighscores.length > 3 && (
+                                            <div className="flex justify-center">
+                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-4 py-1.5 bg-white/5 rounded-full">
+                                                    + {raceHighscores.length - 3} fler lopp i serien
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                            <History size={16} /> Liknande träningspass
+                                        </h3>
+                                        <span className="text-[10px] text-slate-500 uppercase font-mono">Senaste och motsvarande (+/- 25% distans)</span>
+                                    </div>
+
+                                    {similarActivities.length > 0 ? (
+                                        <div className="bg-slate-800/30 rounded-2xl overflow-hidden border border-white/5 shadow-xl">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-slate-950/50">
+                                                    <tr>
+                                                        <th className="px-5 py-4 text-left text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-white/5">Datum</th>
+                                                        <th className="px-5 py-4 text-right text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-white/5">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</th>
+                                                        {activity.elevationGain !== undefined && <th className="px-5 py-4 text-right text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-white/5">Höjd</th>}
+                                                        <th className="px-5 py-4 text-right text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-white/5">Puls</th>
+                                                        <th className="px-5 py-4 text-right text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-white/5">Score</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 font-mono">
+                                                    <tr className="bg-indigo-500/10 group relative border-l-4 border-l-indigo-500">
+                                                        <td className="px-5 py-5">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-white font-black">{formatSwedishDate(activity.date)}</span>
+                                                                <span className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter mt-0.5">Detta pass</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-5 py-5 text-right">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-indigo-200 font-black text-base">{
+                                                                    activity.distance
+                                                                        ? (activity.type === 'cycling'
+                                                                            ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+                                                                            : formatPace((activity.durationMinutes * 60) / activity.distance)
+                                                                        )
+                                                                        : '-'
+                                                                }</span>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">{activity.distance} km</span>
+                                                            </div>
+                                                        </td>
+                                                        {activity.elevationGain !== undefined && (
+                                                            <td className="px-5 py-5 text-right text-emerald-400 font-black text-sm">{Math.round(activity.elevationGain)}m</td>
+                                                        )}
+                                                        <td className="px-5 py-5 text-right text-rose-400 font-black text-sm">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Heart size={10} /> {perf?.avgHeartRate ? Math.round(perf.avgHeartRate) : '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-5 py-5 text-right">
+                                                            <span className="bg-indigo-500/30 text-indigo-400 ring-1 ring-indigo-500/50 text-[10px] font-black px-2 py-1 rounded-lg uppercase shadow-lg shadow-indigo-500/20">
+                                                                {calculatePerformanceScore(activity) || '-'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                    {similarActivities.map(a => {
+                                                        const aPaceSec = a.distance ? (a.durationMinutes * 60 / a.distance) : 0;
+                                                        const aScore = calculatePerformanceScore(a);
+                                                        return (
+                                                            <tr key={a.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => setSelectedActivityId?.(a.id)}>
+                                                                <td className="px-5 py-5">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-slate-300 font-bold">{formatSwedishDate(a.date)}</span>
+                                                                        <span className="text-[10px] text-slate-500 uppercase font-medium">{getRelativeTime(a.date)}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-5 py-5 text-right">
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="text-slate-300 font-bold">{aPaceSec ? (activity.type === 'cycling' ? formatSpeed(aPaceSec) : formatPace(aPaceSec)) : '-'}</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase">{a.distance} km</span>
+                                                                    </div>
+                                                                </td>
+                                                                {activity.elevationGain !== undefined && (
+                                                                    <td className="px-5 py-5 text-right text-slate-400 text-sm">{Math.round(a.elevationGain || 0)}m</td>
+                                                                )}
+                                                                <td className="px-5 py-5 text-right text-slate-400 text-sm">{a.heartRateAvg ? Math.round(a.heartRateAvg) : '-'}</td>
+                                                                <td className="px-5 py-5 text-right">
+                                                                    <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${aScore >= 80 ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30' :
+                                                                        aScore >= 60 ? 'bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/30' : 'bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/30'
+                                                                        }`}>
+                                                                        {aScore || '-'}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-16 bg-slate-900/30 rounded-3xl border-2 border-dashed border-white/5">
+                                            <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600">
+                                                <Search size={24} />
+                                            </div>
+                                            <h4 className="text-slate-400 font-bold text-sm mb-1">Inga liknande pass hittades</h4>
+                                            <p className="text-slate-600 text-xs">Testa att springa fler pass med distans +/- 25% för jämförelse.</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -3218,7 +3313,7 @@ export function ActivityDetailModal({
 
                                 {splits.some((s: any) => s.averageHeartrate) && (
                                     <div className="space-y-3">
-                                        <h3 className="text-sm font-bold text-rose-400 uppercase">❤️ Pulsutveckling</h3>
+                                        <h3 className="text-sm font-bold text-rose-400 uppercase flex items-center gap-2"><Heart className="w-4 h-4" /> Pulsutveckling</h3>
                                         <div className="h-48 bg-slate-800/30 rounded-xl p-2">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <LineChart data={splits.map((s: any, i: number) => ({
@@ -3421,7 +3516,7 @@ export function ActivityDetailModal({
                                                                 )}
                                                                 {avgHr && avgHr > 0 && (
                                                                     <div className="text-right">
-                                                                        <p className="text-rose-400 font-mono text-xs">❤️ {avgHr}</p>
+                                                                        <p className="text-rose-400 font-mono text-xs flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500/50" /> {avgHr}</p>
                                                                     </div>
                                                                 )}
                                                                 {orig.performance?.distanceKm && orig.performance?.durationMinutes && (

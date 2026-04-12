@@ -89,7 +89,7 @@ export default function ToolsPage() {
         },
         {
             title: "Hälsa & Kropp",
-            icon: "💙",
+            icon: "🧬",
             tools: [
                 {
                     name: "Hälsokalkylator",

@@ -32,6 +32,10 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
 
         let totalRunVolumeKm = 0;
         let totalRunTimeMin = 0;
+        let totalCyclingVolumeKm = 0;
+        let totalCyclingTimeMin = 0;
+        let totalAltTimeMin = 0;
+        let totalOtherTimeMin = 0;
         let totalActiveTimeMin = 0;
         let totalElevationGain = 0;
         let maxElevationInOneRun = 0;
@@ -169,10 +173,18 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
                 const lowType = act.type.toLowerCase();
                 if (lowType.includes('strength') || lowType.includes('styrka') || lowType === 'weighttraining') {
                     strengthCount++;
+                    totalOtherTimeMin += (act.durationMinutes || 0);
                 } else if (lowType.includes('cycle') || lowType.includes('cykel') || lowType === 'virtualride' || lowType === 'ride') {
                     cyclingCount++;
+                    totalCyclingVolumeKm += (act.distance || 0);
+                    totalCyclingTimeMin += (act.durationMinutes || 0);
+                    totalAltTimeMin += (act.durationMinutes || 0);
+                } else if (lowType.includes('cardio') || lowType.includes('cross') || lowType.includes('row') || lowType.includes('swim') || lowType.includes('mrc')) {
+                    otherCount++;
+                    totalAltTimeMin += (act.durationMinutes || 0);
                 } else {
                     otherCount++;
+                    totalOtherTimeMin += (act.durationMinutes || 0);
                 }
             }
         });
@@ -301,6 +313,10 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             pros, cons,
             qualitySessions: qualitySessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             totalRunTimeMin,
+            totalCyclingVolumeKm,
+            totalCyclingTimeMin,
+            totalAltTimeMin,
+            totalOtherTimeMin,
             totalRunCount,
             warmupCount,
             warmups,
