@@ -77,7 +77,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             return sum + (e.distance || 0);
         }, 0);
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
-        const count = (exs: ExerciseEntry[]) => {
+        const countSessions = (exs: ExerciseEntry[]) => {
             const sessions = exs.filter(e => !isWarmupOrCooldown(e));
             const warmups = exs.filter(e => isWarmupOrCooldown(e));
             return {
@@ -116,26 +116,26 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             year: {
                 distance: sumDistance(yearExercises),
                 time: sumDuration(yearExercises),
-                count: count(yearExercises),
+                count: countSessions(yearExercises),
                 calories: yearExercises.reduce((sum, e) => sum + e.caloriesBurned, 0)
             },
             month: {
                 distance: sumDistance(monthExercises),
                 time: sumDuration(monthExercises),
-                count: count(monthExercises),
+                count: countSessions(monthExercises),
                 weeklyAvg: {
                     distance: weeksInCurrentMonth > 0 ? sumDistance(monthExercises) / weeksInCurrentMonth : 0,
                     time: weeksInCurrentMonth > 0 ? sumDuration(monthExercises) / weeksInCurrentMonth : 0,
                     count: {
-                        total: weeksInCurrentMonth > 0 ? count(monthExercises).total / weeksInCurrentMonth : 0,
-                        warmups: weeksInCurrentMonth > 0 ? count(monthExercises).warmups / weeksInCurrentMonth : 0
+                        total: weeksInCurrentMonth > 0 ? countSessions(monthExercises).total / weeksInCurrentMonth : 0,
+                        warmups: weeksInCurrentMonth > 0 ? countSessions(monthExercises).warmups / weeksInCurrentMonth : 0
                     }
                 }
             },
             lastMonth: {
                 distance: sumDistance(lastMonthExercises),
                 time: sumDuration(lastMonthExercises),
-                count: count(lastMonthExercises)
+                count: countSessions(lastMonthExercises)
             },
             byType: Object.entries(yearExercises.filter(e => !isWarmupOrCooldown(e)).reduce((acc, e) => {
                 acc[e.type] = (acc[e.type] || 0) + 1;
@@ -341,7 +341,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                                         <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                             <div className="h-full bg-slate-500 rounded-full" style={{ width: `${percent}%` }}></div>
                                         </div>
-                                        <span className="text-xs font-mono font-bold text-slate-500">{count}</span>
+                                        <span className="text-xs font-mono font-bold text-slate-500">{countValue}</span>
                                     </div>
                                 </div>
                             );
@@ -426,7 +426,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 >
                     <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">🔥</span>
                     <span className="text-[10px] uppercase font-bold text-slate-500">Energi</span>
-                    <span className="text-xl font-black text-rose-400">{(stats.year.calories / 1000).toFixed(0)} <span className="text-sm text-slate-500">kkcal</span></span>
+                    <span className="text-xl font-black text-rose-400">{((stats.year.calories || 0) / 1000).toFixed(0)} <span className="text-sm text-slate-500">kkcal</span></span>
                     <span className="text-[9px] text-slate-600 mt-1">
                         {stats.insights.maxEnergySession.date ? new Date(stats.insights.maxEnergySession.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : (isFiltered ? 'Bränt i perioden' : 'Bränt i år')}
                     </span>

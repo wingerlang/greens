@@ -13,7 +13,7 @@ export function isCompetition(activity: UniversalActivity | any): boolean {
     const isRacePlanned = !!activity.plan?.isRace || activity.plan?.category === 'RACE';
     const isRaceActual = activity.subType === 'race' || activity.isRace === true;
 
-    const raceKeywords = ['tävling', ' race', 'lopp', 'competition', 'marathon', 'maraton', 'halvmarathon', 'halvmaraton'];
+    const raceKeywords = ['tävling', ' race', 'lopp', 'competition', 'marathon', 'maraton', 'halvmarathon', 'halvmaraton', 'challenge'];
     const matchesKeyword = raceKeywords.some(kw => title.includes(kw) || notes.includes(kw));
 
     return isRacePlanned || isRaceActual || matchesKeyword;

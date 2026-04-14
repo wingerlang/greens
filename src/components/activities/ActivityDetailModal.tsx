@@ -9,7 +9,7 @@ import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatS
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown, getBestEffortsForActivity, getFastestSince } from '../../utils/performanceEngine.ts';
 import { useHRZones } from '../profile/hooks/useHRZones.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea } from 'recharts';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea, ComposedChart } from 'recharts';
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
@@ -17,9 +17,10 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 import { normalizeRaceTitle } from '../training/races/utils.ts';
+import { usePrepAggregation, PrepEvent } from '../training/hooks/usePrepAggregation.ts';
 
 // Expandable Exercise Component - click to show sets
 const ExpandableExercise = React.memo(({ exercise }: { exercise: any }) => {
@@ -235,20 +236,45 @@ const IntervalMiniSummary = React.memo(({ segmentedSplits }: { segmentedSplits: 
 const BestEffortPerformanceCard = React.memo(({ 
     activity, 
     allActivities,
-    setSelectedActivityId
+    onSelectActivity
 }: { 
     activity: UniversalActivity; 
     allActivities: UniversalActivity[];
-    setSelectedActivityId?: (id: string | null) => void;
+    onSelectActivity?: (id: string | null) => void;
 }) => {
     const efforts = getBestEffortsForActivity(activity);
     if (!efforts || efforts.length === 0) return null;
 
     // Filter to common distances for a cleaner view
-    const relevantEfforts = efforts.filter(e => 
-        [1, 2, 3, 5, 10, 21.1, 42.2].some(d => Math.abs(e.distance / 1000 - d) < 0.2) || 
-        e.name.includes('mile')
-    ).sort((a, b) => b.distance - a.distance);
+    const relevantEfforts = efforts
+        .filter(e => 
+            [0.4, 0.8, 1, 2, 3, 5, 10, 21.1, 42.2].some(d => Math.abs(e.distance / 1000 - d) < 0.05) &&
+            !e.name.toLowerCase().includes('mile')
+        )
+        .reduce((acc, current) => {
+            // Ensure unique distance categories (e.g., only one 1k effort)
+            // Use bucket-based deduplication with 50m tolerance for common distances
+            const dKm = current.distance / 1000;
+            const buckets = [0.4, 0.8, 1, 2, 3, 5, 10, 21.1, 42.2];
+            const matchingBucket = buckets.find(b => Math.abs(dKm - b) < 0.05);
+            const dKey = matchingBucket !== undefined ? matchingBucket : Math.round(dKm * 10) / 10;
+            
+            const existing = acc.find(a => {
+                const aKm = a.distance / 1000;
+                const aBucket = buckets.find(b => Math.abs(aKm - b) < 0.05);
+                const aKey = aBucket !== undefined ? aBucket : Math.round(aKm * 10) / 10;
+                return aKey === dKey;
+            });
+            
+            if (!existing) {
+                acc.push(current);
+            } else if (current.movingTime < existing.movingTime) {
+                const idx = acc.indexOf(existing);
+                acc[idx] = current;
+            }
+            return acc;
+        }, [] as any[])
+        .sort((a, b) => b.distance - a.distance);
 
     if (relevantEfforts.length === 0) return null;
 
@@ -256,7 +282,7 @@ const BestEffortPerformanceCard = React.memo(({
         <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 space-y-4 shadow-xl shadow-indigo-500/5 mt-4">
             <div className="flex items-center justify-between mb-1">
                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                    <Trophy size={14} className="text-amber-400" /> Bästa tider i passet
+                    <Trophy size={14} className="text-amber-400" /> BÄSTA TIDER I PASSET
                 </h4>
                 <div className="flex items-center gap-2">
                     <span className="text-[9px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded-full uppercase">
@@ -275,29 +301,37 @@ const BestEffortPerformanceCard = React.memo(({
                                 {/* Left: Distance & Km range */}
                                 <div className="flex items-center gap-4 min-w-[120px]">
                                     <div className="flex flex-col">
-                                        <span className="text-sm font-black text-white italic tracking-tight uppercase">{effort.name}</span>
+                                        <span className="text-sm font-black text-white italic tracking-tight uppercase">
+                                            {effort.name.toUpperCase()
+                                                .replace('1K', '1K')
+                                                .replace('1KM', '1K')
+                                                .replace('800M', '800M')
+                                                .replace('5K', '5K')
+                                                .replace('10K', '10K')
+                                            }
+                                        </span>
                                         <span className="text-[10px] text-slate-500 font-mono">
-                                            {(effort as any).startKm ? `Km ${(effort as any).startKm}-${Math.floor(((effort as any).startKm) + (effort.distance / 1000))}` : ''}
+                                            {(effort as any).startKm ? `Km ${(effort as any).startKm}-${Math.floor(((effort as any).startKm) + Math.round(effort.distance / 1000))}` : ''}
                                         </span>
                                     </div>
                                     
                                     {isPB && (
-                                        <div className="bg-amber-500/20 text-amber-400 text-[8px] font-black px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 uppercase animate-pulse">
-                                            <Trophy size={10} /> PB
+                                        <div className="bg-amber-500/20 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/20 flex items-center gap-0.5 uppercase">
+                                            PB
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Center: Time, Pace, HR */}
-                                <div className="flex-1 flex flex-wrap items-center gap-x-6 gap-y-1">
-                                    <div className="flex flex-col">
+                                <div className="flex-initial flex flex-wrap items-center gap-x-6 gap-y-1">
+                                    <div className="flex flex-col min-w-[70px]">
                                         <div className="text-base font-black text-indigo-300 font-mono leading-none">
                                             {formatSecondsToTime(effort.movingTime)}
                                         </div>
                                         <div className="text-[9px] text-slate-500 font-mono tracking-tighter mt-0.5 uppercase">Totaltid</div>
                                     </div>
 
-                                    <div className="flex flex-col border-l border-white/5 pl-4">
+                                    <div className="flex flex-col border-l border-white/5 pl-4 min-w-[70px]">
                                         <div className="text-[14px] font-black text-slate-200 font-mono leading-none">
                                             {formatPace(effort.movingTime / (Math.max(effort.distance, 1) / 1000)).replace('/km', '')}
                                         </div>
@@ -315,22 +349,25 @@ const BestEffortPerformanceCard = React.memo(({
                                 </div>
                                 
                                 {/* Right: Comparison */}
-                                <div className="min-w-[180px] sm:text-right border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 sm:pl-4">
+                                <div className="flex-1 sm:text-right border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 sm:pl-4 min-w-0">
                                     {!isPB && result && typeof result === 'object' && (
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSelectedActivityId?.(result.id);
+                                                onSelectActivity?.(result.id);
                                             }}
-                                            className="flex flex-col items-start sm:items-end group/link hover:opacity-80 transition-all text-left"
+                                            className="flex flex-col items-start sm:items-end group/link hover:opacity-80 transition-all text-left w-full"
                                         >
-                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Snabbast sedan</span>
-                                            <span className="text-[10px] font-bold text-indigo-400 group-hover/link:underline truncate max-w-[180px]">
-                                                {result.title}
-                                            </span>
-                                            <span className="text-[8px] font-mono text-slate-500 mt-0.5 bg-white/5 px-1.5 rounded-full">
-                                                {getRelativeTime(result.date).toUpperCase()}
-                                            </span>
+                                            <div className="flex flex-col items-start sm:items-end flex-1 min-w-0">
+                                                <span className="text-[10px] font-black text-indigo-400 group-hover/link:underline truncate w-full sm:text-right">
+                                                    {result.title}
+                                                </span>
+                                                <div className="flex items-center gap-1 mt-0.5 ml-auto">
+                                                    <span className="text-[8px] font-mono text-slate-500 bg-white/5 px-1.5 rounded-full uppercase">
+                                                        {getRelativeTime(result.date).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </button>
                                     )}
                                     {!isPB && !result && (
@@ -356,6 +393,655 @@ const BestEffortPerformanceCard = React.memo(({
 });
 
 
+// Helper Component: Race History Comparison
+const RaceHistoryCard = React.memo(({ 
+    currentActivity, 
+    allActivities,
+    onSelectActivity
+}: { 
+    currentActivity: UniversalActivity; 
+    allActivities: UniversalActivity[];
+    onSelectActivity?: (id: string | null) => void;
+}) => {
+    const currentTitle = normalizeRaceTitle(currentActivity.plan?.title || currentActivity.performance?.notes || currentActivity.performance?.title || '');
+    if (!currentTitle || currentTitle.length < 3) return null;
+
+    const currentDist = currentActivity.performance?.distance || currentActivity.plan?.distance || 0;
+
+    const history = allActivities
+        .filter(a => 
+            a.id !== currentActivity.id && 
+            normalizeRaceTitle(a.plan?.title || a.performance?.notes || a.performance?.title || '') === currentTitle &&
+            (a.performance || a.plan)
+        )
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (history.length === 0) return (
+        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 text-center space-y-2 mt-4">
+            <div className="text-2xl mb-2">🏁</div>
+            <h4 className="text-xs font-black text-white uppercase tracking-widest">Första gången i {currentTitle.toUpperCase()}?</h4>
+            <p className="text-[10px] text-slate-500">Vi hittade inga tidigare resultat med exakt samma namn i historiken.</p>
+        </div>
+    );
+
+    return (
+        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 space-y-4 shadow-xl shadow-indigo-500/5 mt-4">
+            <h4 className="text-[10px] font-bold text-indigo-400/80 uppercase tracking-widest flex items-center gap-2 mb-1">
+                <History size={14} className="text-amber-400/80" /> Tidigare resultat: {currentTitle}
+            </h4>
+            
+            <div className="space-y-3">
+                {history.map((prev) => {
+                    const prevPerf = prev.performance;
+                    const prevDurSeconds = prevPerf?.durationMinutes ? prevPerf.durationMinutes * 60 : (prevPerf as any)?.elapsedTimeSeconds || 0;
+                    const prevDist = prevPerf?.distance || prev.plan?.distance || 0;
+                    const currentDurSeconds = (currentActivity.performance?.durationMinutes || 0) * 60;
+                    const diffTime = currentDurSeconds > 0 && prevDurSeconds > 0 ? currentDurSeconds - prevDurSeconds : null;
+                    
+                    const isSameDistance = currentDist > 0 && prevDist > 0 && Math.abs(currentDist - prevDist) < 0.5;
+                    const prevPace = prevDurSeconds > 0 && prevDist > 0 ? prevDurSeconds / prevDist : 0;
+                    const prevHR = prevPerf?.heartRateAvg || (prevPerf as any)?.averageHeartrate || (prevPerf as any)?.avgHeartRate;
+                    const prevPlacement = prevPerf?.raceDetails?.placement;
+
+                    return (
+                        <div key={prev.id} className="bg-slate-800/40 rounded-xl px-4 py-3 border border-white/5 flex items-center justify-between group hover:bg-slate-800/60 transition-all cursor-pointer relative overflow-hidden shadow-sm flex-wrap gap-y-3"
+                             onClick={() => onSelectActivity?.(prev.id)}>
+
+                            {/* Left side: Date + Placement/Distance */}
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <Activity size={14} className="text-emerald-500/80 shrink-0" />
+                                    <span className="text-[12px] font-bold text-white uppercase tracking-wider truncate">{normalizeRaceTitle(prev.plan?.title || prev.performance?.title || currentTitle)}</span>
+                                    {isSameDistance && <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1 py-0.5 rounded font-black uppercase">Samma distans</span>}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                    <span className="text-[10px] font-semibold text-slate-400">{formatSwedishDate(prev.date)}</span>
+                                    <span className="text-slate-700">•</span>
+                                    <span className="text-[10px] font-bold text-emerald-400/90">{prevDist.toFixed(1)}k</span>
+                                    {prevPlacement && (
+                                        <>
+                                            <span className="text-slate-700">•</span>
+                                            <span className="text-[10px] font-bold text-amber-500 flex items-center gap-0.5"><Medal size={10} /> #{prevPlacement}</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right side: Time, Pace, HR */}
+                            <div className="flex items-center gap-4">
+                                {prevDurSeconds > 0 && (
+                                    <div className="flex flex-col items-end">
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-sm font-bold text-white font-mono leading-none">{formatSecondsToTime(prevDurSeconds)}</span>
+                                        </div>
+                                        {diffTime !== null && isSameDistance && (
+                                            <span className={`text-[8px] font-bold mt-1 flex items-center gap-0.5 ${diffTime < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                <TrendingUp size={8} className={diffTime < 0 ? 'text-emerald-500' : 'rotate-180 text-rose-500'} />
+                                                {diffTime < 0 ? '-' : '+'}{formatSecondsToTime(Math.abs(diffTime))}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {prevPace > 0 && (
+                                    <div className="flex flex-col border-l border-white/5 pl-3">
+                                        <span className="text-sm font-bold text-slate-300 font-mono leading-none">{formatPace(prevPace).replace('/km', '')}<span className="text-[8px] text-slate-500 font-sans ml-0.5">/km</span></span>
+                                    </div>
+                                )}
+                                {prevHR && prevHR > 0 ? (
+                                    <div className="flex flex-col border-l border-white/5 pl-3">
+                                        <span className="text-sm font-bold text-rose-400/90 font-mono flex items-center gap-1 leading-none">
+                                            <HeartPulse size={12} className="opacity-80" /> {Math.round(prevHR)}
+                                        </span>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+});
+
+
+// Helper Component: Prep Analysis Tab Content
+const PrepTabContent = React.memo(({ 
+    activity, 
+    allActivities,
+    timeframeWeeks,
+    setTimeframeWeeks,
+    onSelectActivity
+}: { 
+    activity: ExerciseEntry; 
+    allActivities: ExerciseEntry[];
+    timeframeWeeks: number;
+    setTimeframeWeeks: (weeks: number) => void;
+    onSelectActivity?: (id: string | null) => void;
+}) => {
+    // Treat the current activity as the event for prep aggregation
+    const event: PrepEvent = {
+        id: activity.id,
+        date: activity.date,
+        title: activity.title || activity.type,
+        distance: activity.distance || 0,
+        isRace: true,
+        activity: activity
+    };
+
+    const analysis = usePrepAggregation(event, allActivities, timeframeWeeks);
+
+    const DiffBadge = ({ v1, v2, higherIsBetter = true, type = 'number' }: { v1: number, v2: number, higherIsBetter?: boolean, type?: 'number' | 'pace' | 'percent' | 'time' }) => {
+        // Since we don't have a direct comparison event here yet, we can use it for generic positive/negative color coding if needed
+        // but for now let's just use it to show vs avg or similar if we want.
+        // In the modal tab, we mostly show the stats leading up to it.
+        return null;
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {/* Header / Selector */}
+            <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <span className="text-emerald-400">📈</span> Träningsförberedelser
+                    </h3>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">
+                        Analys av de sista {timeframeWeeks} veckorna inför loppet
+                    </p>
+                </div>
+                
+                <div className="flex items-center bg-slate-800 rounded-xl border border-white/5 p-1">
+                    {[4, 8, 12, 16, 26].map(weeks => (
+                        <button 
+                            key={weeks} 
+                            onClick={() => setTimeframeWeeks(weeks)} 
+                            className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg transition-all ${timeframeWeeks === weeks ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        >
+                            {weeks === 26 ? '6m' : weeks + 'v'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-10 gap-4">
+                
+                {/* Hero Card: Volym, Snitt & Tid */}
+                <div className="lg:col-span-2 xl:col-span-4 bg-slate-800/50 border border-white/5 p-5 rounded-2xl flex flex-col justify-between shadow-xl shadow-black/20">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-1.5"><Activity size={12} className="text-emerald-500" /> Träningsvolym & Tid per vecka</div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-5">
+                        {/* Volym */}
+                        <div>
+                            <div className="flex items-baseline gap-1.5 border-l-2 border-emerald-500 pl-3">
+                                <span className="text-4xl font-bold text-white">{Math.round(analysis.avgWeeklyVol)}</span>
+                                <span className="text-[11px] font-bold text-slate-400 uppercase">km/v</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-bold mt-2 pl-3">
+                                Av <span className="text-slate-300">{Math.round(analysis.totalRunVolumeKm)} km</span> totalt
+                            </div>
+                        </div>
+                        
+                        {/* Tid */}
+                        <div>
+                            <div className="flex items-baseline gap-1.5 border-l-2 border-amber-500 pl-3">
+                                <span className="text-3xl font-bold text-white">{Math.floor((analysis.totalRunTimeMin / timeframeWeeks) / 60)}<span className="text-xl text-slate-400">h</span> {Math.round((analysis.totalRunTimeMin / timeframeWeeks) % 60)}<span className="text-xl text-slate-400">m</span></span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-bold mt-2 pl-3">
+                                <span className="text-amber-500/80">Löpning.</span> Totalt <span className="text-slate-300">{Math.floor((analysis.totalActiveTimeMin / timeframeWeeks) / 60)}h {Math.round((analysis.totalActiveTimeMin / timeframeWeeks) % 60)}m</span>/v
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Pace and HR horizontal bar */}
+                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3 mt-auto">
+                        {/* Pace details */}
+                        <div className="w-full flex justify-between items-center bg-black/20 rounded-xl px-3 py-2 border border-white/5">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Snittempo i perioden</span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl font-bold text-slate-200 font-mono">{formatPace(analysis.avgPaceSecPerKm).replace('/km', '')}<span className="text-[10px] text-slate-500 font-sans ml-0.5 font-bold">/km</span></span>
+                                    
+                                    {analysis.slowestPaceSecPerKm > 0 && analysis.fastestPaceSecPerKm < 900 && (
+                                        <div className="flex items-center gap-1.5 text-[10px] bg-black/40 px-2 py-0.5 rounded text-amber-500/80 border border-white/5 font-mono">
+                                            <TrendingUp size={10} className="text-emerald-500/70" />
+                                            <span 
+                                                className="cursor-pointer hover:text-white transition-colors" 
+                                                onClick={() => analysis.fastestRun && onSelectActivity?.(analysis.fastestRun.id)}
+                                            >
+                                                {formatPace(analysis.fastestPaceSecPerKm).replace('/km', '')}
+                                            </span>
+                                            <span className="text-slate-600">-</span>
+                                            <span 
+                                                className="cursor-pointer hover:text-white transition-colors"
+                                                onClick={() => analysis.slowestRun && onSelectActivity?.(analysis.slowestRun.id)}
+                                            >
+                                                {formatPace(analysis.slowestPaceSecPerKm).replace('/km', '')}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Move Puls here */}
+                            {analysis.avgRunHR && analysis.avgRunHR > 0 ? (
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[9px] text-rose-500/80 uppercase font-bold tracking-widest mb-0.5">Snittpuls</span>
+                                    <div className="flex items-center gap-1.5 text-xl font-bold text-rose-400 font-mono">
+                                        <HeartPulse size={14} /> {analysis.avgRunHR}<span className="text-[10px] text-rose-400/50 font-sans">bpm</span>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                        
+                        {/* Volume/Time breakdown */}
+                        <div className="flex flex-col gap-2 w-full text-[9px] font-bold text-slate-500 bg-white/5 py-2.5 px-3 rounded-xl mt-1">
+                            <div className="flex items-center justify-between shadow-sm">
+                                <span className="text-slate-400 uppercase tracking-widest font-bold">Total tid i perioden</span>
+                                <span className="font-bold text-slate-300">{Math.floor(analysis.totalActiveTimeMin / 60)}h totalt</span>
+                            </div>
+                            <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-black/40">
+                                {analysis.totalRunTimeMin > 0 && <div style={{width:`${(analysis.totalRunTimeMin / analysis.totalActiveTimeMin) * 100}%`}} className="h-full bg-amber-500"></div>}
+                                {analysis.strengthSessions.length > 0 && <div style={{width:`${((analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0)) / analysis.totalActiveTimeMin) * 100}%`}} className="h-full bg-indigo-500"></div>}
+                                {analysis.totalAltTimeMin > 0 && <div style={{width:`${(analysis.totalAltTimeMin / analysis.totalActiveTimeMin) * 100}%`}} className="h-full bg-emerald-500"></div>}
+                                {(analysis.totalOtherTimeMin - analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0)) > 0 && <div style={{width:`${((analysis.totalOtherTimeMin - analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0)) / analysis.totalActiveTimeMin) * 100}%`}} className="h-full bg-pink-500"></div>}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-0.5">
+                                {analysis.totalRunTimeMin > 0 && <span className="text-amber-500 flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>{Math.floor(analysis.totalRunTimeMin / 60)}h löp</span>}
+                                {analysis.strengthSessions.length > 0 && <span className="text-indigo-400 flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>{Math.floor((analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0))/60)}h styrka</span>}
+                                {analysis.totalAltTimeMin > 0 && <span className="text-emerald-400 flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>{Math.floor(analysis.totalAltTimeMin/60)}h alt</span>}
+                                {(analysis.totalOtherTimeMin - analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0)) > 0 && <span className="text-pink-400 flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-pink-500"></div>{Math.floor((analysis.totalOtherTimeMin - analysis.strengthSessions.reduce((a,b)=>a+(b.durationMinutes||0),0))/60)}h övrigt</span>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 2: Pass / Vecka & Träffsäkerhet */}
+                <div className="lg:col-span-1 xl:col-span-3 bg-slate-800/40 border border-white/5 p-5 rounded-2xl flex flex-col justify-between">
+                    <div className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5 mb-4">
+                        <Repeat size={12} className="text-indigo-500" /> Passfördelning
+                    </div>
+                    
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="flex items-baseline gap-1.5 border-l-2 border-indigo-500 pl-3">
+                            <span className="text-4xl font-black text-white">{analysis.avgSessionsPerWeek.toFixed(1)}</span>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase">pass/v</span>
+                        </div>
+                        
+                        <div className="flex flex-col items-end text-right gap-1.5 mt-1">
+                            <span className="text-[10px] text-slate-300 font-bold bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                                {Math.round(analysis.totalRunCount / timeframeWeeks)} löp • {Math.round(analysis.strengthCount / timeframeWeeks)} styrka
+                            </span>
+                            
+                            {((analysis.longRunCount + analysis.qualityCount) / timeframeWeeks) > 0 && (
+                                <div className="text-[10px] text-slate-500 font-bold mt-1 bg-amber-500/10 text-amber-500/90 px-2.5 py-1 rounded-md">
+                                    ~{((analysis.longRunCount + analysis.qualityCount) / timeframeWeeks).toFixed(1)} nyckelpass/v
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Bottom Split Stats */}
+                    <div className="pt-4 border-t border-white/5 flex gap-4 items-center justify-between mt-auto">
+                        <div className="flex-1 bg-black/20 p-3 rounded-xl border border-white/5">
+                            <div className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1.5 mb-1.5">
+                                <TrendingUp size={10} /> Kontinuitet
+                            </div>
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="text-2xl font-black text-emerald-400">{Math.round(analysis.consistencyScore)}%</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 font-bold mt-0.5">
+                                {analysis.activeDaysCount} av {analysis.totalDaysInPeriod} aktiva dagar
+                            </div>
+                        </div>
+                        
+                        <div className="flex-1 bg-black/20 p-3 rounded-xl border border-white/5 text-right flex flex-col justify-between">
+                            <div className="text-[9px] font-black text-blue-400 uppercase flex items-center justify-end gap-1.5 mb-1.5">
+                                <Zap size={10} /> Träffsäkerhet
+                            </div>
+                            <div className="flex justify-end gap-3 w-full mt-2">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xl font-black text-blue-400 leading-none">{Math.round(analysis.qualityRatio)}%</span>
+                                    <span className="text-[8px] text-slate-300 font-bold uppercase tracking-wider text-center mt-1">Kvalité</span>
+                                    <span className="text-[8px] text-slate-500 font-bold text-center mt-0.5">{Math.round(analysis.qualitySessions.reduce((sum, s) => sum + (s.distance || 0), 0))} km</span>
+                                </div>
+                                <div className="w-px stretch bg-white/10 self-stretch my-1"></div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xl font-black text-emerald-400 leading-none">{Math.round(analysis.longRunRatio)}%</span>
+                                    <span className="text-[8px] text-slate-300 font-bold uppercase tracking-wider text-center mt-1">Långpass</span>
+                                    <span className="text-[8px] text-slate-500 font-bold text-center mt-0.5">{Math.round(analysis.longRunsList.reduce((sum, s) => sum + (s.distance || 0), 0))} km</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 3: Belastning & Fokus */}
+                <div className="lg:col-span-1 xl:col-span-3 bg-slate-800/40 border border-white/5 p-5 rounded-2xl flex flex-col justify-start">
+                    <div className="text-[10px] font-black text-slate-500 uppercase flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-1.5"><Mountain size={12} className="text-amber-500" /> Analys av Belastning</div>
+                    </div>
+                    
+                    <div className="space-y-3 mt-1">
+                        <details className="group">
+                            <summary className="flex justify-between items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                                <span className="text-[10px] font-bold text-slate-400">Peak-Vecka</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-white">{Math.round(analysis.peakVolumeWeek)}<span className="text-[9px] text-slate-500 ml-0.5">km</span></span>
+                                    <ChevronDown size={12} className="text-slate-500 group-open:rotate-180 transition-transform" />
+                                </div>
+                            </summary>
+                            <div className="p-2 pt-1.5 text-[9px] text-slate-400 font-medium leading-relaxed">
+                                Veckan med högst volym var <span className="text-emerald-400 font-black">{analysis.peakWeekName}</span> där du sprang {Math.round(analysis.peakVolumeWeek)} km totalt.
+                            </div>
+                        </details>
+                        
+                        <details className="group">
+                            <summary className="flex justify-between items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                                <span className="text-[10px] font-bold text-slate-400">Längsta Streak</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-emerald-400">{analysis.longestStreak}<span className="text-[9px] text-slate-500 ml-0.5">dagar</span></span>
+                                    <ChevronDown size={12} className="text-slate-500 group-open:rotate-180 transition-transform" />
+                                </div>
+                            </summary>
+                            <div className="p-2 pt-1.5 text-[9px] text-slate-400 font-medium leading-relaxed">
+                                Din längsta sammanhängande period av träningsdagar utan vila är {analysis.longestStreak} dagar.
+                            </div>
+                        </details>
+
+                        <details className="group">
+                            <summary className="flex justify-between items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                                <span className="text-[10px] font-bold text-slate-400">Högsta Höjd i Pass</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-amber-400">{analysis.maxElevationInOneRun}<span className="text-[9px] text-slate-500 ml-0.5">m+</span></span>
+                                    <ChevronDown size={12} className="text-slate-500 group-open:rotate-180 transition-transform" />
+                                </div>
+                            </summary>
+                            {analysis.maxElevationRun ? (
+                                <div className="p-2 pt-1.5 flex flex-col gap-1 cursor-pointer hover:bg-slate-800 rounded-lg"
+                                     onClick={() => onSelectActivity?.(analysis.maxElevationRun!.id)}>
+                                    <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">{formatSwedishDate(analysis.maxElevationRun.date)}</span>
+                                    <div className="text-[10px] text-slate-300 font-bold truncate">
+                                        {analysis.maxElevationRun.title || analysis.maxElevationRun.notes}
+                                    </div>
+                                    <div className="text-[9px] text-slate-500">
+                                        {(analysis.maxElevationRun.distance || 0).toFixed(1)} km
+                                    </div>
+                                </div>
+                            ) : undefined}
+                        </details>
+
+                        {analysis.doubleDaysCount > 0 ? (
+                            <details className="group">
+                                <summary className="flex justify-between items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                                    <span className="text-[10px] font-bold text-slate-400">Dubbelpass</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-black text-indigo-400">{analysis.doubleDaysCount}<span className="text-[9px] text-slate-500 ml-0.5">st</span></span>
+                                        <ChevronDown size={12} className="text-slate-500 group-open:rotate-180 transition-transform" />
+                                    </div>
+                                </summary>
+                                <div className="p-2 pt-1.5 text-[9px] text-slate-400 font-medium leading-relaxed">
+                                    Antal dagar i perioden där du genomfört mer än ett träningspass på samma dag.
+                                </div>
+                            </details>
+                        ) : (
+                            <details className="group">
+                                <summary className="flex justify-between items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                                    <span className="text-[10px] font-bold text-slate-400">Uppvärmningar</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-black text-indigo-400">{analysis.warmupCount}<span className="text-[9px] text-slate-500 ml-0.5">st</span></span>
+                                        <ChevronDown size={12} className="text-slate-500 group-open:rotate-180 transition-transform" />
+                                    </div>
+                                </summary>
+                                <div className="p-2 pt-1.5 text-[9px] text-slate-400 font-medium leading-relaxed">
+                                    Specifika uppvärmnings- och nedvarvningspass loggade som separata aktiviteter.
+                                </div>
+                            </details>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Chart & Key Sessions */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* Volume Chart */}
+                <div className="lg:col-span-3 bg-slate-800/30 border border-white/5 p-5 rounded-2xl h-80 flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <BarChart3 size={12} className="text-emerald-500" /> Veckovolym (KM)
+                        </h3>
+                    </div>
+                    <div className="flex-1 w-full opacity-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={analysis.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="prepVolGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                                <XAxis dataKey="week" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} tickFormatter={(val) => val.replace('Vecka ', '')} />
+                                <YAxis yAxisId="left" stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
+                                <YAxis yAxisId="right" orientation="right" hide />
+                                <Tooltip 
+                                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                                    content={({ active, payload }: any) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            return (
+                                                <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl z-50">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{data.week?.replace('Vecka -', '')}v innan loppet</p>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                            <span className="text-sm font-black text-white">{data.vol} <span className="text-[9px] text-slate-500 font-normal">km löpning</span></span>
+                                                        </div>
+                                                        {data.durRun > 0 && (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                                                                <span className="text-xs font-bold text-slate-300">{Math.floor(data.durRun / 60)}h {Math.round(data.durRun % 60)}m <span className="text-[9px] text-slate-500 font-normal">löptid</span></span>
+                                                            </div>
+                                                        )}
+                                                        {data.durTotal > data.durRun && (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                                                                <span className="text-xs font-bold text-slate-300">+{Math.floor((data.durTotal - data.durRun) / 60)}h {Math.round((data.durTotal - data.durRun) % 60)}m <span className="text-[9px] text-slate-500 font-normal">annan träning</span></span>
+                                                            </div>
+                                                        )}
+                                                        {data.raceCount > 0 && (
+                                                            <div className="mt-2 text-[9px] text-amber-500 font-bold bg-amber-500/10 px-2 py-1 rounded inline-flex items-center gap-1 border border-amber-500/20">
+                                                                <Trophy size={10} /> Innehåller Tävling
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar yAxisId="right" dataKey="durTotal" fill="#334155" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                <Area yAxisId="left" type="monotone" dataKey="vol" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#prepVolGradient)" />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Key Training Info & Detailed Lists */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-slate-800/50 border border-white/5 p-4 rounded-xl">
+                        <h4 className="text-[10px] font-black text-amber-500 uppercase mb-3 flex items-center gap-1.5"><Star size={12} /> Huvudpass under prep</h4>
+                        <div className="space-y-3">
+                            <SessionGroup 
+                                title="Speciella Långpass" 
+                                count={analysis.longRunCount} 
+                                icon={<Mountain size={14} className="text-emerald-500" />}
+                                items={analysis.longRunsList}
+                                formatDetail={(act) => (
+                                    <>
+                                        <span className="text-emerald-400">{act.distance?.toFixed(1)} km</span>
+                                        <span className="text-slate-600">|</span>
+                                        <span className="text-slate-300">{formatPace(((act.durationMinutes || 0) * 60) / (act.distance || 1))}</span>
+                                        {((act as any).heartRateAvg || (act as any).averageHeartrate || (act as any).avgHeartRate) > 0 && (
+                                            <span className="text-rose-400 flex items-center gap-0.5"><HeartPulse size={8}/> {Math.round((act as any).heartRateAvg || (act as any).averageHeartrate || (act as any).avgHeartRate)}</span>
+                                        )}
+                                    </>
+                                )}
+                                onActivityClick={(id) => onSelectActivity?.(id)}
+                            />
+                            
+                            <SessionGroup 
+                                title="Kvalitetspass" 
+                                count={analysis.qualityCount} 
+                                icon={<Zap size={14} className="text-amber-500" />}
+                                items={analysis.qualitySessions}
+                                formatDetail={(act) => (
+                                    <>
+                                        <span className="text-amber-400">{act.distance?.toFixed(1)} km</span>
+                                        <span className="text-slate-600">|</span>
+                                        <span className="text-slate-300">{formatPace(((act.durationMinutes || 0) * 60) / (act.distance || 1))}</span>
+                                        {((act as any).heartRateAvg || (act as any).averageHeartrate || (act as any).avgHeartRate) > 0 && (
+                                            <span className="text-rose-400 flex items-center gap-0.5"><HeartPulse size={8}/> {Math.round((act as any).heartRateAvg || (act as any).averageHeartrate || (act as any).avgHeartRate)}</span>
+                                        )}
+                                    </>
+                                )}
+                                onActivityClick={(id) => onSelectActivity?.(id)}
+                            />
+
+                            {analysis.strengthSessions.length > 0 && (
+                                <SessionGroup 
+                                    title="Styrketräning" 
+                                    count={analysis.strengthSessions.length} 
+                                    icon={<Dumbbell size={14} className="text-indigo-500" />}
+                                    items={analysis.strengthSessions}
+                                    formatDetail={(act) => <span>{act.durationMinutes} min</span>}
+                                    onActivityClick={(id) => onSelectActivity?.(id)}
+                                />
+                            )}
+
+                            {analysis.races.length > 0 && (
+                                <SessionGroup 
+                                    title="Tävlingar" 
+                                    count={analysis.races.length} 
+                                    icon={<Trophy size={14} className="text-sky-500" />}
+                                    items={analysis.races}
+                                    formatDetail={(act) => <span className="text-sky-400">{act.distance?.toFixed(1)} km</span>}
+                                    onActivityClick={(id) => onSelectActivity?.(id)}
+                                />
+                            )}
+                        </div>
+                            
+                        <div className="pt-3 border-t border-white/5 mt-3">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">Analys: Pros & Cons</span>
+                            <div className="space-y-1.5">
+                                {analysis.pros.slice(0, 2).map((p, i) => (
+                                    <div key={i} className="text-[10px] text-emerald-400 flex items-start gap-1.5">
+                                        <span className="mt-0.5 shrink-0">✓</span>
+                                        {p}
+                                    </div>
+                                ))}
+                                {analysis.cons.slice(0, 1).map((c, i) => (
+                                    <div key={i} className="text-[10px] text-rose-400 flex items-start gap-1.5">
+                                        <span className="mt-0.5 shrink-0">!</span>
+                                        {c}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl flex flex-col justify-between">
+                        <div>
+                            <h4 className="text-[10px] font-bold text-emerald-400 uppercase mb-2">Summering förberedelse</h4>
+                            <p className="text-[10px] text-slate-300 leading-relaxed italic">
+                                Baserat på dina {timeframeWeeks} veckor har du tränat i snitt {Math.round(analysis.avgWeeklyVol)} km per vecka. 
+                                {analysis.longRunCount >= 3 ? ' Din uthållighet ser stark ut inför start.' : ' Du har färre långpass än optimalt.'}
+                                Din kontinuitet på {Math.round(analysis.consistencyScore)}% tyder på {analysis.consistencyScore > 70 ? 'en stabil träningsperiod.' : 'en något ryckig förberedelse.'}
+                            </p>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                            <SessionGroup 
+                                title="Alla Loggade Pass" 
+                                count={analysis.windowActivities.length} 
+                                icon={<History size={14} className="text-slate-500" />}
+                                items={analysis.windowActivities} // Show latest first
+                                formatDetail={(act) => act.distance ? `${act.distance.toFixed(1)}k` : `${act.durationMinutes}m`}
+                                onActivityClick={onSelectActivity}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+});
+
+// Helper component for session groups in Prep tab
+const SessionGroup = ({ 
+    title, 
+    count, 
+    icon, 
+    items, 
+    formatDetail,
+    onActivityClick
+}: { 
+    title: string; 
+    count: number; 
+    icon: React.ReactNode; 
+    items: ExerciseEntry[]; 
+    formatDetail: (act: ExerciseEntry) => React.ReactNode; 
+    onActivityClick?: (id: string) => void;
+}) => {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    
+    return (
+        <div className="space-y-2">
+            <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full flex items-center justify-between hover:bg-white/5 p-1 rounded transition-colors group"
+            >
+                <div className="flex items-center gap-2">
+                    {icon}
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{title}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-slate-300">{count} st</span>
+                    <ChevronDown size={12} className={`text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+            
+            {(isExpanded || (items.length <= 2 && title !== "Tävlingar")) && (
+                <div className="space-y-1 sm:pl-4">
+                    {items.slice(0, isExpanded ? 99 : 2).map(act => (
+                        <div 
+                            key={act.id} 
+                            className="bg-white/5 p-1.5 rounded-lg flex items-center justify-between text-[11px] group cursor-pointer hover:bg-white/10"
+                            onClick={() => onActivityClick?.(act.id)}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Calendar size={10} className="text-slate-500" />
+                                <span className="text-slate-300">{new Date(act.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}</span>
+                                <span className="font-bold text-white truncate max-w-[80px] sm:max-w-[120px]">{act.title || act.type}</span>
+                            </div>
+                            <div className="text-[10px] flex items-center justify-end font-mono font-bold text-slate-500 group-hover:text-white gap-1">{formatDetail(act)}</div>
+                        </div>
+                    ))}
+                    {items.length > 2 && !isExpanded && (
+                        <div className="text-[9px] text-slate-600 italic text-center py-1">
+                            +{items.length - 2} till... 
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 export interface ActivityDetailModalProps {
 
     activity: ExerciseEntry & { source: string; _mergeData?: any };
@@ -363,7 +1049,7 @@ export interface ActivityDetailModalProps {
     onClose: () => void;
     onSeparate?: () => void;
     initiallyEditing?: boolean;
-    setSelectedActivityId?: (id: string | null) => void;
+    onSelectActivity?: (id: string | null) => void;
 }
 
 // Activity Detail Modal Component
@@ -373,7 +1059,7 @@ export function ActivityDetailModal({
     onClose,
     onSeparate,
     initiallyEditing = false,
-    setSelectedActivityId
+    onSelectActivity
 }: ActivityDetailModalProps) {
     const navigate = useNavigate();
     const { 
@@ -414,27 +1100,27 @@ export function ActivityDetailModal({
     // Make tabs linkable by parsing the selectedActivityId (if available) for a tab suffix.
     // E.g. activityId="123/splits" means tab="splits" for activity "123"
     const initialTab = React.useMemo(() => {
-        // Find if window.location.search has ?activityId=123/splits
         const searchParams = new URLSearchParams(window.location.search);
         const activityParam = searchParams.get('activityId');
         if (activityParam && activityParam.includes('/')) {
             const parts = activityParam.split('/');
             const maybeTab = parts[1];
-            if (['stats', 'compare', 'splits', 'merge', 'analysis'].includes(maybeTab)) {
-                return maybeTab as 'stats' | 'compare' | 'splits' | 'merge' | 'analysis';
+            if (['stats', 'compare', 'splits', 'merge', 'analysis', 'prep'].includes(maybeTab)) {
+                return maybeTab as 'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep';
             }
         }
         return 'stats';
     }, []);
 
-    const [activeTab, setActiveTabLocal] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>(initialTab);
+    const [activeTab, setActiveTabLocal] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep'>(initialTab);
+    const [timeframeWeeks, setTimeframeWeeks] = useState(12);
 
-    const setActiveTab = (tab: 'stats' | 'compare' | 'splits' | 'merge' | 'analysis') => {
+    const setActiveTab = (tab: 'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep') => {
         setActiveTabLocal(tab);
-        if (setSelectedActivityId) {
+        if (onSelectActivity) {
             // Update URL parameters directly via parent's state handler
             const baseId = activity.id;
-            setSelectedActivityId(`${baseId}/${tab}`);
+            onSelectActivity(`${baseId}/${tab}`);
         }
     };
 
@@ -669,13 +1355,26 @@ export function ActivityDetailModal({
     // Smart Extraction Detection (Performance Markers)
     const smartExtractInfo = React.useMemo(() => {
         if (activity.extractedFromId) return null; // Don't suggest extracts from extracts
-        if (activity.performance?.activityType !== 'running') return null;
+        // Reality Checks: 
+        // 1. Tävlingar är sällan intervaller (undvik att irritera användaren med extraktions-tips då)
+        if (isCompetition(activity)) return null;
 
         const bestEfforts = getBestEffortsForActivity(activity);
         
         // We look for common distances to suggest extraction
         const suggestions = bestEfforts
-            .filter(be => [1, 2, 3, 5, 10].includes(be.distance / 1000) || be.name.includes('mile'))
+            .filter(be => {
+                const distanceKm = be.distance / 1000;
+                const isCommon = [1, 2, 3, 5, 10].includes(distanceKm) || be.name.includes('mile');
+                
+                // Reality check: If total distance is > 15km and extraction is < 1km, it's likely just a random fast km
+                if ((activity.distance || 0) > 15 && distanceKm <= 1) return false;
+                
+                // Reality check: Extraction should be a significant part of the activity unless it's a test
+                if (distanceKm < (activity.distance || 0) * 0.05) return false;
+
+                return isCommon;
+            })
             .sort((a, b) => b.distance - a.distance) // Prioritize longer distances
             .slice(0, 3);
 
@@ -1198,7 +1897,7 @@ export function ActivityDetailModal({
                                 ...universalActivity.plan,
                                 title: newTitle,
                                 activityType: universalActivity.plan?.activityType || universalActivity.performance?.activityType || 'other',
-                                distanceKm: universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
+                                distanceKm: activity.distance || universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
                             }
                         };
                         await fetch('/api/activities', {
@@ -1263,7 +1962,7 @@ export function ActivityDetailModal({
                                         ...universalActivity.plan,
                                         title: stravaTitle,
                                         activityType: universalActivity.plan?.activityType || universalActivity.performance?.activityType || 'other',
-                                        distanceKm: universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
+                                        distanceKm: activity.distance || universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
                                     }
                                 };
                                 await fetch('/api/activities', {
@@ -1338,7 +2037,7 @@ export function ActivityDetailModal({
     return (
         <div id="activity-detail-modal" className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[300] p-4 animate-in fade-in duration-200" onClick={onClose}>
             <div
-                className="bg-slate-900 border border-white/10 rounded-3xl max-w-4xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
+                className="bg-slate-900 border border-white/10 rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* EDIT MODE */}
@@ -1847,7 +2546,7 @@ export function ActivityDetailModal({
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSelectedActivityId?.(parentActivity.id);
+                                                    onSelectActivity?.(parentActivity.id);
                                                 }}
                                                 className="font-black text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 group/link"
                                             >
@@ -2153,6 +2852,14 @@ export function ActivityDetailModal({
                                     <span>🧩</span> Analys
                                 </button>
                             )}
+                            {isCompetition(activity) && (
+                                <button
+                                    onClick={() => setActiveTab('prep')}
+                                    className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'prep' ? 'text-emerald-400 border-emerald-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                                >
+                                    <span>📈</span> Förberedelse
+                                </button>
+                            )}
                         </div>
 
 
@@ -2369,9 +3076,9 @@ export function ActivityDetailModal({
                                                 <p className="text-[10px] text-slate-400">Total distans: {(parentUniversal.performance?.distanceKm || 0).toFixed(1)} km</p>
                                             </div>
                                         </div>
-                                        {setSelectedActivityId && (
+                                        {onSelectActivity && (
                                             <button 
-                                                onClick={() => setSelectedActivityId(parentUniversal.id)}
+                                                onClick={() => onSelectActivity(parentUniversal.id)}
                                                 className="text-xs font-bold text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500 px-3 py-1.5 rounded-lg transition-all"
                                             >
                                                 Visa Original ↗
@@ -2790,7 +3497,7 @@ export function ActivityDetailModal({
                                                 <div
                                                     key={sub.id}
                                                     className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                                                    onClick={() => setSelectedActivityId?.(sub.id)}
+                                                    onClick={() => onSelectActivity?.(sub.id)}
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">{sub.title}</span>
@@ -2815,7 +3522,7 @@ export function ActivityDetailModal({
                                      <BestEffortPerformanceCard 
                                          activity={currentUniversal} 
                                          allActivities={universalActivities}
-                                         setSelectedActivityId={setSelectedActivityId}
+                                         onSelectActivity={onSelectActivity}
                                      />
                                  )}
 
@@ -2923,7 +3630,16 @@ export function ActivityDetailModal({
                                     )}
 
 
-                                {segmentedSplits && (
+                                {/* Race History Analysis */}
+                                {isCompetition(activity) && currentUniversal && (
+                                    <RaceHistoryCard 
+                                        currentActivity={currentUniversal} 
+                                        allActivities={universalActivities}
+                                        onSelectActivity={onSelectActivity}
+                                    />
+                                )}
+
+                                {segmentedSplits && !isCompetition(activity) && (
                                     <IntervalSplitsCard activity={activity} segmented={segmentedSplits} />
                                 )}
 
@@ -3012,6 +3728,33 @@ export function ActivityDetailModal({
                                     description={universalActivity?.plan?.description || activity.notes || ''}
                                     subPerformances={subPerformances}
                                 />
+                            </div>
+                        )}
+
+                        {/* PREP TAB */}
+                        {activeTab === 'prep' && (isCompetition(activity) || (activity.distance || 0) > 20) && (
+                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                                <PrepTabContent 
+                                    activity={currentActivity} 
+                                    allActivities={allActivities}
+                                    timeframeWeeks={timeframeWeeks}
+                                    setTimeframeWeeks={setTimeframeWeeks}
+                                    onSelectActivity={onSelectActivity}
+                                />
+                                
+                                {isCompetition(activity) && (
+                                    <div className="space-y-4 pt-4 border-t border-white/5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Trophy className="text-amber-400 w-4 h-4" />
+                                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Historik för {normalizeRaceTitle(displayTitle)}</h3>
+                                        </div>
+                                        <RaceHistoryCard 
+                                            currentActivity={currentUniversal!} 
+                                            allActivities={universalActivities}
+                                            onSelectActivity={onSelectActivity}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -3167,7 +3910,7 @@ export function ActivityDetailModal({
                                                         const aPaceSec = a.distance ? (a.durationMinutes * 60 / a.distance) : 0;
                                                         const aScore = calculatePerformanceScore(a);
                                                         return (
-                                                            <tr key={a.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => setSelectedActivityId?.(a.id)}>
+                                                            <tr key={a.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => onSelectActivity?.(a.id)}>
                                                                 <td className="px-5 py-5">
                                                                     <div className="flex flex-col">
                                                                         <span className="text-slate-300 font-bold">{formatSwedishDate(a.date)}</span>

@@ -156,6 +156,32 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
     const finalRecoverySplits = classified.filter(s => s.role === 'recovery');
     const intervalPaces = finalIntervalSplits.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
 
+    // --- REALITY CHECKS (SKEPTICISM) ---
+    const totalIntervalKm = finalIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    const totalWarmupKm = classified.filter(s => s.role === 'warmup').reduce((s, sp) => s + sp.distance / 1000, 0);
+    
+    // Check 1: Excessive warmup (User's specific case: 20k warmup, 1k interval)
+    // If warmup is > 70% of the run AND we only have 1-2 intervals, it's probably not an interval session
+    if (totalWarmupKm > totalIntervalKm * 3 && intervalGroups.length < 3 && !isExplicitlyInterval) {
+        return null; 
+    }
+
+    // Check 2: Micro-intervals (Too few or too short)
+    // If we have very little high-intensity distance compared to total, and it's not explicit, ignore.
+    const totalDistKm = splits.reduce((s, sp) => s + sp.distance / 1000, 0);
+    if (totalIntervalKm / totalDistKm < 0.1 && !isExplicitlyInterval) {
+        return null;
+    }
+
+    // Check 3: Race Detection
+    // If the title looks like a race, we should be extremely skeptical of interval detection
+    const isRace = lowerTitle.includes('loppet') || lowerTitle.includes('race') || lowerTitle.includes('tävling') || lowerTitle.includes('marathon');
+    if (isRace && !isExplicitlyInterval && intervalGroups.length < 5) {
+        // Many races have a fast start/finish that looks like intervals. 
+        // For races, we only accept it if there are MANY clear intervals (e.g. 5+ reps)
+        return null;
+    }
+
     return {
         type: 'intervals',
         classified,
@@ -163,9 +189,9 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
         intervalGroups,
         cooldownSplits: classified.filter(s => s.role === 'cooldown'),
         summary: {
-            warmupKm: classified.filter(s => s.role === 'warmup').reduce((s, sp) => s + sp.distance / 1000, 0),
+            warmupKm: totalWarmupKm,
             cooldownKm: classified.filter(s => s.role === 'cooldown').reduce((s, sp) => s + sp.distance / 1000, 0),
-            totalIntervalKm: finalIntervalSplits.reduce((s, sp) => s + sp.distance / 1000, 0),
+            totalIntervalKm: totalIntervalKm,
             totalRecoveryKm: finalRecoverySplits.reduce((s, sp) => s + sp.distance / 1000, 0),
             avgIntervalPace: getWeightedPace(finalIntervalSplits),
             avgRecoveryPace: getWeightedPace(finalRecoverySplits),

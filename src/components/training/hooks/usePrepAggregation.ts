@@ -32,16 +32,29 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
 
         let totalRunVolumeKm = 0;
         let totalRunTimeMin = 0;
+        let totalRunHRSum = 0;
+        let totalRunHRCount = 0;
+        let totalDaysInPeriod = timeframeWeeks * 7;
+        let activeDaysCount = 0;
+        let totalActiveTimeMin = 0;
+        let totalHRSum = 0;
+        let totalHRCount = 0;
+
         let totalCyclingVolumeKm = 0;
         let totalCyclingTimeMin = 0;
         let totalAltTimeMin = 0;
         let totalOtherTimeMin = 0;
-        let totalActiveTimeMin = 0;
         let totalElevationGain = 0;
         let maxElevationInOneRun = 0;
         let totalRunCount = 0;
         let warmupCount = 0;
         const warmups: ExerciseEntry[] = [];
+
+        let fastestPaceSecPerKm = 999;
+        let slowestPaceSecPerKm = 0;
+        let theFastestRun: ExerciseEntry | null = null;
+        let theSlowestRun: ExerciseEntry | null = null;
+        let theMaxElevationRun: ExerciseEntry | null = null;
 
         let qualityCount = 0;
         let longerDistCount = 0;
@@ -50,6 +63,7 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         let distanceCount = 0;
 
         let strengthCount = 0;
+        const strengthSessions: ExerciseEntry[] = [];
         let cyclingCount = 0;
         let otherCount = 0;
 
@@ -60,15 +74,18 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         const qualitySessions: ExerciseEntry[] = [];
         const trainingRuns: ExerciseEntry[] = [];
 
-        let fastestPaceSecPerKm = Infinity;
-        let fastestRun: ExerciseEntry | null = null;
+
 
         const weeklyVolume: Record<string, number> = {};
+        const weeklyDurationRun: Record<string, number> = {};
+        const weeklyDurationTotal: Record<string, number> = {};
         const weeklyHealth: Record<string, { kcalTotal: number; weightSum: number; weightCount: number; strengthCount: number; raceCount: number; maxRaceDistance: number; raceList: { title: string; distance: number }[] }> = {};
 
         for (let i = 0; i < timeframeWeeks; i++) {
             const weekKey = `Vecka -${timeframeWeeks - i}`;
             weeklyVolume[weekKey] = 0;
+            weeklyDurationRun[weekKey] = 0;
+            weeklyDurationTotal[weekKey] = 0;
             weeklyHealth[weekKey] = { kcalTotal: 0, weightSum: 0, weightCount: 0, strengthCount: 0, raceCount: 0, maxRaceDistance: 0, raceList: [] };
         }
 
@@ -99,9 +116,12 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
                 const isRunning = act.type.toLowerCase().includes('run') || act.type.toLowerCase().includes('löpning');
                 const isRace = isCompetition(act);
 
+                weeklyDurationTotal[weekKey] = (weeklyDurationTotal[weekKey] || 0) + (act.durationMinutes || 0);
+
                 if (isRunning) {
                     if (act.id !== event.id) {
                         weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + (act.distance || 0);
+                        weeklyDurationRun[weekKey] = (weeklyDurationRun[weekKey] || 0) + (act.durationMinutes || 0);
                     }
                     if (isRace) {
                         weeklyHealth[weekKey].raceCount++;
@@ -136,6 +156,14 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
                 totalRunVolumeKm += act.distance;
                 totalRunTimeMin += act.durationMinutes;
                 totalElevationGain += (act.elevationGain || 0);
+
+                const hr = (act as any).averageHeartrate || (act as any).avgHeartRate;
+                if (hr) {
+                    totalRunHRSum += hr;
+                    totalRunHRCount++;
+                    totalHRSum += hr;
+                    totalHRCount++;
+                }
                 
                 if (isWarmupOrCooldown(act)) {
                     warmupCount++;
@@ -173,6 +201,7 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
                 const lowType = act.type.toLowerCase();
                 if (lowType.includes('strength') || lowType.includes('styrka') || lowType === 'weighttraining') {
                     strengthCount++;
+                    strengthSessions.push(act);
                     totalOtherTimeMin += (act.durationMinutes || 0);
                 } else if (lowType.includes('cycle') || lowType.includes('cykel') || lowType === 'virtualride' || lowType === 'ride') {
                     cyclingCount++;
@@ -193,10 +222,15 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             const pace = (act.durationMinutes * 60) / act.distance;
             if (pace < fastestPaceSecPerKm && pace > 120) {
                 fastestPaceSecPerKm = pace;
-                fastestRun = act;
+                theFastestRun = act;
+            }
+            if (pace > slowestPaceSecPerKm && pace < 900) { // Cap at 15min/km to filter out obvious walks
+                slowestPaceSecPerKm = pace;
+                theSlowestRun = act;
             }
             if ((act.elevationGain || 0) > maxElevationInOneRun) {
                 maxElevationInOneRun = act.elevationGain || 0;
+                theMaxElevationRun = act;
             }
         });
 
@@ -233,7 +267,6 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         const avgPaceSecPerKm = totalRunCount > 0 ? (totalRunTimeMin * 60) / totalRunVolumeKm : 0;
         const doubleDaysCount = Object.values(sessionsPerDay).filter(count => count > 1).length;
         const avgSessionsPerWeek = Object.keys(sessionsPerDay).length / timeframeWeeks;
-        const totalDaysInPeriod = timeframeWeeks * 7;
         const restDays = totalDaysInPeriod - activeDays.size;
 
         const sortedActiveDays = Array.from(activeDays).sort();
@@ -251,6 +284,10 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         });
 
         const peakVolumeWeek = Math.max(0, ...Object.values(weeklyVolume));
+        let peakWeekName = '';
+        Object.entries(weeklyVolume).forEach(([k, v]) => {
+            if (v === peakVolumeWeek) peakWeekName = k;
+        });
         const consistencyScore = (activeDays.size / totalDaysInPeriod) * 100;
         const qualityVol = qualitySessions.reduce((sum, s) => sum + (s.distance || 0), 0);
         const qualityRatio = totalRunVolumeKm > 0 ? (qualityVol / totalRunVolumeKm) * 100 : 0;
@@ -271,6 +308,8 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         }).map(key => ({
             week: key,
             vol: Math.round(weeklyVolume[key] * 10) / 10,
+            durRun: weeklyDurationRun[key] || 0,
+            durTotal: weeklyDurationTotal[key] || 0,
             raceCount: weeklyHealth[key].raceCount,
             maxRaceDistance: weeklyHealth[key].maxRaceDistance,
             raceList: weeklyHealth[key].raceList,
@@ -297,8 +336,13 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             return isRun && (r.distance || 0) < 14 && r.id !== event.id && !isCompetition(r) && !isQuality;
         });
 
+        const longRunVol = longRunsList.reduce((sum, s) => sum + (s.distance || 0), 0);
+        const longRunRatio = totalRunVolumeKm > 0 ? (longRunVol / totalRunVolumeKm) * 100 : 0;
+
         return {
-            top3LongRuns, fastestRun: fastestRun as ExerciseEntry | null,
+            top3LongRuns, fastestRun: theFastestRun as ExerciseEntry | null,
+            slowestRun: theSlowestRun as ExerciseEntry | null, maxElevationRun: theMaxElevationRun as ExerciseEntry | null,
+            peakWeekName,
             races: races.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             qualityCount, distanceCount, longRunCount, longerDistCount, ultraLongRunCount,
             totalElevationGain, maxElevationInOneRun, fastestPaceSecPerKm, totalActiveTimeMin, restDays, activeDaysCount: activeDays.size, totalDaysInPeriod,
@@ -306,12 +350,17 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             longerDistList: longerDistList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             easyRunsList: easyRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             avgWeeklyVol, lastWeekVol, prevWeeksVolAvg, avgPaceSecPerKm,
-            strengthCount, cyclingCount, otherCount, doubleDaysCount, avgSessionsPerWeek,
+            avgHR: totalHRCount > 0 ? Math.round(totalHRSum / totalHRCount) : null,
+            avgRunHR: totalRunHRCount > 0 ? Math.round(totalRunHRSum / totalRunHRCount) : null,
+            strengthCount,
+            strengthSessions: strengthSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cyclingCount, otherCount, doubleDaysCount, avgSessionsPerWeek,
             chartData: rawChartData, hasHealthData,
             weightDataPoints: weightDataPoints.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            windowActivities, longestStreak, peakVolumeWeek, consistencyScore, qualityRatio,
+            windowActivities, longestStreak, peakVolumeWeek, consistencyScore, qualityRatio, longRunRatio,
             pros, cons,
             qualitySessions: qualitySessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            slowestPaceSecPerKm,
             totalRunTimeMin,
             totalCyclingVolumeKm,
             totalCyclingTimeMin,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle, Heart } from 'lucide-react';
+import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle, Heart, Thermometer, ShieldCheck } from 'lucide-react';
 import { formatActivityDuration } from '../../utils/formatters.ts';
 import { formatSpeed } from '../../utils/dateUtils.ts';
 import { useData } from '../../context/DataShared.ts';
@@ -69,16 +69,21 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
     const { getVitalsForDate, updateVitals } = useData();
     const vitals = getVitalsForDate(date);
     const [localNote, setLocalNote] = useState(vitals.notes || '');
+    const [localIllness, setLocalIllness] = useState<'none' | 'mild' | 'moderate' | 'severe'>(vitals.illnessStatus || 'none');
     const [isEditingNote, setIsEditingNote] = useState(false);
 
     // Sync note when date changes
     useEffect(() => {
         setLocalNote(vitals.notes || '');
+        setLocalIllness(vitals.illnessStatus || 'none');
         setIsEditingNote(false);
-    }, [date, vitals.notes]);
+    }, [date, vitals.notes, vitals.illnessStatus]);
 
     const handleSaveNote = () => {
-        updateVitals(date, { notes: localNote });
+        updateVitals(date, { 
+            notes: localNote, 
+            illnessStatus: localIllness === 'none' ? undefined : localIllness 
+        });
         setIsEditingNote(false);
     };
 
@@ -252,40 +257,96 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                         </button>
                         <button
                             onClick={() => setIsEditingNote(true)}
-                            className={`font-bold py-3 px-4 rounded-2xl transition-all border flex items-center justify-center gap-2 active:scale-95 ${vitals.notes ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/5'}`}
+                            className={`font-bold py-3 px-4 rounded-2xl transition-all border flex items-center justify-center gap-2 active:scale-95 ${vitals.illnessStatus && vitals.illnessStatus !== 'none' ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20' : vitals.notes ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/5'}`}
                         >
-                            <StickyNote size={18} />
-                            {vitals.notes ? 'Ändra notering' : 'Skapa notering'}
+                            {vitals.illnessStatus && vitals.illnessStatus !== 'none' ? <Thermometer size={18} /> : <StickyNote size={18} />}
+                            {(vitals.notes || vitals.illnessStatus) ? 'Ändra Status' : 'Logga Status'}
                         </button>
                     </div>
 
-                    {/* Daily Note (If exists or editing) */}
-                    {(vitals.notes || isEditingNote) && (
-                        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-300">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
-                                    <PenSquare className="w-3 h-3" /> Daglig Notering
+                    {/* Daily Note & Illness (If exists or editing) */}
+                    {(vitals.notes || vitals.illnessStatus || isEditingNote) && (
+                        <div className={`border rounded-2xl p-5 animate-in slide-in-from-top-2 duration-300 shadow-lg ${localIllness !== 'none' || (vitals.illnessStatus && vitals.illnessStatus !== 'none') ? 'bg-rose-500/5 border-rose-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${localIllness !== 'none' || (vitals.illnessStatus && vitals.illnessStatus !== 'none') ? 'text-rose-400' : 'text-amber-500'}`}>
+                                    {localIllness !== 'none' || (vitals.illnessStatus && vitals.illnessStatus !== 'none') ? <Thermometer className="w-4 h-4" /> : <PenSquare className="w-4 h-4" />} 
+                                    Hälsostatus & Notering
                                 </h3>
                                 {isEditingNote && (
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setIsEditingNote(false)} className="text-[10px] font-bold text-slate-500 hover:text-white transition-colors">Avbryt</button>
-                                        <button onClick={handleSaveNote} className="text-[10px] font-black bg-amber-500 hover:bg-amber-400 text-black px-2 py-1 rounded-md transition-colors">Spara</button>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setIsEditingNote(false)} className="text-xs font-bold text-slate-500 hover:text-white transition-colors">Avbryt</button>
+                                        <button onClick={handleSaveNote} className="text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition-colors shadow-sm">Spara</button>
                                     </div>
                                 )}
                             </div>
 
                             {isEditingNote ? (
-                                <textarea
-                                    autoFocus
-                                    value={localNote}
-                                    onChange={(e) => setLocalNote(e.target.value)}
-                                    placeholder="Skriv något om dagen... (t.ex. 'Sjukdom', 'Vilodag', 'Känns bra')"
-                                    className="w-full bg-slate-950/50 border border-amber-500/30 rounded-xl p-3 text-slate-200 placeholder:text-slate-600 outline-none focus:border-amber-500/50 transition-colors min-h-[100px] text-sm"
-                                />
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <button
+                                            onClick={() => setLocalIllness('none')}
+                                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${localIllness === 'none' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'}`}
+                                        >
+                                            <div className="flex justify-between items-center w-full">
+                                                <span className="font-bold text-sm">Frisk</span>
+                                                <ShieldCheck className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-[10px] opacity-70">Ingen sjukdom, redo att träna.</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setLocalIllness('mild')}
+                                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${localIllness === 'mild' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'}`}
+                                        >
+                                            <div className="flex justify-between items-center w-full">
+                                                <span className="font-bold text-sm">Känning</span>
+                                                <AlertCircle className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-[10px] opacity-70">Halsont/snorig. Endast lätt träning.</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setLocalIllness('moderate')}
+                                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${localIllness === 'moderate' ? 'bg-rose-500/10 border-rose-500/50 text-rose-400' : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'}`}
+                                        >
+                                            <div className="flex justify-between items-center w-full">
+                                                <span className="font-bold text-sm">Sjuk</span>
+                                                <Thermometer className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-[10px] opacity-70">Sjukdomsbild. Missar all träning.</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setLocalIllness('severe')}
+                                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${localIllness === 'severe' ? 'bg-red-500/10 border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'}`}
+                                        >
+                                            <div className="flex justify-between items-center w-full">
+                                                <span className="font-bold text-sm">Allvarligt</span>
+                                                <Thermometer className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-[10px] opacity-70">Sängliggande, feber eller infektion.</span>
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        autoFocus
+                                        value={localNote}
+                                        onChange={(e) => setLocalNote(e.target.value)}
+                                        placeholder="Beskriv dagen... (t.ex. 'Skön känsla i benen', 'Börjar få ont i halsen')"
+                                        className={`w-full bg-slate-950/50 border rounded-xl p-3 text-slate-200 placeholder:text-slate-600 outline-none transition-colors min-h-[100px] text-sm ${localIllness !== 'none' ? 'border-rose-500/30 focus:border-rose-500/50' : 'border-amber-500/30 focus:border-amber-500/50'}`}
+                                    />
+                                </div>
                             ) : (
-                                <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap flex gap-3">
-                                    <div className="w-1 h-auto bg-amber-500/30 rounded-full shrink-0" />
-                                    <p>{vitals.notes}</p>
+                                <div className="flex flex-col gap-4">
+                                    {vitals.illnessStatus && vitals.illnessStatus !== 'none' && (
+                                        <div className="flex items-center gap-2 text-sm font-bold bg-slate-900/50 w-fit px-3 py-1.5 rounded-lg border border-white/5">
+                                            {vitals.illnessStatus === 'mild' && <><AlertCircle className="w-4 h-4 text-amber-400" /><span className="text-amber-400">Mild känning (Kan träna lätt)</span></>}
+                                            {vitals.illnessStatus === 'moderate' && <><Thermometer className="w-4 h-4 text-rose-400" /><span className="text-rose-400">Sjuk (Ingen träning)</span></>}
+                                            {vitals.illnessStatus === 'severe' && <><Thermometer className="w-4 h-4 text-red-500" /><span className="text-red-500">Allvarligt sjuk (Sängliggande / Feber)</span></>}
+                                        </div>
+                                    )}
+                                    {vitals.notes && (
+                                        <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap flex gap-4">
+                                            <div className={`w-1 h-auto rounded-full shrink-0 ${vitals.illnessStatus && vitals.illnessStatus !== 'none' ? 'bg-rose-500/30' : 'bg-amber-500/30'}`} />
+                                            <p className="py-1">{vitals.notes}</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

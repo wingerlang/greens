@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { formatActivityDuration } from '../../utils/formatters.ts';
-import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
 import { RaceSeriesDetailModal } from './RaceSeriesDetailModal.tsx';
 import { TourManager } from './TourManager.tsx';
 import { Trophy, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';
@@ -24,11 +23,11 @@ interface RaceListProps {
     filterEndDate?: string | null;
     subTab?: string;
     seriesId?: string;
+    onSelectActivity?: (id: string | null) => void;
 }
 
 export function RaceList(props: RaceListProps) {
     const { plannedActivities, savePlannedActivities, deletePlannedActivity, currentUser, updateCurrentUser } = useData();
-    const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
 
     const allHistoryActivities = useMemo(() => {
         const entryKeys = new Set(props.exerciseEntries.map(e => `${e.date.split('T')[0]}_${(e.distance || 0).toFixed(2)}`));
@@ -146,19 +145,18 @@ export function RaceList(props: RaceListProps) {
 
                     {viewMode === 'timeline' ? (
                         <div className="bg-slate-950/30 rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-                             <TimelineTable races={races} upcomingRaces={upcomingRaces} handleEditClick={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} setSelectedActivity={setSelectedActivity} universalActivities={props.universalActivities} sortConfig={sortConfig} handleSort={handleSort} />
+                             <TimelineTable races={races} upcomingRaces={upcomingRaces} handleEditClick={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} setSelectedActivity={(a) => props.onSelectActivity?.(a.id)} universalActivities={props.universalActivities} sortConfig={sortConfig} handleSort={handleSort} />
                         </div>
                     ) : viewMode === 'series' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {raceSeries.map(s => <SeriesCard key={s.name} series={s} onSelect={() => setSelectedSeries({ name: s.name, races: s.races })} setSelectedActivity={setSelectedActivity} formatActivityDuration={formatActivityDuration} />)}
+                            {raceSeries.map(s => <SeriesCard key={s.name} series={s} onSelect={() => setSelectedSeries({ name: s.name, races: s.races })} setSelectedActivity={(a) => props.onSelectActivity?.(a.id)} formatActivityDuration={formatActivityDuration} />)}
                         </div>
                     ) : (<TourManager />)}
                 </div>
             </div>
 
             {/* MODALS */}
-            {selectedActivity && <ActivityDetailModal activity={{ ...selectedActivity, source: 'strava' }} universalActivity={props.universalActivities.find(u => u.id === selectedActivity.id)} onClose={() => setSelectedActivity(null)} />}
-            {selectedSeries && <RaceSeriesDetailModal seriesName={selectedSeries.name} races={selectedSeries.races} onClose={() => setSelectedSeries(null)} onSelectRace={(r) => { setSelectedSeries(null); setSelectedActivity(r); }} />}
+            {selectedSeries && <RaceSeriesDetailModal seriesName={selectedSeries.name} races={selectedSeries.races} onClose={() => setSelectedSeries(null)} onSelectRace={(r) => { setSelectedSeries(null); props.onSelectActivity?.(r.id); }} />}
             {isAddModalOpen && <AddRaceModal activityToEdit={editingRace} races={races} onClose={() => { setIsAddModalOpen(false); setEditingRace(null); }} onSave={handleSaveRace} />}
             {isBulkAddModalOpen && <BulkAddRaceModal onClose={() => setIsBulkAddModalOpen(false)} onSaveAll={handleSaveBulk} />}
         </div>

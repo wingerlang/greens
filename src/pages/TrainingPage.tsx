@@ -940,6 +940,7 @@ export function TrainingPage() {
                             filterEndDate={filterEndDate}
                             subTab={subTab}
                             seriesId={id}
+                            onSelectActivity={setSelectedActivityId}
                         />
                     </div>
                 )
@@ -964,7 +965,7 @@ export function TrainingPage() {
                         <DataAnalysisView
                             exerciseEntries={exerciseEntries}
                             universalActivities={universalActivities}
-                            setSelectedActivityId={setSelectedActivityId}
+                            onSelectActivity={setSelectedActivityId}
                         />
                     </div>
                 )
@@ -992,7 +993,7 @@ export function TrainingPage() {
                         <ActivityDetailModal
                             activity={foundActivity}
                             onClose={() => setSelectedActivityId(null)}
-                            setSelectedActivityId={setSelectedActivityId}
+                            onSelectActivity={setSelectedActivityId}
                         />
                     ) : (
                         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center animate-in fade-in duration-300">

@@ -174,6 +174,14 @@ export function Layout({ children }: LayoutProps) {
             {selectedActivity && (
                 <ActivityDetailModal
                     activity={selectedActivity}
+                    setSelectedActivityId={(id) => {
+                        setSelectedActivityId(id);
+                        const params = new URLSearchParams(window.location.search);
+                        if (id) params.set('activityId', id);
+                        else params.delete('activityId');
+                        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+                        window.history.replaceState({}, '', newUrl);
+                    }}
                     onClose={() => {
                         setSelectedActivityId(null);
                         const params = new URLSearchParams(window.location.search);

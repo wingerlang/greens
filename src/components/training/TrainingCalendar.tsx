@@ -30,7 +30,7 @@ const MONTHS = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', '
 
 export function TrainingCalendar({ monthIndex, year, exercises: allExercises, initialDay, onExerciseClick }: TrainingCalendarProps) {
     const navigate = useNavigate();
-    const { reorderActivity } = useData();
+    const { reorderActivity, getVitalsForDate } = useData();
 
     const [selectedDate, setSelectedDate] = useState<string | null>(() => {
         if (initialDay) return new Date(year, monthIndex, initialDay, 12).toISOString().split('T')[0];
@@ -366,6 +366,13 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                         const isToday = todayStr === date.dateStr;
                                         const hasExercise = date.exercises.length > 0;
                                         const isRace = date.exercises.some(e => e.subType === 'race');
+                                        const vitals = getVitalsForDate(date.dateStr);
+                                        const isSick = vitals.illnessStatus && vitals.illnessStatus !== 'none';
+                                        
+                                        let sickBg = '';
+                                        if (vitals.illnessStatus === 'severe') sickBg = 'bg-red-500/10 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] hover:bg-red-500/20';
+                                        else if (vitals.illnessStatus === 'moderate') sickBg = 'bg-rose-500/10 border-rose-500/50 hover:bg-rose-500/20 shadow-sm';
+                                        else if (vitals.illnessStatus === 'mild') sickBg = 'bg-amber-500/5 border-amber-500/30 hover:bg-amber-500/10 shadow-sm';
 
                                         return (
                                             <div key={date.dateStr}
@@ -379,13 +386,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                 className={`
                                             relative p-0.5 flex flex-col rounded-md sm:rounded-sm border group cursor-pointer transition-all duration-200 min-h-[70px] hover:z-50
                                             ${!date.isCurrentMonth ? 'opacity-60 grayscale-[0.3] hover:opacity-90 hover:grayscale-0' : ''}
-                                            ${isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50 hover:border-sky-400' :
+                                            ${isSick ? sickBg : 
+                                                isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50 hover:border-sky-400' :
                                                         isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/20 hover:border-amber-400' :
                                                             hasExercise ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700/80 shadow-sm' :
                                                                 'bg-slate-900/50 border-white/[0.03] hover:bg-white/[0.05] hover:border-white/10'}
                                         `}>
                                                 <div className="flex justify-between items-start mb-0.5">
-                                                    <span className={`text-[10px] sm:text-sm font-black leading-none 
+                                                    <span className={`text-[10px] sm:text-sm font-bold leading-none 
                                                     ${!date.isCurrentMonth ? 'text-slate-500' :
                                                             isToday ? 'text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded-sm' :
                                                                 isRace ? 'text-amber-400' :
@@ -404,7 +412,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 </span>
                                                             );
                                                         })()}
-                                                        {isRace && <span className="text-[10px] sm:text-xs animate-pulse">🏆</span>}
+                                                        {isRace && <span className="text-[10px] sm:text-xs animate-pulse leading-none">🏆</span>}
+                                                        {isSick && (
+                                                            <span className={`text-[10px] sm:text-xs leading-none ${vitals.illnessStatus === 'severe' ? 'text-red-500 animate-pulse' : vitals.illnessStatus === 'moderate' ? 'text-rose-400' : 'text-amber-400'}`} title={vitals.notes || 'Sjukdom'}>
+                                                                {vitals.illnessStatus === 'severe' ? '🤒' : vitals.illnessStatus === 'moderate' ? '🤒' : '🤧'}
+                                                            </span>
+                                                        )}
 
                                                         {/* Day Total Tooltip */}
                                                         {hasExercise && (
@@ -503,44 +516,50 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         <span className={isLongName ? '' : 'truncate'}>{displayName}</span>
                                                                     </span>
                                                                 </span>
-                                                                <div className={`flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 whitespace-nowrap ${isLongName ? 'pl-4' : 'ml-auto'}`}>
-                                                                    {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
-                                                                    {ex.distance !== undefined && ex.distance > 0 && <span className="opacity-30">•</span>}
-                                                                    <div className="hidden group-hover/ex:flex items-center gap-0.5 ml-1">
-                                                                        <button 
-                                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'up'); }}
-                                                                            className="p-0.5 hover:bg-white/20 rounded transition-colors"
-                                                                        >
-                                                                            <LucideChevronUp size={10} />
-                                                                        </button>
-                                                                        <button 
-                                                                            onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'down'); }}
-                                                                            className="p-0.5 hover:bg-white/20 rounded transition-colors"
-                                                                        >
-                                                                            <LucideChevronDown size={10} />
-                                                                        </button>
+                                                                <div className={`flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 whitespace-nowrap mt-0.5 w-full justify-between`}>
+                                                                    <div className="flex items-center">
+                                                                        {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
+                                                                        {ex.distance !== undefined && ex.distance > 0 && <span className="text-slate-500 mx-1">•</span>}
+
+                                                                        {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
+                                                                            <>
+                                                                                <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<Heart className="w-2 h-2 text-red-500/70 inline-block ml-0.5" /></span>
+                                                                                <span className="text-slate-500 mx-1">•</span>
+                                                                            </>
+                                                                        )}
+
+                                                                        {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (isRun || isLongName) && (
+                                                                            <>
+                                                                                <span className="text-sky-400">
+                                                                                    {(() => {
+                                                                                        const paceDecimal = ex.durationMinutes / ex.distance;
+                                                                                        const mins = Math.floor(paceDecimal);
+                                                                                        const secs = Math.round((paceDecimal - mins) * 60);
+                                                                                        return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                                                                    })()}
+                                                                                </span>
+                                                                                <span className="text-slate-500 mx-1">•</span>
+                                                                            </>
+                                                                        )}
+                                                                        <span>{Math.round(ex.durationMinutes)}m</span>
                                                                     </div>
-                                                                    {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
-                                                                        <>
-                                                                            <span className="opacity-30">•</span>
-                                                                            <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<Heart className="w-2 h-2 text-red-500/70 inline-block ml-0.5" /></span>
-                                                                        </>
+                                                                    
+                                                                    {!ex.startTime && (
+                                                                        <div className="hidden group-hover/ex:flex items-center gap-0.5 ml-auto">
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'up'); }}
+                                                                                className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                                                                            >
+                                                                                <LucideChevronUp size={10} />
+                                                                            </button>
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); reorderActivity(ex.id, 'down'); }}
+                                                                                className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                                                                            >
+                                                                                <LucideChevronDown size={10} />
+                                                                            </button>
+                                                                        </div>
                                                                     )}
-                                                                    {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (isRun || isLongName) && (
-                                                                        <>
-                                                                            <span className="opacity-30">•</span>
-                                                                            <span className="text-sky-400">
-                                                                                {(() => {
-                                                                                    const paceDecimal = ex.durationMinutes / ex.distance;
-                                                                                    const mins = Math.floor(paceDecimal);
-                                                                                    const secs = Math.round((paceDecimal - mins) * 60);
-                                                                                    return `${mins}:${secs.toString().padStart(2, '0')}`;
-                                                                                })()}
-                                                                            </span>
-                                                                        </>
-                                                                    )}
-                                                                    <span className="opacity-30">•</span>
-                                                                    <span>{Math.round(ex.durationMinutes)}m</span>
                                                                 </div>
 
                                                                 {/* Rich Tooltip per Activity - positioned absolutely inside the relative day cell */}
@@ -551,7 +570,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                 {icon}
                                                                             </div>
                                                                             <div className="flex flex-col min-w-0 flex-1">
-                                                                                <span className="text-sm font-black text-white uppercase tracking-wider truncate mb-0.5" title={ex.title || typeName}>
+                                                                                <span className="text-sm font-bold text-white uppercase tracking-wider truncate mb-0.5" title={ex.title || typeName}>
                                                                                     {ex.title || typeName}
                                                                                 </span>
                                                                                 <span className="text-[10px] text-slate-400 font-bold truncate">
@@ -562,12 +581,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                                                                         <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-left px-1">
                                                                             <div className="flex flex-col">
-                                                                                 <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Tid</span>
+                                                                                 <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Tid</span>
                                                                                  <span className="font-mono text-slate-200 font-bold">{Math.round(ex.durationMinutes)} min</span>
                                                                              </div>
                                                                              {ex.startTime && (
                                                                                  <div className="flex flex-col">
-                                                                                     <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Start</span>
+                                                                                     <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Start</span>
                                                                                      <span className="font-mono text-slate-200 font-bold">{ex.startTime}</span>
                                                                                  </div>
                                                                              )}

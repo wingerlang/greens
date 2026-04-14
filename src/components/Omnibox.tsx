@@ -62,6 +62,7 @@ import { NavSuggestionsModule } from './omnibox/modules/NavSuggestionsModule.tsx
 import { ActionSuggestionsModule } from './omnibox/modules/ActionSuggestionsModule.tsx';
 import { LockedRecipeModule } from './omnibox/modules/LockedRecipeModule.tsx';
 import { PurchaseModule } from './omnibox/modules/PurchaseModule.tsx';
+import { ActivityResultModule } from './omnibox/modules/ActivityResultModule.tsx';
 
 export interface OmniboxProps {
     isOpen: boolean;
@@ -99,7 +100,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         addQuickMeal,
         calculateRecipeNutrition,
         savePlannedActivities,
-        addPurchaseLog
+        addPurchaseLog,
+        unifiedActivities
     } = useData();
     const { logEvent, visitStats } = useAnalytics();
 
@@ -223,8 +225,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     // Detect modes
     const isSlashMode = input.startsWith('/');
     const isActionMode = input.startsWith('!');
+    const isGreaterMode = input.startsWith('>');
     const slashQuery = isSlashMode ? input.slice(1).toLowerCase() : '';
     const actionQuery = isActionMode ? input.slice(1).toLowerCase().trim() : '';
+    const activityQuery = isGreaterMode ? input.slice(1).trim() : '';
 
     // Action suggestions
     const actionSuggestions = useMemo(() => {
@@ -509,7 +513,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     const foodResults = useMemo(() => {
         // Don't search if we have a locked food
         if (lockedFood) return [];
-        if (isSlashMode) return [];
+        if (isSlashMode || isGreaterMode) return [];
         if (!input.trim() || input.length < 2) return [];
         // Don't show food results for exercise/vitals/weight intents
         if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return [];
@@ -550,7 +554,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Recipe search results
     const recipeResults = useMemo(() => {
-        if (isSlashMode) return [];
+        if (isSlashMode || isGreaterMode) return [];
         if (!input.trim() || input.length < 2) return [];
         if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return [];
 
@@ -582,15 +586,44 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (!input.trim() || input.length < 2) return [];
         // Only show if query starts with @ or if no specific intent is found
         const isHandleQuery = input.startsWith('@');
-        const query = isHandleQuery ? input.slice(1).toLowerCase() : input.toLowerCase();
+        const userSearchQuery = isHandleQuery ? input.slice(1).toLowerCase() : input.toLowerCase();
 
         if (!isHandleQuery && ['exercise', 'vitals', 'weight', 'food'].includes(intent.type)) return [];
 
         return users.filter(u =>
-            u.name.toLowerCase().includes(query) ||
-            (u.handle || u.username).toLowerCase().includes(query)
+            u.name.toLowerCase().includes(userSearchQuery) ||
+            (u.handle || u.username).toLowerCase().includes(userSearchQuery)
         ).slice(0, 4);
     }, [input, users, isSlashMode, intent]);
+
+    // Activity search results
+    const activityResults = useMemo(() => {
+        if (isSlashMode || isActionMode) return [];
+        const q = isGreaterMode ? activityQuery : input.trim();
+        
+        if (!q || q.length < 2) return [];
+        if (!isGreaterMode && ['vitals', 'weight', 'user'].includes(intent.type)) return [];
+        
+        const results = performSmartSearch(q, unifiedActivities, {
+            textFn: (item) => item.title || item.type,
+            limit: 8,
+            includeScore: true
+        }).map(r => ({
+            ...r.item,
+            itemType: 'activity' as const,
+            searchScore: r.score
+        }));
+
+        // Sort: races first, then by score
+        return results.sort((a, b) => {
+            const aIsRace = a.title?.toLowerCase().includes('loppet') || a.subType === 'race' || a.subType === 'competition';
+            const bIsRace = b.title?.toLowerCase().includes('loppet') || b.subType === 'race' || b.subType === 'competition';
+            
+            if (aIsRace && !bIsRace) return -1;
+            if (!aIsRace && bIsRace) return 1;
+            return b.searchScore - a.searchScore;
+        });
+    }, [input, unifiedActivities, isSlashMode, isGreaterMode, isActionMode, intent.type, activityQuery]);
 
     // Nutrition helpers for Quick Meals in Omnibox
     const getItemName = (item: any) => {
@@ -642,7 +675,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Quick Meal results
     const { standardQuickMeals, savedEstimates } = useMemo(() => {
-        if (isSlashMode) return { standardQuickMeals: [], savedEstimates: [] };
+        if (isSlashMode || isGreaterMode) return { standardQuickMeals: [], savedEstimates: [] };
         if (!input.trim() || input.length < 2) return { standardQuickMeals: [], savedEstimates: [] };
         if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return { standardQuickMeals: [], savedEstimates: [] };
 
@@ -671,7 +704,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Frequent Meal Combinations suggestions
     const frequentCombos = useMemo(() => {
-        if (isSlashMode || isActionMode) return [];
+        if (isSlashMode || isActionMode || isGreaterMode) return [];
         if (intent.type !== 'food' || !intent.data.mealType) return [];
         if (intent.data.query && intent.data.query.trim().length > 0) return []; // Only when just typing the meal category
 
@@ -792,6 +825,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (lockedFood || lockedQuickMeal || lockedRecipe || lockedPurchaseFood) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
         if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
+        if (isGreaterMode) return activityResults.map(a => ({ itemType: 'activity' as const, ...a }));
 
         if (intent.type === 'purchase') return purchaseResults;
 
@@ -803,11 +837,19 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         
         // Merge food, recipes, quick meals and estimates and sort by search score
         const mergedResults = [
+            ...activityResults.map(a => ({ ...a, itemType: 'activity' as const })),
             ...savedEstimates.map(e => ({ ...e, itemType: 'savedEstimate' as const })),
             ...standardQuickMeals.map(q => ({ ...q, itemType: 'quickMeal' as const })),
             ...recipeResults.map(r => ({ ...r, itemType: 'recipe' as const })),
             ...foodResults.map(f => ({ ...f, itemType: 'food' as const }))
-        ].sort((a, b) => (b.searchScore || 0) - (a.searchScore || 0));
+        ].sort((a, b) => {
+            // Prioritize races/competitions within search results
+            const aIsRace = a.itemType === 'activity' && (a.subType === 'race' || a.subType === 'competition' || a.title?.toLowerCase().includes('loppet'));
+            const bIsRace = b.itemType === 'activity' && (b.subType === 'race' || b.subType === 'competition' || b.title?.toLowerCase().includes('loppet'));
+            if (aIsRace && !bIsRace) return -1;
+            if (!aIsRace && bIsRace) return 1;
+            return (b.searchScore || 0) - (a.searchScore || 0);
+        });
 
         items.push(...mergedResults);
 
@@ -817,7 +859,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (is2ColMode && popularFoods.length > 0) items.push(...popularFoods.map(f => ({ itemType: 'popular' as const, ...f })));
 
         return items;
-    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, purchaseResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood, lockedQuickMeal, lockedRecipe, lockedPurchaseFood, frequentCombos, intent.type]);
+    }, [isSlashMode, isActionMode, isGreaterMode, navSuggestions, actionSuggestions, activityResults, foodResults, purchaseResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, popularFoods, lockedFood, lockedQuickMeal, lockedRecipe, lockedPurchaseFood, frequentCombos, intent.type]);
 
 
     // Reset selection when results change or input changes
@@ -1323,6 +1365,19 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             return;
         }
 
+        // Handle activity selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'activity') {
+            const selectedActivity = selectableItems[selectedIndex] as any;
+            const params = new URLSearchParams(window.location.search);
+            if (selectedActivity.id) params.set('activityId', selectedActivity.id);
+            const newUrl = window.location.pathname + '?' + params.toString() + window.location.hash;
+            // Update URL and navigate
+            window.history.pushState({}, '', newUrl);
+            navigate(newUrl);
+            onClose();
+            return;
+        }
+
         // Handle user selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'user') {
             const selectedUser = selectableItems[selectedIndex] as any;
@@ -1378,6 +1433,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         }
 
 
+
+        if (isGreaterMode) {
+            // In activity mode, if no activity is selected, we don't do anything else
+            // to prevent falling through to food search logic
+            return;
+        }
 
         if (!input.trim()) return;
 
@@ -1676,17 +1737,54 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                     )}
 
                     {/* Mixed Search Results */}
-                    {!isSlashMode && !lockedFood && !lockedQuickMeal && !lockedRecipe && (foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0 || recipeResults.length > 0) && (
-                        <MixedSearchResultsModule
-                            intent={intent}
-                            foodResults={foodResults}
-                            standardQuickMeals={standardQuickMeals}
-                            savedEstimates={savedEstimates}
-                            recipeResults={recipeResults}
+                    {!isSlashMode && !isGreaterMode && !lockedFood && !lockedQuickMeal && !lockedRecipe && (activityResults.length > 0 || foodResults.length > 0 || standardQuickMeals.length > 0 || savedEstimates.length > 0 || recipeResults.length > 0) && (
+                        <>
+                            {activityResults.length > 0 && (
+                                <ActivityResultModule 
+                                    results={activityResults}
+                                    selectableItems={selectableItems}
+                                    selectedIndex={selectedIndex}
+                                    setSelectedActivityId={(id) => {
+                                        const params = new URLSearchParams(window.location.search);
+                                        if (id) params.set('activityId', id);
+                                        const newUrl = window.location.pathname + '?' + params.toString() + window.location.hash;
+                                        window.history.pushState({}, '', newUrl);
+                                        navigate(newUrl);
+                                    }}
+                                    onClose={onClose}
+                                />
+                            )}
+
+                            {(foodResults.length > 0 || standardQuickMeals.length > 0 || recipeResults.length > 0 || savedEstimates.length > 0) && (
+                                <MixedSearchResultsModule
+                                    intent={intent}
+                                    foodResults={foodResults}
+                                    standardQuickMeals={standardQuickMeals}
+                                    savedEstimates={savedEstimates}
+                                    recipeResults={recipeResults}
+                                    selectableItems={selectableItems}
+                                    selectedIndex={selectedIndex}
+                                    logFoodItem={logFoodItem}
+                                    lockQuickMeal={lockQuickMeal}
+                                />
+                            )}
+                        </>
+                    )}
+
+                    {/* Specialized Activity-Only Mode */}
+                    {isGreaterMode && !isSlashMode && (
+                        <ActivityResultModule 
+                            results={activityResults}
                             selectableItems={selectableItems}
                             selectedIndex={selectedIndex}
-                            logFoodItem={logFoodItem}
-                            lockQuickMeal={lockQuickMeal}
+                            setSelectedActivityId={(id) => {
+                                const params = new URLSearchParams(window.location.search);
+                                if (id) params.set('activityId', id);
+                                const newUrl = window.location.pathname + '?' + params.toString() + window.location.hash;
+                                window.history.pushState({}, '', newUrl);
+                                navigate(newUrl);
+                            }}
+                            onClose={onClose}
                         />
                     )}
 

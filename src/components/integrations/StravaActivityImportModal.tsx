@@ -10,6 +10,8 @@ interface StravaActivity {
     elapsed_time: number;
     moving_time: number;
     distance: number;
+    average_heartrate?: number;
+    average_speed?: number;
     excludeFromStats?: boolean;
 }
 
@@ -247,6 +249,28 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
     if (!isOpen) return null;
 
     // Compute smart date label for display
+    const formatLocalDuration = (minutes: number) => {
+        if (minutes < 60) return `${Math.round(minutes)}m`;
+        const h = Math.floor(minutes / 60);
+        const m = Math.round(minutes % 60);
+        return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    };
+
+    const formatLocalPace = (speedMs: number | undefined, type: string) => {
+        if (!speedMs || speedMs <= 0) return null;
+        
+        // Running/Walking: min/km
+        if (type === 'Run' || type === 'TrailRun' || type === 'Walk' || type === 'Hike') {
+            const paceMinPerKm = 1000 / speedMs / 60;
+            const mins = Math.floor(paceMinPerKm);
+            const secs = Math.round((paceMinPerKm % 1) * 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}/km`;
+        }
+        
+        // Cycling/Other: km/h
+        return `${(speedMs * 3.6).toFixed(1)} km/h`;
+    };
+
     const smartDateLabel = (() => {
         if (!exerciseEntries || exerciseEntries.length === 0) return 'senaste 30 dagarna';
         let latestDate = new Date(0);
@@ -406,14 +430,35 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                                                 <div className="text-2xl">{EXERCISE_ICONS[a.type] || '⚡'}</div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-white text-sm truncate">{a.name}</div>
-                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                                                        <span>📅 {new Date(a.start_date).toLocaleDateString()}</span>
-                                                        <span>📏 {a.distance ? (a.distance / 1000).toFixed(2) : 0} km</span>
-                                                        <span className="flex items-center gap-1">
-                                                            ⏱️ <span className="text-emerald-400 font-medium">{(a.moving_time / 60).toFixed(1)}</span>
-                                                            <span className="text-slate-600">/</span>
-                                                            <span className="text-slate-500">{(a.elapsed_time / 60).toFixed(1)} min</span>
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 font-medium uppercase tracking-wider">
+                                                        <span>{new Date(a.start_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}</span>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-700" />
+                                                        <span>{EXERCISE_ICONS[a.type] || '⚡'} {a.type}</span>
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-2 mt-2 items-center">
+                                                        <span className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                                                            <span className="text-slate-500 text-[10px]">📏</span>
+                                                            <span className="font-bold text-white">{a.distance ? (a.distance / 1000).toFixed(1) : 0}</span>
+                                                            <span className="text-slate-500 text-[10px]">km</span>
                                                         </span>
+                                                        <span className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                                                            <span className="text-slate-500 text-[10px]">⏱️</span>
+                                                            <span className="font-bold text-emerald-400">{formatLocalDuration(a.moving_time / 60)}</span>
+                                                            <span className="text-slate-500 text-[10px]">({formatLocalDuration(a.elapsed_time / 60)})</span>
+                                                        </span>
+                                                        {a.average_speed && (
+                                                            <span className="flex items-center gap-1.5 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/10">
+                                                                <span className="text-sky-500 text-[10px]">⚡</span>
+                                                                <span className="font-bold text-sky-400 font-mono tracking-tighter">{formatLocalPace(a.average_speed, a.type)}</span>
+                                                            </span>
+                                                        )}
+                                                        {a.average_heartrate && (
+                                                            <span className="flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/10">
+                                                                <span className="text-rose-500 text-[10px]">❤️</span>
+                                                                <span className="font-bold text-rose-400 font-mono tracking-tighter">{Math.round(a.average_heartrate)}</span>
+                                                                <span className="text-rose-500 text-[10px]">bpm</span>
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -441,13 +486,30 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                                                 <div className="text-2xl">{EXERCISE_ICONS[s.type] || '⚡'}</div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-white text-sm truncate">{s.name}</div>
-                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-1 mb-2">
-                                                        <span>📅 {new Date(s.start_date).toLocaleDateString()}</span>
-                                                        <span className="flex items-center gap-1">
-                                                            ⏱️ <span className="text-amber-400 font-medium">{(s.moving_time / 60).toFixed(1)}</span>
-                                                            <span className="text-slate-600">/</span>
-                                                            <span className="text-slate-500">{(s.elapsed_time / 60).toFixed(1)} min</span>
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 font-medium uppercase tracking-wider mb-2">
+                                                        <span>{new Date(s.start_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}</span>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-700" />
+                                                        <span>{EXERCISE_ICONS[s.type] || '⚡'} {s.type}</span>
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-2 mb-3 items-center">
+                                                        <span className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                                                            <span className="text-slate-500 text-[10px]">⏱️</span>
+                                                            <span className="font-bold text-amber-400">{formatLocalDuration(s.moving_time / 60)}</span>
+                                                            <span className="text-slate-500 text-[10px]">({formatLocalDuration(s.elapsed_time / 60)})</span>
                                                         </span>
+                                                        {s.average_speed && (
+                                                            <span className="flex items-center gap-1.5 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/10">
+                                                                <span className="text-sky-500 text-[10px]">⚡</span>
+                                                                <span className="font-bold text-sky-400 font-mono tracking-tighter">{formatLocalPace(s.average_speed, s.type)}</span>
+                                                            </span>
+                                                        )}
+                                                        {s.average_heartrate && (
+                                                            <span className="text-rose-500/10 flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/10">
+                                                                <span className="text-rose-500 text-[10px]">❤️</span>
+                                                                <span className="font-bold text-rose-400 font-mono tracking-tighter">{Math.round(s.average_heartrate)}</span>
+                                                                <span className="text-rose-500 text-[10px]">bpm</span>
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="text-xs bg-black/30 p-2 rounded text-amber-300 font-mono">
                                                         {changes.map((c, i) => <div key={i}>• {c}</div>)}
