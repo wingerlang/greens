@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { calculateBMI, calculateBMR, calculateTDEE, calculateCalorieDeficit, type ActivityLevel } from '../../utils/healthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useHealth } from '../../hooks/useHealth.ts';
+import { useSettings } from '../../context/SettingsContext.tsx';
+import { useData } from '../../context/DataContext.tsx';
 
 export function ToolsHealthPage() {
     const { user } = useAuth();
-    // Use health hook to get weight/height/gender/age if available
-    // Assuming user object might have profile data or health hook has it.
-    // Since useHealth is available, we can try to extract data from it or user profile.
-    // For now we assume user might have `weight`, `height` properties in a custom field or similar.
-    // We will just use a mock button logic to simulate "Use My Data" as requested.
+    const { settings } = useSettings();
+    const { getLatestWeight } = useData();
 
     // State
     const [weight, setWeight] = useState(80);
@@ -19,27 +18,22 @@ export function ToolsHealthPage() {
     const [activity, setActivity] = useState<ActivityLevel>('sedentary');
 
     const handleUseMyData = () => {
-        // In a real scenario, this would pull from useHealth() or user context
-        // Example:
-        // if (user?.profile) {
-        //     setWeight(user.profile.weight || 80);
-        //     setHeight(user.profile.height || 180);
-        //     setAge(user.profile.age || 30);
-        //     setGender(user.profile.gender || 'male');
-        // }
-        // For now, we just log or maybe set some "detected" values if they differ.
-        // Or better, we only show this button if we actually have data.
-        // Since I don't know the exact shape of `user` beyond `username` and `role`,
-        // I will implement it as a "Reset to Defaults / Standard Male" for demo,
-        // OR simply assume 75kg/180cm/25yr if the user clicks it to show interaction.
-        // BUT the requirement is "Use your data".
+        // Pull data from settings and health hooks
+        const latestWeight = getLatestWeight() || settings.weight || 80;
+        const userHeight = settings.height || 180;
+        const currentYear = new Date().getFullYear();
+        const userAge = settings.birthYear ? (currentYear - settings.birthYear) : 30;
+        const userGender = settings.gender === 'female' ? 'female' : 'male';
 
-        // Let's assume the user object has these fields for now, or just leave it as a manual input.
-        // However, I must add the button.
-
-        // Simulating data fetch
-        console.log("Fetching user data...");
-        // This is where we would set state from user profile
+        setWeight(latestWeight);
+        setHeight(userHeight);
+        setAge(userAge);
+        setGender(userGender);
+        
+        // Also set target weight to something reasonable if not set
+        if (targetWeight === 75 && weight === 80) {
+            setTargetWeight(Math.round(latestWeight - 5));
+        }
     };
 
     // Deficit State
@@ -69,7 +63,7 @@ export function ToolsHealthPage() {
             <div className="grid lg:grid-cols-3 gap-6">
                 {/* Input Column */}
                 <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 relative">
+                    <div className="bg-slate-900 border border-white/5 rounded-xl p-4 relative">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-bold text-white">Dina värden</h2>
                             <button
@@ -142,7 +136,7 @@ export function ToolsHealthPage() {
                         </div>
                     </div>
 
-                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
+                    <div className="bg-slate-900 border border-white/5 rounded-xl p-4">
                         <h2 className="text-xl font-bold text-white mb-6">Viktmål</h2>
                         <div className="space-y-4">
                              <div>
@@ -175,7 +169,7 @@ export function ToolsHealthPage() {
                         <ResultTile title="TDEE" value={tdee} unit="kcal" desc="Dagligt behov" color="text-amber-400" />
                     </div>
 
-                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-8">
+                    <div className="bg-slate-900 border border-white/5 rounded-xl p-4">
                         <h2 className="text-2xl font-bold text-white mb-2">För att nå ditt mål</h2>
                         <p className="text-slate-400 mb-8">
                             För att gå från <span className="text-white font-bold">{weight}kg</span> till <span className="text-white font-bold">{targetWeight}kg</span> på <span className="text-white font-bold">{weeks} veckor</span>.
@@ -222,7 +216,7 @@ export function ToolsHealthPage() {
 
 function ResultTile({ title, value, unit, desc, color }: { title: string, value: number, unit: string, desc: string, color: string }) {
     return (
-        <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 flex flex-col items-center text-center">
+        <div className="bg-slate-900 border border-white/5 rounded-xl p-4 flex flex-col items-center text-center">
             <div className="text-sm text-slate-500 font-bold uppercase tracking-wider mb-2">{title}</div>
             <div className={`text-4xl font-bold mb-1 ${color}`}>{value} <span className="text-lg text-slate-500 font-medium">{unit}</span></div>
             <div className="text-xs text-slate-400">{desc}</div>

@@ -492,7 +492,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
                 // 🚨 USER REQUEST: Prioritize Strava Name for merged activities
                 const stravaOrgId = u.mergeInfo.originalActivityIds?.find(id => id.startsWith('strava-') || id.startsWith('strava_') || !id.includes('-'));
-                const stravaActivityId = u.mergeInfo.stravaActivityId || stravaOrgId;
+                const stravaActivityId = (u.mergeInfo as any).stravaActivityId || stravaOrgId;
                 if (stravaActivityId) {
                     const stravaActivity = universalActivities.find(a => a.id === stravaActivityId || a.id === stravaActivityId.replace('strava-', '').replace('strava_', ''));
                     if (stravaActivity) {

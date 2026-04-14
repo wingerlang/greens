@@ -1,9 +1,9 @@
 import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts';
 import { getBestEffortsForActivity } from '../../utils/performanceEngine.ts';
-import { UniversalActivity } from '../../models/types.ts';
+import { UniversalActivity, ExerciseEntry } from '../../models/types.ts';
 
 interface IntervalSplitsCardProps {
-    activity: UniversalActivity;
+    activity: UniversalActivity | ExerciseEntry;
     segmented: SegmentedSplits;
     highlightRange?: { start: number; end: number };
 }
@@ -157,7 +157,7 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
     // Använd förberäknade snitt-tempon från segmenteringen (viktat snitt total tid / total distans)
     const { avgWarmupPace, avgCooldownPace } = summary;
 
-    const bestEfforts = getBestEffortsForActivity(activity);
+    const bestEfforts = getBestEffortsForActivity(activity as any);
 
     return (
         <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">

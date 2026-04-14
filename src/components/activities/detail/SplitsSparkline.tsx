@@ -1,12 +1,7 @@
 import React from 'react';
-import { ResponsiveContainer, AreaChart, defs, linearGradient, stop, XAxis, ReferenceArea, Tooltip, Area, YAxis } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
 
-interface SplitsSparklineProps {
-    splits: any[];
-    highlightRange?: { start: number; end: number };
-}
-
-const SplitsSparkline = React.memo(({ splits, highlightRange }: SplitsSparklineProps) => {
+export const SplitsSparkline = React.memo(({ splits, highlightRange }: { splits: any[], highlightRange?: { start: number; end: number } }) => {
     if (!splits || splits.length < 2) return null;
 
     const data = splits.map((s, i) => ({
@@ -26,22 +21,22 @@ const SplitsSparkline = React.memo(({ splits, highlightRange }: SplitsSparklineP
                 <AreaChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                     <defs>
                         <linearGradient id="colorPace" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#fb7185" stopOpacity={0.4}/>
-                            <stop offset="95%" stopColor="#fb7185" stopOpacity={0.01}/>
+                            <stop offset="5%" stopColor="#fb7185" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#fb7185" stopOpacity={0.01} />
                         </linearGradient>
                         <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.01}/>
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.01} />
                         </linearGradient>
                     </defs>
                     <XAxis dataKey="index" hide />
-                    
+
                     {highlightRange && (
-                        <ReferenceArea 
-                            x1={highlightRange.start + 1} 
-                            x2={highlightRange.end} 
-                            fill="#f59e0b" 
-                            fillOpacity={0.3} 
+                        <ReferenceArea
+                            x1={highlightRange.start + 1}
+                            x2={highlightRange.end}
+                            fill="#f59e0b"
+                            fillOpacity={0.3}
                         />
                     )}
 
@@ -53,34 +48,39 @@ const SplitsSparkline = React.memo(({ splits, highlightRange }: SplitsSparklineP
                             name === 'pace' ? 'Tempo' : 'Puls'
                         ]}
                     />
-                    
-                    <YAxis yId="left" hide domain={['auto', 'auto']} reversed />
-                    <YAxis yId="right" hide domain={[minHr, maxHr]} />
-                    
+
                     <Area
-                        yId="left"
                         type="monotone"
                         dataKey="pace"
+                        name="pace"
                         stroke="#fb7185"
                         strokeWidth={2}
                         fill="url(#colorPace)"
-                        animationDuration={500}
+                        yAxisId="pace"
+                        connectNulls
                     />
                     <Area
-                        yId="right"
                         type="monotone"
                         dataKey="hr"
+                        name="hr"
                         stroke="#6366f1"
-                        strokeWidth={2}
+                        strokeWidth={1.5}
                         fill="url(#colorHr)"
-                        animationDuration={500}
+                        yAxisId="hr"
+                        connectNulls
                     />
+                    <YAxis yAxisId="pace" hide domain={['auto', 'auto']} reversed />
+                    <YAxis yAxisId="hr" hide domain={[minHr, maxHr]} />
                 </AreaChart>
             </ResponsiveContainer>
+            <div className="flex justify-between px-2 text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1">
+                <span>Start</span>
+                <div className="flex gap-4">
+                    <span className="text-rose-400">Tempo</span>
+                    <span className="text-indigo-400">Puls</span>
+                </div>
+                <span>Mål</span>
+            </div>
         </div>
     );
 });
-
-SplitsSparkline.displayName = 'SplitsSparkline';
-
-export default SplitsSparkline;

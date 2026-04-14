@@ -143,9 +143,9 @@ export function segmentSplits(splits: KmSplit[], parsed?: ParsedWorkout, title?:
         if (split.role === 'interval') {
             if (!currentGroup || currentGroup.number !== split.intervalNumber!) {
                 if (currentGroup) intervalGroups.push(finalizeGroup(currentGroup));
-                currentGroup = { number: split.intervalNumber!, intervalSplits: [], recoverySplits: [] };
+                currentGroup = { number: split.intervalNumber!, intervalSplits: [], recoverySplits: [], avgPace: 0 };
             }
-            currentGroup.intervalSplits.push(split);
+            currentGroup!.intervalSplits.push(split);
         } else if (split.role === 'recovery' && currentGroup) {
             currentGroup.recoverySplits.push(split);
         }

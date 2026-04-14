@@ -219,7 +219,7 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         });
 
         trainingRuns.forEach(act => {
-            const pace = (act.durationMinutes * 60) / act.distance;
+            const pace = (act.durationMinutes * 60) / (act.distance || 1);
             if (pace < fastestPaceSecPerKm && pace > 120) {
                 fastestPaceSecPerKm = pace;
                 theFastestRun = act;
@@ -265,7 +265,24 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         }
 
         const avgPaceSecPerKm = totalRunCount > 0 ? (totalRunTimeMin * 60) / totalRunVolumeKm : 0;
-        const doubleDaysCount = Object.values(sessionsPerDay).filter(count => count > 1).length;
+        let doubleDaysCount = 0;
+        const runsPerDay: Record<string, number> = {};
+        windowActivities.forEach(act => {
+            const dateStr = act.date.substring(0, 10);
+            const isRunning = act.type.toLowerCase().includes('run') || act.type.toLowerCase().includes('löpning');
+            if (isRunning && !isWarmupOrCooldown(act)) {
+                runsPerDay[dateStr] = (runsPerDay[dateStr] || 0) + 1;
+            }
+        });
+
+        let doubleRunDaysCount = 0;
+        Object.values(runsPerDay).forEach(count => {
+            if (count > 1) doubleRunDaysCount++;
+        });
+
+        Object.values(sessionsPerDay).forEach(count => {
+            if (count > 1) doubleDaysCount++;
+        });
         const avgSessionsPerWeek = Object.keys(sessionsPerDay).length / timeframeWeeks;
         const restDays = totalDaysInPeriod - activeDays.size;
 
@@ -288,6 +305,16 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
         Object.entries(weeklyVolume).forEach(([k, v]) => {
             if (v === peakVolumeWeek) peakWeekName = k;
         });
+
+        // Find activities belonging to the peak week
+        const peakWeekWorkouts = windowActivities.filter(act => {
+            const actTimeMs = new Date(act.date).getTime();
+            const daysBeforeEvent = Math.floor((eventDate - actTimeMs) / (1000 * 60 * 60 * 24));
+            const weeksBeforeEvent = Math.floor(daysBeforeEvent / 7);
+            const weekKey = `Vecka -${weeksBeforeEvent + 1}`;
+            return weekKey === peakWeekName;
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
         const consistencyScore = (activeDays.size / totalDaysInPeriod) * 100;
         const qualityVol = qualitySessions.reduce((sum, s) => sum + (s.distance || 0), 0);
         const qualityRatio = totalRunVolumeKm > 0 ? (qualityVol / totalRunVolumeKm) * 100 : 0;
@@ -369,7 +396,9 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             totalRunCount,
             warmupCount,
             warmups,
-            totalRunVolumeKm
+            totalRunVolumeKm,
+            peakWeekWorkouts,
+            doubleRunDaysCount
         };
     }, [event, allActivities, timeframeWeeks, weightEntries, calculateDailyNutrition]);
 }
