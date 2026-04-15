@@ -591,7 +591,10 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                     dailyCarbsGoal: profile.carbs,
                                     dailyFatGoal: profile.fat,
                                     calorieMode: profile.calorieMode,
-                                    fixedCalorieBase: profile.fixedCalorieBase
+                                    fixedCalorieBase: profile.fixedCalorieBase,
+                                    exerciseCalorieMultiplier: profile.exerciseCalorieMultiplier,
+                                    macroMode: profile.macroMode,
+                                    proteinMultiplier: profile.proteinMultiplier
                                 });
                             }
                             setShowNutritionWizard(false);

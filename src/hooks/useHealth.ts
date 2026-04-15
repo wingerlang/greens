@@ -86,7 +86,8 @@ export function useHealth(date: string = getISODate()) {
         settings.dailyCalorieGoal,
         2000,
         settings.calorieMode || 'tdee',
-        dailyCaloriesBurned
+        dailyCaloriesBurned,
+        settings.exerciseCalorieMultiplier ?? 1.0
     );
 
     const netCalories = dailyCaloriesConsumed - dailyCaloriesBurned;

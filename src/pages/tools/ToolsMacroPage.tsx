@@ -48,7 +48,10 @@ export function ToolsMacroPage() {
                 dailyCarbsGoal: profile.carbs,
                 dailyFatGoal: profile.fat,
                 calorieMode: profile.calorieMode,
-                fixedCalorieBase: profile.fixedCalorieBase
+                fixedCalorieBase: profile.fixedCalorieBase,
+                exerciseCalorieMultiplier: profile.exerciseCalorieMultiplier,
+                macroMode: profile.macroMode,
+                proteinMultiplier: profile.proteinMultiplier
             });
             setCalories(profile.calories);
             setShowWizard(false);

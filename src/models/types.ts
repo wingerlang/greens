@@ -88,6 +88,9 @@ export interface UserSettings {
     // Calorie Mode: 'tdee' = TDEE-based, 'fixed' = fixed base + exercise calories
     calorieMode?: 'tdee' | 'fixed';
     fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'
+    exerciseCalorieMultiplier?: number; // Percentage of burned calories to eat back (0.0 to 1.0+)
+    macroMode?: 'percentage' | 'weight_multiplier';
+    proteinMultiplier?: number; // e.g. 2.0g per kg of bodyweight
     incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
     noccoOClockEnabled?: boolean;
     trainingPreferences?: {
@@ -265,6 +268,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     dailyProteinGoal: 150,
     dailyCarbsGoal: 50,
     dailyFatGoal: 30,
+    macroMode: 'percentage',
+    proteinMultiplier: 2.0,
+    exerciseCalorieMultiplier: 1.0,
     trainingGoal: 'neutral',
     weight: 80,
     dailySleepGoal: 8,

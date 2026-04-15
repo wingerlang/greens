@@ -13,6 +13,9 @@ interface NutritionProfile {
     fat: number;
     calorieMode: 'tdee' | 'fixed';
     fixedCalorieBase?: number;
+    exerciseCalorieMultiplier?: number;
+    macroMode?: 'percentage' | 'weight_multiplier';
+    proteinMultiplier?: number;
     targetWeight?: number;
     weeks?: number;
     dailyDeficit?: number;
@@ -68,9 +71,12 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
     // Step 3: Calorie Configuration
     const [calorieOverride, setCalorieOverride] = useState<number | null>(null);
     const [calorieMode, setCalorieMode] = useState<'tdee' | 'fixed'>(settings?.calorieMode || 'tdee');
+    const [exerciseCalorieMultiplier, setExerciseCalorieMultiplier] = useState<number>(settings?.exerciseCalorieMultiplier ?? 1.0);
 
     // Step 4: Macro Split
     const [dietType, setDietType] = useState('balanced');
+    const [macroMode, setMacroMode] = useState<'percentage' | 'weight_multiplier'>(settings?.macroMode || 'percentage');
+    const [proteinMultiplier, setProteinMultiplier] = useState<number>(settings?.proteinMultiplier ?? 2.0);
 
     // Diet Presets
     const diets: Record<string, { label: string, p: number, c: number, f: number, desc: string, icon: string, isWeightBased?: boolean }> = {
@@ -111,9 +117,10 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
     const currentDiet = diets[dietType];
 
     const macros = useMemo(() => {
-        if (currentDiet.isWeightBased) {
-            // Target 2.2g protein / kg
-            const proteinGrams = Math.round(weight * 2.2);
+        if (macroMode === 'weight_multiplier' || currentDiet.isWeightBased) {
+            // Use custom protein multiplier if in weight_multiplier mode, otherwise fallback to 2.2 for legacy 'muscle_optimized'
+            const activeProteinMultiplier = macroMode === 'weight_multiplier' ? proteinMultiplier : 2.2;
+            const proteinGrams = Math.round(weight * activeProteinMultiplier);
             const proteinCalories = proteinGrams * 4;
 
             // Aim for 0.8g fat / kg (healthy minimum/standard)
@@ -131,7 +138,7 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
             };
         }
         return calculateMacros(targetCalories, currentDiet);
-    }, [targetCalories, currentDiet, weight]);
+    }, [targetCalories, currentDiet, weight, macroMode, proteinMultiplier]);
 
     const handleSave = () => {
         setIsSaving(true);
@@ -142,6 +149,9 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
             fat: macros.fat,
             calorieMode: calorieMode,
             fixedCalorieBase: calorieMode === 'fixed' ? targetCalories : undefined,
+            exerciseCalorieMultiplier: calorieMode === 'fixed' ? exerciseCalorieMultiplier : undefined,
+            macroMode: macroMode,
+            proteinMultiplier: macroMode === 'weight_multiplier' ? proteinMultiplier : undefined,
             targetWeight: hasWeightGoal ? targetWeight : undefined,
             weeks: hasWeightGoal ? weeks : undefined,
             dailyDeficit: deficitResult?.dailyDeficit,
@@ -362,9 +372,26 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
                         </div>
 
                         {calorieMode === 'fixed' && (
-                            <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl text-blue-400 text-xs flex gap-3">
-                                <Flame size={20} className="shrink-0" />
-                                <p>Exempel: Om ditt mål är 1500 och du springer en runda som bränner 400 kcal, kommer ditt dagliga mål bli 1900 kcal.</p>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Hur mycket av träningen vill du äta tillbaka?</label>
+                                        <span className="text-xs font-bold text-blue-400">{Math.round(exerciseCalorieMultiplier * 100)}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={exerciseCalorieMultiplier}
+                                        onChange={(e) => setExerciseCalorieMultiplier(Number(e.target.value))}
+                                        className="w-full accent-blue-500"
+                                    />
+                                </div>
+                                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl text-blue-400 text-xs flex gap-3">
+                                    <Flame size={20} className="shrink-0" />
+                                    <p>Exempel: Om ditt mål är 1500 och du bränner 400 kcal. {exerciseCalorieMultiplier > 0 ? `Med ${Math.round(exerciseCalorieMultiplier * 100)}% kommer ditt mål bli ${1500 + Math.round(400 * exerciseCalorieMultiplier)} kcal.` : `Eftersom du angett 0% kommer ditt mål stanna på 1500 kcal.`}</p>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -374,26 +401,71 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
                 {step === 4 && (
                     <div className="space-y-6">
                         <div className="space-y-3">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Kostupplägg</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Kostupplägg Metod</label>
                             <div className="grid grid-cols-2 gap-2">
-                                {Object.entries(diets).map(([key, diet]) => (
-                                    <button
-                                        key={key}
-                                        onClick={() => setDietType(key)}
-                                        className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${dietType === key
-                                            ? 'bg-emerald-500/10 border-emerald-500/50 text-white'
-                                            : 'bg-slate-900 border-white/5 text-slate-500'
-                                            }`}
-                                    >
-                                        <span className="text-lg">{diet.icon}</span>
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-xs">{diet.label}</span>
-                                            <span className="text-[9px] opacity-70">P{diet.p} C{diet.c} F{diet.f}</span>
-                                        </div>
-                                    </button>
-                                ))}
+                                <button
+                                    onClick={() => setMacroMode('percentage')}
+                                    className={`p-3 rounded-xl border transition-all text-center ${macroMode === 'percentage'
+                                        ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                        : 'bg-slate-900 border-white/5 text-slate-500'
+                                    }`}
+                                >
+                                    <span className="font-bold text-xs">Procentuell fördelning</span>
+                                </button>
+                                <button
+                                    onClick={() => setMacroMode('weight_multiplier')}
+                                    className={`p-3 rounded-xl border transition-all text-center ${macroMode === 'weight_multiplier'
+                                        ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                                        : 'bg-slate-900 border-white/5 text-slate-500'
+                                    }`}
+                                >
+                                    <span className="font-bold text-xs">Baserat på kroppsvikt</span>
+                                </button>
                             </div>
                         </div>
+
+                        {macroMode === 'percentage' ? (
+                            <div className="space-y-3">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Välj Fördelning</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {Object.entries(diets).filter(([_, d]) => !d.isWeightBased).map(([key, diet]) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setDietType(key)}
+                                            className={`p-3 rounded-xl border transition-all text-left flex items-center gap-2 ${dietType === key
+                                                ? 'bg-emerald-500/10 border-emerald-500/50 text-white'
+                                                : 'bg-slate-900 border-white/5 text-slate-500'
+                                                }`}
+                                        >
+                                            <span className="text-lg">{diet.icon}</span>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-xs">{diet.label}</span>
+                                                <span className="text-[9px] opacity-70">P{diet.p} C{diet.c} F{diet.f}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-slate-900 border border-white/5 rounded-2xl space-y-4">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Proteinmål (g / kg kroppsvikt)</label>
+                                <div className="flex items-center gap-4">
+                                    <input
+                                        type="range"
+                                        min="1.0"
+                                        max="3.0"
+                                        step="0.1"
+                                        value={proteinMultiplier}
+                                        onChange={(e) => setProteinMultiplier(Number(e.target.value))}
+                                        className="w-full accent-emerald-500"
+                                    />
+                                    <span className="text-xl font-black text-emerald-400 w-16 text-right">{proteinMultiplier.toFixed(1)}x</span>
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    Fett beräknas till 0.8g/kg och resterande kalorier läggs på kolhydrater. Justeras automatiskt när din vikt ändras.
+                                </div>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-3 gap-3">
                             <SmallMacroBox label="Protein" value={macros.protein} unit="g" color="text-emerald-400" bg="bg-emerald-500/10" />
@@ -401,22 +473,24 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
                             <SmallMacroBox label="Fett" value={macros.fat} unit="g" color="text-rose-400" bg="bg-rose-500/10" />
                         </div>
 
-                        <div className="p-4 bg-slate-900 rounded-2xl border border-white/5 space-y-4">
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="font-bold text-white">Sammanfattning</span>
-                                <span className="text-slate-500">{targetCalories} kcal</span>
+                        {macroMode === 'percentage' && (
+                            <div className="p-4 bg-slate-900 rounded-2xl border border-white/5 space-y-4">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-white">Sammanfattning</span>
+                                    <span className="text-slate-500">{targetCalories} kcal</span>
+                                </div>
+                                <div className="flex h-3 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500" style={{ width: `${currentDiet.p}%` }} />
+                                    <div className="h-full bg-blue-500" style={{ width: `${currentDiet.c}%` }} />
+                                    <div className="h-full bg-rose-500" style={{ width: `${currentDiet.f}%` }} />
+                                </div>
+                                <div className="flex justify-between text-[9px] font-bold text-slate-500">
+                                    <span>{currentDiet.p}% P</span>
+                                    <span>{currentDiet.c}% C</span>
+                                    <span>{currentDiet.f}% F</span>
+                                </div>
                             </div>
-                            <div className="flex h-3 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500" style={{ width: `${currentDiet.p}%` }} />
-                                <div className="h-full bg-blue-500" style={{ width: `${currentDiet.c}%` }} />
-                                <div className="h-full bg-rose-500" style={{ width: `${currentDiet.f}%` }} />
-                            </div>
-                            <div className="flex justify-between text-[9px] font-bold text-slate-500">
-                                <span>{currentDiet.p}% P</span>
-                                <span>{currentDiet.c}% C</span>
-                                <span>{currentDiet.f}% F</span>
-                            </div>
-                        </div>
+                        )}
 
                         <button
                             onClick={handleSave}

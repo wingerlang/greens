@@ -32,6 +32,7 @@ export interface CalorieTargetResult {
  * @param defaultCalories - Fallback value (default: 2000)
  * @param calorieMode - 'tdee' or 'fixed'
  * @param burnedCalories - Calories burned from exercise for the day
+ * @param exerciseCalorieMultiplier - Percentage of burned calories to add back in 'fixed' mode (default: 1.0)
  */
 export function getActiveCalorieTarget(
     date: string,
@@ -40,7 +41,8 @@ export function getActiveCalorieTarget(
     settingsCalorieGoal?: number,
     defaultCalories: number = 2000,
     calorieMode: 'tdee' | 'fixed' = 'tdee',
-    burnedCalories: number = 0
+    burnedCalories: number = 0,
+    exerciseCalorieMultiplier: number = 1.0
 ): CalorieTargetResult {
 
     // Step 1: Find active training period for the date
@@ -149,7 +151,7 @@ export function getActiveCalorieTarget(
     // If 'fixed', we add burned base + burned.
     // If 'tdee', the base is assumed to already include average activity.
     const finalCalories = calorieMode === 'fixed'
-        ? baseCalories + burnedCalories
+        ? baseCalories + (burnedCalories * exerciseCalorieMultiplier)
         : baseCalories;
 
     return {
@@ -173,7 +175,8 @@ export function getActiveCalories(
     settingsCalorieGoal?: number,
     defaultCalories: number = 2000,
     calorieMode: 'tdee' | 'fixed' = 'tdee',
-    burnedCalories: number = 0
+    burnedCalories: number = 0,
+    exerciseCalorieMultiplier: number = 1.0
 ): number {
     return getActiveCalorieTarget(
         date,
@@ -182,7 +185,8 @@ export function getActiveCalories(
         settingsCalorieGoal,
         defaultCalories,
         calorieMode,
-        burnedCalories
+        burnedCalories,
+        exerciseCalorieMultiplier
     ).calories;
 }
 
