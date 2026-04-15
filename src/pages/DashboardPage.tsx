@@ -504,21 +504,21 @@ export function DashboardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative overflow-x-hidden">
+        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-2 md:p-8 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative overflow-x-hidden">
             {isHoveringChart && (
                 <div className="fixed inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm z-[50] transition-all duration-500 pointer-events-none" />
             )}
 
             {/* Sticky Date Header */}
             <div className={`fixed top-12 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all`}>
-                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4 py-2">
+                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4">
                     <button onClick={() => changeDate(-1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft size={18} /></button>
                     <div onClick={() => setSelectedDate(today)} className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${selectedDate !== today ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700' : 'text-slate-900 dark:text-white'}`}>{selectedDate === today ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}{selectedDate !== today && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}</div>
                     <button onClick={() => changeDate(1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronRight size={18} /></button>
                 </div>
             </div>
 
-            <div className="w-full max-w-5xl mx-auto pt-2">
+            <div className="w-full max-w-5xl mx-auto">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-6 md:mb-10'} flex flex-col md:flex-row justify-between items-center gap-4`}>
                     <div className="flex flex-col gap-1 items-center md:items-start w-full md:w-auto">
                         <div className="flex items-center gap-4">
@@ -542,7 +542,7 @@ export function DashboardPage() {
 
                 <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
                     {/* Top Section: Daily Summary & Active Goals */}
-                    <div className="md:col-span-12 flex flex-col gap-4 mb-4">
+                    <div className="md:col-span-12 flex flex-col gap-4">
                         <div className="md:col-span-12 mt-2 mb-4">
                             <WeeklySummary selectedDate={selectedDate} activities={unifiedActivities} history={unifiedHistory} />
                         </div>

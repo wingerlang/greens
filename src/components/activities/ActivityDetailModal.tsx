@@ -606,21 +606,7 @@ export function ActivityDetailModal({
 
     const isRace = React.useMemo(() => isCompetition(activity), [activity]);
 
-    const raceHighscores = React.useMemo(() => {
-        if (!isRace) return [];
-        const normTitle = normalizeRaceTitle(displayTitle);
-        if (!normTitle) return [];
 
-        return allActivities
-            .filter(a => {
-                if (a.id === activity.id) return false;
-                if (!isCompetition(a)) return false;
-                const aTitle = a.title || a.notes || (a as any).name || '';
-                return normalizeRaceTitle(aTitle) === normTitle;
-            })
-            .sort((a, b) => a.durationMinutes - b.durationMinutes)
-            .slice(0, 5);
-    }, [isRace, displayTitle, allActivities, activity.id]);
 
 
     const [isFetchingSplits, setIsFetchingSplits] = useState(false);
@@ -2774,67 +2760,14 @@ export function ActivityDetailModal({
                         {activeTab === 'compare' && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* RACE HIGHSCORES SECTION */}
-                                {isRace && raceHighscores.length > 0 && (
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                                                <Trophy size={16} /> Historiska resultat i {normalizeRaceTitle(displayTitle)}
-                                            </h3>
-                                            <span className="text-[10px] text-slate-500 uppercase font-mono">Din personliga topplista</span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {raceHighscores.slice(0, 3).map((a, idx) => {
-                                                const aPaceSec = a.distance ? (a.durationMinutes * 60 / a.distance) : 0;
-                                                const isFaster = a.durationMinutes < activity.durationMinutes;
-                                                const timeDiff = Math.abs(a.durationMinutes - activity.durationMinutes);
-
-                                                return (
-                                                    <div key={a.id} className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800/60 transition-all group">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black ${idx === 0 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                                            idx === 1 ? 'bg-slate-300/20 text-slate-300 border border-white/20' :
-                                                                'bg-orange-700/20 text-orange-400 border border-orange-700/30'
-                                                            }`}>
-                                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                                                        </div>
-
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-0.5">
-                                                                <span className="text-white font-black">{formatSwedishDate(a.date)}</span>
-                                                                <span className="text-[10px] text-slate-500 uppercase font-mono">{a.distance} km</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="text-xl font-black text-indigo-300 font-mono">
-                                                                    {formatDuration(a.durationMinutes * 60)}
-                                                                </div>
-                                                                <div className="text-xs text-slate-500 font-mono italic">
-                                                                    {aPaceSec ? formatPace(aPaceSec) : '-'}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="text-right shrink-0">
-                                                            <div className={`text-xs font-black uppercase flex items-center gap-1 justify-end ${isFaster ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                                {isFaster ? '-' : '+'} {formatDuration(timeDiff * 60)}
-                                                            </div>
-                                                            <div className="text-[9px] text-slate-600 uppercase font-bold mt-1">
-                                                                {isFaster ? 'Snabbare än idag' : 'Långsammare'}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {raceHighscores.length > 3 && (
-                                            <div className="flex justify-center">
-                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-4 py-1.5 bg-white/5 rounded-full">
-                                                    + {raceHighscores.length - 3} fler lopp i serien
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                {isRace && currentUniversal && (
+                                    <RaceHistoryCard
+                                        currentActivity={currentUniversal}
+                                        allActivities={universalActivities}
+                                        onSelectActivity={onSelectActivity}
+                                    />
                                 )}
+
 
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
