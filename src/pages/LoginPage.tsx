@@ -72,6 +72,30 @@ export function LoginPage() {
                 <div className="mt-6 text-center text-sm text-slate-500 font-medium">
                     Inget konto? <Link to="/register" className="text-emerald-400 hover:text-emerald-300">Skapa ett konto</Link>
                 </div>
+
+                {import.meta.env.DEV && (
+                    <div className="mt-4 pt-4 border-t border-slate-700">
+                        <button
+                            id="dev-login-btn"
+                            type="button"
+                            onClick={async () => {
+                                setIsSubmitting(true);
+                                try {
+                                    await login('admin', 'admin');
+                                    navigate('/');
+                                } catch (e) {
+                                    console.error(e);
+                                } finally {
+                                    setIsSubmitting(false);
+                                }
+                            }}
+                            disabled={isSubmitting}
+                            className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 text-sm"
+                        >
+                            Dev Login (Agent/Admin)
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
