@@ -5,7 +5,7 @@ import { NutritionLabel } from '../../shared/NutritionLabel.tsx';
 import { getCategoryEmoji, canLogAsCooked } from '../OmniboxConstants.ts';
 
 interface LockedFoodModuleProps {
-    lockedFood: FoodItem & { usageStats?: { count: number; avgGrams: number; lastUsed: string } };
+    lockedFood: FoodItem & { usageStats?: { count: number; avgGrams: number; lastUsed: string; frequentGrams?: number } };
     draftFoodQuantity: number | null;
     draftFoodMealType: MealType | null;
     draftFoodDate: string | null;
@@ -108,7 +108,7 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
                             value={draftFoodQuantity || ''}
                             onChange={(e) => setDraftFoodQuantity(parseFloat(e.target.value) || 0)}
                             className="w-full text-2xl font-black bg-transparent border-b-2 border-slate-600 focus:border-emerald-500 outline-none text-white"
-                            placeholder={String(lockedFood.usageStats?.avgGrams || 100)}
+                            placeholder={String(lockedFood.usageStats?.frequentGrams || lockedFood.usageStats?.avgGrams || 100)}
                         />
                         <span className="text-sm font-bold text-slate-400">g</span>
                     </div>
@@ -126,6 +126,7 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
                         <option value="breakfast">🌅 Frukost</option>
                         <option value="lunch">☀️ Lunch</option>
                         <option value="dinner">🌙 Middag</option>
+                        <option value="evening_meal">🍵 Kvällsmål</option>
                         <option value="snack">🍎 Mellanmål</option>
                         <option value="beverage">🥤 Dryck</option>
                     </select>

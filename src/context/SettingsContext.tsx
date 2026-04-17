@@ -49,20 +49,29 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     const { currentUser, updateCurrentUser } = useData();
     const [settings, setSettings] = useState<UserSettings>(() => currentUser?.settings || loadSettings());
 
-    // Sync from currentUser
+    // Sync from currentUser (when currentUser object changes, e.g. after refreshData)
     useEffect(() => {
         if (currentUser?.settings) {
-            setSettings(currentUser.settings);
+            // Check if settings are actually different before updating state
+            // Use JSON stringification for a deep value comparison
+            if (JSON.stringify(settings) !== JSON.stringify(currentUser.settings)) {
+                console.log('[SettingsContext] Refreshing settings from currentUser');
+                setSettings(currentUser.settings);
+            }
         }
-    }, [currentUser?.id]);
+    }, [currentUser]); // Depend on the whole user object to catch refreshes
 
     // Apply theme to document
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', settings.theme);
     }, [settings.theme]);
 
-    // Push to currentUser (Data Context) on change
+    // Push to currentUser (Data Context) AND local storage on change
     useEffect(() => {
+        // 1. Sync to local storage for instant hydration on next load
+        saveSettings(settings);
+
+        // 2. Sync to cloud (via currentUser)
         if (currentUser) {
             // Only update if settings actually changed from what's in currentUser
             if (JSON.stringify(currentUser.settings) !== JSON.stringify(settings)) {

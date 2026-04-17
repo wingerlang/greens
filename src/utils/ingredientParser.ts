@@ -47,7 +47,8 @@ export interface RecipeEstimate {
     price: number;
     co2: number;
     matchedCount: number;
-    totalWeight: number; // in grams
+    totalWeight: number; // in grams (cooked if loss applied)
+    rawWeight: number;   // in grams
     totalCount: number;
     proteinCategories: string[]; // e.g. ['legume', 'grain']
     isCompleteProtein: boolean;
@@ -247,7 +248,8 @@ export function calculateRecipeEstimate(
     foodItems: FoodItem[],
     swaps?: Record<string, string>,
     instructionsText?: string,
-    recipeName?: string
+    recipeName?: string,
+    cookingLoss?: number
 ): RecipeEstimate {
     const parsed = parseIngredients(ingredientsText);
     const matchedIngredients: MatchedIngredient[] = [];
@@ -444,7 +446,8 @@ export function calculateRecipeEstimate(
         co2: Math.round(totalCo2 * 100) / 100,
         matchedCount,
         totalCount: parsed.length,
-        totalWeight: Math.round(totalWeight),
+        rawWeight: Math.round(totalWeight),
+        totalWeight: Math.round(totalWeight * (1 - (cookingLoss || 0) / 100)),
         proteinCategories: categories,
         isCompleteProtein: isComplete,
         tags,

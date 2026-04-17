@@ -62,7 +62,7 @@ export function useAllGoalsProgress(): Map<string, GoalProgress> {
     return useMemo(() => {
         const progressMap = new Map<string, GoalProgress>();
 
-        performanceGoals.forEach(goal => {
+        (performanceGoals || []).forEach(goal => {
             // Use unifiedActivities which includes merged strength sessions
             const progress = calculateGoalProgress(
                 goal,
@@ -95,7 +95,7 @@ export function useGoalsByCategory() {
             lifestyle: [] as { goal: PerformanceGoal; progress: GoalProgress }[]
         };
 
-        performanceGoals.forEach(goal => {
+        (performanceGoals || []).forEach(goal => {
             const progress = progressMap.get(goal.id);
             if (!progress) return;
 
@@ -135,7 +135,7 @@ export function useCompletedGoals() {
     const { performanceGoals = [] } = useData();
 
     return useMemo(() => {
-        return performanceGoals.filter(goal => goal.status === 'completed');
+        return (performanceGoals || []).filter(goal => goal.status === 'completed');
     }, [performanceGoals]);
 }
 
@@ -146,7 +146,7 @@ export function useArchivedGoals() {
     const { performanceGoals = [] } = useData();
 
     return useMemo(() => {
-        return performanceGoals.filter(goal =>
+        return (performanceGoals || []).filter(goal =>
             goal.status === 'completed' ||
             goal.status === 'cancelled' ||
             goal.status === 'failed'

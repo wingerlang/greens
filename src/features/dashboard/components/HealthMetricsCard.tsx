@@ -38,6 +38,8 @@ interface HealthMetricsCardProps {
     unifiedHistory: any[];
     onOpenWeightModal: (data: { weight?: number, waist?: number, chest?: number, date?: string }) => void;
     onDeleteEntry?: (data: { weightEntryId?: string, waistId?: string, chestId?: string }) => void;
+    performanceGoals?: any[];
+    trainingPeriods?: any[];
 }
 
 export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
@@ -52,7 +54,9 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
     weightTrendEntries,
     unifiedHistory,
     onOpenWeightModal,
-    onDeleteEntry
+    onDeleteEntry,
+    performanceGoals = [],
+    trainingPeriods = []
 }) => {
     const [showAllHistory, setShowAllHistory] = useState(false);
     const { settings, updateSettings } = useSettings();
@@ -191,6 +195,8 @@ export const HealthMetricsCard: React.FC<HealthMetricsCardProps> = ({
                                 currentWeight={latestWeightVal || 0}
                                 hideHeader={true}
                                 hiddenMetrics={hiddenMetrics}
+                                trainingPeriods={trainingPeriods}
+                                performanceGoals={performanceGoals}
                                 onToggleMetric={handleToggleMetric}
                                 onEntryClick={(entry) => {
                                     onOpenWeightModal({

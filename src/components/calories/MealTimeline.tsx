@@ -377,6 +377,7 @@ export function MealTimeline({
                                     {mealTypeKey === 'breakfast' && '🌅'}
                                     {mealTypeKey === 'lunch' && '☀️'}
                                     {mealTypeKey === 'dinner' && '🌙'}
+                                    {mealTypeKey === 'evening_meal' && '🌌'}
                                     {mealTypeKey === 'snack' && '🍎'}
                                     {mealTypeKey === 'beverage' && '🥤'}
                                     {mealTypeKey === 'estimate' && '🤷'}

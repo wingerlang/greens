@@ -102,32 +102,40 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
         return { type: 'navigate', data: { path }, date };
     }
 
-    // 3. Exercise Check (PRIORITY OVER WEIGHT if explicit exercise keywords exist)
-    // This fixes "Styrka 200kg" being interpreted as weight update
-    const exerciseIntents = parseExercise(lower);
-    if (exerciseIntents) return { ...exerciseIntents, date };
+    // 3. Check for specific prefix logic
+    const forceExercise = lower.startsWith('>');
+    const cleanLower = forceExercise ? lower.substring(1).trim() : lower;
 
-    // 4. Weight Check
-    // Matches "vikt 80kg", "80kg", "80 kg", but NOT if context implies exercise (handled above)
+    if (forceExercise) {
+        const exerciseIntents = parseExercise(cleanLower);
+        if (exerciseIntents) return { ...exerciseIntents, date };
+    }
+
+    // 4. Weight Check (Keep high to prevent "80kg" from becoming food)
     const weightMatch = lower.match(/(?:vikt\s*[:\s]*|)(\d+(?:[.,]\d+)?)\s*(?:kg|kilo)?$/);
     if (weightMatch && (lower.startsWith('vikt') || lower.endsWith('kg') || lower.endsWith('kilo'))) {
         const weight = parseFloat(weightMatch[1].replace(',', '.'));
-        // Sanity check for weight
         if (!isNaN(weight) && weight > 20 && weight < 500) {
             return { type: 'weight', data: { weight }, date };
         }
     }
 
     // 4.5 Measurement Check
-    const measurementIntent = parseMeasurements(lower);
+    const measurementIntent = parseMeasurements(cleanLower);
     if (measurementIntent) return { ...measurementIntent, date };
 
-    // 5. Food/Meal Check
-    const foodIntents = parseFood(lower);
+    // 5. Food/Meal Check (HIGHER PRIORITY)
+    const foodIntents = parseFood(cleanLower);
     if (foodIntents) return { ...foodIntents, date };
 
-    // 6. Default to Search
-    return { type: 'search', data: { query: input }, date };
+    // 6. Exercise Check (LOWER PRIORITY)
+    if (!forceExercise) {
+        const exerciseIntents = parseExercise(cleanLower);
+        if (exerciseIntents) return { ...exerciseIntents, date };
+    }
+
+    // 7. Default to Search
+    return { type: 'search', data: { query: cleanLower }, date };
 }
 
 function parsePurchase(input: string): OmniboxIntent | null {
@@ -632,6 +640,7 @@ function parseFood(input: string): OmniboxIntent | null {
         'frukost': 'breakfast', 'fruk': 'breakfast',
         'lunch': 'lunch', 'lun': 'lunch',
         'middag': 'dinner', 'midda': 'dinner', 'kvällsmat': 'dinner',
+        'kvällsmål': 'evening_meal',
         'mellanmål': 'snack', 'mellis': 'snack', 'mellan': 'snack', 'snack': 'snack',
         'dryck': 'beverage', 'drick': 'beverage'
     };
@@ -758,6 +767,7 @@ function parseFood(input: string): OmniboxIntent | null {
         if (hour >= 5 && hour < 10) mealType = 'breakfast';
         else if (hour >= 10 && hour < 14) mealType = 'lunch';
         else if (hour >= 17 && hour < 21) mealType = 'dinner';
+        else if (hour >= 21) mealType = 'evening_meal';
         else mealType = 'snack';
     }
 

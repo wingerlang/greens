@@ -13,6 +13,7 @@ export interface CalorieTargetResult {
     goalId?: string;
     periodId?: string;
     goalName?: string;
+    explanation?: string;
 }
 
 /**
@@ -154,12 +155,41 @@ export function getActiveCalorieTarget(
         ? baseCalories + (burnedCalories * exerciseCalorieMultiplier)
         : baseCalories;
 
+    // Build the explanation
+    let explanation = '';
+    const multiplierPct = Math.round(exerciseCalorieMultiplier * 100);
+
+    if (source === 'period_goal') {
+        explanation = `Aktiverat av målet "${goalName}". `;
+    } else if (source === 'period_direct') {
+        explanation = `Styrs av din nuvarande träningsperiod. `;
+    } else if (source === 'settings') {
+        explanation = `Baserat på dina inställningar (${settingsCalorieGoal} kcal). `;
+    } else {
+        explanation = `Förinställt standardvärde. `;
+    }
+
+    if (calorieMode === 'fixed') {
+        if (multiplierPct > 100) {
+            explanation += `Inkluderar överskott: ${multiplierPct}% av förbränning läggs till.`;
+        } else if (multiplierPct === 100) {
+            explanation += `Dynamiskt: All förbränning från träning läggs till.`;
+        } else if (multiplierPct > 0) {
+            explanation += `Dynamiskt: ${multiplierPct}% av förbränning från träning läggs till.`;
+        } else {
+            explanation += `Fast mål: Förbränning från träning räknas ej in.`;
+        }
+    } else {
+        explanation += `TDEE-läge: Förbränning antas ingå i ditt basmål.`;
+    }
+
     return {
         calories: Math.round(finalCalories),
         source,
         goalId,
         periodId,
-        goalName
+        goalName,
+        explanation
     };
 }
 

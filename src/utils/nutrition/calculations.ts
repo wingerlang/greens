@@ -99,11 +99,13 @@ export function calculateRecipeNutrition(
             vitaminC: estimate.vitaminC,
             vitaminA: estimate.vitaminA,
             proteinCategories: estimate.proteinCategories,
+            totalWeight: estimate.totalWeight,
+            rawWeight: estimate.rawWeight
         };
     }
 
     const summary: NutritionSummary = {
-        calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0
+        calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, totalWeight: 0
     };
 
     for (const ingredient of recipe.ingredients) {
@@ -115,6 +117,7 @@ export function calculateRecipeNutrition(
             summary.carbs += foodItem.carbs * multiplier;
             summary.fat += foodItem.fat * multiplier;
             summary.fiber += (foodItem.fiber || 0) * multiplier;
+            summary.totalWeight = (summary.totalWeight || 0) + ingredient.quantity;
 
             // Micronutrients
             summary.iron = (summary.iron || 0) + (foodItem.iron || 0) * multiplier;
@@ -145,7 +148,8 @@ export function calculateRecipeNutrition(
         vitaminB12: summary.vitaminB12,
         vitaminC: summary.vitaminC,
         vitaminA: summary.vitaminA,
-        proteinCategories: summary.proteinCategories
+        proteinCategories: summary.proteinCategories,
+        totalWeight: summary.totalWeight
     };
 }
 

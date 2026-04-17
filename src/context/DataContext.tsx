@@ -394,7 +394,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 weeklyPlans,
                 pantryItems,
                 pantryQuantities,
-                userSettings,
+                userSettings: currentUser?.settings || userSettings,
                 users,
                 currentUserId: currentUser?.id,
                 dailyVitals,
@@ -421,7 +421,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 raceIgnoreRules,
                 tours,
                 purchaseLogs
-            }, { skipApi: true });
+            }, { skipApi: shouldSkipApi });
         }
     }, [
         foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities,

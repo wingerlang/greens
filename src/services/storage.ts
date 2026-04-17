@@ -271,13 +271,49 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
+                // OPTIMIZATION: Create a 'lite' version of data to sync
+                // Large historical arrays are handled via granular APIs and reassembled by the server on GET.
+                // Sending them here causes 'Payload too large' (400) errors and server timeouts.
+                const {
+                    mealEntries,
+                    universalActivities,
+                    exerciseEntries,
+                    weightEntries,
+                    strengthSessions,
+                    performanceGoals,
+                    weeklyPlans,
+                    quickMeals,
+                    recipes,
+                    foodItems,
+                    bodyMeasurements,
+                    trainingPeriods,
+                    plannedActivities,
+                    purchaseLogs,
+                    tours,
+                    raceDefinitions,
+                    raceIgnoreRules,
+                    intakeLogs,
+                    dailyVitals,
+                    databaseActions,
+                    exercises,
+                    sleepSessions,
+                    injuryLogs,
+                    recoveryMetrics,
+                    competitions,
+                    trainingCycles,
+                    racePlans,
+                    users,           // Exclude from cloud sync blob (handled by auth/users API)
+                    currentUserId,   // Exclude from cloud sync blob
+                    ...liteData
+                } = data;
+
                 const res = await fetch('/api/data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(liteData)
                 });
 
                 if (res.ok) {

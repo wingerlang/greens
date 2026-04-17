@@ -149,7 +149,7 @@ export function NutritionWizard({ onSave, onCancel, initialWeight, initialTarget
             fat: macros.fat,
             calorieMode: calorieMode,
             fixedCalorieBase: calorieMode === 'fixed' ? targetCalories : undefined,
-            exerciseCalorieMultiplier: calorieMode === 'fixed' ? exerciseCalorieMultiplier : undefined,
+            exerciseCalorieMultiplier: exerciseCalorieMultiplier,
             macroMode: macroMode,
             proteinMultiplier: macroMode === 'weight_multiplier' ? proteinMultiplier : undefined,
             targetWeight: hasWeightGoal ? targetWeight : undefined,

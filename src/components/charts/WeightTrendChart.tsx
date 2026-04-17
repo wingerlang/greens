@@ -8,8 +8,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
+    ReferenceArea,
 } from 'recharts';
-import { WeightEntry } from '../../models/types.ts';
+import { WeightEntry, PerformanceGoal, TrainingPeriod } from '../../models/types.ts';
+import { calculateMovingAverage, calculateTimeMovingAverage } from '../../utils/mathUtils.ts';
 
 interface WeightTrendChartProps {
     entries: WeightEntry[];
@@ -131,9 +133,20 @@ interface WeightTrendChartProps {
     hideHeader?: boolean;
     hiddenMetrics?: string[];
     onToggleMetric?: (metric: string) => void;
+    trainingPeriods?: TrainingPeriod[];
+    performanceGoals?: PerformanceGoal[];
 }
 
-export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHeader = false, hiddenMetrics, onToggleMetric }: WeightTrendChartProps) {
+export function WeightTrendChart({ 
+    entries, 
+    currentWeight, 
+    onEntryClick, 
+    hideHeader = false, 
+    hiddenMetrics, 
+    onToggleMetric,
+    trainingPeriods = [],
+    performanceGoals = []
+}: WeightTrendChartProps) {
     // 1. Process entries: Sort and Unique by Date (taking the latest entry for a day if multiple)
     const sortedUniqueEntries = useMemo(() => {
         const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -152,13 +165,34 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
         return sortedUniqueEntries.some(e => e.waist || e.chest);
     }, [sortedUniqueEntries]);
 
+    // Calculate Moving Averages
+    const ma7Day = useMemo(() => {
+        return calculateTimeMovingAverage(sortedUniqueEntries, e => e.weight, 7);
+    }, [sortedUniqueEntries]);
+
+    const ma7Measure = useMemo(() => {
+        return calculateMovingAverage(sortedUniqueEntries.map(e => e.weight), 7);
+    }, [sortedUniqueEntries]);
+
+    // Calculate training periods to highlight
+    const highlightPeriods = useMemo(() => {
+        if (!trainingPeriods.length) return [];
+        
+        // Find periods that have an associated weight goal
+        return trainingPeriods.filter(tp => {
+            return performanceGoals.some(pg => pg.type === 'weight' && pg.periodId === tp.id);
+        });
+    }, [trainingPeriods, performanceGoals]);
+
     // 2. Prepare Chart Data
     const chartData = useMemo(() => {
         return sortedUniqueEntries.map((e, idx) => {
             const hasWeight = e.weight > 0;
             const point: any = {
                 ...e,
-                displayDate: e.date.slice(5),
+                ma7d: ma7Day[idx],
+                ma7m: ma7Measure[idx],
+                displayDate: new Date(e.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }),
                 weight: hasWeight ? Number(e.weight) : null,
                 waist: e.waist ? Number(e.waist) : null,
                 chest: e.chest ? Number(e.chest) : null,
@@ -174,7 +208,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
             });
             return point;
         });
-    }, [sortedUniqueEntries, trendSegments]);
+    }, [sortedUniqueEntries, trendSegments, ma7Day, ma7Measure]);
 
     if (sortedUniqueEntries.length < 2) {
         return (
@@ -290,6 +324,25 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                             vertical={false}
                         />
 
+                        {/* Training Period Highlights */}
+                        {highlightPeriods.map(p => (
+                            <ReferenceArea 
+                                key={p.id}
+                                x1={new Date(p.startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                                x2={new Date(p.endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                                fill="rgba(16, 185, 129, 0.05)"
+                                stroke="rgba(16, 185, 129, 0.1)"
+                                strokeDasharray="3 3"
+                                label={{ 
+                                    position: 'top', 
+                                    value: p.focusType === 'weight_loss' ? '🔥 Deff' : '🎯 Mål', 
+                                    fill: 'rgba(16, 185, 129, 0.4)', 
+                                    fontSize: 8,
+                                    fontWeight: 'bold'
+                                }}
+                            />
+                        ))}
+
                         <XAxis
                             dataKey="date"
                             tickFormatter={(date) => {
@@ -350,6 +403,16 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                                              )}
                                             <div className="text-[10px] text-slate-400 mt-1">
                                                 {data.date}
+                                                {data.ma7d && (
+                                                    <div className="mt-1 text-emerald-400 font-bold">
+                                                        7-dag snitt: {data.ma7d.toFixed(1)} kg
+                                                    </div>
+                                                )}
+                                                {data.ma7m && (
+                                                    <div className="text-amber-400 font-bold">
+                                                        7-mät snitt: {data.ma7m.toFixed(1)} kg
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -401,6 +464,30 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                             dot={false}
                             activeDot={{ r: 5, fill: TREND_COLORS.stable }}
                             isAnimationActive={false}
+                        />
+
+                        {/* Moving Averages */}
+                        <Line 
+                            yAxisId="weight"
+                            type="monotone" 
+                            dataKey="ma7d" 
+                            stroke="#10b981" 
+                            strokeWidth={1.5}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name="7-dagar snitt"
+                            connectNulls={true}
+                        />
+                        <Line 
+                            yAxisId="weight"
+                            type="monotone" 
+                            dataKey="ma7m" 
+                            stroke="#f59e0b" 
+                            strokeWidth={1.5}
+                            strokeDasharray="2 2"
+                            dot={false}
+                            name="7-mätningar snitt"
+                            connectNulls={true}
                         />
 
                         {/* Measurement Lines (Right Axis) - Always render, they'll just be empty if no data */}

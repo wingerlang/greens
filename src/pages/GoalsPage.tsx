@@ -341,10 +341,12 @@ export function GoalsPage() {
         const periodMap = new Map<string, typeof filteredGoals>();
         const loose: typeof filteredGoals = [];
 
+        if (!filteredGoals || !Array.isArray(filteredGoals)) return { periodGoals: [], looseGoals: [] };
+
         filteredGoals.forEach(item => {
             // Check if goal has a period ID AND that period actually exists
             const pid = item.goal.periodId;
-            const periodExists = pid && trainingPeriods.some(p => p.id === pid);
+            const periodExists = pid && (trainingPeriods || []).some(p => p.id === pid);
 
             if (periodExists && pid) {
                 if (!periodMap.has(pid)) periodMap.set(pid, []);

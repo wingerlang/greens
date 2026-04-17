@@ -405,20 +405,28 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
-        const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number }> = {};
+        const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number; frequentGrams: number; _counts: Record<number, number> }> = {};
 
         mealEntries.forEach(entry => {
             entry.items.forEach(item => {
                 if (item.type === 'foodItem') {
-                    const grams = item.servings || 100; // servings is grams in this app
+                    const grams = Math.round(item.servings || 100);
                     if (!stats[item.referenceId]) {
-                        stats[item.referenceId] = { count: 0, lastUsed: entry.date, totalGrams: 0, avgGrams: 100 };
+                        stats[item.referenceId] = { count: 0, lastUsed: entry.date, totalGrams: 0, avgGrams: 100, frequentGrams: 100, _counts: {} };
                     }
-                    stats[item.referenceId].count++;
-                    stats[item.referenceId].totalGrams += grams;
-                    stats[item.referenceId].avgGrams = stats[item.referenceId].totalGrams / stats[item.referenceId].count;
-                    if (entry.date > stats[item.referenceId].lastUsed) {
-                        stats[item.referenceId].lastUsed = entry.date;
+                    const s = stats[item.referenceId];
+                    s.count++;
+                    s.totalGrams += grams;
+                    s.avgGrams = s.totalGrams / s.count;
+                    s._counts[grams] = (s._counts[grams] || 0) + 1;
+                    
+                    // Update frequentGrams (mode)
+                    if (s._counts[grams] > (s._counts[s.frequentGrams] || 0)) {
+                        s.frequentGrams = grams;
+                    }
+                    
+                    if (entry.date > s.lastUsed) {
+                        s.lastUsed = entry.date;
                     }
                 }
             });
@@ -469,6 +477,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             'frukost': 'breakfast',
             'lunch': 'lunch',
             'middag': 'dinner',
+            'kvällsmål': 'evening_meal',
             'mellanmål': 'snack',
             'snack': 'snack'
         };
@@ -480,6 +489,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             if (hour >= 5 && hour < 10) mealType = 'breakfast';
             else if (hour >= 10 && hour < 14) mealType = 'lunch';
             else if (hour >= 17 && hour < 21) mealType = 'dinner';
+            else if (hour >= 21) mealType = 'evening_meal';
         }
 
         const counts: Record<string, number> = {};
@@ -575,6 +585,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                     carbs: Math.round((nutrition.carbs / r.item.servings) * 10) / 10,
                     fat: Math.round((nutrition.fat / r.item.servings) * 10) / 10
                 },
+                totalWeight: r.item.totalWeight || nutrition.totalWeight,
                 summary: `${r.item.servings} portioner • ~${Math.round(nutrition.calories / r.item.servings)} kcal per portion`
             };
         });
@@ -602,6 +613,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         const q = isGreaterMode ? activityQuery : input.trim();
         
         if (!q || q.length < 2) return [];
+        
+        // BUG FIX: Activities should only show up if no food is found, OR if we are in greater mode (">")
+        if (!isGreaterMode && foodResults.length > 0) return [];
+
         if (!isGreaterMode && ['vitals', 'weight', 'user'].includes(intent.type)) return [];
         
         const results = performSmartSearch(q, unifiedActivities, {
@@ -986,6 +1001,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 if (hour >= 5 && hour < 10) mealType = 'breakfast';
                 else if (hour >= 10 && hour < 14) mealType = 'lunch';
                 else if (hour >= 17 && hour < 21) mealType = 'dinner';
+                else if (hour >= 21 || hour < 5) mealType = 'evening_meal';
             }
         }
 
@@ -1089,6 +1105,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             if (hour >= 5 && hour < 10) mealType = 'breakfast';
             else if (hour >= 10 && hour < 14) mealType = 'lunch';
             else if (hour >= 17 && hour < 21) mealType = 'dinner';
+            else if (hour >= 21 || hour < 5) mealType = 'evening_meal';
         }
 
         if (lockedRecipe) {
@@ -1178,12 +1195,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     };
 
     // Lock a food item for detailed editing
-    const lockFood = (item: FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } | null }) => {
+    const lockFood = (item: FoodItem) => {
+        const stats = foodUsageStats[item.id];
         setLockedFood({
             ...item,
-            usageStats: item.usageStats || undefined
+            usageStats: stats ? {
+                count: stats.count,
+                avgGrams: stats.avgGrams,
+                lastUsed: stats.lastUsed,
+                frequentGrams: stats.frequentGrams
+            } : undefined
         });
-        const stats = foodUsageStats[item.id];
         // Determine initial quantity
         let initialQty = 100;
 
@@ -1196,9 +1218,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 initialQty = intent.data.quantity;
             }
         } else {
-            // Fallback: Default portion > Average logged amount > 100g
+            // Fallback: Default portion > Most frequent logged amount > Average > 100g
             if (item.defaultPortionGrams) {
                 initialQty = item.defaultPortionGrams;
+            } else if (stats?.frequentGrams) {
+                initialQty = stats.frequentGrams;
             } else if (stats?.avgGrams) {
                 initialQty = stats.avgGrams;
             } else {
@@ -1215,10 +1239,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     // Handle logging the locked food
     const handleLockedFoodAction = () => {
         if (!lockedFood) return;
-        const quantity = draftFoodQuantity || lockedFood.usageStats?.avgGrams || 100;
+        const stats = foodUsageStats[lockedFood.id];
+        const quantity = draftFoodQuantity || stats?.frequentGrams || stats?.avgGrams || 100;
         console.log('[Omnibox] handleLockedFoodAction', {
             draftFoodQuantity,
-            avgGrams: lockedFood.usageStats?.avgGrams,
+            frequentGrams: stats?.frequentGrams,
+            avgGrams: stats?.avgGrams,
             resultQuantity: quantity,
             lockedFoodName: lockedFood.name
         });
@@ -1507,6 +1533,38 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                             }
                         }}
                     />
+
+                    {/* LIVE VALIDATION GHOSTING */}
+                    {input && !isSlashMode && !isActionMode && !lockedFood && !lockedQuickMeal && !lockedRecipe && (
+                        <div className="flex items-center gap-2 pr-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <div className={`p-2 rounded-xl border border-white/10 flex items-center gap-2 transition-all duration-300 ${
+                                intent.type === 'food' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
+                                intent.type === 'exercise' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]' :
+                                intent.type === 'weight' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]' :
+                                intent.type === 'vitals' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]' :
+                                intent.type === 'measurement' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]' :
+                                intent.type === 'planera' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]' :
+                                'bg-slate-800 text-slate-400 border-white/5'
+                            }`}>
+                                {intent.type === 'food' && <Zap size={18} className="animate-pulse" />}
+                                {intent.type === 'exercise' && <Dumbbell size={18} className="animate-bounce" style={{ animationDuration: '2s' }} />}
+                                {intent.type === 'weight' && <Calculator size={18} />}
+                                {intent.type === 'vitals' && <Heart size={18} className="animate-pulse" />}
+                                {intent.type === 'measurement' && <ArrowRight size={18} />}
+                                {intent.type === 'planera' && <Calendar size={18} />}
+                                {intent.type === 'search' && <Search size={18} />}
+                                
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
+                                    {intent.type === 'food' ? 'Mat' :
+                                     intent.type === 'exercise' ? 'Träning' :
+                                     intent.type === 'weight' ? 'Vikt' :
+                                     intent.type === 'vitals' ? 'Hälsa' :
+                                     intent.type === 'measurement' ? 'Mått' :
+                                     intent.type === 'planera' ? 'Plan' : 'Sök'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                     {showFeedback && lastLoggedItem && (
                         <div className="absolute top-full left-0 right-0 z-50 p-4 bg-slate-800 border-b border-white/5 shadow-xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">
                             <div className="flex items-center gap-3">

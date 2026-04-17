@@ -9,7 +9,7 @@ export type { StrengthWorkout, StrengthSet, ExerciseDefinition };
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';
 
 /** Meal type for calorie tracking entries */
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage' | 'estimate';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage' | 'estimate' | 'evening_meal';
 
 /** Food category for organizing the database (vegan only) */
 export type FoodCategory =
@@ -263,16 +263,16 @@ export const DEFAULT_PRIVACY: UserPrivacy = {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
     theme: 'dark',
-    visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack'],
+    visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal'],
     dailyCalorieGoal: 2000,
     dailyProteinGoal: 150,
     dailyCarbsGoal: 50,
     dailyFatGoal: 30,
     macroMode: 'percentage',
     proteinMultiplier: 2.0,
-    exerciseCalorieMultiplier: 1.0,
+    exerciseCalorieMultiplier: 0.7,
     trainingGoal: 'neutral',
-    weight: 80,
+    weight: 75, // Updated default weight to closely match user current (was 80)
     dailySleepGoal: 8,
     dailyWaterGoal: 8,
     dailyCaffeineLimit: 400,
@@ -440,6 +440,7 @@ export interface Recipe {
     totalWeight?: number; // Total weight in grams for portion calculation
     priceCategory?: PriceCategory; // Estimated cost level
     seasons?: Season[];            // Best seasons for this recipe
+    cookingLoss?: number; // Weight loss percentage during cooking (e.g. 15 for 15%)
     createdAt: string;
     updatedAt: string;
 }
@@ -1562,6 +1563,8 @@ export interface NutritionSummary {
     carbs: number;
     fat: number;
     fiber: number;
+    totalWeight?: number; // Calculated cooked/final weight
+    rawWeight?: number;   // Calculated source weight
     // Micronutrients
     iron?: number;
     calcium?: number;
@@ -1755,12 +1758,13 @@ export const UNIT_LABELS: Record<Unit, string> = {
 
 /** Meal type display labels (Swedish) */
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
-    breakfast: 'Frukost',
-    lunch: 'Lunch',
-    dinner: 'Middag',
-    snack: 'Mellanmål',
-    beverage: 'Dryck',
-    estimate: 'Estimering 🤷',
+    breakfast: '🌅 Frukost',
+    lunch: '☀️ Lunch',
+    dinner: '🌙 Middag',
+    snack: '🍎 Mellanmål',
+    evening_meal: '🍵 Kvällsmål',
+    beverage: '🥤 Dryck',
+    estimate: '🤷 Estimering',
 };
 
 /** Meal type colors for UI */
@@ -1769,6 +1773,7 @@ export const MEAL_TYPE_COLORS: Record<MealType, string> = {
     lunch: 'text-sky-400 bg-sky-500/10',
     dinner: 'text-emerald-400 bg-emerald-500/10',
     snack: 'text-violet-400 bg-violet-500/10',
+    evening_meal: 'text-indigo-400 bg-indigo-500/10',
     beverage: 'text-cyan-400 bg-cyan-500/10',
     estimate: 'text-orange-400 bg-orange-500/10',
 };
@@ -1787,36 +1792,10 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
 /** Ordered weekdays array */
 export const WEEKDAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-export interface AppSettings {
-    visibleMeals: MealType[];
-    calorieTarget?: number;
-    theme?: 'light' | 'dark';
-
-    // Bio & Goals
-    height?: number;
-    birthYear?: number;
-    gender?: 'male' | 'female' | 'other';
-    dailyCalorieGoal?: number;
-    dailyProteinGoal?: number;
-    dailyCarbsGoal?: number;
-    dailyFatGoal?: number;
-    dailySleepGoal?: number;
-    dailyWaterGoal?: number;
-    dailyStepGoal?: number;
-    dailyCaffeineMax?: number;
-    dailyTrainingGoal?: number;
-    noccoOClockEnabled?: boolean;
-    densityMode?: 'compact' | 'slim' | 'cozy';
-
-    // Training Logic Flags
-    trainingInterests?: {
-        running: boolean;
-        strength: boolean;
-        hyrox: boolean;
-    };
-    longRunThreshold?: number; // km
-    incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
-    stravaTimePreference?: 'moving' | 'elapsed';
+export interface AppSettings extends UserSettings {
+    // Add any App-specific flags that aren't per-user settings if needed
+    // But for now, we want full parity to prevent data loss.
+    calorieTarget?: number; // Legacy/Override alias
 }
 
 /** Category display labels (Swedish, vegan only) */

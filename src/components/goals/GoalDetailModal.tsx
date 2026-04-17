@@ -6,6 +6,7 @@ import React, { useMemo, useEffect } from 'react';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { useData } from '../../context/DataContext';
 import { useGoalProgress, useAllGoalsProgress } from '../../hooks/useGoalProgress';
+import { useSettings } from '../../context/SettingsContext.tsx';
 import { GoalProgressRing } from './GoalProgressRing';
 import { CancellationModal } from './CancellationModal';
 import type { PerformanceGoal, GoalCategory, WeightEntry } from '../../models/types';
@@ -33,6 +34,7 @@ const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color
 
 export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }: GoalDetailModalProps) {
     const { weightEntries = [], universalActivities = [], strengthSessions = [], unifiedActivities = [], performanceGoals = [] } = useData();
+    const { settings } = useSettings();
     const progressData = useGoalProgress(goal);
     const allProgressMap = useAllGoalsProgress();
 
@@ -1171,16 +1173,41 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                                 <div className="mt-4 space-y-1">
                                     <div className="text-xs font-bold text-slate-400 mb-2">Vägningshistorik</div>
                                     <div className="max-h-32 overflow-y-auto space-y-1">
-                                        {relevantWeights.slice().reverse().map((w, i) => (
-                                            <div
-                                                key={i}
-                                                className="flex items-center justify-between text-xs p-2 bg-slate-900/50 rounded-lg"
-                                            >
-                                                <span className="text-slate-400">{formatDate(w.date)}</span>
-                                                <span className="font-bold text-white">{w.weight} kg</span>
-                                            </div>
-                                        ))}
+                                        {relevantWeights.slice().reverse().map((w, i) => {
+                                            const isStartWeight = i === relevantWeights.length - 1;
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className={`flex items-center justify-between text-xs p-2 rounded-lg ${isStartWeight ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-slate-900/50'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-slate-400">{formatDate(w.date)}</span>
+                                                        {isStartWeight && (
+                                                            <span className="text-[8px] font-black uppercase px-1 bg-blue-500 text-white rounded">Start</span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`font-bold ${isStartWeight ? 'text-blue-400' : 'text-white'}`}>{w.weight} kg</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                    
+                                    {/* Outlier / Water Weight Info */}
+                                    {relevantWeights.length >= 2 && (() => {
+                                        const first = relevantWeights[0];
+                                        const second = relevantWeights[1];
+                                        const diff = first.weight - second.weight;
+                                        const days = (new Date(second.date).getTime() - new Date(first.date).getTime()) / 86400000;
+                                        
+                                        if (diff >= 1.0 && days <= 2) {
+                                            return (
+                                                <div className="mt-3 p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl text-[10px] text-slate-400 leading-relaxed italic">
+                                                    <span className="text-blue-400 font-bold not-italic">💡 Notera:</span> Den kraftiga dippen i början ({diff.toFixed(1)} kg) är sannolikt en "outlier". Det rör sig troligen om minskad vätska och tarminnehåll snarare än ren fettförlust, vilket är vanligt vid start av ett nytt kostschema.
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -1211,15 +1238,61 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                                 <div className="flex items-center gap-3">
                                     <div className={`text-xl font-black ${aheadBehind.value >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {formatAheadBehind(calculateAheadBehind(goal, progress).value, goal.type === 'speed' ? 's' : goal.targets[0]?.unit)}
-                                        {/* Note: calculateAheadBehind returns text "X unit ahead", we reconstruct or use value */}
                                     </div>
                                 </div>
                                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all ${aheadBehind.value >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                                        style={{ width: `${Math.min(100, Math.abs(aheadBehind.value) * 10)}%` }} // Visual approximation
+                                        style={{ width: `${Math.min(100, Math.abs(aheadBehind.value) * 10)}%` }} 
                                     />
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* NEW: METABOLIC CONFIGURATION SECTION (As requested) */}
+                    {(goal.type === 'weight' || goal.type === 'nutrition') && (
+                        <div className="p-4 bg-slate-900/50 rounded-xl border border-indigo-500/20 mb-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="text-indigo-400">⚙️</span>
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Mål-konfiguration</h3>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
+                                        <div className="text-lg font-black text-white">{settings.fixedCalorieBase || settings.dailyCalorieGoal || 2000}</div>
+                                        <div className="text-[8px] text-slate-500 uppercase font-bold">Bas-kcal</div>
+                                    </div>
+                                    <span className="text-slate-600 font-black">-</span>
+                                    <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
+                                        <div className="text-lg font-black text-rose-400">{(settings.fixedCalorieBase || settings.dailyCalorieGoal || 0) - (settings.dailyCalorieGoal || 0)}</div>
+                                        <div className="text-[8px] text-slate-500 uppercase font-bold">Deficit</div>
+                                    </div>
+                                    <span className="text-slate-600 font-black">+</span>
+                                    <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
+                                        <div className="text-lg font-black text-amber-300">{Math.round((settings.exerciseCalorieMultiplier ?? 1.0) * 100)}%</div>
+                                        <div className="text-[8px] text-slate-500 uppercase font-bold">Träning</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 md:col-span-2">
+                                     <div className="h-8 w-[1px] bg-white/5 mx-2 hidden md:block" />
+                                     <div className="flex-1 p-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10 flex flex-col justify-center">
+                                         <div className="flex justify-between items-baseline">
+                                             <span className="text-[9px] font-black text-slate-500 uppercase">Proteinmål</span>
+                                             <span className="text-xs font-black text-emerald-400">
+                                                 {settings.proteinMultiplier || (settings.dailyProteinGoal ? (settings.dailyProteinGoal / 80).toFixed(1) : '2.0')}g/kg
+                                             </span>
+                                         </div>
+                                         <div className="text-[10px] font-bold text-slate-400">
+                                             ~{settings.dailyProteinGoal || 160}g per dag
+                                         </div>
+                                     </div>
+                                </div>
+                            </div>
+                            <div className="mt-3 p-2 bg-slate-950/30 rounded-lg text-[9px] text-slate-600 leading-tight">
+                                <span className="font-bold text-slate-500">Logik:</span> Din dagsbudget baseras på din underhållsnivå (Bas) korrigerat för ditt målvikt-deficit, plus {Math.round((settings.exerciseCalorieMultiplier ?? 1.0) * 100)}% av energin du bränner under träning.
                             </div>
                         </div>
                     )}

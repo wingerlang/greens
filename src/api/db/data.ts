@@ -13,6 +13,12 @@ import { weeklyPlanRepo } from "../repositories/weeklyPlanRepository.ts";
 import { recipeRepo } from "../repositories/recipeRepository.ts";
 import { exerciseEntryRepo } from "../repositories/exerciseEntryRepository.ts";
 import { quickMealRepo } from "../repositories/quickMealRepository.ts";
+import { vitalsRepo } from "../repositories/vitalsRepository.ts";
+import { actionRepo } from "../repositories/actionRepository.ts";
+import { measurementRepo } from "../repositories/measurementRepository.ts";
+import { raceRepo } from "../repositories/raceRepository.ts";
+import { plannedActivityRepo } from "../repositories/plannedActivityRepository.ts";
+import { raceDefinitionRepo } from "../repositories/raceDefinitionRepository.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -97,6 +103,15 @@ export async function getUserData(userId: string): Promise<AppData | null> {
         userData.foodItems = Array.from(foodMap.values());
     }
 
+    // 6. Granular reassembly (New repos)
+    userData.dailyVitals = await vitalsRepo.getVitals(userId);
+    userData.bodyMeasurements = await measurementRepo.getMeasurementHistory(userId);
+    userData.databaseActions = await actionRepo.getActions(userId, 200);
+    userData.racePlans = await raceRepo.getRacePlans(userId);
+    userData.plannedActivities = await plannedActivityRepo.getActivities(userId);
+    userData.raceDefinitions = await raceDefinitionRepo.getDefinitions(userId);
+    userData.raceIgnoreRules = await raceDefinitionRepo.getIgnoreRules(userId);
+
     return userData;
 }
 
@@ -151,6 +166,42 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         }
     }
 
+    if (data.dailyVitals) {
+        for (const [date, vitals] of Object.entries(data.dailyVitals)) {
+            await vitalsRepo.saveVitals(userId, date, vitals);
+        }
+    }
+
+    if (data.bodyMeasurements && data.bodyMeasurements.length > 0) {
+        for (const measurement of data.bodyMeasurements) {
+            await measurementRepo.saveMeasurement(userId, measurement);
+        }
+    }
+
+    if (data.databaseActions && data.databaseActions.length > 0) {
+        for (const action of data.databaseActions) {
+            await actionRepo.saveAction(userId, action);
+        }
+    }
+
+    if (data.racePlans && data.racePlans.length > 0) {
+        for (const plan of data.racePlans) {
+            await raceRepo.saveRacePlan(userId, plan);
+        }
+    }
+
+    if (data.plannedActivities && data.plannedActivities.length > 0) {
+        await plannedActivityRepo.saveActivities(userId, data.plannedActivities);
+    }
+
+    if (data.raceDefinitions && data.raceDefinitions.length > 0) {
+        await raceDefinitionRepo.saveDefinitions(userId, data.raceDefinitions);
+    }
+
+    if (data.raceIgnoreRules && data.raceIgnoreRules.length > 0) {
+        await raceDefinitionRepo.saveIgnoreRules(userId, data.raceIgnoreRules);
+    }
+
     const {
         universalActivities,
         mealEntries,
@@ -162,6 +213,14 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         quickMeals,       // Exclude from blob
         recipes,          // Exclude from blob
         foodItems,        // Exclude from blob
+        dailyVitals,      // Exclude from blob
+        bodyMeasurements, // Exclude from blob
+        databaseActions,  // Exclude from blob
+        racePlans,        // Exclude from blob
+        plannedActivities,// Exclude from blob
+        raceDefinitions,  // Exclude from blob
+        raceIgnoreRules,  // Exclude from blob
+        users,             // Exclude from blob
         ...userSpecificData
     } = data;
 
@@ -170,15 +229,17 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
 
     await kv.set(["user_profiles", userId], { ...userSpecificData, updatedAt: new Date().toISOString() });
 
-    // 3. Sync settings back to primary user record if present in users list
-    const currentUserInPayload = data.users?.find(u => u.id === userId);
-    if (currentUserInPayload) {
+    // 3. Sync settings back to primary user record
+    // Use userSettings from payload if users list is excluded/missing
+    const settingsToSync = data.userSettings || data.users?.find(u => u.id === userId)?.settings;
+    
+    if (settingsToSync) {
         const userEntry = await kv.get<DBUser>(["users", userId]);
         if (userEntry.value) {
             const user = userEntry.value;
             // Only update if settings are different
-            if (JSON.stringify(user.settings) !== JSON.stringify(currentUserInPayload.settings)) {
-                user.settings = currentUserInPayload.settings;
+            if (JSON.stringify(user.settings) !== JSON.stringify(settingsToSync)) {
+                user.settings = settingsToSync;
                 await kv.set(["users", userId], user);
                 console.log(`[saveUserData] Synced settings for user ${userId}`);
             }

@@ -133,7 +133,7 @@ export function calculateFrequencyProgress(
     const { start, end } = getGoalPeriodDates(goal);
 
     // If multiple targets, calculate total across all
-    if (goal.targets.length > 1) {
+    if (goal.targets && goal.targets.length > 1) {
         let totalCurrent = 0;
         goal.targets.forEach(target => {
             const matchingEntries = exerciseEntries.filter(e => {
@@ -147,7 +147,8 @@ export function calculateFrequencyProgress(
         return totalCurrent;
     }
 
-    const target = goal.targets[0];
+    const target = goal.targets ? goal.targets[0] : null;
+    if (!target) return 0;
     const matchingEntries = exerciseEntries.filter(e => {
         const activityDate = e.date.split('T')[0];
         if (activityDate < start || activityDate > end) return false;
@@ -201,7 +202,7 @@ export function calculateSpeedProgress(
         const dur = (e.durationMinutes || 0) * 60; // seconds
         if (dist > 0 && dur > 0) {
             const paceSecondsPerKm = dur / dist;
-            const projectedTimeFn = paceSecondsPerKm * target.distanceKm!;
+            const projectedTimeFn = paceSecondsPerKm * (target.distanceKm || 0);
             if (projectedTimeFn < bestTimeSeconds) {
                 bestTimeSeconds = projectedTimeFn;
                 bestActivityId = e.id;
@@ -396,7 +397,7 @@ export function calculateNutritionProgress(
             return entryDate >= start && entryDate <= end;
         })
         .forEach(entry => {
-            entry.items.forEach(item => {
+            (entry.items || []).forEach(item => {
                 if (item.type === 'foodItem') {
                     const food = foodItems.find(f => f.id === item.referenceId);
                     if (food) {
@@ -413,7 +414,7 @@ export function calculateNutritionProgress(
                     if (recipe) {
                         // Calculate recipe totals
                         let recipeTotal = 0;
-                        recipe.ingredients.forEach(ing => {
+                        (recipe.ingredients || []).forEach(ing => {
                             const f = foodItems.find(fi => fi.id === ing.foodItemId);
                             if (f) {
                                 const mult = ing.quantity / 100;
@@ -503,12 +504,17 @@ export function calculateAheadBehind(
     const progressRatio = daysElapsed / totalDays;
     const expectedProgress = totalExpected * progressRatio;
 
-    const diff = progress.current - expectedProgress;
-
+    let diff = progress.current - expectedProgress;
+    
+    // For "keep under" goals or weight loss, the meaning is reversed
+    // but progress.current for weight is already "amount lost", so higher is still better.
+    // However, for some other "down" goals, we might need to be careful.
+    // Let's ensure weight loss (where target < start) always treats positive current-expected as ahead.
+    
     const unit = goal.targets[0]?.unit || '';
     const text = diff >= 0
         ? `+${diff.toFixed(1)} före`
-        : `${diff.toFixed(1)} efter`;
+        : `${Math.abs(diff).toFixed(1)} efter`;
 
     return { value: diff, text, unit };
 }
@@ -942,7 +948,7 @@ export function calculateGoalProgress(
                         // but here we have to sum. Let's do a simple sum of calories if target is calories.
                         const nutritionType = target?.nutritionType || 'calories';
                         entries.forEach(entry => {
-                            entry.items.forEach(item => {
+                            (entry.items || []).forEach(item => {
                                 const food = foodItems.find(f => f.id === item.referenceId);
                                 if (food) {
                                     const mult = item.servings / 100;

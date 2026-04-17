@@ -44,17 +44,20 @@ export function calculateAdaptiveGoals(
     // Carbs: 65% of extra calories for glycogen (Athletic focus)
     // Fat: 20% of extra calories for hormonal health
 
-    const extraProtein = (totalBurned * 0.15) / 4;
-    const extraCarbs = (totalBurned * 0.65) / 4;
-    const extraFat = (totalBurned * 0.20) / 9;
+    const multiplier = settings.exerciseCalorieMultiplier ?? 1.0;
+    const effectiveBurned = totalBurned * multiplier;
+
+    const extraProtein = (effectiveBurned * 0.15) / 4;
+    const extraCarbs = (effectiveBurned * 0.65) / 4;
+    const extraFat = (effectiveBurned * 0.20) / 9;
 
     return {
-        calories: Math.round(baseCalories + totalBurned),
+        calories: Math.round(baseCalories + effectiveBurned),
         protein: Math.round(baseProtein + extraProtein),
         carbs: Math.round(baseCarbs + extraCarbs),
         fat: Math.round(baseFat + extraFat),
         isAdapted: true,
-        extraCalories: Math.round(totalBurned)
+        extraCalories: Math.round(effectiveBurned)
     };
 }
 

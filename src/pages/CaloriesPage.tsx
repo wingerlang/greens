@@ -92,7 +92,9 @@ export function CaloriesPage() {
         const hour = new Date().getHours();
         if (hour >= 5 && hour < 10) return 'breakfast';
         if (hour >= 10 && hour < 14) return 'lunch';
-        if (hour >= 14 && hour < 20) return 'dinner';
+        if (hour >= 14 && hour < 17) return 'snack';
+        if (hour >= 17 && hour < 21) return 'dinner';
+        if (hour >= 21 || hour < 5) return 'evening_meal';
         return 'snack';
     };
 
@@ -193,6 +195,7 @@ export function CaloriesPage() {
             snack: [],
             beverage: [],
             estimate: [],
+            evening_meal: [],
         };
         dailyEntries.forEach((entry: MealEntry) => {
             grouped[entry.mealType].push(entry);
@@ -494,13 +497,19 @@ export function CaloriesPage() {
     const onSaveQuickMeal = (name: string) => {
         const newMeal = addQuickMeal(name, quickMealItems);
 
-        // Link original entries to this new snabbval
-        selectedIds.forEach(id => {
-            updateMealEntry(id, {
-                snabbvalId: newMeal.id,
-                title: newMeal.name
-            });
-        });
+        // Grouping logic requested: 
+        // 1. Delete the manual entries that were just used to create the snabbval
+        // 2. Log a NEW single entry using that snabbval so they are merged
+        selectedIds.forEach(id => deleteMealEntry(id));
+        
+        addMealEntry({
+            date: selectedDate,
+            mealType, // Inherit the current meal type
+            items: newMeal.items,
+            title: newMeal.name,
+            snabbvalId: newMeal.id,
+            pieces: 1
+        } as any);
 
         setIsQuickMealModalOpen(false);
         setSelectedIds(new Set());

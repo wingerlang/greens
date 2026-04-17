@@ -64,6 +64,7 @@ export const LockedQuickMealModule: React.FC<LockedQuickMealModuleProps> = ({
                         <option value="breakfast">🌅 Frukost</option>
                         <option value="lunch">☀️ Lunch</option>
                         <option value="dinner">🌙 Middag</option>
+                        <option value="evening_meal">🍵 Kvällsmål</option>
                         <option value="snack">🍎 Mellanmål</option>
                         <option value="beverage">🥤 Dryck</option>
                     </select>

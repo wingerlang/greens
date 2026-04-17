@@ -55,7 +55,7 @@ export function SystemGeneratorModule() {
                 generatedDays++;
 
                 // Generate Meals (3-4 per day)
-                const meals: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+                const meals: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal'];
                 for (const mealType of meals) {
                     // Pick random recipe
                     if (recipes.length > 0 && Math.random() > 0.1) {
@@ -123,7 +123,7 @@ export function SystemGeneratorModule() {
                     plan: 'free',
                     settings: {
                         theme: 'dark',
-                        visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack'],
+                        visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal'],
                         dailyCalorieGoal: 2000 + Math.floor(Math.random() * 1000),
                         dailyProteinGoal: 150,
                         dailyCarbsGoal: 50,

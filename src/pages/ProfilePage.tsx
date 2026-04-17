@@ -30,7 +30,7 @@ import { PBLadder } from '../components/profile/PBLadder.tsx';
 
 import './ProfilePage.css';
 
-const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal'];
 
 type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account' | 'training';
 
@@ -688,6 +688,52 @@ export function ProfilePage() {
                                     readonly={!!activePeriod}
                                     onChange={(v: string) => updateSettings({ dailyFatGoal: Number(v) })}
                                 />
+                            </div>
+
+                            <div className="mt-8 pt-6 border-t border-white/5 space-y-6">
+                                <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <span>⚙️</span> Beräkningsmodell
+                                </h4>
+
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <label className="block text-xs text-slate-500 uppercase font-black mb-2">Metod</label>
+                                        <div className="flex bg-slate-800 p-1 rounded-xl">
+                                            <button
+                                                onClick={() => updateSettings({ calorieMode: 'tdee' })}
+                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${settings.calorieMode === 'tdee' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                            >
+                                                TDEE (Snitt)
+                                            </button>
+                                            <button
+                                                onClick={() => updateSettings({ calorieMode: 'fixed' })}
+                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${settings.calorieMode === 'fixed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                            >
+                                                Bas + Träning
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 italic">
+                                            {settings.calorieMode === 'fixed' 
+                                                ? 'Ditt mål baseras på ett fast värde plus en andel av dagens träningsförbränning.' 
+                                                : 'Ditt mål antas inkludera din genomsnittliga aktivitetsnivå.'}
+                                        </p>
+                                    </div>
+
+                                    {settings.calorieMode === 'fixed' && (
+                                        <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+                                            <DataField
+                                                label="Tränings-multiplier"
+                                                value={((settings.exerciseCalorieMultiplier ?? 1.0) * 100).toString()}
+                                                type="number"
+                                                suffix="%"
+                                                onChange={(v: string) => updateSettings({ exerciseCalorieMultiplier: Number(v) / 100 })}
+                                            />
+                                            <p className="text-[10px] text-slate-500 mt-2 italic">
+                                                Hur stor del av träningspassen som ska räknas in i ditt dagliga kalorimål (t.ex. 70%).
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {activePeriod && (

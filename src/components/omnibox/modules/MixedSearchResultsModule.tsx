@@ -191,11 +191,20 @@ export const MixedSearchResultsModule: React.FC<MixedSearchResultsModuleProps> =
                                     <div className="flex items-center gap-2">
                                         <div className="font-medium truncate italic">{item.name}</div>
                                         <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
-                                            {Math.round((item as any).totals.calories)} kcal/p
+                                            {item.totalWeight && item.totalWeight > 0 
+                                                ? `${Math.round((item as any).totals.calories * (item.servings || 1) * 100 / item.totalWeight)} kcal/100g`
+                                                : `${Math.round((item as any).totals.calories)} kcal/p`
+                                            }
                                         </span>
                                     </div>
                                     <div className="text-[10px] text-slate-500 flex items-center gap-2">
                                         <span className="truncate">{(item as any).summary}</span>
+                                        {item.totalWeight && item.totalWeight > 0 && (
+                                            <>
+                                                <span className="text-slate-600">•</span>
+                                                <span className="text-slate-400">{Math.round(item.totalWeight / (item.servings || 1))}g/p</span>
+                                            </>
+                                        )}
                                         {item.usageStats && (
                                             <>
                                                 <span className="text-slate-600">•</span>

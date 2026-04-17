@@ -110,7 +110,7 @@ export const MealItemSchema = z.object({
 export const MealEntrySchema = z.object({
     id: z.string(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    mealType: z.enum(["breakfast", "lunch", "dinner", "snack", "beverage", "estimate"]),
+    mealType: z.enum(["breakfast", "lunch", "dinner", "snack", "beverage", "estimate", "evening_meal"]),
     items: z.array(MealItemSchema),
     title: z.string().optional(),
     snabbvalId: z.string().optional(),

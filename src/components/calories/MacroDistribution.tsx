@@ -10,17 +10,22 @@ interface MacroDistributionProps {
 
 export function MacroDistribution({ entries, foodItems, recipes }: MacroDistributionProps) {
     const distribution = useMemo(() => {
-        const stats: Record<MealType, { calories: number; protein: number; carbs: number; fat: number }> = {
+        const stats: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {
             breakfast: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             lunch: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             dinner: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             snack: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+            evening_meal: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             beverage: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             estimate: { calories: 0, protein: 0, carbs: 0, fat: 0 },
         };
 
+        if (!entries || !Array.isArray(entries)) return stats;
+
         entries.forEach(entry => {
             const mType = entry.mealType;
+            if (!stats[mType]) return; // Safety check
+
             entry.items.forEach(item => {
                 let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
@@ -46,7 +51,7 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
                     const recipe = recipes.find(r => r.id === item.referenceId);
                     if (recipe && recipe.ingredientsText) {
                         const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-                        const factor = item.servings / recipe.servings;
+                        const factor = item.servings / Math.max(recipe.servings || 1, 1);
                         nutrition = {
                             calories: estimate.calories * factor,
                             protein: estimate.protein * factor,

@@ -148,6 +148,7 @@ export const LockedRecipeModule: React.FC<LockedRecipeModuleProps> = ({
                             <option value="breakfast">🌅 Frukost</option>
                             <option value="lunch">☀️ Lunch</option>
                             <option value="dinner">🌙 Middag</option>
+                            <option value="evening_meal">🍵 Kvällsmål</option>
                             <option value="snack">🍎 Mellanmål</option>
                         </select>
                     </div>

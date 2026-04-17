@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronRight, X } from 'lucide-react';
+import { Info, ChevronRight, X, Target } from 'lucide-react';
 import { DashboardCardWrapper } from '../../../components/dashboard/DashboardCardWrapper.tsx';
 import { DoubleCircularProgress } from '../../../components/dashboard/DoubleCircularProgress.tsx';
 
@@ -24,6 +24,7 @@ interface DailyIntakeCardProps {
     proteinRatio: number;
     targetProteinRatio: number;
     onHoverTraining?: (isHovering: boolean) => void;
+    explanation?: string;
 }
 
 export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
@@ -45,7 +46,8 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
     latestWeightVal,
     proteinRatio,
     targetProteinRatio,
-    onHoverTraining
+    onHoverTraining,
+    explanation
 }) => {
     const navigate = useNavigate();
     const [showDetails, setShowDetails] = useState(false);
@@ -155,7 +157,19 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                         {/* Calories */}
                         <div>
                             <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kcal</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kcal</span>
+                                    {explanation && (
+                                        <div className="group relative">
+                                            <Info size={10} className="text-slate-300 hover:text-indigo-500 cursor-help transition-colors" />
+                                            <div className="hidden md:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900/95 backdrop-blur text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 pointer-events-none shadow-2xl border border-white/10 z-[110] leading-relaxed text-center">
+                                                <div className="font-black text-[9px] uppercase text-indigo-400 mb-1 border-b border-white/5 pb-1">Målberäkning</div>
+                                                {explanation}
+                                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                 <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
@@ -208,6 +222,17 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                                 <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
                                     <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
                                 </div>
+                                {explanation && (
+                                    <div className="mt-3 p-2 bg-indigo-500/5 border border-indigo-500/10 rounded-xl flex items-start gap-2 animate-in fade-in zoom-in-95 duration-500">
+                                        <div className="p-1 bg-indigo-500/20 text-indigo-400 rounded-md shrink-0">
+                                            <Target size={12} />
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 leading-normal">
+                                            <span className="font-black text-indigo-400 uppercase tracking-tighter mr-1 italic">Regler:</span>
+                                            {explanation}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

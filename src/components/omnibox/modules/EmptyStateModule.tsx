@@ -60,12 +60,14 @@ export const EmptyStateModule: React.FC<EmptyStateModuleProps> = ({
                                     if (lower === 'frukost') return 'Frukost';
                                     if (lower === 'lunch') return 'Lunch';
                                     if (lower === 'middag') return 'Middag';
+                                    if (lower === 'kvällsmål') return 'Kvällsmål';
                                     if (lower === 'mellanmål' || lower === 'snack') return 'Mellanmål';
 
                                     const hour = new Date().getHours();
                                     return (hour >= 5 && hour < 10) ? 'Frukost' :
                                         (hour >= 10 && hour < 14) ? 'Lunch' :
-                                            (hour >= 17 && hour < 21) ? 'Middag' : 'Mellanmål';
+                                            (hour >= 17 && hour < 21) ? 'Middag' : 
+                                            (hour >= 21 || hour < 5) ? 'Kvällsmål' : 'Mellanmål';
                                 })()}
                             </div>
                             {popularFoods.map((item, idx) => {

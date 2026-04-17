@@ -34,6 +34,7 @@ import { TrainingCard } from '../features/dashboard/components/TrainingCard.tsx'
 import { HealthMetricsCard } from '../features/dashboard/components/HealthMetricsCard.tsx';
 import { WeeklyTimeline } from '../features/dashboard/components/WeeklyTimeline.tsx';
 import { DashboardSleepCard, DashboardWaterCard, DashboardAlcoholCard, DashboardCaffeineCard } from '../features/dashboard/components/QuickLogCards.tsx';
+import { WeeklyMetabolismCard } from '../features/dashboard/components/WeeklyMetabolismCard.tsx';
 
 // --- Helper Functions ---
 
@@ -386,7 +387,8 @@ export function DashboardPage() {
         settings.dailyCalorieGoal,
         2500,
         settings.calorieMode || 'tdee',
-        burned
+        burned,
+        settings.exerciseCalorieMultiplier ?? 1.0
     );
     const target = targetResult.calories;
 
@@ -397,7 +399,8 @@ export function DashboardPage() {
         settings.dailyCalorieGoal,
         2500,
         settings.calorieMode || 'tdee',
-        0
+        0,
+        settings.exerciseCalorieMultiplier ?? 1.0
     ).calories;
 
     const extraCalories = Math.max(0, target - baseTarget);
@@ -542,9 +545,13 @@ export function DashboardPage() {
 
                 <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
                     {/* Top Section: Daily Summary & Active Goals */}
-                    <div className="md:col-span-12 flex flex-col gap-4">
-                        <div className="md:col-span-12 mt-2 mb-4">
+                    <div className="md:col-span-12 flex flex-col gap-6">
+                        <div className="md:col-span-12 mt-2">
                             <WeeklySummary selectedDate={selectedDate} activities={unifiedActivities} history={unifiedHistory} />
+                        </div>
+                        <ActiveGoalsCard fullWidth={true} />
+                        <div className="mt-4">
+                            <WeeklyMetabolismCard />
                         </div>
                     </div>
 
@@ -573,6 +580,7 @@ export function DashboardPage() {
                                     proteinRatio={proteinRatio}
                                     targetProteinRatio={targetProteinRatio}
                                     onHoverTraining={setIsHoveringTraining}
+                                    explanation={targetResult.explanation}
                                 />
                             );
                         }
@@ -696,6 +704,8 @@ export function DashboardPage() {
                         setWeightRange={setWeightRange}
                         weightTrendEntries={weightTrendEntries}
                         unifiedHistory={unifiedHistory}
+                        performanceGoals={performanceGoals}
+                        trainingPeriods={trainingPeriods}
                         onDeleteEntry={(data) => {
                             if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
                             if (data.waistId) deleteBodyMeasurement(data.waistId);
@@ -724,7 +734,6 @@ export function DashboardPage() {
                         onHoverChange={setIsHoveringChart}
                     />
 
-                    <ActiveGoalsCard />
 
                     <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
                         <div className="flex flex-col md:flex-row gap-6">

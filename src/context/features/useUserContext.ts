@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     type User,
     type AppSettings,
     type DailyVitals,
     type UserPrivacy,
-    getISODate
+    getISODate,
+    DEFAULT_USER_SETTINGS
 } from '../../models/types.ts';
 import { storageService } from '../../services/storage.ts';
 import type { FeedEventType } from '../../models/feedTypes.ts';
@@ -12,9 +13,7 @@ import type { FeedEventType } from '../../models/feedTypes.ts';
 export function useUserContext() {
     const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUserState] = useState<User | null>(null);
-    const [userSettings, setUserSettings] = useState<AppSettings>({
-        visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack']
-    });
+    const [userSettings, setUserSettings] = useState<AppSettings>(DEFAULT_USER_SETTINGS as AppSettings);
     const [dailyVitals, setDailyVitals] = useState<Record<string, DailyVitals>>({});
 
     // Helper for Feed events
@@ -129,6 +128,16 @@ export function useUserContext() {
             };
         });
     }, []);
+
+    // Sync userSettings state with currentUser.settings
+    useEffect(() => {
+        if (currentUser?.settings) {
+            // Only update if they differ to avoid loops
+            if (JSON.stringify(userSettings) !== JSON.stringify(currentUser.settings)) {
+                setUserSettings(currentUser.settings);
+            }
+        }
+    }, [currentUser?.settings, userSettings]);
 
     return {
         // State
