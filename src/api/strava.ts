@@ -5,6 +5,7 @@ import {
     UserSettings
 } from '../models/types.ts';
 import { calculateHeartRateCalories, calculateStrengthCaloriesMET } from '../utils/analytics.ts';
+import { parseWattsFromText, AssaultBikeMath } from '../utils/cyclingCalculations.ts';
 
 // Environment variables (set these in your deployment)
 // @ts-ignore: Deno is polyfilled
@@ -446,6 +447,26 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
 
     const limits = KCAL_LIMITS[type] || KCAL_LIMITS.other;
 
+    // 0. Check for Power (Watts) - The Gold Standard for Cycling
+    if (type === 'cycling') {
+        // Source priority: metadata.average_watts, or parsed from title/notes
+        const avgWatts = activity.average_watts || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : null);
+        
+        if (avgWatts && avgWatts > 0) {
+            const powerCalories = AssaultBikeMath.calculateCyclingKcal(avgWatts, durationMin);
+            
+            // Additional check: If Strava kilojoules exists, it's usually VERY accurate for mechanical work
+            // Since 1 kJ ≈ 1 kcal metabolic cost (due to 24-25% efficiency), we can use kJ direct.
+            const kjCalories = activity.kilojoules ? Math.round(activity.kilojoules) : 0;
+            const finalPowerKcal = (kjCalories > 0 && Math.abs(kjCalories - powerCalories) < 100) ? kjCalories : powerCalories;
+
+            return {
+                calories: finalPowerKcal,
+                breakdown: `Metod: Kraftberäkning (${avgWatts.toFixed(0)}W)\nEftersom vi har watt-data beräknas förbrukningen objektivt: Watt * tid * 3.6.\nDetta är mer exakt än pulsberäkning vid cykling (lågpuls, intervaller etc).`
+            };
+        }
+    }
+
     // 1. ALWAYS prioritize Strava's own calorie calculation if available
     if (activity.calories && activity.calories > 0) {
         return {
@@ -585,7 +606,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         maxHeartRate: activity.max_heartrate,
         elevationGain: activity.total_elevation_gain,
 
-        averageWatts: activity.average_watts,
+        averageWatts: activity.average_watts || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : undefined),
         maxWatts: activity.max_watts,
         averageSpeed: mapStravaType(activity.type, activity.name) !== 'strength' && activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
         maxSpeed: activity.max_speed ? activity.max_speed * 3.6 : 0, // m/s to km/h

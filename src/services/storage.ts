@@ -293,7 +293,6 @@ export class LocalStorageService implements StorageService {
                     raceDefinitions,
                     raceIgnoreRules,
                     intakeLogs,
-                    dailyVitals,
                     databaseActions,
                     exercises,
                     sleepSessions,

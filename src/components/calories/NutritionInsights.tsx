@@ -8,7 +8,7 @@ interface NutritionInsightsProps {
 }
 
 export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
-    const { mealEntries, recipes, foodItems, calculateDailyNutrition } = useData();
+    const { mealEntries, recipes, foodItems, calculateDailyNutrition, unifiedActivities, dailyVitals, selectedDate } = useData();
     const { settings } = useSettings();
     const [range, setRange] = React.useState<7 | 14 | 30>(7);
 
@@ -27,10 +27,13 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
             const dateStr = getISODate(date);
             
             const entries = mealEntries.filter(e => e.date === dateStr);
-            const isIncomplete = settings.incompleteDays?.[dateStr];
+            const isIncomplete = dailyVitals[dateStr]?.incomplete;
             const isToday = dateStr === todayStr;
 
             const nutrition = calculateDailyNutrition(dateStr);
+            const dailyActivities = unifiedActivities.filter(a => a.date === dateStr && !a.excludeFromStats);
+            const burned = dailyActivities.reduce((sum, a) => sum + (a.caloriesBurned || 0), 0);
+            
             const hasData = entries.length > 0 && nutrition.calories > 0;
             const isComplete = !isIncomplete;
 
@@ -40,40 +43,39 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                     date: dateStr,
                     label: isToday ? 'Idag' : lookback === 1 ? 'Igår' : new Date(dateStr).toLocaleDateString('sv-SE', { weekday: 'short' }),
                     calories: nutrition.calories,
+                    burned,
                     protein: nutrition.protein,
                     isToday,
-                    isHistorical: !isToday
+                    isHistorical: !isToday,
+                    isComplete: true
                 });
                 measurementsFound++;
             } else if (isToday) {
-                // If today is empty/incomplete, we still show it in the chart for current context,
-                // but we don't count it towards the 'range' limit for history.
                 foundDays.push({
                     date: dateStr,
                     label: 'Idag',
                     calories: nutrition.calories,
+                    burned,
                     protein: nutrition.protein,
                     isToday: true,
                     isHistorical: false,
-                    isEmpty: true
+                    isEmpty: !hasData,
+                    isComplete: false
                 });
             }
 
             lookback++;
         }
 
-        // foundDays might have Today at index 0 after unshift, and then historical days
-        // We want them chronological for the SVG (oldest to newest)
         return foundDays.sort((a, b) => a.date.localeCompare(b.date));
-    }, [mealEntries, recipes, foodItems, calculateDailyNutrition, range, settings.incompleteDays]);
+    }, [mealEntries, recipes, foodItems, calculateDailyNutrition, range, dailyVitals, unifiedActivities]);
 
     // Filter for average: Only historical complete days (exclude today as it's partial/ongoing)
-    const completeDays = daysData.filter((d: any) => !d.isToday && !settings.incompleteDays?.[d.date]);
-
-    // Safety check to avoid division by zero
+    const completeDays = daysData.filter((d: any) => !d.isToday && d.isComplete);
     const divisor = completeDays.length || 1;
 
     const calorieAvegare = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.calories, 0) / divisor);
+    const burnedAverage = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.burned, 0) / divisor);
     const proteinAverage = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.protein, 0) / divisor * 10) / 10;
 
     const calorieGoal = settings.dailyCalorieGoal || 2000;
@@ -100,6 +102,15 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
 
     const chartWidth = daysData.length * (barWidth + gap);
 
+    // Maintenance Calculation (Physics-based)
+    const age = settings.birthYear ? (new Date().getFullYear() - settings.birthYear) : 34;
+    const height = settings.height || 180;
+    const gender = settings.gender || 'male';
+    const lastWeight = settings.weight || 75; // Simplification: use settings weight as baseline for trends
+    const bmr = (10 * lastWeight) + (6.25 * height) - (5 * age) + (gender === 'female' ? -161 : 5);
+    const pal = settings.metabolicBaselineMultiplier || 1.2;
+    const maintenance = Math.round(bmr * pal);
+
     return (
         <div className="nutrition-insights p-4 bg-slate-900/50 rounded-2xl border border-slate-800 animate-fadeIn mt-4 overflow-x-auto">
             <div className="flex justify-between items-center mb-4">
@@ -119,39 +130,41 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Calorie Trend */}
-                <div className="trend-card">
-                    <div className="flex justify-between items-end mb-2">
+                <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex justify-between items-end mb-4">
                         <div>
-                            <span className="text-xs text-slate-500 block">Kaloritrend ({completeDays.length} dgr)</span>
-                            <span className="text-lg font-bold text-emerald-400">{calorieAvegare} <span className="text-xs font-normal text-slate-500">kcal snitt</span></span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Kaloritrend</span>
+                            <span className="text-xl font-black text-emerald-400">{calorieAvegare} <span className="text-[10px] uppercase text-slate-500">kcal snitt</span></span>
+                            <div className="flex gap-2 mt-1">
+                                <span className="text-[9px] font-bold text-slate-600 uppercase">Totalt: {Math.round(completeDays.reduce((acc, d) => acc + d.calories, 0))} kcal</span>
+                                <span className="text-[9px] font-bold text-indigo-400 uppercase">Netto Snitt: {Math.round(calorieAvegare - burnedAverage)} kcal</span>
+                            </div>
                         </div>
-                        <span className="text-[10px] text-slate-500">Mål: {calorieGoal}</span>
+                        <span className="text-[10px] font-bold text-slate-500">Mål: {calorieGoal}</span>
                     </div>
                     <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/cal">
-                        {/* Goal line */}
                         <line
                             x1="0" y1={chartHeight - (calorieGoal / calScale) * chartHeight}
                             x2={chartWidth} y2={chartHeight - (calorieGoal / calScale) * chartHeight}
                             stroke="#334155" strokeDasharray="4 2"
                         />
                         {daysData.map((day: any, i: number) => {
-                            const actualH = (day.calories / calScale) * chartHeight;
-                            const isCapped = day.calories > maxCalDisplay;
+                            const val = day.calories || 0;
+                            const actualH = (val / calScale) * chartHeight;
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
                             const isToday = day.isToday;
-                            const isIncomplete = settings.incompleteDays?.[day.date];
+                            const opacity = day.isComplete || isToday ? 1 : 0.2;
 
                             return (
                                 <g
                                     key={day.date}
                                     className="cursor-pointer group/bar transition-all duration-300"
                                     onClick={() => onDateSelect?.(day.date)}
-                                    style={{ opacity: isIncomplete ? 0.3 : 1 }}
+                                    style={{ opacity }}
                                 >
-                                    <title>{`${day.date}: ${day.calories} kcal ${isIncomplete ? '(Inkomplett)' : ''}`}</title>
                                     <rect
                                         x={x} y={chartHeight - h}
                                         width={barWidth} height={h}
@@ -159,39 +172,19 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                                         className="hover:fill-emerald-400 transition-colors duration-200"
                                         rx="4"
                                     />
-                                    {isCapped && (
-                                        <text
-                                            x={x + barWidth / 2} y={chartHeight - h + 10}
-                                            textAnchor="middle"
-                                            className="text-[10px] fill-white font-bold pointer-events-none"
-                                        >
-                                            !
-                                        </text>
-                                    )}
-                                    {isIncomplete && (
-                                        <text
-                                            x={x + barWidth / 2} y={chartHeight - h - 15}
-                                            textAnchor="middle"
-                                            className="text-[8px] fill-amber-500 font-bold"
-                                        >
-                                            ⚠️
-                                        </text>
-                                    )}
+                                    <text
+                                        x={x + barWidth / 2} y={chartHeight - h - 5}
+                                        textAnchor="middle"
+                                        className="text-[9px] fill-emerald-400 font-black"
+                                    >
+                                        {val > 0 ? val : ''}
+                                    </text>
                                     <text
                                         x={x + barWidth / 2} y={chartHeight + 12}
                                         textAnchor="middle"
                                         className={`text-[8px] uppercase tracking-tighter transition-colors ${isToday ? 'fill-emerald-400 font-bold' : 'fill-slate-500'} group-hover/bar:fill-white`}
                                     >
                                         {day.label}
-                                    </text>
-
-                                    {/* Hover Value */}
-                                    <text
-                                        x={x + barWidth / 2} y={chartHeight - h - 4}
-                                        textAnchor="middle"
-                                        className="text-[8px] fill-emerald-300 font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity"
-                                    >
-                                        {day.calories}
                                     </text>
                                 </g>
                             );
@@ -200,37 +193,38 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                 </div>
 
                 {/* Protein Trend */}
-                <div className="trend-card">
-                    <div className="flex justify-between items-end mb-2">
+                <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex justify-between items-end mb-4">
                         <div>
-                            <span className="text-xs text-slate-500 block">Proteintrend ({completeDays.length} dgr)</span>
-                            <span className="text-lg font-bold text-violet-400">{proteinAverage}g <span className="text-xs font-normal text-slate-500">snitt</span></span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Proteintrend</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-xl font-black text-violet-400">{proteinAverage}g <span className="text-[10px] uppercase text-slate-500">snitt</span></span>
+                                <span className="text-[10px] font-bold text-violet-500/70">({(proteinAverage / (settings.weight || 75)).toFixed(2)}g/kg)</span>
+                            </div>
                         </div>
-                        <span className="text-[10px] text-slate-500">Mål: {proteinGoal}g</span>
+                        <span className="text-[10px] font-bold text-slate-500">Mål: {proteinGoal}g</span>
                     </div>
                     <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/prot">
-                        {/* Goal line */}
                         <line
                             x1="0" y1={chartHeight - (proteinGoal / protScale) * chartHeight}
                             x2={chartWidth} y2={chartHeight - (proteinGoal / protScale) * chartHeight}
                             stroke="#334155" strokeDasharray="4 2"
                         />
                         {daysData.map((day: any, i: number) => {
-                            const actualH = (day.protein / protScale) * chartHeight;
-                            const isCapped = day.protein > maxProtDisplay;
+                            const val = day.protein || 0;
+                            const actualH = (val / protScale) * chartHeight;
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
                             const isToday = day.isToday;
-                            const isIncomplete = settings.incompleteDays?.[day.date];
+                            const opacity = day.isComplete || isToday ? 1 : 0.2;
 
                             return (
                                 <g
                                     key={day.date}
                                     className="cursor-pointer group/bar transition-all duration-300"
                                     onClick={() => onDateSelect?.(day.date)}
-                                    style={{ opacity: isIncomplete ? 0.3 : 1 }}
+                                    style={{ opacity }}
                                 >
-                                    <title>{`${day.date}: ${day.protein}g protein`}</title>
                                     <rect
                                         x={x} y={chartHeight - h}
                                         width={barWidth} height={h}
@@ -238,15 +232,13 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                                         className="hover:fill-violet-400 transition-colors duration-200"
                                         rx="4"
                                     />
-                                    {isCapped && (
-                                        <text
-                                            x={x + barWidth / 2} y={chartHeight - h + 10}
-                                            textAnchor="middle"
-                                            className="text-[10px] fill-white font-bold pointer-events-none"
-                                        >
-                                            !
-                                        </text>
-                                    )}
+                                    <text
+                                        x={x + barWidth / 2} y={chartHeight - h - 5}
+                                        textAnchor="middle"
+                                        className="text-[9px] fill-violet-400 font-black"
+                                    >
+                                        {val > 0 ? val : ''}
+                                    </text>
                                     <text
                                         x={x + barWidth / 2} y={chartHeight + 12}
                                         textAnchor="middle"
@@ -254,19 +246,141 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                                     >
                                         {day.label}
                                     </text>
+                                </g>
+                            );
+                        })}
+                    </svg>
+                </div>
 
-                                    {/* Hover Value */}
+                {/* Träningstrend */}
+                <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex justify-between items-end mb-4">
+                        <div>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Träningstrend</span>
+                            <span className="text-xl font-black text-amber-400">+{burnedAverage} <span className="text-[10px] uppercase text-slate-500">kcal snitt</span></span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500">Senaste {range}d</span>
+                    </div>
+                    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/burn">
+                        {daysData.map((day: any, i: number) => {
+                            const val = day.burned || 0;
+                            const maxBurn = Math.max(...daysData.map(d => d.burned), 100);
+                            const h = (val / maxBurn) * chartHeight;
+                            const x = i * (barWidth + gap);
+                            const isToday = day.isToday;
+
+                            return (
+                                <g
+                                    key={day.date}
+                                    className="cursor-pointer group/bar transition-all duration-300"
+                                    onClick={() => onDateSelect?.(day.date)}
+                                >
+                                    <rect
+                                        x={x} y={chartHeight - h}
+                                        width={barWidth} height={h}
+                                        fill={isToday ? '#fbbf24' : '#fbbf2444'}
+                                        className="hover:fill-amber-300 transition-colors duration-200"
+                                        rx="4"
+                                    />
                                     <text
-                                        x={x + barWidth / 2} y={chartHeight - h - 4}
+                                        x={x + barWidth / 2} y={chartHeight - h - 5}
                                         textAnchor="middle"
-                                        className="text-[8px] fill-violet-300 font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                                        className="text-[9px] fill-amber-400 font-black"
                                     >
-                                        {day.protein}g
+                                        {val > 0 ? val : '0'}
+                                    </text>
+                                    <text
+                                        x={x + barWidth / 2} y={chartHeight + 12}
+                                        textAnchor="middle"
+                                        className={`text-[8px] uppercase tracking-tighter transition-colors ${isToday ? 'fill-amber-400 font-bold' : 'fill-slate-500'}`}
+                                    >
+                                        {day.label}
                                     </text>
                                 </g>
                             );
                         })}
                     </svg>
+                </div>
+            </div>
+
+            {/* Net Analysis Table */}
+            <div className="mt-8 overflow-hidden rounded-2xl border border-white/5 bg-white/5">
+                <div className="px-5 py-3 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Netto-analys (Dagsöversikt)</span>
+                    <span className="text-[9px] font-bold text-slate-500 italic">Maintenance (Bas): {maintenance} kcal</span>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                        <thead>
+                            <tr className="text-slate-500 bg-slate-950/20">
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px]">Dag / Datum</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px]">Intag</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px] text-amber-400">Träning</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px] text-indigo-300">Bas</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px]">Mål</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px]">Diff (Mål)</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px]">Diff (Bas)</th>
+                                <th className="px-5 py-2 font-black uppercase tracking-widest text-[9px] text-right">Protein</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {daysData.filter(d => d.isComplete && !d.isToday).reverse().slice(0, 10).map(day => {
+                                const net = day.calories - day.burned;
+                                const balance = maintenance - net;
+                                const diffGoal = net - calorieGoal;
+                                const isSelected = selectedDate === day.date;
+
+                                return (
+                                    <tr 
+                                        key={day.date} 
+                                        onClick={() => onDateSelect?.(day.date)}
+                                        className={`cursor-pointer transition-all duration-200 ${isSelected ? 'bg-indigo-500/20 ring-1 ring-inset ring-indigo-500/50' : 'hover:bg-white/5'}`}
+                                    >
+                                        <td className="px-5 py-2 font-bold whitespace-nowrap">
+                                            {day.label} <span className="text-[9px] font-normal text-slate-600 ml-1">{day.date.split('-').slice(1).join('/')}</span>
+                                        </td>
+                                        <td className={`px-5 py-2 font-black ${day.calories > calorieGoal ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                            {day.calories}
+                                        </td>
+                                        <td className="px-5 py-2 font-black text-amber-500">
+                                            {day.burned > 0 ? `+${day.burned}` : '0'}
+                                        </td>
+                                        <td className="px-5 py-2 font-black text-indigo-300">
+                                            {maintenance}
+                                        </td>
+                                        <td className="px-5 py-2 font-black text-slate-400">
+                                            {calorieGoal}
+                                        </td>
+                                        <td className={`px-5 py-2 font-black ${diffGoal <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {diffGoal > 0 ? '+' : ''}{Math.round(diffGoal)}
+                                        </td>
+                                        <td className={`px-5 py-2 font-black ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {balance > 0 ? '+' : ''}{Math.round(balance)}
+                                        </td>
+                                        <td className={`px-5 py-2 font-black text-right ${day.protein >= proteinGoal ? 'text-violet-400' : 'text-slate-500'}`}>
+                                            {day.protein}<span className="text-[8px] opacity-40 font-normal ml-0.5">g</span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot className="bg-slate-950/40 border-t border-white/10">
+                            <tr className="font-black text-[10px] uppercase tracking-widest">
+                                <td className="px-5 py-3 text-slate-500">Snitt / Totalt</td>
+                                <td className="px-5 py-3 text-emerald-400">{calorieAvegare} <span className="opacity-40 font-normal">avg</span></td>
+                                <td className="px-5 py-3 text-amber-500">+{burnedAverage} <span className="opacity-40 font-normal">avg</span></td>
+                                <td className="px-5 py-3 text-indigo-300">{maintenance} <span className="opacity-40 font-normal">avg</span></td>
+                                <td className="px-5 py-3 text-slate-400">{calorieGoal}</td>
+                                <td className={`px-5 py-3 ${completeDays.reduce((s, d) => s + (d.calories - d.burned - calorieGoal), 0) <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {Math.round(completeDays.reduce((s, d) => s + (d.calories - d.burned - calorieGoal), 0))} <span className="opacity-40 font-normal">sum</span>
+                                </td>
+                                <td className={`px-5 py-3 ${completeDays.reduce((s, d) => s + (maintenance - (d.calories - d.burned)), 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {Math.round(completeDays.reduce((s, d) => s + (maintenance - (d.calories - d.burned)), 0))} <span className="opacity-40 font-normal">sum</span>
+                                </td>
+                                <td className="px-5 py-3 text-right text-violet-400">{proteinAverage}g <span className="opacity-40 font-normal">avg</span></td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
             </div>
 

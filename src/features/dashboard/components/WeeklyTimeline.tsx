@@ -12,6 +12,7 @@ interface WeeklyTimelineProps {
     calculateTrainingStreak: (date: string, type?: string) => number;
     calculateWeeklyTrainingStreak: (date: string) => number;
     onHoverChange?: (isHovering: boolean) => void;
+    className?: string;
 }
 
 export const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({
@@ -23,14 +24,15 @@ export const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({
     calculateDailyNutrition,
     calculateTrainingStreak,
     calculateWeeklyTrainingStreak,
-    onHoverChange
+    onHoverChange,
+    className
 }) => {
     const navigate = useNavigate();
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
 
     return (
         <div
-            className="col-span-1 md:col-span-12 relative z-[60]"
+            className={className || "col-span-1 md:col-span-12 relative z-[60]"}
             onMouseEnter={() => onHoverChange?.(true)}
             onMouseLeave={() => onHoverChange?.(false)}
         >

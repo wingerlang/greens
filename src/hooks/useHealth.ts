@@ -115,9 +115,11 @@ export function useHealth(date: string = getISODate()) {
         return { daysIn, daysLeft, percent };
     }, [activeCycle, date]);
 
+    const metabolicMultiplier = settings.metabolicBaselineMultiplier || 1.2;
+
     return {
         bmr,
-        tdee: bmr + dailyCaloriesBurned, // True Total Daily Energy Expenditure (approx)
+        tdee: (bmr * metabolicMultiplier) + dailyCaloriesBurned, // True Total Daily Energy Expenditure (approx)
         dailyCaloriesConsumed,
         dailyCaloriesBurned,
         netCalories,

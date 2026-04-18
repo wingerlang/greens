@@ -1,5 +1,6 @@
 .calories-page {
     animation: fadeIn 0.3s ease;
+    padding-top: 5.5rem;
 }
 
 @keyframes fadeIn {

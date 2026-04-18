@@ -621,7 +621,17 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                             {ex.caloriesBurned !== undefined && ex.caloriesBurned > 0 && (
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[9px] text-rose-500/80 uppercase font-black tracking-widest">Energi</span>
-                                                                                    <span className="font-mono text-rose-400 font-bold">{Math.round(ex.caloriesBurned)} kcal</span>
+                                                                                    <span className="font-mono text-rose-400 font-bold flex items-center gap-1">
+                                                                                        {Math.round(ex.caloriesBurned)} kcal
+                                                                                        {ex.isCalorieAdjusted && (
+                                                                                            <span 
+                                                                                                className="text-[10px] text-amber-500 cursor-help" 
+                                                                                                title={`Justerat från ${ex.originalCalories} kcal (Strava) pga låg heart rate/effekt.`}
+                                                                                            >
+                                                                                                ✨
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </span>
                                                                                 </div>
                                                                             )}
                                                                             {ex.averageWatts !== undefined && ex.averageWatts > 0 && (

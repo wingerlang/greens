@@ -17,6 +17,7 @@ interface TrainingCardProps {
     isHoveringTraining: boolean;
     settings: { dailyTrainingGoal?: number };
     category?: DashboardTrainingCategory;
+    className?: string;
 }
 
 const getCategoryForType = (type: string): DashboardTrainingCategory => {
@@ -35,7 +36,8 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
     deleteExercise,
     isHoveringTraining,
     settings,
-    category = 'all'
+    category = 'all',
+    className
 }) => {
     const navigate = useNavigate();
 
@@ -106,7 +108,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         const goalMet = totalDuration >= (settings.dailyTrainingGoal || 60);
 
         trainingContent = (
-            <div className={`flex flex-col ${density === 'compact' ? 'gap-0.5 w-full p-1' : density === 'slim' ? 'gap-1.5 w-full p-2' : 'gap-2 w-full p-3'} rounded-2xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
+            <div className={`flex flex-col ${density === 'compact' ? 'gap-0.5 w-full p-0.5' : density === 'slim' ? 'gap-1.5 w-full p-1' : 'gap-2 w-full p-1.5'} rounded-2xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
@@ -184,7 +186,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                             className={`flex flex-col sm:flex-row items-stretch sm:items-center ${density === 'compact' ? 'gap-2 p-2 rounded-lg' : 'gap-3 p-2.5 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`${density === 'compact' ? 'text-sm p-1.5' : 'text-lg p-2'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50 shrink-0`}>
+                                <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50 shrink-0`}>
                                     {typeDef?.icon || '💪'}
                                 </div>
                                 <div className="sm:hidden flex-1 font-bold text-slate-900 dark:text-white capitalize truncate">
@@ -276,16 +278,16 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
             id={`training-${category}`}
             isDone={isDone}
             onToggle={onToggle}
-            className={`md:col-span-12 ${category === 'all' ? 'xl:col-span-6' : 'xl:col-span-4'} h-full`}
+            className={className || `md:col-span-12 ${category === 'all' ? 'xl:col-span-6' : 'xl:col-span-4'} h-full`}
         >
             <div
                 onClick={() => navigate('/planera')}
-                className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
+                className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-2.5 gap-3 rounded-2xl' : 'p-4 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
             >
                 <CategoryIcon className={`absolute -bottom-4 -right-4 w-24 h-24 ${config.color} opacity-[0.03] dark:opacity-[0.07] pointer-events-none transform -rotate-12 transition-all group-hover:scale-110`} />
 
-                <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} ${config.iconBg} rounded-full flex items-center justify-center ${config.color} group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-slate-800 transition-colors shrink-0 z-10`}>
-                    <CategoryIcon className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
+                <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-12 h-12'} ${config.iconBg} rounded-full flex items-center justify-center ${config.color} group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-slate-800 transition-colors shrink-0 z-10`}>
+                    <CategoryIcon className={density === 'compact' ? 'w-4 h-4' : 'w-6 h-6'} />
                 </div>
                 <div className="flex-1 min-w-0 text-left z-10">
                     <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1 flex items-center justify-between`}>

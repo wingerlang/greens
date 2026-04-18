@@ -70,7 +70,55 @@ export const AssaultBikeMath = {
 
     calsPerMinToWatts: (cpm: number): number => {
         return cpm / 0.05;
+    },
+
+    /**
+     * Energy (kcal) = Average Power (Watts) * Duration (hours) * 3.6
+     * This assumes ~24% human efficiency (1 kJ mechanical work ≈ 1 kcal metabolic cost)
+     */
+    calculateCyclingKcal: (avgWatts: number, durationMinutes: number): number => {
+        if (!avgWatts || !durationMinutes) return 0;
+        const durationHours = durationMinutes / 60;
+        return Math.round(avgWatts * durationHours * 3.6);
     }
+};
+
+
+// ============================================
+// Text Parsing Utilities
+// ============================================
+
+/**
+ * Extracts average wattage from text strings.
+ * Supports:
+ * - "200w"
+ * - "@ 200w"
+ * - "180-190w"
+ * - "180w-200w"
+ * - "30min @ 200watt"
+ */
+export const parseWattsFromText = (text: string): number | null => {
+    if (!text) return null;
+
+    // Range patterns: "180-190w" or "180w-190w"
+    const rangeRegex = /(\d+)\s*(?:-|–|to)\s*(\d+)\s*(?:w|watt)/i;
+    const rangeMatch = text.match(rangeRegex);
+    if (rangeMatch) {
+        const val1 = parseInt(rangeMatch[1]);
+        const val2 = parseInt(rangeMatch[2]);
+        return (val1 + val2) / 2;
+    }
+
+    // Single value patterns: "@ 200w", "avg 200w", "200 watt"
+    // Also captures cases like "30min @ 200w"
+    const singleRegex = /(?:@|avg|v)\s*(\d+)\s*(?:w|watt)\b|(\d+)\s*(?:w|watt)\b/i;
+    const singleMatch = text.match(singleRegex);
+    if (singleMatch) {
+        const val = singleMatch[1] || singleMatch[2];
+        return parseInt(val);
+    }
+
+    return null;
 };
 
 

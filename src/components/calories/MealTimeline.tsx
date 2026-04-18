@@ -350,7 +350,12 @@ export function MealTimeline({
     // Normal view (Detailed Sections)
     return (
         <div className="meals-timeline flex flex-col gap-4">
-            {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][]).map(([mealTypeKey, entries]) => (
+            {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][])
+                .filter(([key, entries]) => {
+                    if (key === 'beverage' || key === 'estimate') return entries.length > 0;
+                    return true;
+                })
+                .map(([mealTypeKey, entries]) => (
                 <div
                     key={mealTypeKey}
                     className="meal-section"
@@ -373,15 +378,7 @@ export function MealTimeline({
                     <div className="flex items-center justify-between mb-2 px-2">
                         <div className="flex items-center gap-4">
                             <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                                <span className="text-lg">
-                                    {mealTypeKey === 'breakfast' && '🌅'}
-                                    {mealTypeKey === 'lunch' && '☀️'}
-                                    {mealTypeKey === 'dinner' && '🌙'}
-                                    {mealTypeKey === 'evening_meal' && '🌌'}
-                                    {mealTypeKey === 'snack' && '🍎'}
-                                    {mealTypeKey === 'beverage' && '🥤'}
-                                    {mealTypeKey === 'estimate' && '🤷'}
-                                </span>
+                                <span className="text-lg"></span>
                                 {MEAL_TYPE_LABELS[mealTypeKey]}
                             </h3>
                             {entries.length > 0 && (

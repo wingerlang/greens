@@ -20,7 +20,7 @@ export class SmartCacheMiddleware implements Middleware {
     name = "SmartCache";
 
     async handle(ctx: GuardianContext, next: Next): Promise<void> {
-        if (!CONFIG.features.smartCache || ctx.req.method !== "GET") {
+        if (!CONFIG.features.smartCache || ctx.req.method !== "GET" || CONFIG.mode === "dev") {
             await next();
             return;
         }

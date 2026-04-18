@@ -11,6 +11,7 @@ import {
     getISODate,
     UniversalActivity
 } from '../models/types.ts';
+import { parseWattsFromText } from './cyclingCalculations.ts';
 
 // ============================================
 // Streak Calculations
@@ -256,23 +257,36 @@ export function calculateExerciseCalories(
 export function parsePowerCalories(notes: string): number {
     if (!notes) return 0;
     
-    // Regex matches: 45min @ 215w, 45 m @ 215 watt, 45 min: 215w, etc.
-    // Group 1: Duration, Group 2: Unit (min/m), Group 3: Power
-    const regex = /(\d+)\s*(min|m)?\s*[@:]\s*(\d+)\s*(?:w|watt)/gi;
+    // Regex matches complex interval structures or simple summaries
+    // 1. Explicit intervals: "45min @ 215w", "10 min: 200w"
+    const intervalRegex = /(?:(\d+)\s*(?:min|m)?\s*[@:]\s*)?(\d+)(?:\s*-\s*(\d+))?\s*(?:w|watt)/gi;
     let totalKcal = 0;
     let match;
 
-    while ((match = regex.exec(notes)) !== null) {
-        const durationMin = parseInt(match[1]);
-        const watts = parseInt(match[3]);
+    const notesLower = notes.toLowerCase();
+
+    // If it's a simple summary like "Avg 210w" without a stated duration in that specific line, 
+    // we return the watts but we can't calculate kcal without knowing total duration from context.
+    // parsePowerCalories is designed to SUM UP explicitly timed segments.
+    
+    while ((match = intervalRegex.exec(notesLower)) !== null) {
+        const durationMin = match[1] ? parseInt(match[1]) : 0;
+        const wattsMin = parseInt(match[2]);
+        const wattsMax = match[3] ? parseInt(match[3]) : wattsMin;
+        const avgWatts = (wattsMin + wattsMax) / 2;
         
-        // kJ = Watts * seconds / 1000
-        // kcal ≈ kJ (assuming ~24% human efficiency)
-        const kcal = (watts * durationMin * 60) / 1000;
-        totalKcal += kcal;
+        if (durationMin > 0) {
+            // kcal ≈ kJ = Watts * seconds / 1000
+            const kcal = (avgWatts * durationMin * 60) / 1000;
+            totalKcal += kcal;
+        } else {
+            // If no duration is explicitly attached to the watt pattern, check if the WHOLE string 
+            // is just a watt value (e.g. "200w"). In that case, we might need external duration.
+            // But parsePowerCalories traditionally returns TOTAL kcal.
+        }
     }
 
-    return totalKcal;
+    return Math.round(totalKcal);
 }
 
 export function calculateHeartRateCalories(

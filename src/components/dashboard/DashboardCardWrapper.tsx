@@ -22,7 +22,7 @@ export const DashboardCardWrapper = ({
         : '';
 
     return (
-        <div className={`${className} ${opacityClass} relative group/card`}>
+        <div className={`${className} ${opacityClass} relative group/card hover:z-40`}>
             {/* Manual Completion Toggle */}
             <button
                 onClick={(e) => onToggle(id, e)}

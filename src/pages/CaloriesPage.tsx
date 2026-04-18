@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useAnalytics } from '../context/AnalyticsContext.tsx';
+import { useHealth } from '../hooks/useHealth.ts';
 import {
     type MealType,
     type MealItem,
@@ -162,6 +163,8 @@ export function CaloriesPage() {
         [calculateDailyNutrition, selectedDate]
     );
 
+    const { tdee: maintenance, bmr, dailyCaloriesBurned: burned } = useHealth(selectedDate);
+
     // View mode toggle hotkey and navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -198,8 +201,12 @@ export function CaloriesPage() {
             evening_meal: [],
         };
         dailyEntries.forEach((entry: MealEntry) => {
-            grouped[entry.mealType].push(entry);
+            // Integration: Move 'estimate' entries into 'lunch' for display
+            const targetType = entry.mealType === 'estimate' ? 'lunch' : entry.mealType;
+            grouped[targetType].push(entry);
         });
+        
+        // Remove 'beverage' row if empty or by preference (user requested dryck hidden)
         return grouped;
     }, [dailyEntries]);
 
@@ -668,18 +675,40 @@ export function CaloriesPage() {
             <div className="flex justify-center mb-4">
                 <button
                     onClick={() => toggleIncompleteDay(selectedDate)}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-2 ${userSettings.incompleteDays?.[selectedDate]
-                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                        : 'bg-transparent border-slate-700 text-slate-500 hover:border-slate-500'
+                    className={`text-xs font-black px-4 py-2 rounded-xl border transition-all flex items-center gap-2 ${currentVitals.incomplete
+                        ? 'bg-orange-500/20 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]'
+                        : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
                         }`}
                 >
-                    {userSettings.incompleteDays?.[selectedDate] ? '⚠️ Dagen markerad som inkomplett' : 'Markera dag som inkomplett'}
+                    {currentVitals.incomplete ? '⚠️ Dagen markerad som inkomplett' : 'Markera dag som inkomplett'}
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 my-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 mb-6">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6 overflow-hidden">
-                    <div className="flex flex-col sm:flex-row items-center gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div className="flex flex-col items-center justify-center p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
+                            <span className="text-[10px] font-black uppercase text-emerald-500 mb-1">Intag</span>
+                            <span className="text-2xl font-black text-white">{Math.round(dailyNutrition.calories)}</span>
+                            <span className="text-[9px] text-slate-500 font-bold">kcal</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10">
+                            <span className="text-[10px] font-black uppercase text-amber-500 mb-1">Träning</span>
+                            <span className="text-2xl font-black text-white">+{Math.round(burned)}</span>
+                            <span className="text-[9px] text-slate-500 font-bold">kcal</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                            <span className="text-[10px] font-black uppercase text-indigo-400 mb-1">Balans</span>
+                            <div className="flex items-center gap-1">
+                                <span className={`text-2xl font-black ${dailyNutrition.calories > maintenance ? 'text-rose-400' : 'text-indigo-300'}`}>
+                                    {Math.round(maintenance - dailyNutrition.calories)}
+                                </span>
+                            </div>
+                            <span className="text-[9px] text-slate-500 font-bold">kcal kvar</span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-8 mt-8">
                         <div className="shrink-0">
                             <CalorieRing
                                 calories={dailyNutrition.calories}

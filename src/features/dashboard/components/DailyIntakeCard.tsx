@@ -24,7 +24,9 @@ interface DailyIntakeCardProps {
     proteinRatio: number;
     targetProteinRatio: number;
     onHoverTraining?: (isHovering: boolean) => void;
+    maintenance?: number;
     explanation?: string;
+    className?: string;
 }
 
 export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
@@ -47,10 +49,11 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
     proteinRatio,
     targetProteinRatio,
     onHoverTraining,
-    explanation
+    maintenance,
+    explanation,
+    className
 }) => {
     const navigate = useNavigate();
-    const [showDetails, setShowDetails] = useState(false);
     const [isHoveringTraining, setIsHoveringTraining] = useState(false);
 
     return (
@@ -58,7 +61,7 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
             id="intake"
             isDone={isDone}
             onToggle={onToggle}
-            className="md:col-span-12 xl:col-span-6 h-full flex"
+            className={className || "md:col-span-12 xl:col-span-6 h-full flex"}
         >
             <div
                 onClick={() => navigate(`/calories?date=${selectedDate}`)}
@@ -72,9 +75,35 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                         displayValue={Math.round(target - consumed)}
                         label="Kvar"
                     />
+
+                        {/* Progress Bar for Consumption vs Target */}
+                        <div className="w-full mt-4">
+                            <div className="flex justify-between items-center mb-1 text-[8px] font-bold uppercase tracking-tighter">
+                                <span className="text-slate-400">Intag</span>
+                                <span className={consumed > target ? 'text-rose-500' : 'text-slate-500'}>{Math.round(consumed)} kcal</span>
+                            </div>
+                            <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
+                            </div>
+                        </div>
                 </div>
-                <div className="flex-1 w-full md:w-auto md:ml-4 mt-2 md:mt-0 min-w-0 pb-2 md:pb-6 text-center md:text-left">
-                    <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
+
+                <div className="flex-1 w-full md:w-auto md:ml-4 mt-2 md:mt-0 min-w-0 pb-2 md:pb-6 text-center md:text-left flex flex-col">
+                    <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-2 ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>
+                        <span>Dagens Intag</span>
+                        
+                        {/* Beräknat Mål & Netto - Now in Header for better visibility */}
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-center md:items-end">
+                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-0.5">Mål</span>
+                                <span className={`font-black tracking-tighter text-sm ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>{target}</span>
+                            </div>
+                            <div className="flex flex-col items-center md:items-end">
+                                <span className="text-[8px] font-black text-indigo-500 uppercase leading-none mb-0.5">Netto</span>
+                                <span className={`font-black tracking-tighter text-sm ${(consumed - burned) > (baseTarget + 50) ? 'text-rose-500' : 'text-indigo-500'}`}>{Math.round(consumed - burned)}</span>
+                            </div>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 lg:grid-cols-2 gap-x-4 gap-y-4">
                         {/* Protein */}
                         <div>
@@ -154,96 +183,59 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                             </div>
                         </div>
 
-                        {/* Calories */}
-                        <div>
-                            <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kcal</span>
-                                    {explanation && (
+                        {/* Balans - Now Integrated as a Fourth Meter */}
+                        {maintenance && (
+                            <div>
+                                <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Balans</span>
                                         <div className="group relative">
-                                            <Info size={10} className="text-slate-300 hover:text-indigo-500 cursor-help transition-colors" />
-                                            <div className="hidden md:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900/95 backdrop-blur text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 pointer-events-none shadow-2xl border border-white/10 z-[110] leading-relaxed text-center">
-                                                <div className="font-black text-[9px] uppercase text-indigo-400 mb-1 border-b border-white/5 pb-1">Målberäkning</div>
-                                                {explanation}
-                                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+                                            <Info size={10} className="text-slate-300 hover:text-indigo-400 cursor-help" />
+                                            <div className="hidden md:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 border border-white/20 rounded-xl shadow-2xl z-[300] pointer-events-none transition-all opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0">
+                                                <div className="text-[10px] font-black text-indigo-400 mb-2 uppercase tracking-tighter border-b border-white/10 pb-1">Metabolisk Analys</div>
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between text-[9px]">
+                                                        <span className="text-slate-400 text-[8px]">Basförbränning (BMR)</span>
+                                                        <span className="text-white font-mono">{Math.round(maintenance - burned)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-[9px]">
+                                                        <span className="text-slate-400 text-[8px]">Vardagsmotion & TEF (PAL)</span>
+                                                        <span className="text-emerald-400 font-mono">Inkluderad</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-[9px]">
+                                                        <span className="text-slate-400 text-[8px]">Dagens träning</span>
+                                                        <span className="text-amber-400 font-mono">+{Math.round(burned)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between pt-1 mt-1 border-t border-white/5 text-[10px] font-black">
+                                                        <span className="text-indigo-300 uppercase leading-none">Total Förbränning</span>
+                                                        <span className="text-indigo-300 font-mono">{Math.round(maintenance)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between pt-1 text-[10px] font-black">
+                                                        <span className="text-slate-500 uppercase leading-none">Netto-status</span>
+                                                        <span className={consumed > maintenance ? 'text-orange-400' : 'text-emerald-400'}>
+                                                            {consumed > maintenance ? `+${Math.round(consumed - maintenance)} Överskott` : `${Math.round(maintenance - consumed)} Underskott`}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
-                                <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
-                                    {Math.round(consumed)}
-                                </span>
-                                <span className="text-[9px] text-slate-400 font-bold">/ {target}</span>
-                            </div>
-                            <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
-                                <div className={`h-full rounded-full ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
-                            </div>
-                        </div>
-
-                        {/* Training/Burned Calories - Hidden unless active or expanded */}
-                        {(showDetails || burned > 0) && (
-                            <div
-                                onMouseEnter={() => { setIsHoveringTraining(true); onHoverTraining?.(true); }}
-                                onMouseLeave={() => { setIsHoveringTraining(false); onHoverTraining?.(false); }}
-                                className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
-                            >
-                                <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
-                                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
+                                    </div>
                                 </div>
                                 <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
-                                    <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
-                                        -{Math.round(burned)}
+                                    <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${consumed > maintenance ? 'text-orange-500' : 'text-indigo-400'}`}>
+                                        {Math.round(maintenance - consumed)}
                                     </span>
-                                    <span className="text-[9px] text-slate-400 font-bold">kcal</span>
+                                    <span className="text-[9px] text-slate-400 font-bold truncate">/ balans</span>
                                 </div>
-                                <div className="h-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full overflow-hidden mt-1">
-                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${burned > 0 ? Math.min((burned / 500) * 100, 100) : 0}%` }}></div>
+                                <div className="h-1 bg-indigo-500/10 rounded-full overflow-hidden mt-1">
+                                    <div 
+                                        className={`h-full rounded-full ${consumed > maintenance ? 'bg-orange-500' : 'bg-indigo-400'}`} 
+                                        style={{ width: `${Math.min((consumed / maintenance) * 100, 100)}%` }}
+                                    ></div>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Net Calories - Hidden unless expanded */}
-                        {showDetails && (
-                            <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-2">
-                                <div className={`flex justify-between items-baseline mb-1`}>
-                                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
-                                    <span className={`text-[9px] font-bold ${(consumed - burned) > baseTarget ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                                        {(consumed - burned) <= baseTarget ? '✓ Under mål' : '⚠ Över mål'}
-                                    </span>
-                                </div>
-                                <div className="flex items-baseline gap-1">
-                                    <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > baseTarget ? 'text-rose-500' : 'text-indigo-500'}`}>
-                                        {Math.round(consumed - burned)}
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 font-bold">/ {baseTarget} kcal</span>
-                                </div>
-                                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
-                                    <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
-                                </div>
-                                {explanation && (
-                                    <div className="mt-3 p-2 bg-indigo-500/5 border border-indigo-500/10 rounded-xl flex items-start gap-2 animate-in fade-in zoom-in-95 duration-500">
-                                        <div className="p-1 bg-indigo-500/20 text-indigo-400 rounded-md shrink-0">
-                                            <Target size={12} />
-                                        </div>
-                                        <div className="text-[9px] text-slate-500 leading-normal">
-                                            <span className="font-black text-indigo-400 uppercase tracking-tighter mr-1 italic">Regler:</span>
-                                            {explanation}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
-
-                    {/* Expand Toggle */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setShowDetails(!showDetails); }}
-                        className="absolute bottom-2 right-4 p-1 text-slate-300 hover:text-slate-600 dark:hover:text-slate-100 transition-colors"
-                    >
-                        {showDetails ? <X size={14} /> : <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">Mer <ChevronRight size={10} className="rotate-90" /></div>}
-                    </button>
                 </div>
             </div>
         </DashboardCardWrapper>

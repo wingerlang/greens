@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, type MutableRefObject } from 'react';
+import { AssaultBikeMath } from '../../utils/cyclingCalculations.ts';
 import {
     type ExerciseEntry,
     type StrengthWorkout,
@@ -432,14 +433,28 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
     }, [storageService]);
 
-    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string): number => {
+    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string, averageWatts?: number): number => {
         const weight = getLatestWeight();
 
-        // MET values
+        // 1. Cycling Power Priority (Gold Standard)
+        if (type === 'cycling') {
+            const watts = averageWatts || (notes ? parsePowerCalories(notes) / (duration / 60 || 1) : 0);
+            if (watts > 0) {
+                return AssaultBikeMath.calculateCyclingKcal(watts, duration);
+            }
+        }
+
+        // 2. Parse explicit patterns (e.g. "10min @ 200w")
+        if (notes) {
+            const powerCalories = parsePowerCalories(notes);
+            if (powerCalories > 0) return Math.round(powerCalories);
+        }
+
+        // 3. Fallback to MET (Science Standard)
         const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
             running: { low: 6, moderate: 8, high: 11, ultra: 14 },
             cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
-            strength: { low: 2.5, moderate: 3.5, high: 5.0, ultra: 7.0 }, // Adjusted downwards to align better with Strava
+            strength: { low: 2.5, moderate: 3.5, high: 5.0, ultra: 7.0 },
             walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 5.5 },
             swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
             yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
@@ -452,13 +467,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
 
-        // 1. Try to parse power from notes if available
-        if (notes) {
-            const powerCalories = parsePowerCalories(notes);
-            if (powerCalories > 0) return Math.round(powerCalories);
-        }
-
-        const met = METS[type][intensity];
+        const met = METS[type][intensity] || 4.5;
         return Math.round(met * weight * (duration / 60));
     }, [getLatestWeight]);
 
@@ -504,6 +513,26 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 }
             }
 
+            let calories = e.caloriesBurned;
+            let noteAdjustment = '';
+
+            const powerKcal = parsePowerCalories(u?.performance?.notes || '');
+            if (powerKcal > 0) {
+                calories = Math.round(powerKcal);
+            } else if (e.type === 'running' && e.distance && e.distance > 0) {
+                const weight = getLatestWeight() || 75;
+                const stravaKcal = e.caloriesBurned;
+                const baselineKcal = e.distance * weight * 1.0;
+                
+                // If Strava's estimate is notably low (e.g. low heart rate run), adjust to the average
+                if (stravaKcal < (baselineKcal * 0.85)) {
+                    calories = Math.round((stravaKcal + baselineKcal) / 2);
+                    noteAdjustment = `\n[Notis: Kalorier justerade från ${stravaKcal} till ${calories} pga låg Strava-estimering (${Math.round(baselineKcal)} kcal baseline)]`;
+                }
+            }
+            
+            const isAdjusted = noteAdjustment !== '';
+
             return {
                 ...e,
                 source: source as any,
@@ -514,9 +543,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     universalActivity: u,
                     strengthWorkout: sw
                 },
-                caloriesBurned: parsePowerCalories(u?.performance?.notes || '') > 0 
-                  ? Math.round(parsePowerCalories(u?.performance?.notes || '')) 
-                  : e.caloriesBurned
+                caloriesBurned: calories,
+                isCalorieAdjusted: isAdjusted,
+                originalCalories: isAdjusted ? e.caloriesBurned : undefined,
+                notes: noteAdjustment ? (e.notes ? `${e.notes}${noteAdjustment}` : noteAdjustment.trim()) : e.notes
             };
         });
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' as const }));
@@ -526,20 +556,20 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             const workoutName = (w.name || w.title || '').toLowerCase();
 
             // 1. Identify cardio exercises within the workout
-            const cardioExercises = w.exercises.filter((ex: any) => isDistanceBasedExercise(ex.exerciseName));
+            const cardioExercises = (w.exercises || []).filter((ex: any) => isDistanceBasedExercise(ex.exerciseName));
 
             // 2. Calculate Cardio Time vs Total Time
             // Most sets are reps, but cardio sets have duration in seconds or minutes.
             const cardioTimeSeconds = cardioExercises.reduce((sum: number, ex: any) =>
-                sum + ex.sets.reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
+                sum + (ex.sets || []).reduce((s: number, set: any) => s + (set.timeSeconds || 0), 0), 0);
 
             let totalDurationMinutes = w.duration || w.durationMinutes;
             if (!totalDurationMinutes || totalDurationMinutes === 0) {
                 // Strength sets typically lack timeSeconds, so estimating derived from sets (3min/set incl rest) 
                 // prevents pure cardio sets from incorrectly dominating the duration ratio.
-                const strengthSetsCount = w.exercises.reduce((sum: number, ex: any) => {
+                const strengthSetsCount = (w.exercises || []).reduce((sum: number, ex: any) => {
                     if (isDistanceBasedExercise(ex.exerciseName)) return sum;
-                    return sum + ex.sets.length;
+                    return sum + (ex.sets || []).length;
                 }, 0);
                 
                 const estimatedStrengthMinutes = strengthSetsCount * 3;
@@ -560,7 +590,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 workoutName.includes('padel') || workoutName.includes('tennis') ||
                 workoutName.includes('basket') || workoutName.includes('hockey');
 
-            const cardioExerciseRatio = w.exercises.length > 0 ? cardioExercises.length / w.exercises.length : 0;
+            const exerciseCount = (w.exercises || []).length;
+            const cardioExerciseRatio = exerciseCount > 0 ? cardioExercises.length / exerciseCount : 0;
             const isHybrid = !isExplicitCardioWorkout && totalDurationMinutes > 0 && (
                 (cardioDurationMinutes / totalDurationMinutes) >= 0.20
             );
@@ -610,8 +641,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
 
             // Sum distance for the whole session
-            const totalDistance = w.exercises.reduce((sum: number, ex: any) =>
-                sum + ex.sets.reduce((s: number, set: any) => s + (set.distance || 0), 0), 0);
+            const totalDistance = (w.exercises || []).reduce((sum: number, ex: any) =>
+                sum + (ex.sets || []).reduce((s: number, set: any) => s + (set.distance || 0), 0), 0);
 
             return {
                 id: w.id,

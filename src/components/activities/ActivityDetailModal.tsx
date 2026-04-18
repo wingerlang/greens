@@ -143,6 +143,7 @@ export function ActivityDetailModal({
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
         hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
         startKm: '0',
+        averageWatts: (perf?.averageWatts || currentActivity.averageWatts || '').toString(),
         placement: currentActivity.raceDetails?.placement?.toString() || '',
         totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || ''
     });
@@ -800,7 +801,8 @@ export function ActivityDetailModal({
         e.preventDefault();
 
         const duration = parseInt(editForm.duration) || 0;
-        const calories = calculateExerciseCalories(editForm.type, duration, editForm.intensity);
+        const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
+        const calories = calculateExerciseCalories(editForm.type, duration, editForm.intensity, editForm.notes, avgWatts);
 
         let updatedNotes = editForm.notes;
         if ((editForm as any).startKm && parseFloat((editForm as any).startKm) >= 0) {
@@ -817,6 +819,7 @@ export function ActivityDetailModal({
             subType: editForm.subType as any,
             tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
+            averageWatts: avgWatts,
             caloriesBurned: calories,
             location: editForm.location,
             excludeFromStats: editForm.excludeFromStats,
@@ -1106,6 +1109,22 @@ export function ActivityDetailModal({
                                     <option value="default">Standard</option>
                                 </select>
                             </div>
+
+                            {/* Average Watts (Cycling only) */}
+                            {editForm.type === 'cycling' && (
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-amber-500 uppercase flex items-center gap-1">
+                                        <Zap size={10} /> Effekt (Watt)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        placeholder="Avg Watts..."
+                                        value={editForm.averageWatts}
+                                        onChange={e => setEditForm({ ...editForm, averageWatts: e.target.value })}
+                                        className="w-full bg-slate-800 border-white/10 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-amber-500/50"
+                                    />
+                                </div>
+                            )}
 
                             {/* Race Toggle */}
                             <div className="md:col-span-2">
@@ -2013,6 +2032,9 @@ export function ActivityDetailModal({
                                                         title={activity.calorieBreakdown}
                                                     >
                                                         {activity.caloriesBurned ? `${activity.caloriesBurned} kcal` : '-'}
+                                                        {activity.isCalorieAdjusted && (
+                                                            <span className="text-[10px] text-amber-500 ml-1" title={`Justerat från ${activity.originalCalories} kcal`}>✨</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                                 {/* HR */}
@@ -2244,10 +2266,13 @@ export function ActivityDetailModal({
                                                     <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
                                                     <div className="flex items-baseline gap-1">
                                                         <span
-                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''}`}
-                                                            title={activity.calorieBreakdown}
+                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''} flex items-center gap-1`}
+                                                            title={activity.calorieBreakdown || (activity.isCalorieAdjusted ? `Justerat från ${activity.originalCalories} kcal (Strava) pga låg puls/intensitet.` : undefined)}
                                                         >
                                                             {activity.caloriesBurned || perf?.calories || '-'}
+                                                            {activity.isCalorieAdjusted && (
+                                                                <span className="text-xs text-amber-500">✨</span>
+                                                            )}
                                                         </span>
                                                         <span className="text-[10px] uppercase text-slate-500">kcal</span>
                                                     </div>

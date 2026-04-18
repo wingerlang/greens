@@ -42,6 +42,10 @@ export default defineConfig({
             clientPort: 3000,
             host: 'localhost'
         } : true, // Default HMR when running standalone
+        watch: {
+            usePolling: true,
+            interval: 100,
+        },
         proxy: {
             '/api': {
                 target: 'http://127.0.0.1:8000',

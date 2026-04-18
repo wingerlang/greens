@@ -204,7 +204,7 @@ export function TrainingPage() {
                     } else if (item.type === 'recipe') {
                         const recipe = recipes.find(r => r.id === item.referenceId);
                         if (recipe) {
-                            const recipeTotalKcal = recipe.ingredients.reduce((sum, ing) => {
+                            const recipeTotalKcal = (recipe.ingredients || []).reduce((sum, ing) => {
                                 const f = foodItems.find(fi => fi.id === ing.foodItemId);
                                 if (!f) return sum;
                                 const base = (f.unit === 'g' || f.unit === 'ml') ? 100 : 1;

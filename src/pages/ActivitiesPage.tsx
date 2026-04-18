@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { ExerciseEntry, UniversalActivity } from '../models/types.ts';
 import { StrengthWorkout } from '../models/strengthTypes.ts';
+import { Heart, Zap, MessageSquare, Clock, MapPin } from 'lucide-react';
 
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { SmartFilter, parseSmartQuery, applySmartFilters } from '../utils/activityFilters.ts';
@@ -92,10 +93,19 @@ const ActivityRow = ({
         }
     }
 
-    // Calculate pace
-    const pace = activity.distance && activity.durationMinutes > 0
-        ? (activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')
-        : null;
+    // Calculate pace (proper MM:SS format)
+    const pace = useMemo(() => {
+        if (!activity.distance || activity.distance <= 0 || !activity.durationMinutes) return null;
+        
+        const totalSeconds = activity.durationMinutes * 60;
+        const secondsPerKm = totalSeconds / activity.distance;
+        const mins = Math.floor(secondsPerKm / 60);
+        const secs = Math.round(secondsPerKm % 60);
+        
+        // Handle overflow cases (60s -> 1m)
+        if (secs === 60) return `${mins + 1}:00`;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }, [activity.distance, activity.durationMinutes]);
 
     // Score
     const score = calculatePerformanceScore(activity, allActivities);
@@ -128,7 +138,7 @@ const ActivityRow = ({
                 <td className="px-3 py-2">
                     <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
-                            <span className="text-white font-bold text-xs truncate max-w-[180px]" title={displayTitle}>
+                            <span className="text-white font-bold text-xs truncate max-w-[240px]" title={displayTitle}>
                                 {displayTitle}
                             </span>
                         </div>
@@ -173,7 +183,7 @@ const ActivityRow = ({
                         if (isMergedActivity) {
                             return (
                                 <div
-                                    className="flex items-center gap-2 cursor-pointer group/source min-w-[100px]"
+                                    className="flex items-center gap-2 cursor-pointer group/source"
                                     onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
                                     title="Visa källor"
                                 >
@@ -221,29 +231,57 @@ const ActivityRow = ({
                         }
                     })()}
                 </td>
+                <td className="px-3 py-2 text-[10px] font-mono whitespace-nowrap text-slate-400">
+                    {formatDuration(activity.durationMinutes * 60)}
+                </td>
+                <td className="px-3 py-2 text-[10px] font-mono whitespace-nowrap text-emerald-400/90 font-bold">
+                    {activity.distance && activity.distance > 0 ? `${activity.distance.toFixed(1)} km` : '-'}
+                </td>
                 <td className="px-3 py-2">
-                    <div className="flex flex-col text-[10px] font-mono text-slate-300 leading-tight">
-                        <span>{formatDuration(activity.durationMinutes * 60)}</span>
-                        {activity.distance && (
-                            <span className="text-slate-400">{activity.distance.toFixed(1)} km</span>
-                        )}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px]">
                         {pace && (
-                            <span className="text-indigo-400">{pace}/km</span>
+                            <span className="text-indigo-400 font-black">{pace}/km</span>
+                        )}
+                        {universalMatch?.performance?.avgHeartRate && (
+                            <div className="flex items-center gap-0.5 text-rose-400 font-bold" title="Medelpuls">
+                                <Heart size={10} />
+                                <span>{Math.round(universalMatch.performance.avgHeartRate)}</span>
+                            </div>
+                        )}
+                        {universalMatch?.performance?.averageWatts && (
+                            <div className="flex items-center gap-0.5 text-amber-500 font-bold" title="Medelwatt">
+                                <Zap size={10} />
+                                <span>{Math.round(universalMatch.performance.averageWatts)}w</span>
+                            </div>
                         )}
                         {activity.tonnage && (
-                            <span className="text-purple-400">{(activity.tonnage / 1000).toFixed(1)}t</span>
+                            <span className="text-purple-400 font-bold">{(activity.tonnage / 1000).toFixed(1)}t</span>
+                        )}
+                        {!pace && !universalMatch?.performance?.avgHeartRate && !universalMatch?.performance?.averageWatts && !activity.tonnage && (
+                            <span className="text-slate-700">-</span>
                         )}
                     </div>
                 </td>
-                <td className="px-3 py-2 text-[10px] italic opacity-50 truncate max-w-[80px]" title={activity.notes || ''}>
-                    {activity.notes ? (activity.notes.length > 20 ? activity.notes.slice(0, 20) + '…' : activity.notes) : '-'}
+                <td className="px-3 py-2 text-center">
+                    {activity.notes ? (
+                        <div className="group relative flex justify-center">
+                            <MessageSquare size={14} className="text-slate-500 hover:text-emerald-400 transition-colors cursor-help" />
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-56 p-3 bg-slate-900 border border-white/20 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 pointer-events-none transition-all z-[100] text-[10px] text-slate-200 italic leading-relaxed text-left backdrop-blur-md">
+                                {activity.notes}
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-900" />
+                            </div>
+                        </div>
+                    ) : (
+                        <span className="text-slate-800">-</span>
+                    )}
                 </td>
             </tr>
 
             {/* Expanded Details Row */}
             {isMergedActivity && isExpanded && (
                 <tr className="bg-slate-900/50 animate-in fade-in duration-200">
-                    <td colSpan={7} className="px-4 py-4 cursor-default">
+                    <td colSpan={9} className="px-4 py-4 cursor-default">
                         <div className="flex flex-col gap-3 pl-8 border-l-2 border-indigo-500/30">
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Källaktiviteter</h4>
                             <div className="space-y-2">
@@ -877,27 +915,33 @@ export function ActivitiesPage() {
                 </div>
             </header>
 
-            <div className="bg-slate-900/50 border border-white/5 rounded-3xl overflow-hidden shadow-xl">
+            <div className="bg-slate-900/50 border border-white/5 rounded-3xl shadow-xl">
                 <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-slate-950/80 text-xs uppercase font-bold text-slate-500 border-b border-white/5 sticky top-0 z-10 backdrop-blur-md">
                         <tr>
                             <th className="w-8 px-1"></th> {/* Merge selection column */}
-                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
+                            <th className="px-3 py-2 w-24 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
                                 Datum <SortIcon colKey="date" />
                             </th>
-                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('title')}>
+                            <th className="px-3 py-2 w-auto min-w-[180px] cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('title')}>
                                 Aktivitet <SortIcon colKey="title" />
                             </th>
-                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('type')}>
+                            <th className="px-3 py-2 w-16 cursor-pointer hover:text-white transition-colors select-none text-center" onClick={() => handleSort('type')}>
                                 Typ <SortIcon colKey="type" />
                             </th>
-                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('source')}>
+                            <th className="px-3 py-2 w-20 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('source')}>
                                 Källa <SortIcon colKey="source" />
                             </th>
-                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('durationMinutes')}>
-                                Info <SortIcon colKey="durationMinutes" />
+                            <th className="px-3 py-2 w-20 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('durationMinutes')}>
+                                Tid <SortIcon colKey="durationMinutes" />
                             </th>
-                            <th className="px-3 py-2">Not.</th>
+                            <th className="px-3 py-2 w-20 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('distance')}>
+                                Dist. <SortIcon colKey="distance" />
+                            </th>
+                            <th className="px-3 py-2 w-auto min-w-[150px] cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('pace')}>
+                                Info <SortIcon colKey="pace" />
+                            </th>
+                            <th className="px-3 py-2 w-12 text-center">Not.</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">

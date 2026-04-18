@@ -93,6 +93,7 @@ export interface UserSettings {
     proteinMultiplier?: number; // e.g. 2.0g per kg of bodyweight
     incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
     noccoOClockEnabled?: boolean;
+    metabolicBaselineMultiplier?: number; // PAL factor for NEAT/TEF (default 1.2)
     trainingPreferences?: {
         longRunThreshold?: number; // km
     };
@@ -722,6 +723,8 @@ export interface ExerciseEntry {
     durationMinutes: number;
     intensity: ExerciseIntensity;
     caloriesBurned: number;
+    isCalorieAdjusted?: boolean;
+    originalCalories?: number;
     calorieBreakdown?: string;
     notes?: string;
     excludeFromStats?: boolean;

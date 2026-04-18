@@ -34,7 +34,8 @@ import { TrainingCard } from '../features/dashboard/components/TrainingCard.tsx'
 import { HealthMetricsCard } from '../features/dashboard/components/HealthMetricsCard.tsx';
 import { WeeklyTimeline } from '../features/dashboard/components/WeeklyTimeline.tsx';
 import { DashboardSleepCard, DashboardWaterCard, DashboardAlcoholCard, DashboardCaffeineCard } from '../features/dashboard/components/QuickLogCards.tsx';
-import { WeeklyMetabolismCard } from '../features/dashboard/components/WeeklyMetabolismCard.tsx';
+import { WeeklyMetabolismAnalyticCard } from '../features/dashboard/components/WeeklyMetabolismAnalyticCard.tsx';
+import { ReadinessStreakCard } from '../features/dashboard/components/ReadinessStreakCard.tsx';
 
 // --- Helper Functions ---
 
@@ -537,69 +538,83 @@ export function DashboardPage() {
 
                     <div className="flex flex-wrap justify-center md:justify-end items-center gap-2 w-full md:w-auto">
                         <button onClick={() => toggleCompleteDay(selectedDate)} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${vitals.completed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'}`} title={vitals.completed ? "Markera som ej avslutad" : "Markera som avslutad"}><CheckCircle size={16} className={vitals.completed ? 'animate-[pulse_1s_ease-in-out_1]' : ''} /><span className="text-xs font-black uppercase tracking-wider whitespace-nowrap">{vitals.completed ? 'Klar' : 'Avsluta'}</span></button>
-                        {!vitals.completed && <button onClick={() => toggleIncompleteDay(selectedDate)} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${vitals.incomplete ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'}`} title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}><AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} /><span className="text-xs font-black uppercase tracking-wider whitespace-nowrap">{vitals.incomplete ? 'Ofullständig' : 'Ofullständig'}</span></button>}
+                        {!vitals.completed && (
+                            <button 
+                                onClick={() => toggleIncompleteDay(selectedDate)} 
+                                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${vitals.incomplete ? 'bg-orange-500/20 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]' : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'}`}
+                                title={vitals.incomplete ? "Ångra (Markera som fullständig)" : "Markera som ofullständig"}
+                            >
+                                <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                                <span className="text-xs font-black uppercase tracking-wider whitespace-nowrap">
+                                    {vitals.incomplete ? 'Ofullständig' : 'Markera Ofullständig'}
+                                </span>
+                            </button>
+                        )}
                         <button onClick={() => setIsStravaModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 text-[#FC4C02] rounded-xl border border-[#FC4C02]/20 transition-all group" title="Synka med Strava (7 dagar)"><RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500" /></button>
                         <div className="hidden md:flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">{(['compact', 'slim', 'cozy'] as const).map((m) => (<button key={m} onClick={() => setDensityMode(m)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${density === m ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>{m === 'compact' ? 'Tiny' : m === 'slim' ? 'Slim' : 'Cozy'}</button>))}</div>
                     </div>
                 </header>
 
                 <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
-                    {/* Top Section: Daily Summary & Active Goals */}
-                    <div className="md:col-span-12 flex flex-col gap-6">
-                        <div className="md:col-span-12 mt-2">
-                            <WeeklySummary selectedDate={selectedDate} activities={unifiedActivities} history={unifiedHistory} />
-                        </div>
-                        <ActiveGoalsCard fullWidth={true} />
-                        <div className="mt-4">
-                            <WeeklyMetabolismCard />
-                        </div>
+                    {/* Row 1: Primary Action Cards */}
+                    {cardOrder.find(c => c.id === 'intake') && (
+                        <DailyIntakeCard
+                            key="intake"
+                            isDone={cardOrder.find(c => c.id === 'intake')!.isDone}
+                            onToggle={toggleCardCompletion}
+                            density={density}
+                            selectedDate={selectedDate}
+                            consumed={consumed}
+                            target={target}
+                            proteinCurrent={proteinCurrent}
+                            proteinTarget={proteinTarget}
+                            carbsCurrent={carbsCurrent}
+                            carbsTarget={carbsTarget}
+                            fatCurrent={fatCurrent}
+                            fatTarget={fatTarget}
+                            burned={burned}
+                            baseTarget={baseTarget}
+                            trainingGoal={settings.trainingGoal}
+                            latestWeightVal={latestWeightVal}
+                            proteinRatio={proteinRatio}
+                            targetProteinRatio={targetProteinRatio}
+                            onHoverTraining={setIsHoveringTraining}
+                            maintenance={health.tdee}
+                            explanation={targetResult.explanation}
+                            className="md:col-span-12 lg:col-span-6 h-full"
+                        />
+                    )}
+                    {cardOrder.find(c => c.id === 'training') && (
+                        <TrainingCard
+                            key="training"
+                            category="all"
+                            isDone={cardOrder.find(c => c.id === 'training')!.isDone}
+                            onToggle={toggleCardCompletion}
+                            density={density}
+                            completedTraining={completedTraining}
+                            todaysPlan={todaysPlan}
+                            deleteExercise={deleteExercise}
+                            isHoveringTraining={isHoveringTraining}
+                            settings={settings}
+                            className="md:col-span-12 lg:col-span-6 h-full"
+                        />
+                    )}
+
+                    {/* Row 2: Summary Analytics */}
+                    <div className="md:col-span-12 mt-2">
+                        <WeeklySummary selectedDate={selectedDate} activities={unifiedActivities} history={unifiedHistory} />
                     </div>
 
-                    {/* Cards Grid */}
+                    <div className="md:col-span-8">
+                        <WeeklyMetabolismAnalyticCard />
+                    </div>
+                    <div className="md:col-span-4 flex flex-col gap-6">
+                        <ActiveGoalsCard fullWidth={false} />
+                    </div>
+
+                    {/* Vitals Grid (Shifted below primary cards) */}
                     {cardOrder.map((card) => {
-                        if (card.id === 'intake') {
-                            return (
-                                <DailyIntakeCard
-                                    key="intake"
-                                    isDone={card.isDone}
-                                    onToggle={toggleCardCompletion}
-                                    density={density}
-                                    selectedDate={selectedDate}
-                                    consumed={consumed}
-                                    target={target}
-                                    proteinCurrent={proteinCurrent}
-                                    proteinTarget={proteinTarget}
-                                    carbsCurrent={carbsCurrent}
-                                    carbsTarget={carbsTarget}
-                                    fatCurrent={fatCurrent}
-                                    fatTarget={fatTarget}
-                                    burned={burned}
-                                    baseTarget={baseTarget}
-                                    trainingGoal={settings.trainingGoal}
-                                    latestWeightVal={latestWeightVal}
-                                    proteinRatio={proteinRatio}
-                                    targetProteinRatio={targetProteinRatio}
-                                    onHoverTraining={setIsHoveringTraining}
-                                    explanation={targetResult.explanation}
-                                />
-                            );
-                        }
-                        if (card.id === 'training') {
-                            return (
-                                <TrainingCard
-                                    key={card.id}
-                                    category="all"
-                                    isDone={card.isDone}
-                                    onToggle={toggleCardCompletion}
-                                    density={density}
-                                    completedTraining={completedTraining}
-                                    todaysPlan={todaysPlan}
-                                    deleteExercise={deleteExercise}
-                                    isHoveringTraining={isHoveringTraining}
-                                    settings={settings}
-                                />
-                            );
-                        }
+                        if (card.id === 'intake' || card.id === 'training') return null;
                         if (card.id === 'sleep') {
                             return (
                                 <DashboardSleepCard
@@ -693,100 +708,57 @@ export function DashboardPage() {
                         }
                     })}
 
-                    <HealthMetricsCard
-                        density={density}
-                        latestWeightVal={latestWeightVal}
-                        latestWaist={latestWaist}
-                        latestChest={latestChest}
-                        bmi={bmi}
-                        weightDiffRange={weightDiffRange}
-                        weightRange={weightRange}
-                        setWeightRange={setWeightRange}
-                        weightTrendEntries={weightTrendEntries}
-                        unifiedHistory={unifiedHistory}
-                        performanceGoals={performanceGoals}
-                        trainingPeriods={trainingPeriods}
-                        onDeleteEntry={(data) => {
-                            if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
-                            if (data.waistId) deleteBodyMeasurement(data.waistId);
-                            if (data.chestId) deleteBodyMeasurement(data.chestId);
-                        }}
-                        onOpenWeightModal={(data) => {
-                            setTempValue(data.weight?.toString() || "");
-                            setTempWaist(data.waist?.toString() || "");
-                            setTempChest(data.chest?.toString() || "");
-                            if (data.date) {
-                                setSelectedDate(data.date);
-                            }
-                            setIsWeightModalOpen(true);
-                        }}
-                    />
-
-                    <WeeklyTimeline
-                        density={density}
-                        selectedDate={selectedDate}
-                        setSelectedDate={setSelectedDate}
-                        unifiedActivities={unifiedActivities}
-                        dailyVitals={dailyVitals}
-                        calculateDailyNutrition={calculateDailyNutrition}
-                        calculateTrainingStreak={calculateTrainingStreak}
-                        calculateWeeklyTrainingStreak={calculateWeeklyTrainingStreak}
-                        onHoverChange={setIsHoveringChart}
-                    />
-
-
-                    <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
-                        <div className="flex flex-col md:flex-row gap-6">
-                            <div className="flex-1 border-r border-slate-100 dark:border-slate-800 pr-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-rose-500/10 rounded-full text-rose-500 ring-2 ring-rose-500/5"><Flame className={density === 'compact' ? 'w-4 h-4' : 'w-5 h-5'} /></div>
-                                        <div><span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Loggningsstreak</span><div className={`${density === 'compact' ? 'text-xl' : 'text-2xl'} font-black text-slate-900 dark:text-white tracking-tighter`}>{streakDays} Dagar</div></div>
-                                    </div>
-                                    {density !== 'compact' && (
-                                        <div className="text-right">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Mål: 30</span>
-                                            <div className="h-1 w-20 bg-slate-100 dark:bg-slate-800 rounded-full mt-1 overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min((streakDays / 30) * 100, 100)}%` }} /></div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex gap-1 justify-between">
-                                    {Array.from({ length: 14 }).map((_, i) => (
-                                        <div key={i} className={`${density === 'compact' ? 'h-4' : 'h-6'} flex-1 rounded-sm flex items-center justify-center transition-all border ${i < streakDays % 14 ? 'bg-slate-900 dark:bg-emerald-600 border-slate-800 dark:border-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-200 dark:text-slate-800'}`}>
-                                            {i < streakDays % 14 ? <Check className="w-3 h-3 stroke-[3]" /> : <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800" />}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="flex-[1.5] grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all" onClick={() => navigate('/planning/training')}>
-                                    <div className="flex items-center gap-2 mb-1"><Calendar size={12} className="text-indigo-500" /><span className="text-[8px] font-bold uppercase text-slate-400">Planera Träning</span></div>
-                                    <div className="text-xl font-black text-indigo-500 dark:text-indigo-400">+ Pass</div>
-                                </div>
-                                <div className="p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100/50 dark:border-emerald-900/20">
-                                    <div className="flex items-center gap-2 mb-1"><Calendar size={12} className="text-emerald-500" /><span className="text-[8px] font-bold uppercase text-slate-400">Veckor i rad</span></div>
-                                    <div className="text-xl font-black text-slate-900 dark:text-white">{weeklyStreak} <span className="text-[10px] text-slate-400">v.</span></div>
-                                </div>
-                                <div className="p-3 bg-rose-50/50 dark:bg-rose-900/10 rounded-2xl border border-rose-100/50 dark:border-rose-900/20">
-                                    <div className="flex items-center gap-2 mb-1"><Target size={12} className="text-rose-500" /><span className="text-[8px] font-bold uppercase text-slate-400">Kalorimål</span></div>
-                                    <div className="text-xl font-black text-slate-900 dark:text-white">{calorieStreak} <span className="text-[10px] text-slate-400">dag</span></div>
-                                </div>
-                            </div>
-                        </div>
+                    <div className="md:col-span-8 xl:col-span-8">
+                        <HealthMetricsCard
+                            density={density}
+                            latestWeightVal={latestWeightVal}
+                            latestWaist={latestWaist}
+                            latestChest={latestChest}
+                            bmi={bmi}
+                            weightDiffRange={weightDiffRange}
+                            weightRange={weightRange}
+                            setWeightRange={setWeightRange}
+                            weightTrendEntries={weightTrendEntries}
+                            unifiedHistory={unifiedHistory}
+                            performanceGoals={performanceGoals}
+                            trainingPeriods={trainingPeriods}
+                            onDeleteEntry={(data) => {
+                                if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
+                                if (data.waistId) deleteBodyMeasurement(data.waistId);
+                                if (data.chestId) deleteBodyMeasurement(data.chestId);
+                            }}
+                            onOpenWeightModal={(data) => {
+                                setTempValue(data.weight?.toString() || "");
+                                setTempWaist(data.waist?.toString() || "");
+                                setTempChest(data.chest?.toString() || "");
+                                if (data.date) {
+                                    setSelectedDate(data.date);
+                                }
+                                setIsWeightModalOpen(true);
+                            }}
+                        />
                     </div>
 
-                    {/* Daily Summary at the bottom */}
-                    <div className="md:col-span-12 mt-6">
-                        <DailySummaryCard
-                            calories={{ current: consumed, target: target }}
-                            protein={{ current: proteinCurrent, target: proteinTarget }}
-                            trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
-                            burnedCalories={burned}
-                            measurementsCount={0}
-                            weighInDone={unifiedHistory.some(w => w.date === today && w.weight)}
-                            sleepHours={vitals.sleep || 0}
-                            alcoholUnits={vitals.alcohol || 0}
-                            density={density === 'compact' ? 'compact' : 'normal'}
+                    <div className="md:col-span-4 xl:col-span-4">
+                        <ReadinessStreakCard
+                            density={density}
+                            streakDays={streakDays}
+                            weeklyStreak={weeklyStreak}
+                            calorieStreak={calorieStreak}
+                        />
+                    </div>
+
+                    <div className="md:col-span-12">
+                        <WeeklyTimeline
+                            density={density}
+                            selectedDate={selectedDate}
+                            setSelectedDate={setSelectedDate}
+                            unifiedActivities={unifiedActivities}
+                            dailyVitals={dailyVitals}
+                            calculateDailyNutrition={calculateDailyNutrition}
+                            calculateTrainingStreak={calculateTrainingStreak}
+                            calculateWeeklyTrainingStreak={calculateWeeklyTrainingStreak}
+                            onHoverChange={setIsHoveringChart}
                         />
                     </div>
                 </div>

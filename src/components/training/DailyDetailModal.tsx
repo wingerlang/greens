@@ -376,7 +376,13 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                 <span className="p-2 bg-orange-500/10 text-orange-400 rounded-xl"><Flame className="w-5 h-5" /></span>
                                 <div>
                                     <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">Kalorier</p>
-                                    <p className="text-2xl font-black text-white">{Math.round(stats.calories)} <span className="text-xs text-slate-400">kcal</span></p>
+                                    <p className="text-2xl font-black text-white flex items-center gap-1">
+                                        {Math.round(stats.calories)}
+                                        <span className="text-xs text-slate-400 font-bold">kcal</span>
+                                        {exercises.some(e => e.isCalorieAdjusted) && (
+                                            <span className="text-xs text-amber-500" title="Innehåller justerad kaloridata">✨</span>
+                                        )}
+                                    </p>
                                 </div>
                             </div>
                             <div className="bg-slate-800/50 p-4 rounded-2xl border border-white/5 flex flex-col items-start gap-2">
@@ -506,6 +512,9 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                         <p className="text-white font-mono font-bold flex items-center gap-1">
                                                             <Flame className="w-3 h-3 text-orange-500" />
                                                             {Math.round(ex.caloriesBurned!)}
+                                                            {ex.isCalorieAdjusted && (
+                                                                <span className="text-xs text-amber-500" title={`Justerat från ${ex.originalCalories} kcal`}>✨</span>
+                                                            )}
                                                         </p>
                                                     </div>
                                                 )}
