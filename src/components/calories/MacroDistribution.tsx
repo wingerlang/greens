@@ -6,9 +6,11 @@ interface MacroDistributionProps {
     entries: MealEntry[];
     foodItems: FoodItem[];
     recipes: Recipe[];
+    isAdapted?: boolean;
+    extraCalories?: number;
 }
 
-export function MacroDistribution({ entries, foodItems, recipes }: MacroDistributionProps) {
+export function MacroDistribution({ entries, foodItems, recipes, isAdapted, extraCalories }: MacroDistributionProps) {
     const distribution = useMemo(() => {
         const stats: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {
             breakfast: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -96,7 +98,7 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
                                 </span>
                                 <span className="text-xs font-bold text-slate-300">{calories} <span className="text-[10px] font-normal text-slate-500">kcal</span></span>
                             </div>
-                            <div className="h-4 bg-slate-800/50 rounded-lg overflow-hidden flex border border-white/5">
+                            <div className="h-4 bg-slate-800/50 rounded-md overflow-hidden flex border border-white/5">
                                 <div
                                     className="h-full bg-violet-500/80 transition-all duration-1000"
                                     style={{ width: `${pWidth}%` }}
@@ -124,6 +126,38 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
                     <p className="text-[11px] text-amber-200/80 leading-snug">
                         Sikta på minst <span className="text-amber-400 font-bold">20%</span> av ditt protein vid frukost för att maximera muskelproteinsyntesen efter nattens fasta.
                     </p>
+                </div>
+            )}
+
+            {isAdapted && extraCalories && (
+                <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-right duration-700">
+                    <div className="flex flex-col gap-3 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 bg-emerald-500/20 rounded-xl flex items-center justify-center text-lg shadow-[0_0_15px_rgba(16,185,129,0.1)]">⚡</div>
+                                <div>
+                                    <div className="text-xs font-black text-emerald-500 uppercase tracking-widest leading-none">Performance Buffer</div>
+                                    <div className="text-[9px] text-emerald-600/50 uppercase font-black mt-1">Återhämtnings-läge aktiv</div>
+                                </div>
+                            </div>
+                            <div className="flex gap-1.5">
+                                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-1">
+                            <div className="bg-slate-800/40 rounded-xl p-2.5 border border-white/5">
+                                <div className="text-xs font-black text-white">+{extraCalories}</div>
+                                <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Energi (kcal)</div>
+                            </div>
+                            <div className="bg-slate-800/40 rounded-xl p-2.5 border border-white/5">
+                                <div className="text-xs font-black text-emerald-400">+{Math.round(extraCalories * 0.15 / 4)}g</div>
+                                <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Protein</div>
+                            </div>
+                        </div>
+                        <div className="text-[9px] text-slate-500 italic px-1 leading-normal">
+                            Autogenererat överskott baserat på dagens träningsmängd för optimal reparation.
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

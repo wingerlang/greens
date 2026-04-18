@@ -27,7 +27,7 @@ import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
 import { EstimateLunchModal } from '../components/calories/EstimateLunchModal.tsx';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Zap, Activity, Dumbbell, Heart, Timer, Clock, Map, Navigation, Trash2, ArrowRight } from 'lucide-react';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -205,7 +205,7 @@ export function CaloriesPage() {
             const targetType = entry.mealType === 'estimate' ? 'lunch' : entry.mealType;
             grouped[targetType].push(entry);
         });
-        
+
         // Remove 'beverage' row if empty or by preference (user requested dryck hidden)
         return grouped;
     }, [dailyEntries]);
@@ -508,7 +508,7 @@ export function CaloriesPage() {
         // 1. Delete the manual entries that were just used to create the snabbval
         // 2. Log a NEW single entry using that snabbval so they are merged
         selectedIds.forEach(id => deleteMealEntry(id));
-        
+
         addMealEntry({
             date: selectedDate,
             mealType, // Inherit the current meal type
@@ -589,7 +589,7 @@ export function CaloriesPage() {
                     </button>
                     <div
                         onClick={() => setSelectedDate(getISODate())}
-                        className={`flex flex-col items-center cursor-pointer px-4 py-1 rounded-xl transition-all ${!isToday
+                        className={`flex flex-col items-center cursor-pointer px-4 py-1 rounded-md transition-all ${!isToday
                             ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700'
                             : ''
                             }`}
@@ -610,6 +610,18 @@ export function CaloriesPage() {
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
                     >
                         <ChevronRight size={18} />
+                    </button>
+
+                    {/* Compact Incomplete Day Toggle */}
+                    <button
+                        onClick={() => toggleIncompleteDay(selectedDate)}
+                        className={`text-[9px] font-black px-2 py-1 rounded border transition-all ${currentVitals.incomplete
+                            ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                            : 'bg-slate-800/20 border-white/5 text-slate-500 hover:text-white'
+                            }`}
+                        title={currentVitals.incomplete ? 'Dagen är markerad som inkomplett' : 'Markera dag som inkomplett'}
+                    >
+                        {currentVitals.incomplete ? '⚠️ INKOMPLETT' : 'MARKERA INKOMPLETT'}
                     </button>
 
                     {/* View Mode Toggle - Right side */}
@@ -654,38 +666,10 @@ export function CaloriesPage() {
                 </div>
             )}
 
-            {goals.isAdapted && (
-                <div className="mx-4 mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between animate-in slide-in-from-top duration-500">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-xl">⚡</div>
-                        <div>
-                            <div className="text-sm font-black text-emerald-400">Performance Buffer Aktiv</div>
-                            <div className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest">
-                                {goals.extraCalories} extra kcal för återhämtning
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-[10px] text-slate-500 uppercase font-bold">Ökad återhämtning</div>
-                        <div className="text-xs font-bold text-white">+{Math.round(goals.extraCalories * 0.15 / 4)}g Protein</div>
-                    </div>
-                </div>
-            )}
 
-            <div className="flex justify-center mb-4">
-                <button
-                    onClick={() => toggleIncompleteDay(selectedDate)}
-                    className={`text-xs font-black px-4 py-2 rounded-xl border transition-all flex items-center gap-2 ${currentVitals.incomplete
-                        ? 'bg-orange-500/20 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]'
-                        : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
-                        }`}
-                >
-                    {currentVitals.incomplete ? '⚠️ Dagen markerad som inkomplett' : 'Markera dag som inkomplett'}
-                </button>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 mb-6">
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6 overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-4 mb-2">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-4 overflow-hidden">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         <div className="flex flex-col items-center justify-center p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
                             <span className="text-[10px] font-black uppercase text-emerald-500 mb-1">Intag</span>
@@ -811,16 +795,20 @@ export function CaloriesPage() {
                                     </div>
                                 </div>
                             </div>
+
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-4">
                     <MacroDistribution
                         entries={dailyEntries}
                         foodItems={foodItems}
                         recipes={recipes}
+                        isAdapted={goals.isAdapted}
+                        extraCalories={goals.extraCalories}
                     />
+
                 </div>
             </div>
 
@@ -850,65 +838,114 @@ export function CaloriesPage() {
             />
 
             {dailyExercises.length > 0 && (
-                <section className="mt-8">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 px-2">Träningspass</h3>
-                    <div className="space-y-2">
-                        {dailyExercises.map(ex => (
-                            <div key={ex.id} className="relative group">
-                                <Link
-                                    to={`/activity/${ex.id}`}
-                                    className="flex items-center justify-between p-4 bg-slate-900/50 border border-white/5 rounded-2xl hover:bg-slate-800/50 hover:border-emerald-500/30 transition-all cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-4 text-left">
-                                        <span className="text-xl">
-                                            {ex.type === 'running' ? '🏃' :
-                                                ex.type === 'cycling' ? '🚴' :
-                                                    ex.type === 'strength' ? '🏋️' :
-                                                        ex.type === 'walking' ? '🚶' :
-                                                            ex.type === 'swimming' ? '🏊' :
-                                                                ex.type === 'yoga' ? '🧘' : '🏋️'}
-                                        </span>
-                                        <div>
-                                            <div className="font-bold text-slate-200">
-                                                {ex.type === 'running' ? 'Löpning' :
-                                                    ex.type === 'cycling' ? 'Cykling' :
-                                                        ex.type === 'strength' ? 'Styrka' :
-                                                            ex.type === 'walking' ? 'Promenad' :
-                                                                ex.type === 'swimming' ? 'Simning' :
-                                                                    ex.type === 'yoga' ? 'Yoga' : 'Annat'}
+                <section className="mx-4 mb-8">
+                    <div className="flex items-center justify-between mb-4 px-2">
+                        <div className="flex items-center gap-2">
+                            <Activity size={18} className="text-emerald-500" />
+                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Dagens Träningspass</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full border border-white/5">
+                            {dailyExercises.length} {dailyExercises.length === 1 ? 'PASS' : 'PASS'} UTFÖRDA
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {dailyExercises.map((ex) => {
+                            const isCycling = ex.type === 'cycling';
+                            const isRunning = ex.type === 'running' || ex.type === 'walking';
+                            const isStrength = ex.type === 'strength';
+                            
+                            const distance = (ex as any).distanceKm || (ex as any).distance || 0;
+                            const pace = distance > 0 ? (ex.durationMinutes / distance).toFixed(2).replace('.', ':') : null;
+                            const watts = (ex as any).averageWatts || (ex as any).watts || 0;
+                            const hr = (ex as any).heartRateAvg || (ex as any).hr || 0;
+
+                            return (
+                                <div key={ex.id} className="group relative">
+                                    <Link
+                                        to={`/logg?id=${ex.id}`}
+                                        className="block p-3 bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 rounded-2xl transition-all hover:bg-slate-900/90 shadow-sm active:scale-[0.98]"
+                                    >
+                                        <div className="flex items-start justify-between mb-2">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border border-white/5 shadow-inner ${
+                                                isRunning ? 'bg-indigo-500/10 text-indigo-400' :
+                                                isCycling ? 'bg-amber-500/10 text-amber-500' :
+                                                isStrength ? 'bg-purple-500/10 text-purple-400' :
+                                                'bg-slate-700/10 text-slate-400'
+                                            }`}>
+                                                {isRunning ? <Activity size={20} /> : 
+                                                 isCycling ? <Zap size={20} /> : 
+                                                 isStrength ? <Dumbbell size={20} /> : 
+                                                 <Timer size={20} />}
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
-                                                {formatActivityDuration(ex.durationMinutes)} • {ex.intensity}
-                                                {(ex as any).source === 'strava' && <span className="ml-2 text-[#FC4C02] font-bold">ST</span>}
-                                                {(ex as any).source === 'manual' && <span className="ml-2 text-emerald-500 font-bold">M</span>}
+                                            <div className="text-right">
+                                                <div className="text-base font-black text-rose-400 leading-none">-{ex.caloriesBurned}</div>
+                                                <div className="text-[8px] font-black text-rose-500/40 uppercase tracking-tighter mt-0.5">kcal</div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <span
-                                        className={`font-black ${ex.caloriesBurned > 0 ? 'text-rose-400' : 'text-slate-400'} ${ex.calorieBreakdown ? 'cursor-help border-b border-rose-400/20 md:border-b-0' : ''}`}
-                                        title={ex.calorieBreakdown}
-                                    >
-                                        -{ex.caloriesBurned} kcal
-                                    </span>
-                                </Link>
 
-                                {((ex as any).source === 'manual' || (ex as any).source === 'strength') && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (confirm('Vill du ta bort denna aktivitet?')) {
-                                                deleteExercise(ex.id);
-                                            }
-                                        }}
-                                        className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
-                                        title="Ta bort aktivitet"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+                                        <div className="mb-2">
+                                            <h4 className="text-xs font-black text-slate-100 uppercase tracking-wide truncate">
+                                                {ex.title || (
+                                                    ex.type === 'running' ? 'Löpning' :
+                                                    ex.type === 'cycling' ? 'Cykling' :
+                                                    ex.type === 'strength' ? 'Styrka' :
+                                                    ex.type === 'walking' ? 'Promenad' :
+                                                    ex.type === 'swimming' ? 'Simning' :
+                                                    ex.type === 'yoga' ? 'Yoga' : 'Träningspass'
+                                                )}
+                                            </h4>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{formatActivityDuration(ex.durationMinutes)}</span>
+                                                <span className="w-1 h-1 bg-slate-800 rounded-full"></span>
+                                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{ex.intensity}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-2 border-t border-slate-800/50">
+                                            {distance > 0 && (
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <Navigation size={8} className="text-slate-600 shrink-0" />
+                                                    <span className="text-[9px] font-black text-emerald-400 truncate">{distance.toFixed(1)}km</span>
+                                                </div>
+                                            )}
+                                            {pace && (
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <Timer size={8} className="text-slate-600 shrink-0" />
+                                                    <span className="text-[9px] font-black text-indigo-400 truncate">{pace}/k</span>
+                                                </div>
+                                            )}
+                                            {watts > 0 && (
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <Zap size={8} className="text-slate-600 shrink-0" />
+                                                    <span className="text-[9px] font-black text-amber-500 truncate">{Math.round(watts)}w</span>
+                                                </div>
+                                            )}
+                                            {hr > 0 && (
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <Heart size={8} className="text-slate-600 shrink-0" />
+                                                    <span className="text-[9px] font-black text-rose-500/80 truncate">{Math.round(hr)}b</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </Link>
+
+                                    {((ex as any).source === 'manual' || (ex as any).source === 'strength') && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (confirm('Vill du ta bort denna aktivitet?')) {
+                                                    deleteExercise(ex.id);
+                                                }
+                                            }}
+                                            className="absolute -top-1 -right-1 w-6 h-6 bg-slate-800 text-slate-500 hover:text-rose-400 border border-slate-700 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xl"
+                                        >
+                                            <Trash2 size={10} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
             )}

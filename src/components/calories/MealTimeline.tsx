@@ -85,7 +85,7 @@ export function MealTimeline({
         return (
             <div
                 key={entry.id}
-                className={`group relative flex items-center justify-between ${isCompact ? 'p-1 py-0.5' : 'py-1.5 px-3'} bg-slate-900/40 border rounded-xl hover:border-white/10 transition-all gap-4 cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
+                className={`group relative flex items-center justify-between ${isCompact ? 'p-1 py-0.5' : 'py-1.5 px-3'} bg-slate-900/40 border rounded-md hover:border-white/10 transition-all gap-4 cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
                     ? 'border-emerald-500/30 bg-emerald-500/5'
                     : 'border-white/5'
                     }`}
@@ -273,7 +273,7 @@ export function MealTimeline({
                             <span className="block mb-2 text-lg">🍽️</span>
                             <span className="text-sm font-medium">Inga måltider loggade idag</span>
                             <button
-                                className="block mx-auto mt-4 py-2 px-6 text-xs font-black uppercase tracking-widest bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all"
+                                className="block mx-auto mt-4 py-2 px-6 text-xs font-black uppercase tracking-widest bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-all"
                                 onClick={() => setIsFormOpen(true)}
                             >
                                 + Logga Första
@@ -349,79 +349,74 @@ export function MealTimeline({
 
     // Normal view (Detailed Sections)
     return (
-        <div className="meals-timeline flex flex-col gap-4">
+        <div className="meals-timeline flex flex-col gap-2">
             {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][])
                 .filter(([key, entries]) => {
                     if (key === 'beverage' || key === 'estimate') return entries.length > 0;
                     return true;
                 })
                 .map(([mealTypeKey, entries]) => (
-                <div
-                    key={mealTypeKey}
-                    className="meal-section"
-                    onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
-                    }}
-                    onDragLeave={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
-                    }}
-                    onDrop={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
-                        const entryId = e.dataTransfer.getData('entryId');
-                        if (entryId) {
-                            updateMealEntry(entryId, { mealType: mealTypeKey });
-                        }
-                    }}
-                >
-                    <div className="flex items-center justify-between mb-2 px-2">
-                        <div className="flex items-center gap-4">
-                            <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                                <span className="text-lg"></span>
-                                {MEAL_TYPE_LABELS[mealTypeKey]}
-                            </h3>
-                            {entries.length > 0 && (
-                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left duration-500">
-                                    <div className="h-4 w-[1px] bg-slate-800" />
-                                    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-tighter">
-                                        <span className="text-emerald-500">
-                                            {Math.round(entries.reduce((sum, e) => {
-                                                const mult = e.pieces || 1;
-                                                return sum + e.items.reduce((acc, it) => acc + (getItemCalories(it) * mult), 0);
-                                            }, 0))} kcal
-                                        </span>
-                                        <span className="text-rose-400">
-                                            🌱 {Math.round(entries.reduce((sum, e) => {
-                                                const mult = e.pieces || 1;
-                                                return sum + e.items.reduce((acc, it) => acc + ((getItemNutrition?.(it).protein || 0) * mult), 0);
-                                            }, 0))}g
-                                        </span>
+                    <div
+                        key={mealTypeKey}
+                        className="meal-section"
+                        onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                        }}
+                        onDragLeave={(e) => {
+                            (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                        }}
+                        onDrop={(e) => {
+                            (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                            const entryId = e.dataTransfer.getData('entryId');
+                            if (entryId) {
+                                updateMealEntry(entryId, { mealType: mealTypeKey });
+                            }
+                        }}
+                    >
+                        <div className="flex items-center justify-between mb-2 px-2">
+                            <div className="flex items-center gap-4">
+                                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
+                                    <span className="text-lg"></span>
+                                    {MEAL_TYPE_LABELS[mealTypeKey]}
+                                    {entries.length === 0 && <span className="text-[10px] font-medium text-slate-600 italic ml-2">(Sektionen är tom)</span>}
+                                </h3>
+                                {entries.length > 0 && (
+                                    <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left duration-500">
+                                        <div className="h-4 w-[1px] bg-slate-800" />
+                                        <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-tighter">
+                                            <span className="text-emerald-500">
+                                                {Math.round(entries.reduce((sum, e) => {
+                                                    const mult = e.pieces || 1;
+                                                    return sum + e.items.reduce((acc, it) => acc + (getItemCalories(it) * mult), 0);
+                                                }, 0))} kcal
+                                            </span>
+                                            <span className="text-rose-400">
+                                                🌱 {Math.round(entries.reduce((sum, e) => {
+                                                    const mult = e.pieces || 1;
+                                                    return sum + e.items.reduce((acc, it) => acc + ((getItemNutrition?.(it).protein || 0) * mult), 0);
+                                                }, 0))}g
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+                            </div>
+                            {entries.length === 0 && (
+                                <button
+                                    className="text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-400"
+                                    onClick={() => { setMealType(mealTypeKey); setIsFormOpen(true); }}
+                                >
+                                    + Lägg till
+                                </button>
                             )}
                         </div>
-                        {entries.length === 0 && (
-                            <button
-                                className="text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-400"
-                                onClick={() => { setMealType(mealTypeKey); setIsFormOpen(true); }}
-                            >
-                                + Lägg till
-                            </button>
-                        )}
-                    </div>
 
-                    <div className="flex flex-col gap-2">
-                        {entries.length === 0 ? (
-                            <div className="p-8 border border-dashed border-slate-700/50 rounded-2xl text-center text-slate-600 text-xs italic">
-                                Sektionen är tom
-                            </div>
-                        ) : (
-                            entries.map(entry => renderEntryRow(entry, false))
-                        )}
+                        <div className="flex flex-col gap-2">
+                            {entries.map(entry => renderEntryRow(entry, false))}
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))}
 
             <ConfirmModal
                 isOpen={deleteConfirm.isOpen}
@@ -451,7 +446,7 @@ function PortionControls({
     const [isEditing, setIsEditing] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [localServings, setLocalServings] = useState(item.servings);
-    const isSubmitting = React.useRef(false); 
+    const isSubmitting = React.useRef(false);
     const debounceTimer = React.useRef<NodeJS.Timeout | null>(null);
 
     // Keep local servings in sync with props if we are not actively bumping it or editing
@@ -465,11 +460,11 @@ function PortionControls({
 
     const debouncedUpdate = (newVal: number) => {
         setLocalServings(newVal);
-        
+
         if (debounceTimer.current) {
             clearTimeout(debounceTimer.current);
         }
-        
+
         debounceTimer.current = setTimeout(() => {
             onUpdate(newVal);
             debounceTimer.current = null;
@@ -536,7 +531,7 @@ function PortionControls({
                 }}
             >
                 <span className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-slate-200 font-bold`}>
-                    {item.type === 'recipe' ? `${localServings} p` : `${localServings}g`}
+                    {item.type === 'recipe' && item.portionType !== 'weight' ? `${localServings} p` : `${localServings}g`}
                 </span>
             </button>
             <button
@@ -553,7 +548,7 @@ function TimelineActions({ setIsFormOpen }: { setIsFormOpen: (open: boolean) => 
     return (
         <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-700/30">
             <button
-                className="py-2.5 px-8 text-xs font-black uppercase tracking-[2px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl transition-all hover:scale-105"
+                className="py-2.5 px-8 text-xs font-black uppercase tracking-[2px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-all hover:scale-105"
                 onClick={() => setIsFormOpen(true)}
             >
                 + Logga Punkt

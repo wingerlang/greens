@@ -133,16 +133,20 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Calorie Trend */}
                 <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
-                    <div className="flex justify-between items-end mb-4">
-                        <div>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Kaloritrend</span>
-                            <span className="text-xl font-black text-emerald-400">{calorieAvegare} <span className="text-[10px] uppercase text-slate-500">kcal snitt</span></span>
-                            <div className="flex gap-2 mt-1">
-                                <span className="text-[9px] font-bold text-slate-600 uppercase">Totalt: {Math.round(completeDays.reduce((acc, d) => acc + d.calories, 0))} kcal</span>
-                                <span className="text-[9px] font-bold text-indigo-400 uppercase">Netto Snitt: {Math.round(calorieAvegare - burnedAverage)} kcal</span>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                            <div className="flex items-center justify-between gap-4 mb-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Kaloritrend</span>
+                                    <span className="text-[10px] font-bold text-slate-600">Snitt: <span className="text-emerald-400">{calorieAvegare} kcal</span></span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[9px] font-bold text-slate-600 uppercase">Totalt: {Math.round(completeDays.reduce((acc, d) => acc + d.calories, 0))}</span>
+                                    <span className="text-[9px] font-bold text-indigo-400 uppercase bg-indigo-500/10 px-1.5 py-0.5 rounded">Netto snitt: {Math.round(calorieAvegare - burnedAverage)}</span>
+                                    <span className="text-[9px] font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">Mål: {calorieGoal}</span>
+                                </div>
                             </div>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-500">Mål: {calorieGoal}</span>
                     </div>
                     <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/cal">
                         <line
@@ -194,15 +198,19 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
 
                 {/* Protein Trend */}
                 <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
-                    <div className="flex justify-between items-end mb-4">
-                        <div>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Proteintrend</span>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-black text-violet-400">{proteinAverage}g <span className="text-[10px] uppercase text-slate-500">snitt</span></span>
-                                <span className="text-[10px] font-bold text-violet-500/70">({(proteinAverage / (settings.weight || 75)).toFixed(2)}g/kg)</span>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                            <div className="flex items-center justify-between gap-4 mb-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Proteintrend</span>
+                                    <span className="text-[10px] font-black text-violet-400">{proteinAverage}g <span className="text-[8px] text-slate-600">snitt</span></span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[9px] font-bold text-violet-500/70">{(proteinAverage / (settings.weight || 75)).toFixed(2)}g/kg</span>
+                                    <div className="px-1.5 py-0.5 bg-slate-800 rounded text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Mål: {proteinGoal}g</div>
+                                </div>
                             </div>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-500">Mål: {proteinGoal}g</span>
                     </div>
                     <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/prot">
                         <line
