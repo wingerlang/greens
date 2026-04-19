@@ -630,8 +630,16 @@ export function ProfilePage() {
                                         suffix="km"
                                         onChange={(v: string) => updateSettings({ longRunThreshold: Number(v) })}
                                     />
+                                    <DataField
+                                        label="Kalorifaktor löpning"
+                                        value={(settings.runningCalorieFactor ?? 0.92).toString()}
+                                        type="number"
+                                        step="0.01"
+                                        suffix=""
+                                        onChange={(v: string) => updateSettings({ runningCalorieFactor: parseFloat(v) })}
+                                    />
                                     <p className="text-xs text-slate-500 mt-2">
-                                        Pass som överstiger denna distans klassas automatiskt som långpass.
+                                        Standard: 1.0 (1 kcal/kg/km). Konservativt: 0.92.
                                     </p>
                                 </div>
                             </section>

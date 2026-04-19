@@ -1089,7 +1089,9 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(activity)
                 });
-                if (!res.ok) {
+                if (res.ok) {
+                    notificationService.notify('success', 'Passet sparat till servern');
+                } else {
                     console.error('[Storage] Failed to save planned activity');
                 }
             } catch (e) {
@@ -1110,7 +1112,9 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(activities)
                 });
-                if (!res.ok) {
+                if (res.ok) {
+                    notificationService.notify('success', `${activities.length} pass sparade`);
+                } else {
                     console.error('[Storage] Failed to bulk save planned activities');
                 }
             } catch (e) {

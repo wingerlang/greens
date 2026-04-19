@@ -3,7 +3,7 @@ import { parsePlanningInput } from './planningParser.ts';
 
 export type OmniboxIntent =
     | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number; heartRateAvg?: number; heartRateMax?: number }; date?: string }
-    | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
+    | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType; isPlanned?: boolean }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps'; amount: number; caffeine?: number }; date?: string }
     | { type: 'measurement'; data: { measurementType?: BodyMeasurementType; value?: number }; date?: string }
@@ -646,6 +646,13 @@ function parseFood(input: string): OmniboxIntent | null {
     };
 
     let working = input.toLowerCase().trim();
+    
+    // Check for planning indicator "??"
+    let isPlanned = false;
+    if (working.includes('??')) {
+        isPlanned = true;
+        working = working.replace('??', '').trim();
+    }
 
     // 1. Extract meal type
     let explicitMealType: MealType | undefined;
@@ -779,7 +786,7 @@ function parseFood(input: string): OmniboxIntent | null {
 
     return {
         type: 'food',
-        data: { query, quantity, unit, mealType }
+        data: { query, quantity, unit, mealType, isPlanned }
     };
 }
 

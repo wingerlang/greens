@@ -5,6 +5,7 @@ interface CalorieRingProps {
     calorieGoal: number;
     protein: number;
     proteinGoal: number;
+    plannedCalories?: number;
     /** Size: 'sm', 'md', 'lg' */
     size?: 'sm' | 'md' | 'lg';
 }
@@ -18,6 +19,7 @@ export function CalorieRing({
     calorieGoal,
     protein,
     proteinGoal,
+    plannedCalories = 0,
     size = 'md'
 }: CalorieRingProps) {
     const isProteinMet = protein >= proteinGoal;
@@ -59,6 +61,25 @@ export function CalorieRing({
                     cx={r}
                     cy={r}
                 />
+                {/* Planned extension - Drawn behind the main progress */}
+                {plannedCalories > 0 && (
+                    <circle
+                        stroke="currentColor"
+                        className="text-indigo-500/30"
+                        strokeWidth={s}
+                        strokeDasharray={circumference + ' ' + circumference}
+                        style={{ 
+                            strokeDashoffset: circumference - (Math.min(calories + plannedCalories, calorieGoal * 1.5) / calorieGoal) * circumference, 
+                            transition: 'stroke-dashoffset 0.5s ease-in-out' 
+                        }}
+                        strokeLinecap="round"
+                        fill="transparent"
+                        r={normalizedRadius}
+                        cx={r}
+                        cy={r}
+                    />
+                )}
+
                 {/* Outer progress */}
                 <circle
                     stroke="currentColor"
@@ -100,7 +121,12 @@ export function CalorieRing({
                 <div className={`${sizes.text} font-bold leading-none ${isOver ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
                     {Math.round(calories)}
                 </div>
-                <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">Kcal</div>
+                {plannedCalories > 0 && (
+                    <div className="text-[10px] font-black text-indigo-400 mt-0.5">
+                        +{Math.round(plannedCalories)} planerat
+                    </div>
+                )}
+                <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">Kcal Totalt</div>
                 <div className="mt-2 flex flex-col items-center gap-0.5">
                     <div className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
                         <div className={`w-2 h-2 rounded-full ${isProteinMet ? 'bg-emerald-500' : 'bg-orange-400'}`} />

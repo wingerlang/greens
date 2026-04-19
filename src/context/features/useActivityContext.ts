@@ -265,7 +265,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 subType: updates.subType || ua.performance?.subType,
                                 averageWatts: updates.averageWatts !== undefined ? updates.averageWatts : ua.performance?.averageWatts,
                                 distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm,
-                                excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats
+                                excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats,
+                                calories: updates.caloriesBurned !== undefined ? updates.caloriesBurned : ua.performance?.calories,
+                                isCalorieAdjusted: updates.isCalorieAdjusted !== undefined ? updates.isCalorieAdjusted : ua.performance?.isCalorieAdjusted,
+                                originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories
                             },
                             raceDetails: updates.raceDetails || ua.raceDetails
                         } as UniversalActivity;
@@ -293,7 +296,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         averageWatts: updates.averageWatts,
                         hyroxStats: updates.hyroxStats,
                         excludeFromStats: updates.excludeFromStats,
-                        raceDetails: updates.raceDetails
+                        raceDetails: updates.raceDetails,
+                        calories: updates.caloriesBurned,
+                        isCalorieAdjusted: updates.isCalorieAdjusted,
+                        originalCalories: updates.originalCalories
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
                 return;
@@ -474,9 +480,10 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
 
         // 3. Movement-based (Distance) for Running (Bronze Standard)
-        // Net Calories Running = Weight (kg) * Distance (km) * 1.036
+        // Net Calories Running = Weight (kg) * Distance (km) * 0.92 (conservative)
         if ((type === 'running' || type === 'walking') && distance && distance > 0 && weight > 0) {
-            const factor = type === 'running' ? 1.036 : 0.7; // Walking is less efficient per km
+            const runningFactor = currentUser?.settings?.runningCalorieFactor || 0.92;
+            const factor = type === 'running' ? runningFactor : 0.644; // Walking is less efficient per km
             return Math.round(weight * distance * factor);
         }
 
@@ -1650,6 +1657,6 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         addTour,
         updateTour,
         deleteTour,
-        setTours,
+        setTours, calculateExerciseCalories,
     };
 }

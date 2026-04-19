@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Info, ArrowRightLeft } from 'lucide-react';
+import { X, Info, ArrowRightLeft, Check } from 'lucide-react';
 import {
     type MealEntry,
     type MealType,
@@ -85,7 +85,7 @@ export function MealTimeline({
         return (
             <div
                 key={entry.id}
-                className={`group relative flex items-center justify-between ${isCompact ? 'p-1 py-0.5' : 'py-1.5 px-3'} bg-slate-900/40 border rounded-md hover:border-white/10 transition-all gap-4 cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
+                className={`group relative flex items-center justify-between ${isCompact ? 'p-1 py-0.5' : 'py-1.5 px-3'} bg-slate-900/40 border rounded-md hover:border-white/10 transition-all gap-4 cursor-move ${entry.isPlanned ? 'border-dashed border-indigo-500/50 opacity-70 bg-indigo-500/5' : (entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
                     ? 'border-emerald-500/30 bg-emerald-500/5'
                     : 'border-white/5'
                     }`}
@@ -215,8 +215,21 @@ export function MealTimeline({
                         )}
                     </span>
 
-                    {/* Action buttons (Info, Ersätt, Delete) */}
+                    {/* Action buttons (Confirm, Info, Ersätt, Delete) */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        {entry.isPlanned && (
+                            <button
+                                className="p-1.5 rounded-lg text-indigo-400 hover:text-white hover:bg-indigo-500 transition-all flex items-center gap-1.5 font-black text-[10px] uppercase px-3 shadow-lg shadow-indigo-500/20"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateMealEntry(entry.id, { isPlanned: false });
+                                }}
+                                title="Bekräfta måltid"
+                            >
+                                <Check size={16} strokeWidth={3} />
+                                <span>Ätit</span>
+                            </button>
+                        )}
                         <button
                             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
                             onClick={(e) => {

@@ -107,6 +107,7 @@ export interface UserSettings {
     pinnedPaths?: string[]; // Custom navbar pins
     stravaTimePreference?: 'moving' | 'elapsed';
     lastActiveRaceTab?: 'timeline' | 'series' | 'tours';
+    runningCalorieFactor?: number; // Multiple of kg * km (e.g. 0.92 or 1.0)
 }
 
 /** Weekly Stats Interface */
@@ -297,7 +298,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
         hyrox: true
     },
     longRunThreshold: 20,
-    pinnedPaths: []
+    pinnedPaths: [],
+    runningCalorieFactor: 0.92
 };
 
 // ============================================
@@ -487,6 +489,7 @@ export interface MealEntry {
     title?: string; // Optional title for the meal (e.g. "Breakfast Sandwich")
     snabbvalId?: string; // ID of the quick meal used to create this entry
     pieces?: number; // How many of this snabbval were consumed (default 1)
+    isPlanned?: boolean; // If true, this entry is planned but not yet consumed
     createdAt: string;
 }
 
@@ -1452,6 +1455,7 @@ export interface PlannedActivity {
     order?: number;
     category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST' | 'RACE' | 'CARDIO' | 'OTHER';
     subType?: 'cycling' | 'cross-trainer' | 'rowing' | 'stair-master' | 'skierg' | 'cardio' | 'other';
+    calculationMode?: 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts';
     title: string;
     description: string;
     structure: {

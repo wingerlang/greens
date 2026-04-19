@@ -42,6 +42,7 @@ export function CaloriesPage() {
         getMealEntriesForDate,
         updateVitals,
         calculateDailyNutrition,
+        calculateDailyPlannedNutrition = () => ({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0, vitaminC: 0, vitaminA: 0, proteinCategories: [] }),
         getRecipeWithNutrition,
         getFoodItem,
         getPlannedMealsForDate,
@@ -57,6 +58,8 @@ export function CaloriesPage() {
         foodAliases,
         setSelectedDate: setDataSelectedDate
     } = useData();
+
+    console.log('CaloriesPage: calculateDailyPlannedNutrition is:', typeof calculateDailyPlannedNutrition);
 
     const { settings } = useSettings();
     const { logEvent } = useAnalytics();
@@ -161,6 +164,11 @@ export function CaloriesPage() {
     const dailyNutrition = useMemo(
         () => calculateDailyNutrition(selectedDate),
         [calculateDailyNutrition, selectedDate]
+    );
+
+    const plannedNutrition = useMemo(
+        () => calculateDailyPlannedNutrition(selectedDate),
+        [calculateDailyPlannedNutrition, selectedDate]
     );
 
     const { tdee: maintenance, bmr, dailyCaloriesBurned: burned } = useHealth(selectedDate);
@@ -666,29 +674,55 @@ export function CaloriesPage() {
                 </div>
             )}
 
+            {dailyEntries.filter(e => e.isPlanned).length > 0 && (
+                <div className="planned-meals-banner !bg-indigo-500/10 !border-indigo-500/20">
+                    <div className="banner-content">
+                        <span className="banner-icon">🕒</span>
+                        <div className="banner-text">
+                            <strong className="text-indigo-400">{dailyEntries.filter(e => e.isPlanned).length} måltider är planerade</strong>
+                            <span className="banner-subtitle text-indigo-400/60 font-medium italic">Väntar på din bekräftelse</span>
+                        </div>
+                    </div>
+                    <button 
+                        className="btn btn-primary btn-sm !bg-indigo-600 hover:!bg-indigo-500 transition-all font-black text-[10px] uppercase px-4 shadow-lg shadow-indigo-500/30" 
+                        onClick={() => {
+                            dailyEntries.filter(e => e.isPlanned).forEach(e => updateMealEntry(e.id, { isPlanned: false }));
+                            logEvent('confirm_all_planned', 'bulk', 'food');
+                        }}
+                    >
+                        ✓ Bekräfta alla
+                    </button>
+                </div>
+            )}
+
 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-4 mb-2">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-4 overflow-hidden">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <div className="flex flex-col items-center justify-center p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="flex flex-col items-center justify-center p-3 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
                             <span className="text-[10px] font-black uppercase text-emerald-500 mb-1">Intag</span>
-                            <span className="text-2xl font-black text-white">{Math.round(dailyNutrition.calories)}</span>
+                            <span className="text-xl font-black text-white">{Math.round(dailyNutrition.calories)}</span>
                             <span className="text-[9px] text-slate-500 font-bold">kcal</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10">
+                        <div className="flex flex-col items-center justify-center p-3 bg-amber-500/5 rounded-2xl border border-amber-500/10">
                             <span className="text-[10px] font-black uppercase text-amber-500 mb-1">Träning</span>
-                            <span className="text-2xl font-black text-white">+{Math.round(burned)}</span>
+                            <span className="text-xl font-black text-white">+{Math.round(burned)}</span>
                             <span className="text-[9px] text-slate-500 font-bold">kcal</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
-                            <span className="text-[10px] font-black uppercase text-indigo-400 mb-1">Balans</span>
-                            <div className="flex items-center gap-1">
-                                <span className={`text-2xl font-black ${dailyNutrition.calories > maintenance ? 'text-rose-400' : 'text-indigo-300'}`}>
-                                    {Math.round(maintenance - dailyNutrition.calories)}
-                                </span>
-                            </div>
+                        <div className="flex flex-col items-center justify-center p-3 bg-rose-500/5 rounded-2xl border border-rose-500/10">
+                            <span className="text-[10px] font-black uppercase text-rose-400 mb-1">Balans</span>
+                            <span className="text-xl font-black text-rose-400">
+                                {Math.round(maintenance - dailyNutrition.calories)}
+                            </span>
                             <span className="text-[9px] text-slate-500 font-bold">kcal kvar</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-3 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                            <span className="text-[10px] font-black uppercase text-indigo-400 mb-1">Planerat</span>
+                            <span className="text-xl font-black text-indigo-400">
+                                {Math.round(dailyNutrition.calories + plannedNutrition.calories)}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-bold">/ {goals.calories} kcal</span>
                         </div>
                     </div>
 
@@ -697,6 +731,7 @@ export function CaloriesPage() {
                             <CalorieRing
                                 calories={dailyNutrition.calories}
                                 calorieGoal={goals.calories}
+                                plannedCalories={plannedNutrition.calories}
                                 protein={dailyNutrition.protein}
                                 proteinGoal={goals.protein}
                                 size="lg"
@@ -712,6 +747,7 @@ export function CaloriesPage() {
                                 carbsGoal={goals.carbs || 250}
                                 fat={dailyNutrition.fat}
                                 fatGoal={goals.fat || 80}
+                                plannedCalories={plannedNutrition.calories}
                                 size="md"
                             />
 

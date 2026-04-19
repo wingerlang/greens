@@ -9,6 +9,7 @@ interface MacroBarsProps {
     carbsGoal: number;
     fat: number;
     fatGoal: number;
+    plannedCalories?: number;
     /** Size: 'sm', 'md' */
     size?: 'sm' | 'md';
 }
@@ -26,10 +27,13 @@ export function MacroBars({
     carbsGoal,
     fat,
     fatGoal,
+    plannedCalories = 0,
     size = 'md'
 }: MacroBarsProps) {
     const textSize = size === 'sm' ? 'text-sm' : 'text-lg';
     const isOverCalories = calories > calorieGoal;
+    const totalProjected = calories + plannedCalories;
+    const isProjectedOver = totalProjected > calorieGoal;
 
     return (
         <div className="grid grid-cols-2 gap-x-4 gap-y-4">
@@ -94,6 +98,32 @@ export function MacroBars({
                 </div>
                 <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
                     <div className={`h-full rounded-full transition-all ${isOverCalories ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((calories / calorieGoal) * 100, 100)}%` }}></div>
+                </div>
+            </div>
+
+            {/* Planned */}
+            <div className="col-span-2">
+                <div className="flex justify-between items-baseline mb-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Planerat / Totalt</span>
+                    {plannedCalories > 0 && (
+                        <span className="text-[10px] font-black text-indigo-400">+{Math.round(plannedCalories)} kcal planerat</span>
+                    )}
+                </div>
+                <div className="flex items-baseline gap-1">
+                    <span className={`font-black tracking-tighter ${textSize} ${isProjectedOver ? 'text-indigo-400' : 'text-slate-900 dark:text-white'}`}>
+                        {Math.round(totalProjected)}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-bold">/ {calorieGoal} kcal</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1 relative">
+                    <div 
+                        className="absolute left-0 top-0 h-full bg-slate-400 dark:bg-slate-600 rounded-full z-10" 
+                        style={{ width: `${Math.min((calories / calorieGoal) * 100, 100)}%` }}
+                    ></div>
+                    <div 
+                        className="absolute left-0 top-0 h-full bg-indigo-500/40 rounded-full transition-all z-0" 
+                        style={{ width: `${Math.min((totalProjected / calorieGoal) * 100, 100)}%` }}
+                    ></div>
                 </div>
             </div>
         </div>

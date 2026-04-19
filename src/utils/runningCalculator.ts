@@ -213,11 +213,11 @@ export function estimateCardioCalories(type: 'running' | 'cycling', durationSeco
     const durationHours = durationSeconds / 3600;
 
     if (type === 'running') {
-        // Rule of thumb: 1 kcal per kg per km
+        // Rule of thumb: ~0.92 kcal per kg per km (conservative estimate)
         // Distance = Speed * Time
         if (!input.weightKg || !input.speedKph) return 0;
         const distanceKm = input.speedKph * durationHours;
-        return Math.round(input.weightKg * distanceKm);
+        return Math.round(input.weightKg * distanceKm * 0.92);
     }
 
     if (type === 'cycling') {

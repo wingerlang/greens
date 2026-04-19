@@ -293,7 +293,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
 
         emitFeedEvent(
             'NUTRITION_MEAL',
-            `Loggade ${newEntry.mealType.charAt(0).toUpperCase() + newEntry.mealType.slice(1)}`,
+            `${newEntry.isPlanned ? 'Planerade' : 'Loggade'} ${newEntry.mealType.charAt(0).toUpperCase() + newEntry.mealType.slice(1)}`,
             {
                 type: 'NUTRITION_MEAL',
                 mealType: newEntry.mealType,
@@ -370,7 +370,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     }, [mealEntries]);
 
     const calculateDailyNutrition = React.useCallback((date: string): NutritionSummary => {
-        const entries = getMealEntriesForDate(date);
+        const entries = getMealEntriesForDate(date).filter(e => !e.isPlanned);
         const summary: NutritionSummary = {
             calories: 0,
             protein: 0,
@@ -441,6 +441,38 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         };
     }, [getMealEntriesForDate, recipes, foodItems]);
 
+    // Calculate nutrition for planned meals only
+    const calculateDailyPlannedNutrition = React.useCallback((date: string): NutritionSummary => {
+        const entries = getMealEntriesForDate(date).filter(e => e.isPlanned);
+        const summary: NutritionSummary = {
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+        };
+
+        for (const entry of entries) {
+            for (const item of entry.items) {
+                const { nutrition: baseNutrition } = calculateMealItemNutrition(item, recipes, foodItems, quickMeals);
+                const multiplier = entry.pieces ?? 1;
+                summary.calories += baseNutrition.calories * multiplier;
+                summary.protein += baseNutrition.protein * multiplier;
+                summary.carbs += baseNutrition.carbs * multiplier;
+                summary.fat += baseNutrition.fat * multiplier;
+                summary.fiber += (baseNutrition.fiber || 0) * multiplier;
+            }
+        }
+
+        return {
+            calories: Math.round(summary.calories),
+            protein: Math.round(summary.protein * 10) / 10,
+            carbs: Math.round(summary.carbs * 10) / 10,
+            fat: Math.round(summary.fat * 10) / 10,
+            fiber: Math.round(summary.fiber * 10) / 10,
+            proteinCategories: [],
+        };
+    }, [getMealEntriesForDate, recipes, foodItems]);
 
     // ============================================
     // Weekly Plan CRUD
@@ -642,6 +674,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         deleteMealEntry,
         getMealEntriesForDate,
         calculateDailyNutrition,
+        calculateDailyPlannedNutrition,
         getWeeklyPlan,
         saveWeeklyPlan,
         getPlannedMealsForDate,

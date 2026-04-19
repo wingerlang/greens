@@ -91,6 +91,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [exercises, setExercises] = React.useState<ExerciseDefinition[]>([]);
     const [permissionConfig, setPermissionConfig] = React.useState<PermissionConfig>(DEFAULT_PERMISSION_CONFIG);
     const skipAutoSave = React.useRef(false);
+    const isRefreshingRef = React.useRef(false);
     const refreshCounterRef = React.useRef(0);
 
     // ============================================
@@ -145,6 +146,7 @@ export function DataProvider({ children }: DataProviderProps) {
         addFoodItem, updateFoodItem, deleteFoodItem, getFoodItem,
         addRecipe, updateRecipe, deleteRecipe, getRecipe, calculateRecipeNutrition, getRecipeWithNutrition,
         addMealEntry, updateMealEntry, deleteMealEntry, getMealEntriesForDate, calculateDailyNutrition,
+        calculateDailyPlannedNutrition,
         getWeeklyPlan, saveWeeklyPlan, getPlannedMealsForDate,
         addQuickMeal, deleteQuickMeal, updateQuickMeal, updateFoodAlias, addPurchaseLog
     } = useNutritionContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, updateVitals, getVitalsForDate });
@@ -178,6 +180,7 @@ export function DataProvider({ children }: DataProviderProps) {
         const currentLoadId = ++refreshCounterRef.current;
 
         // If already loaded, this is a background refresh. We should be careful.
+        isRefreshingRef.current = true;
         setIsLoaded(false);
         const data = await storageService.load();
 
@@ -377,6 +380,11 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.bodyMeasurements) setBodyMeasurements(data.bodyMeasurements || []);
 
         setIsLoaded(true);
+        // Delay resetting isRefreshingRef slightly to ensure React has batched all state updates
+        // and the auto-save effect sees the lock.
+        setTimeout(() => {
+            isRefreshingRef.current = false;
+        }, 100);
     }, []);
 
     React.useEffect(() => {
@@ -396,7 +404,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     // Save to storage on changes
     React.useEffect(() => {
-        if (isLoaded) {
+        if (isLoaded && !isRefreshingRef.current) {
             const shouldSkipApi = skipAutoSave.current;
             if (shouldSkipApi) {
                 console.log("Optimizing auto-save: Skipping API sync for atomic update");
@@ -549,6 +557,8 @@ export function DataProvider({ children }: DataProviderProps) {
         updateMealEntry,
         deleteMealEntry,
         getMealEntriesForDate,
+        calculateDailyNutrition,
+        calculateDailyPlannedNutrition, // Added for planned nutrition dashboard
         getWeeklyPlan,
         saveWeeklyPlan,
         getPlannedMealsForDate,
@@ -559,7 +569,6 @@ export function DataProvider({ children }: DataProviderProps) {
         setPantryQuantity,
         getPantryQuantity,
         calculateRecipeNutrition,
-        calculateDailyNutrition,
         users,
         currentUser,
         setCurrentUser: setCurrentUserPublic,
@@ -645,6 +654,7 @@ export function DataProvider({ children }: DataProviderProps) {
         foodAliases,
         updateFoodAlias,
         unifiedActivities,
+        calculateExerciseCalories,
 
         refreshData,
         isLoading: !isLoaded,

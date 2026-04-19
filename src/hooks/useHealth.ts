@@ -13,6 +13,8 @@ export interface HealthState {
     targetCalories: number;
     goalAdjustment: number;
     remainingCalories: number;
+    plannedCaloriesBurned: number;
+    totalProjectedBurn: number;
     currentGoal: 'neutral' | 'deff' | 'bulk';
     activeCycle: any | null; // Typed loosely for now, or import TrainingCycle
     cycleProgress: {
@@ -30,7 +32,9 @@ export function useHealth(date: string = getISODate()) {
         unifiedActivities,
         calculateDailyNutrition,
         weightEntries,
-        getLatestWeight
+        getLatestWeight,
+        plannedActivities,
+        calculateExerciseCalories
     } = useData();
 
     const { settings } = useSettings();
@@ -72,6 +76,22 @@ export function useHealth(date: string = getISODate()) {
         dailyExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0),
         [dailyExercises]
     );
+    
+    const plannedCaloriesBurned = useMemo(() => {
+        const plannedForDate = plannedActivities.filter(p => p.date === date && p.status === 'PLANNED');
+        return plannedForDate.reduce((sum, p) => {
+            const intensity = p.targetHrZone <= 2 ? 'low' : p.targetHrZone >= 4 ? 'high' : 'moderate';
+            return sum + calculateExerciseCalories(
+                p.type.toLowerCase() as any,
+                p.durationMinutes || 0,
+                intensity,
+                p.description,
+                undefined, // averageWatts
+                undefined, // avgHr
+                p.estimatedDistance
+            );
+        }, 0);
+    }, [plannedActivities, date, calculateExerciseCalories]);
 
     // 5. Consumed
     const nutrition = calculateDailyNutrition(date);
@@ -122,6 +142,8 @@ export function useHealth(date: string = getISODate()) {
         tdee: (bmr * metabolicMultiplier) + dailyCaloriesBurned, // True Total Daily Energy Expenditure (approx)
         dailyCaloriesConsumed,
         dailyCaloriesBurned,
+        plannedCaloriesBurned,
+        totalProjectedBurn: dailyCaloriesBurned + plannedCaloriesBurned,
         netCalories,
         targetCalories,
         goalAdjustment,

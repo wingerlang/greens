@@ -638,7 +638,7 @@ export function ActivityDetailModal({
 
 
     const [isFetchingSplits, setIsFetchingSplits] = React.useState(false);
-    const [fetchSplitsResult, setFetchSplitsResult] = useState<'idle' | 'success' | 'error'>('idle');
+    const [fetchSplitsResult, setFetchSplitsResult] = React.useState<'idle' | 'success' | 'error'>('idle');
 
     // Auto-fetch splits if Strava activity is missing them
     React.useEffect(() => {
@@ -824,89 +824,96 @@ export function ActivityDetailModal({
 
     // Handle Save
     const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
+        try {
+            e.preventDefault();
+            console.log("ActivityDetailModal: handleSave triggered", { calculationMode: editForm.calculationMode });
 
-        const duration = parseInt(editForm.duration) || 0;
-        const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
-        const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
-        let calories = calorieOptions[editForm.calculationMode as keyof typeof calorieOptions] || calorieOptions.original;
-        let isCalorieAdjusted = editForm.calculationMode !== 'original';
+            const duration = parseInt(editForm.duration) || 0;
+            const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
+            const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
+            let calories = calorieOptions[editForm.calculationMode as keyof typeof calorieOptions] || calorieOptions.original;
+            let isCalorieAdjusted = editForm.calculationMode !== 'original';
 
-        // Legacy/Special Watts handling (Keep for UI sync if needed, but calculationMode is the new master)
-        if (editForm.calculationMode === 'watts' && avgWatts && avgWatts > 0) {
-            calories = calorieOptions.watts;
-            isCalorieAdjusted = true;
-        } else if (editForm.calculationMode === 'average') {
-            calories = calorieOptions.average;
-            isCalorieAdjusted = true;
-        } else if (editForm.calculationMode === 'hr') {
-            calories = calorieOptions.hr;
-            isCalorieAdjusted = true;
-        } else if (editForm.calculationMode === 'distance') {
-            calories = calorieOptions.distance;
-            isCalorieAdjusted = true;
-        } else if (editForm.calculationMode === 'met') {
-            calories = calorieOptions.met;
-            isCalorieAdjusted = true;
-        }
+            // Legacy/Special Watts handling (Keep for UI sync if needed, but calculationMode is the new master)
+            if (editForm.calculationMode === 'watts' && avgWatts && avgWatts > 0) {
+                calories = calorieOptions.watts;
+                isCalorieAdjusted = true;
+            } else if (editForm.calculationMode === 'average') {
+                calories = calorieOptions.average;
+                isCalorieAdjusted = true;
+            } else if (editForm.calculationMode === 'hr') {
+                calories = calorieOptions.hr;
+                isCalorieAdjusted = true;
+            } else if (editForm.calculationMode === 'distance') {
+                calories = calorieOptions.distance;
+                isCalorieAdjusted = true;
+            } else if (editForm.calculationMode === 'met') {
+                calories = calorieOptions.met;
+                isCalorieAdjusted = true;
+            }
 
-        let updatedNotes = editForm.notes;
-        if ((editForm as any).startKm && parseFloat((editForm as any).startKm) >= 0) {
-            updatedNotes = updatedNotes.replace(/\[START_KM:\s*[\d.]+\]/g, '').trim();
-            updatedNotes += ` [START_KM: ${parseFloat((editForm as any).startKm).toFixed(1)}]`;
-        }
+            let updatedNotes = editForm.notes;
+            if ((editForm as any).startKm && parseFloat((editForm as any).startKm) >= 0) {
+                updatedNotes = updatedNotes.replace(/\[START_KM:\s*[\d.]+\]/g, '').trim();
+                updatedNotes += ` [START_KM: ${parseFloat((editForm as any).startKm).toFixed(1)}]`;
+            }
 
-        const commonData = {
-            title: editForm.title,
-            type: editForm.type,
-            durationMinutes: duration,
-            intensity: editForm.intensity,
-            notes: updatedNotes,
-            subType: editForm.subType as any,
-            tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
-            distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
-            averageWatts: avgWatts,
-            caloriesBurned: calories,
-            isCalorieAdjusted,
-            originalCalories,
-            location: editForm.location,
-            excludeFromStats: editForm.excludeFromStats,
-            isHiddenInCalendar: editForm.isHiddenInCalendar,
-            hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
-            raceDetails: editForm.subType === 'race' || editForm.subType === 'competition' ? {
-                ...activity.raceDetails,
-                placement: parseInt((editForm as any).placement) || undefined,
-                totalParticipants: parseInt((editForm as any).totalParticipants) || undefined
-            } : activity.raceDetails
-        };
-
-        // Local update (works for 'manual', 'strava', and 'merged')
-        // Local update and persistence (Context handles both)
-        updateExercise(activity.id, {
-            ...commonData,
-            averageWatts: avgWatts,
-            isCalorieAdjusted,
-            caloriesBurned: calories, // Explicitly pass to ensure it's not missed
-            performance: {
-                ...(perf || {}),
+            const commonData = {
+                title: editForm.title,
+                type: editForm.type,
+                durationMinutes: duration,
+                intensity: editForm.intensity,
+                notes: updatedNotes,
+                subType: editForm.subType as any,
+                tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
+                distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
                 averageWatts: avgWatts,
-                calories: calories,
+                caloriesBurned: calories,
                 isCalorieAdjusted,
                 originalCalories,
-                durationMinutes: duration,
-                distanceKm: commonData.distance,
-                notes: updatedNotes,
-                activityType: editForm.type
-            },
-            plan: {
-                ...(universalActivity?.plan || {}),
-                title: editForm.title,
-                activityType: editForm.type,
-                distanceKm: commonData.distance
-            }
-        });
+                location: editForm.location,
+                excludeFromStats: editForm.excludeFromStats,
+                isHiddenInCalendar: editForm.isHiddenInCalendar,
+                hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
+                raceDetails: editForm.subType === 'race' || editForm.subType === 'competition' ? {
+                    ...activity.raceDetails,
+                    placement: parseInt((editForm as any).placement) || undefined,
+                    totalParticipants: parseInt((editForm as any).totalParticipants) || undefined
+                } : activity.raceDetails
+            };
 
-        setIsEditing(false);
+            // Local update (works for 'manual', 'strava', and 'merged')
+            // Local update and persistence (Context handles both)
+            updateExercise(activity.id, {
+                ...commonData,
+                averageWatts: avgWatts,
+                isCalorieAdjusted,
+                caloriesBurned: calories, // Explicitly pass to ensure it's not missed
+                performance: {
+                    ...(perf || {}),
+                    averageWatts: avgWatts,
+                    calories: calories,
+                    isCalorieAdjusted,
+                    originalCalories,
+                    durationMinutes: duration,
+                    distanceKm: commonData.distance,
+                    notes: updatedNotes,
+                    activityType: editForm.type
+                },
+                plan: {
+                    ...(universalActivity?.plan || {}),
+                    title: editForm.title,
+                    activityType: editForm.type,
+                    distanceKm: commonData.distance
+                }
+            });
+
+            console.log("ActivityDetailModal: updateExercise called successfully");
+            setIsEditing(false);
+        } catch (error) {
+            console.error("ActivityDetailModal: handleSave FAILED:", error);
+            alert("Ett fel uppstod vid sparande: " + (error instanceof Error ? error.message : String(error)));
+        }
     };
 
     // Handle Delete

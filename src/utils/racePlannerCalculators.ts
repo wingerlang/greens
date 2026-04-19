@@ -310,10 +310,10 @@ export function calculateAdjustedRaceTime(
  * Formula: ~1 kcal/kg/km.
  */
 export function estimateKcalBurnRate(weightKg: number, speedKph: number): number {
-    // 1 kcal per kg per km
-    // kcal/hour = weight * speed
-    // kcal/min = (weight * speed) / 60
-    return (weightKg * speedKph) / 60;
+    // ~0.92 kcal per kg per km (conservative)
+    // kcal/hour = weight * speed * 0.92
+    // kcal/min = (weight * speed * 0.92) / 60
+    return (weightKg * speedKph * 0.92) / 60;
 }
 
 /**
@@ -900,8 +900,8 @@ export function calculateEnergyBreakdown(
     const speedKph = distanceKm / (targetTimeMinutes / 60);
     const raceHours = targetTimeMinutes / 60;
 
-    // Total kcal burned (1 kcal/kg/km approximation)
-    const totalKcalBurned = runnerWeightKg * distanceKm;
+    // Total kcal burned (~0.92 kcal/kg/km conservative estimate)
+    const totalKcalBurned = runnerWeightKg * distanceKm * 0.92;
 
     // Intensity estimate
     let intensity = 0.85;

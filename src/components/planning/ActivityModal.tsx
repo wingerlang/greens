@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
+import { notificationService } from '../../services/notificationService.ts';
 import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer, Bike, Activity, Wind, Waves, Disc, TrendingUp } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
@@ -57,6 +58,7 @@ export function ActivityModal({
     const [formStatus, setFormStatus] = useState<'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'CHANGED'>('PLANNED');
     const [formStartTime, setFormStartTime] = useState('');
     const [formDate, setFormDate] = useState(selectedDate || '');
+    const [formCalculationMode, setFormCalculationMode] = useState<'original' | 'distance'>('original');
 
     const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser, universalActivities } = useData();
     const { settings } = useSettings();
@@ -384,6 +386,7 @@ export function ActivityModal({
                 setFormStartTime(editingActivity.startTime || '');
                 setFormStatus(editingActivity.status === 'DRAFT' ? 'PLANNED' : editingActivity.status as any);
                 setFormDate(editingActivity.date || selectedDate || '');
+                setFormCalculationMode(editingActivity.calculationMode as any || 'original');
             } else {
                 setFormType('RUN');
                 setRunSubCategory('EASY');
@@ -402,6 +405,7 @@ export function ActivityModal({
                 setFormStartTime('');
                 setFormStatus('PLANNED');
                 setFormDate(selectedDate || '');
+                setFormCalculationMode('original');
             }
         }
     }, [isOpen, selectedDate, editingActivity]);
@@ -442,7 +446,14 @@ export function ActivityModal({
     };
 
     const handleSave = () => {
-        if (!formDate) return;
+        console.log('ActivityModal: handleSave triggered');
+        try {
+            if (!formDate) {
+                notificationService.notify('error', 'Datum saknas');
+                return;
+            }
+
+            console.log('ActivityModal: formDate validated:', formDate);
 
         // Parse hh:mm to minutes for internal logic/description if needed
         const [hours, minutes] = formDuration.split(':').map(Number);
@@ -516,6 +527,7 @@ export function ActivityModal({
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
             status: formStatus as any,
+            calculationMode: formCalculationMode as any,
             isRace: isRace,
             raceDetails: isRace ? {
                 ...editingActivity?.raceDetails,
@@ -527,8 +539,14 @@ export function ActivityModal({
             } : undefined
         };
 
+        console.log('ActivityModal: Calling onSave with:', activityData);
         onSave(activityData);
+        console.log('ActivityModal: onSave finished');
         onClose();
+        } catch (err) {
+            console.error('ActivityModal: handleSave CRASHED:', err);
+            notificationService.notify('error', 'Ett tekniskt fel uppstod: ' + (err instanceof Error ? err.message : String(err)));
+        }
     };
 
     const handleApplySuggestion = (s: TrainingSuggestion) => {
@@ -1179,6 +1197,27 @@ export function ActivityModal({
                                             <option value="moderate">Medel (Zon 3)</option>
                                             <option value="high">Hög (Zon 4-5)</option>
                                         </select>
+                                    </div>
+                                )}
+
+                                {/* Calorie Calculation Mode - Only for RUN */}
+                                {formType === 'RUN' && (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Kalkylmodell (Kcal)</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => setFormCalculationMode('original')}
+                                                className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formCalculationMode === 'original' ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-sm' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-slate-300'}`}
+                                            >
+                                                MET (Standard)
+                                            </button>
+                                            <button
+                                                onClick={() => setFormCalculationMode('distance')}
+                                                className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formCalculationMode === 'distance' ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-emerald-300'}`}
+                                            >
+                                                {settings.runningCalorieFactor || 0.92} kcal/kg/km
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 

@@ -139,6 +139,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
 
     // Cooked toggle state for raw ingredients
     const [draftLogAsCooked, setDraftLogAsCooked] = useState(false);
+    const [isPlanned, setIsPlanned] = useState(false);
 
     // Purchase Specific State
     const [lockedPurchaseFood, setLockedPurchaseFood] = useState<FoodItem | null>(null);
@@ -896,16 +897,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
     }, [showFeedback]);
 
     useEffect(() => {
-        if (isOpen && inputRef.current) {
-            inputRef.current.focus();
-            setInput('');
+        if (isOpen) {
             setOpenTimestamp(Date.now());
-        } else if (!isOpen) {
+            inputRef.current?.focus();
+        } else {
             setOpenTimestamp(null);
             setLockedFood(null);
-            setLockedRecipe(null);
             setLockedQuickMeal(null);
+            setLockedRecipe(null);
             setLockedPurchaseFood(null);
+            setDraftLogAsCooked(false);
+            setIsPlanned(false);
             setDraftFoodQuantity(null);
             setDraftRecipeServings(1);
             setDraftRecipeMealType(null);
@@ -1018,7 +1020,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 servings: quantity, // servings is grams
                 ...(isLoggingAsCooked && { loggedAsCooked: true }),
                 ...(isLoggingAsCooked && { effectiveYieldFactor }),
-            }]
+            }],
+            isPlanned
         });
         console.log('[Omnibox] logFoodItem', {
             name: item.name,
@@ -1117,7 +1120,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                     referenceId: lockedRecipe.id,
                     servings: draftRecipeServings
                 }],
-                title: lockedRecipe.name
+                title: lockedRecipe.name,
+                isPlanned
             });
         } else if (lockedQuickMeal) {
             const meal = lockedQuickMeal; // local ref for TS
@@ -1127,7 +1131,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 items: meal.items,
                 title: meal.name,
                 snabbvalId: meal.id, // This is important for grouping on the Calories page
-                pieces: 1 // Default to 1 so stepper is available
+                pieces: 1, // Default to 1 so stepper is available
+                isPlanned
             });
         }
 
@@ -1533,6 +1538,24 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                             }
                         }}
                     />
+
+                    {/* Plan vs Log Toggle */}
+                    {!isSlashMode && !isActionMode && (
+                        <div className="flex bg-slate-800/80 rounded-lg p-0.5 border border-white/5 shadow-inner">
+                            <button 
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all duration-300 ${!isPlanned ? 'bg-emerald-500 text-white shadow-[0_2px_10px_rgba(16,185,129,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
+                                onClick={() => setIsPlanned(false)}
+                            >
+                                Ätit
+                            </button>
+                            <button 
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all duration-300 ${isPlanned ? 'bg-indigo-500 text-white shadow-[0_2px_10px_rgba(99,102,241,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
+                                onClick={() => setIsPlanned(true)}
+                            >
+                                Planera
+                            </button>
+                        </div>
+                    )}
 
                     {/* LIVE VALIDATION GHOSTING */}
                     {input && !isSlashMode && !isActionMode && !lockedFood && !lockedQuickMeal && !lockedRecipe && (
