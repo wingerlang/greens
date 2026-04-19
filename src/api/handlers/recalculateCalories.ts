@@ -6,7 +6,10 @@ import { calculateStravaCalories } from "../strava.ts";
 
 export async function handleRecalculateCaloriesRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
-    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    let token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token || token === "mock" || token === "null" || token.length < 10) {
+        token = req.headers.get("cookie")?.split("auth_token=")[1]?.split(";")[0] || null;
+    }
     if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
 
     const session = await getSession(token);

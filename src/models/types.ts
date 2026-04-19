@@ -1270,6 +1270,8 @@ export interface ActivityPerformanceSection {
     distanceKm?: number;
     calories: number;
     calorieBreakdown?: string;
+    isCalorieAdjusted?: boolean;
+    originalCalories?: number;
     excludeFromStats?: boolean;
 
     // Physiological

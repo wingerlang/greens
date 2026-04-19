@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, type MutableRefObject } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, type MutableRefObject } from 'react';
 import { AssaultBikeMath } from '../../utils/cyclingCalculations.ts';
 import {
     type ExerciseEntry,
@@ -64,7 +64,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     const [tours, setTours] = useState<Tour[]>([]);
 
     // Pre-seed Race Data (One-off or load from storage later)
-    useEffect(() => {
+    React.useEffect(() => {
         if (!isLoaded) return;
 
         // This would ideally come from storageService.load() but we'll init if empty for now
@@ -107,7 +107,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Strength Session CRUD
     // ============================================
 
-    const addStrengthSession = useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {
+    const addStrengthSession = React.useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {
         const newSession: StrengthWorkout = {
             ...session as any, // Cast for simplicity during migration
             id: generateId(),
@@ -139,7 +139,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newSession;
     }, [emitFeedEvent]);
 
-    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthWorkout>): void => {
+    const updateStrengthSession = React.useCallback((id: string, updates: Partial<StrengthWorkout>): void => {
         setStrengthSessions(prev => {
             const next = prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s);
             const updated = next.find(s => s.id === id);
@@ -165,7 +165,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, []);
 
-    const deleteStrengthSession = useCallback((id: string): void => {
+    const deleteStrengthSession = React.useCallback((id: string): void => {
         let sessionToDelete: StrengthWorkout | undefined;
 
         setStrengthSessions(prev => {
@@ -188,7 +188,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Exercise Management
     // ============================================
 
-    const addExercise = useCallback((data: Omit<ExerciseEntry, 'id' | 'createdAt'>): ExerciseEntry => {
+    const addExercise = React.useCallback((data: Omit<ExerciseEntry, 'id' | 'createdAt'>): ExerciseEntry => {
         const newEntry: ExerciseEntry = {
             ...data,
             id: generateId(),
@@ -227,7 +227,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newEntry;
     }, [emitFeedEvent, logAction, skipAutoSave]);
 
-    const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
+    const updateExercise = React.useCallback((id: string, updates: Partial<ExerciseEntry>) => {
         const existing = exerciseEntries.find(e => e.id === id);
 
         if (!existing) {
@@ -244,7 +244,6 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
 
             // Fallback 2: Check universalActivities (Strava/Virtual)
-            // This allows editing Strava activities (Type, Duration, Title, Notes)
             const uniActivity = universalActivities.find(a => a.id === id);
             if (uniActivity) {
                 // Optimistic Update
@@ -264,7 +263,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 durationMinutes: updates.durationMinutes !== undefined ? updates.durationMinutes : ua.performance?.durationMinutes,
                                 notes: updates.notes || ua.performance?.notes,
                                 subType: updates.subType || ua.performance?.subType,
-                                // Also update distance in performance if changed
+                                averageWatts: updates.averageWatts !== undefined ? updates.averageWatts : ua.performance?.averageWatts,
                                 distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm,
                                 excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats
                             },
@@ -291,6 +290,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         intensity: updates.intensity,
                         subType: updates.subType,
                         location: updates.location,
+                        averageWatts: updates.averageWatts,
                         hyroxStats: updates.hyroxStats,
                         excludeFromStats: updates.excludeFromStats,
                         raceDetails: updates.raceDetails
@@ -304,7 +304,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
         const updated = { ...existing, ...updates };
 
-        // If intensity or duration updated and it's a manual entry (or we want to override for manual edits), refresh the breakdown
+        // If intensity or duration updated and it's a manual entry, refresh the breakdown
         if ((updates.intensity || updates.durationMinutes || updates.caloriesBurned) && !updates.calorieBreakdown) {
             updated.calorieBreakdown = `Källhänvisning: Manuellt inlägg\nBeräkning: Baserad på angiven intensitet (${updated.intensity}) och längd (${updated.durationMinutes} min).`;
         }
@@ -313,7 +313,6 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         setExerciseEntries(prev => prev.map(e => e.id === id ? updated : e));
 
         // ALSO update universalActivities if this ID matches a server activity
-        // This ensures Strava activities get their title and subType updated and persisted
         setUniversalActivities(prev => prev.map(ua => {
             if (ua.id === id) {
                 return {
@@ -327,6 +326,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     performance: {
                         ...ua.performance,
                         subType: updates.subType || ua.performance?.subType,
+                        averageWatts: updates.averageWatts !== undefined ? updates.averageWatts : ua.performance?.averageWatts,
+                        isCalorieAdjusted: updates.isCalorieAdjusted !== undefined ? updates.isCalorieAdjusted : ua.performance?.isCalorieAdjusted,
+                        originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories,
                         splits: updates.splits || ua.performance?.splits,
                         laps: updates.laps || ua.performance?.laps
                     },
@@ -336,7 +338,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             return ua;
         }));
 
-        // PERSISTENCE FIX: Ensure manual entries also sync their metadata to the backend
+        // PERSISTENCE FIX
         const token = localStorage.getItem('auth_token');
         if (token) {
             const dateParam = updated.date.split('T')[0];
@@ -347,17 +349,20 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    title: updated.title,
-                    notes: updated.notes,
-                    durationMinutes: updated.durationMinutes,
-                    type: updated.type,
-                    distance: updated.distance,
-                    intensity: updated.intensity,
-                    subType: updated.subType,
-                    location: updated.location,
-                    hyroxStats: updated.hyroxStats,
-                    excludeFromStats: updated.excludeFromStats,
-                    raceDetails: updated.raceDetails
+                    ...updated,
+                    // Map critical performance metrics to the root for the backend handler
+                    caloriesBurned: updated.caloriesBurned,
+                    isCalorieAdjusted: updated.isCalorieAdjusted,
+                    originalCalories: updated.originalCalories,
+                    averageWatts: updated.averageWatts,
+                    // Also ensure nested performance object is updated
+                    performance: {
+                        ...(updated as any).performance,
+                        calories: updated.caloriesBurned,
+                        isCalorieAdjusted: updated.isCalorieAdjusted,
+                        originalCalories: updated.originalCalories,
+                        averageWatts: updated.averageWatts
+                    }
                 })
             }).catch(e => console.error("Failed to persist manual activity update:", e));
         }
@@ -373,7 +378,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
     }, [exerciseEntries, strengthSessions, universalActivities, updateStrengthSession, storageService, skipAutoSave]);
 
-    const deleteExercise = useCallback((id: string) => {
+    const deleteExercise = React.useCallback((id: string) => {
         let entryToDelete: ExerciseEntry | undefined;
         let sessionToDelete: StrengthWorkout | undefined;
         let activityToDelete: UniversalActivity | undefined;
@@ -433,8 +438,19 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
     }, [storageService]);
 
-    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string, averageWatts?: number): number => {
+    const calculateExerciseCalories = React.useCallback((
+        type: ExerciseType, 
+        duration: number, 
+        intensity: ExerciseIntensity, 
+        notes?: string, 
+        averageWatts?: number,
+        avgHr?: number,
+        distance?: number
+    ): number => {
         const weight = getLatestWeight();
+        const settings = currentUser?.settings;
+        const gender = settings?.gender || 'male';
+        const age = settings?.birthYear ? new Date().getFullYear() - settings.birthYear : 30;
 
         // 1. Cycling Power Priority (Gold Standard)
         if (type === 'cycling') {
@@ -444,13 +460,33 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
         }
 
-        // 2. Parse explicit patterns (e.g. "10min @ 200w")
+        // 2. Running/Cardio with Heart Rate (Silver Standard)
+        // Formula: Men: C = [(Age x 0.2017) + (Weight x 0.1988) + (HR x 0.6309) — 55.0969] x Time / 4.184
+        // Women: C = [(Age x 0.074) — (Weight x 0.1263) + (HR x 0.4472) — 20.4022] x Time / 4.184
+        if (avgHr && avgHr > 40 && weight > 0 && (type === 'running' || type === 'cycling' || type === 'cardio' || type === 'climbing' || type === 'hyrox')) {
+            let hrCalPerMin = 0;
+            if (gender === 'male') {
+                hrCalPerMin = ((-55.0969 + (0.6309 * avgHr) + (0.1988 * weight) + (0.2017 * age)) / 4.184);
+            } else {
+                hrCalPerMin = ((-20.4022 + (0.4472 * avgHr) - (0.1263 * weight) + (0.074 * age)) / 4.184);
+            }
+            return Math.round(Math.max(0, hrCalPerMin * duration));
+        }
+
+        // 3. Movement-based (Distance) for Running (Bronze Standard)
+        // Net Calories Running = Weight (kg) * Distance (km) * 1.036
+        if ((type === 'running' || type === 'walking') && distance && distance > 0 && weight > 0) {
+            const factor = type === 'running' ? 1.036 : 0.7; // Walking is less efficient per km
+            return Math.round(weight * distance * factor);
+        }
+
+        // 4. Parse explicit patterns (e.g. "10min @ 200w")
         if (notes) {
             const powerCalories = parsePowerCalories(notes);
             if (powerCalories > 0) return Math.round(powerCalories);
         }
 
-        // 3. Fallback to MET (Science Standard)
+        // 5. Fallback to MET (Science Standard)
         const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
             running: { low: 6, moderate: 8, high: 11, ultra: 14 },
             cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
@@ -475,7 +511,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Derived: Unified Activities (Manual + Strava + Strength)
     // ============================================
 
-    const unifiedActivities = useMemo(() => {
+    const unifiedActivities = React.useMemo(() => {
         const serverEntries = universalActivities
             .filter(u => !u.mergedIntoId) // Filter out merged activities
             .map(mapUniversalToLegacyEntry)
@@ -513,25 +549,43 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 }
             }
 
-            let calories = e.caloriesBurned;
+            let calories = u?.performance?.isCalorieAdjusted ? u.performance.calories : e.caloriesBurned;
             let noteAdjustment = '';
 
-            const powerKcal = parsePowerCalories(u?.performance?.notes || '');
-            if (powerKcal > 0) {
-                calories = Math.round(powerKcal);
-            } else if (e.type === 'running' && e.distance && e.distance > 0) {
+            // If not already manually adjusted, try power calculation or run baseline
+            if (!(u?.performance?.isCalorieAdjusted)) {
+                const avgHr = u?.performance?.avgHeartRate || e.heartRateAvg;
+                const calculated = calculateExerciseCalories(
+                    e.type,
+                    e.durationMinutes,
+                    e.intensity,
+                    u?.performance?.notes || e.notes,
+                    u?.performance?.averageWatts || e.averageWatts,
+                    avgHr,
+                    e.distance
+                );
+
+                const stravaKcal = e.caloriesBurned || 0;
                 const weight = getLatestWeight() || 75;
-                const stravaKcal = e.caloriesBurned;
-                const baselineKcal = e.distance * weight * 1.0;
+                const baselineKcal = e.distance && e.distance > 0 ? e.distance * weight : 0;
+
+                // Only adjust if Strava is missing or suspiciously low (< 80% of baseline distance work)
+                // or if we have power data (Power is king)
+                const hasPower = (u?.performance?.averageWatts && u.performance.averageWatts > 0) || (e.averageWatts && e.averageWatts > 0);
                 
-                // If Strava's estimate is notably low (e.g. low heart rate run), adjust to the average
-                if (stravaKcal < (baselineKcal * 0.85)) {
-                    calories = Math.round((stravaKcal + baselineKcal) / 2);
-                    noteAdjustment = `\n[Notis: Kalorier justerade från ${stravaKcal} till ${calories} pga låg Strava-estimering (${Math.round(baselineKcal)} kcal baseline)]`;
+                if (hasPower || stravaKcal === 0 || (e.type === 'running' && baselineKcal > 0 && stravaKcal < baselineKcal * 0.8)) {
+                    if (calculated > 0 && Math.abs(calculated - stravaKcal) > 30) {
+                        calories = calculated;
+                        const reason = hasPower ? 'effektdata (Watt)' : (avgHr ? 'pulsdata' : 'distans');
+                        noteAdjustment = `\n[Notis: Kalorier justerade från ${stravaKcal} till ${calories} baserat på ${reason}]`;
+                    }
                 }
             }
             
-            const isAdjusted = noteAdjustment !== '';
+            const isAdjusted = u?.performance?.isCalorieAdjusted || noteAdjustment !== '';
+            const originalCalories = u?.performance?.isCalorieAdjusted 
+                ? u.performance.originalCalories 
+                : (isAdjusted ? e.caloriesBurned : undefined);
 
             return {
                 ...e,
@@ -545,7 +599,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                 },
                 caloriesBurned: calories,
                 isCalorieAdjusted: isAdjusted,
-                originalCalories: isAdjusted ? e.caloriesBurned : undefined,
+                originalCalories: originalCalories,
                 notes: noteAdjustment ? (e.notes ? `${e.notes}${noteAdjustment}` : noteAdjustment.trim()) : e.notes
             };
         });
@@ -952,7 +1006,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     }, [universalActivities, exerciseEntries, strengthSessions]);
 
 
-    const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
+    const getExercisesForDate = React.useCallback((date: string): ExerciseEntry[] => {
         // Use startsWith to match YYYY-MM-DD even if activity has time time YYYY-MM-DDTHH:mm:ss
         return unifiedActivities.filter(e => e.date.startsWith(date));
     }, [unifiedActivities]);
@@ -961,7 +1015,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Coach / Plan / Competition Actions
     // ============================================
 
-    const addCompetition = useCallback((data: Omit<Competition, 'id' | 'createdAt'>): Competition => {
+    const addCompetition = React.useCallback((data: Omit<Competition, 'id' | 'createdAt'>): Competition => {
         const newComp: Competition = {
             ...data,
             id: generateId(),
@@ -971,22 +1025,22 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newComp;
     }, []);
 
-    const updateCompetition = useCallback((id: string, updates: Partial<Competition>) => {
+    const updateCompetition = React.useCallback((id: string, updates: Partial<Competition>) => {
         setCompetitions(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
     }, []);
 
-    const deleteCompetition = useCallback((id: string) => {
+    const deleteCompetition = React.useCallback((id: string) => {
         setCompetitions(prev => prev.filter(c => c.id !== id));
     }, []);
 
-    const calculateParticipantPoints = useCallback((compId: string, userId: string, date: string): number => {
+    const calculateParticipantPoints = React.useCallback((compId: string, userId: string, date: string): number => {
         const comp = competitions.find(c => c.id === compId);
         if (!comp) return 0;
         // Logic for calculating points based on rules will be implemented in a service/util
         return 0; // Placeholder
     }, [competitions]);
 
-    const addTrainingCycle = useCallback((data: Omit<TrainingCycle, 'id'>): TrainingCycle => {
+    const addTrainingCycle = React.useCallback((data: Omit<TrainingCycle, 'id'>): TrainingCycle => {
         const newCycle: TrainingCycle = {
             ...data,
             id: generateId()
@@ -995,15 +1049,15 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newCycle;
     }, []);
 
-    const updateTrainingCycle = useCallback((id: string, updates: Partial<TrainingCycle>) => {
+    const updateTrainingCycle = React.useCallback((id: string, updates: Partial<TrainingCycle>) => {
         setTrainingCycles(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
     }, []);
 
-    const deleteTrainingCycle = useCallback((id: string) => {
+    const deleteTrainingCycle = React.useCallback((id: string) => {
         setTrainingCycles(prev => prev.filter(c => c.id !== id));
     }, []);
 
-    const addGoal = useCallback((data: Omit<PerformanceGoal, 'id' | 'createdAt'>): PerformanceGoal => {
+    const addGoal = React.useCallback((data: Omit<PerformanceGoal, 'id' | 'createdAt'>): PerformanceGoal => {
         const newGoal: PerformanceGoal = {
             ...data,
             id: generateId(),
@@ -1017,7 +1071,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newGoal;
     }, [currentUser, skipAutoSave]);
 
-    const updateGoal = useCallback((id: string, updates: Partial<PerformanceGoal>) => {
+    const updateGoal = React.useCallback((id: string, updates: Partial<PerformanceGoal>) => {
         setPerformanceGoals(prev => {
             const next = prev.map(g => g.id === id ? { ...g, ...updates } : g);
             const updatedGoal = next.find(g => g.id === id);
@@ -1029,17 +1083,17 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const deleteGoal = useCallback((id: string) => {
+    const deleteGoal = React.useCallback((id: string) => {
         setPerformanceGoals(prev => prev.filter(g => g.id !== id));
         skipAutoSave.current = true;
         storageService.deleteGoal(id).catch(e => console.error("Failed to delete goal", e));
     }, [skipAutoSave]);
 
-    const getGoalsForCycle = useCallback((cycleId: string): PerformanceGoal[] => {
+    const getGoalsForCycle = React.useCallback((cycleId: string): PerformanceGoal[] => {
         return performanceGoals.filter(g => g.cycleId === cycleId);
     }, [performanceGoals]);
 
-    const addTrainingPeriod = useCallback((data: Omit<TrainingPeriod, 'id' | 'createdAt' | 'updatedAt'>): TrainingPeriod => {
+    const addTrainingPeriod = React.useCallback((data: Omit<TrainingPeriod, 'id' | 'createdAt' | 'updatedAt'>): TrainingPeriod => {
         const newPeriod: TrainingPeriod = {
             ...data,
             id: generateId(),
@@ -1052,7 +1106,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newPeriod;
     }, [skipAutoSave]);
 
-    const updateTrainingPeriod = useCallback((id: string, updates: Partial<TrainingPeriod>) => {
+    const updateTrainingPeriod = React.useCallback((id: string, updates: Partial<TrainingPeriod>) => {
         setTrainingPeriods(prev => {
             const next = prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
             const updatedPeriod = next.find(p => p.id === id);
@@ -1064,7 +1118,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const deleteTrainingPeriod = useCallback((id: string) => {
+    const deleteTrainingPeriod = React.useCallback((id: string) => {
         // 1. Remove period locally
         setTrainingPeriods(prev => prev.filter(p => p.id !== id));
         skipAutoSave.current = true;
@@ -1082,24 +1136,24 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }));
     }, [skipAutoSave]);
 
-    const updateCoachConfig = useCallback((updates: Partial<CoachConfig>) => {
+    const updateCoachConfig = React.useCallback((updates: Partial<CoachConfig>) => {
         setCoachConfig(prev => prev ? { ...prev, ...updates } : updates as CoachConfig);
     }, []);
 
-    const generateCoachPlanAction = useCallback((stravaHistory: StravaActivity[], configOverride?: CoachConfig) => {
+    const generateCoachPlanAction = React.useCallback((stravaHistory: StravaActivity[], configOverride?: CoachConfig) => {
         const config = configOverride || coachConfig;
         if (!config) return;
         const newPlan = generateTrainingPlan(config, stravaHistory, plannedActivities);
         setPlannedActivities(newPlan);
     }, [coachConfig, plannedActivities]);
 
-    const deletePlannedActivity = useCallback((id: string) => {
+    const deletePlannedActivity = React.useCallback((id: string) => {
         setPlannedActivities(prev => prev.filter(a => a.id !== id));
         skipAutoSave.current = true;
         storageService.deletePlannedActivity(id).catch(e => console.error("Failed to delete planned activity", e));
     }, [skipAutoSave]);
 
-    const updatePlannedActivity = useCallback((id: string, updates: Partial<PlannedActivity>) => {
+    const updatePlannedActivity = React.useCallback((id: string, updates: Partial<PlannedActivity>) => {
         setPlannedActivities(prev => {
             const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
             const updated = next.find(a => a.id === id);
@@ -1111,7 +1165,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const bulkSavePlannedActivities = useCallback((newActivities: PlannedActivity[]) => {
+    const bulkSavePlannedActivities = React.useCallback((newActivities: PlannedActivity[]) => {
         setPlannedActivities(prev => {
             const ids = new Set(newActivities.map(a => a.id));
             const filtered = prev.filter(a => !ids.has(a.id));
@@ -1126,7 +1180,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const completePlannedActivity = useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
+    const completePlannedActivity = React.useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
         setPlannedActivities(prev => {
             const next = prev.map(a => {
                 if (a.id === activityId) {
@@ -1174,7 +1228,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [addExercise, calculateExerciseCalories, skipAutoSave]);
 
-    const addCoachGoal = useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
+    const addCoachGoal = React.useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
         const newGoal: CoachGoal = {
             ...goalData,
             id: generateId(),
@@ -1188,7 +1242,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [coachConfig]);
 
-    const activateCoachGoal = useCallback((goalId: string) => {
+    const activateCoachGoal = React.useCallback((goalId: string) => {
         setCoachConfig(prev => {
             if (!prev) return prev;
             return {
@@ -1198,7 +1252,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, []);
 
-    const deleteCoachGoal = useCallback((goalId: string) => {
+    const deleteCoachGoal = React.useCallback((goalId: string) => {
         setCoachConfig(prev => {
             if (!prev) return prev;
             return {
@@ -1209,7 +1263,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     }, []);
 
     // Race Definitions
-    const addRaceDefinition = useCallback((data: Omit<RaceDefinition, 'id'>): RaceDefinition => {
+    const addRaceDefinition = React.useCallback((data: Omit<RaceDefinition, 'id'>): RaceDefinition => {
         const newDef: RaceDefinition = {
             ...data,
             id: generateId()
@@ -1220,7 +1274,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newDef;
     }, [skipAutoSave]);
 
-    const updateRaceDefinition = useCallback((id: string, updates: Partial<RaceDefinition>) => {
+    const updateRaceDefinition = React.useCallback((id: string, updates: Partial<RaceDefinition>) => {
         setRaceDefinitions(prev => {
             const next = prev.map(d => d.id === id ? { ...d, ...updates } : d);
             const updated = next.find(d => d.id === id);
@@ -1232,13 +1286,13 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const deleteRaceDefinition = useCallback((id: string) => {
+    const deleteRaceDefinition = React.useCallback((id: string) => {
         setRaceDefinitions(prev => prev.filter(d => d.id !== id));
         skipAutoSave.current = true;
         storageService.deleteRaceDefinition(id).catch(e => console.error("Failed to delete race def", e));
     }, [skipAutoSave]);
 
-    const addRaceIgnoreRule = useCallback((data: Omit<RaceIgnoreRule, 'id'>): RaceIgnoreRule => {
+    const addRaceIgnoreRule = React.useCallback((data: Omit<RaceIgnoreRule, 'id'>): RaceIgnoreRule => {
         const newRule: RaceIgnoreRule = {
             ...data,
             id: generateId()
@@ -1249,14 +1303,14 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newRule;
     }, [skipAutoSave]);
 
-    const deleteRaceIgnoreRule = useCallback((id: string) => {
+    const deleteRaceIgnoreRule = React.useCallback((id: string) => {
         setRaceIgnoreRules(prev => prev.filter(r => r.id !== id));
         skipAutoSave.current = true;
         storageService.deleteRaceIgnoreRule(id).catch(e => console.error("Failed to delete ignore rule", e));
     }, [skipAutoSave]);
 
     // Tours
-    const addTour = useCallback((data: TourFormData): Tour => {
+    const addTour = React.useCallback((data: TourFormData): Tour => {
         const newTour: Tour = {
             ...data,
             id: generateId(),
@@ -1269,7 +1323,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         return newTour;
     }, [skipAutoSave]);
 
-    const updateTour = useCallback((id: string, updates: Partial<Tour>) => {
+    const updateTour = React.useCallback((id: string, updates: Partial<Tour>) => {
         setTours(prev => {
             const next = prev.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t);
             const updated = next.find(t => t.id === id);
@@ -1281,14 +1335,14 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         });
     }, [skipAutoSave]);
 
-    const deleteTour = useCallback((id: string) => {
+    const deleteTour = React.useCallback((id: string) => {
         setTours(prev => prev.filter(t => t.id !== id));
         skipAutoSave.current = true;
         storageService.deleteTour(id).catch(e => console.error("Failed to delete tour", e));
     }, [skipAutoSave]);
 
     // Manual Reordering
-    const reorderActivity = useCallback((id: string, direction: 'up' | 'down') => {
+    const reorderActivity = React.useCallback((id: string, direction: 'up' | 'down') => {
         // 1. Find the target activity in all possible sources
         const target = exerciseEntries.find(e => e.id === id) || 
                        plannedActivities.find(p => p.id === id) ||
@@ -1361,7 +1415,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     // Automatic Reconciliation
     // ============================================
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (!isLoaded || plannedActivities.length === 0 || unifiedActivities.length === 0) return;
 
         let hasChanges = false;

@@ -109,7 +109,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
 
     if (url.pathname === "/api/auth/me") {
         let token = req.headers.get("Authorization")?.replace("Bearer ", "");
-        if (!token) {
+        if (!token || token === "mock" || token === "null" || token.length < 10) {
             const cookie = req.headers.get("cookie");
             token = cookie?.split("auth_token=")[1]?.split(";")[0];
         }
@@ -127,7 +127,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
 
     if (url.pathname === "/api/auth/stats") {
         let token = req.headers.get("Authorization")?.replace("Bearer ", "");
-        if (!token) {
+        if (!token || token === "mock" || token === "null" || token.length < 10) {
             const cookie = req.headers.get("cookie");
             token = cookie?.split("auth_token=")[1]?.split(";")[0];
         }

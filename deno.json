@@ -1,10 +1,10 @@
 {
   "tasks": {
-    "dev": "deno run -A --v8-flags=--max-old-space-size=4096 npm:vite@^6.2.0",
+    "dev": "deno run -A --v8-flags=--max-old-space-size=4096 npm:vite@^8.0.8",
     "go": "deno run -A --unstable-kv scripts/guardian/runner.ts",
     "server": "DEBUG_MODE=true deno run -A --unstable-kv --watch --env src/api/main.ts",
-    "build": "deno run -A npm:vite@^6.2.0 build",
-    "preview": "deno run -A npm:vite@^6.2.0 preview"
+    "build": "deno run -A npm:vite@^8.0.8 build",
+    "preview": "deno run -A npm:vite@^8.0.8 preview"
   },
   "compilerOptions": {
     "lib": [
@@ -23,8 +23,8 @@
     "react-dom": "npm:react-dom@^19.0.0",
     "react-dom/client": "npm:react-dom@^19.0.0/client",
     "react-router-dom": "npm:react-router-dom@^7.0.2",
-    "vite": "npm:vite@^6.2.0",
-    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^4.3.4",
+    "vite": "npm:vite@^8.0.8",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.0.1",
     "@types/react": "npm:@types/react@^19.0.0",
     "@types/react-dom": "npm:@types/react-dom@^19.0.0",
     "print-js": "npm:print-js@^1.6.0",

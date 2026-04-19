@@ -1,4 +1,4 @@
-import { useState, useCallback, type MutableRefObject } from 'react';
+import React, { useState, useCallback, type MutableRefObject } from 'react';
 import {
     type WeightEntry,
     type SleepSession,
@@ -40,7 +40,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     // Weight Management
     // ============================================
 
-    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number | null, chest?: number | null, hips?: number | null, thigh?: number | null): WeightEntry => {
+    const addWeightEntry = React.useCallback((weight: number, date: string = getISODate(), waist?: number | null, chest?: number | null, hips?: number | null, thigh?: number | null): WeightEntry => {
         // Check if an entry for this date already exists
         const existingEntry = weightEntries.find(w => w.date === date);
 
@@ -110,7 +110,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         return newEntry;
     }, [weightEntries, emitFeedEvent, logAction]);
 
-    const bulkAddWeightEntries = useCallback((entries: Partial<WeightEntry>[]) => {
+    const bulkAddWeightEntries = React.useCallback((entries: Partial<WeightEntry>[]) => {
         const newEntries = entries.map(e => ({
             id: generateId(),
             date: e.date || getISODate(),
@@ -128,7 +128,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         });
     }, []);
 
-    const updateWeightEntry = useCallback((id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => {
+    const updateWeightEntry = React.useCallback((id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => {
         setWeightEntries(prev => {
             const next = prev.map(w => w.id === id ? { ...w, ...(weight !== undefined ? { weight } : {}), ...(date ? { date } : {}), ...updates } : w);
 
@@ -144,7 +144,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         });
     }, []);
 
-    const deleteWeightEntry = useCallback((id: string) => {
+    const deleteWeightEntry = React.useCallback((id: string) => {
         setWeightEntries(prev => {
             const entry = prev.find(w => w.id === id);
             if (entry) {
@@ -155,11 +155,11 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         });
     }, [skipAutoSave]);
 
-    const getLatestWeight = useCallback((): number => {
+    const getLatestWeight = React.useCallback((): number => {
         return weightEntries[0]?.weight || 0;
     }, [weightEntries]);
 
-    const getLatestWaist = useCallback((): number | undefined => {
+    const getLatestWaist = React.useCallback((): number | undefined => {
         const entry = weightEntries.find(w => w.waist !== undefined && w.waist !== null);
         return entry ? (entry.waist as number) : undefined;
     }, [weightEntries]);
@@ -168,7 +168,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     // Sleep & Intake
     // ============================================
 
-    const addSleepSession = useCallback((session: SleepSession) => {
+    const addSleepSession = React.useCallback((session: SleepSession) => {
         setSleepSessions(prev => {
             const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
             return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
@@ -188,7 +188,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     // Injury & Recovery (Phase 7)
     // ============================================
 
-    const addInjuryLog = useCallback((data: Omit<InjuryLog, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const addInjuryLog = React.useCallback((data: Omit<InjuryLog, 'id' | 'createdAt' | 'updatedAt'>) => {
         const newLog: InjuryLog = {
             ...data,
             id: generateId(),
@@ -199,17 +199,17 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         return newLog;
     }, []);
 
-    const updateInjuryLog = useCallback((id: string, updates: Partial<InjuryLog>) => {
+    const updateInjuryLog = React.useCallback((id: string, updates: Partial<InjuryLog>) => {
         setInjuryLogs(prev => prev.map(log =>
             log.id === id ? { ...log, ...updates, updatedAt: new Date().toISOString() } : log
         ));
     }, []);
 
-    const deleteInjuryLog = useCallback((id: string) => {
+    const deleteInjuryLog = React.useCallback((id: string) => {
         setInjuryLogs(prev => prev.filter(log => log.id !== id));
     }, []);
 
-    const addRecoveryMetric = useCallback((metric: Omit<RecoveryMetric, 'id'>) => {
+    const addRecoveryMetric = React.useCallback((metric: Omit<RecoveryMetric, 'id'>) => {
         const newMetric: RecoveryMetric = {
             ...metric,
             id: generateId()
@@ -227,7 +227,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
     // Body Measurements
     // ============================================
 
-    const addBodyMeasurement = useCallback((entry: Omit<BodyMeasurementEntry, 'id' | 'createdAt'>) => {
+    const addBodyMeasurement = React.useCallback((entry: Omit<BodyMeasurementEntry, 'id' | 'createdAt'>) => {
         const newEntry: BodyMeasurementEntry = {
             ...entry,
             id: generateId(),
@@ -258,11 +258,11 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
         storageService.saveBodyMeasurement?.(newEntry).catch(e => console.error("Failed to sync measurement:", e));
     }, []);
 
-    const updateBodyMeasurement = useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {
+    const updateBodyMeasurement = React.useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {
         setBodyMeasurements(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
     }, []);
 
-    const deleteBodyMeasurement = useCallback((id: string) => {
+    const deleteBodyMeasurement = React.useCallback((id: string) => {
         setBodyMeasurements(prev => prev.filter(e => e.id !== id));
         storageService.deleteBodyMeasurement?.(id).catch(e => console.error("Failed to delete measurement:", e));
     }, []);

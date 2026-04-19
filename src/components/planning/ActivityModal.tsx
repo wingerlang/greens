@@ -308,11 +308,11 @@ export function ActivityModal({
             const pm = parseInt(paceParts[0]);
             const ps = parseInt(paceParts[1]);
             if (isNaN(pm)) return;
-            
+
             const paceMinutes = pm + (isNaN(ps) ? 0 : ps / 60);
             if (paceMinutes <= 0) return;
             const totalMinutes = Math.round(distKm * paceMinutes);
-            
+
             if (isNaN(totalMinutes)) return;
 
             const hours = Math.floor(totalMinutes / 60);
@@ -333,7 +333,7 @@ export function ActivityModal({
             const [hours, minutes] = formDuration.split(':').map(Number);
             const totalMinutes = (hours * 60) + minutes;
             if (isNaN(totalMinutes) || totalMinutes <= 0) return;
-            
+
             const paceDecimal = totalMinutes / distKm;
             if (isNaN(paceDecimal) || paceDecimal === Infinity) return;
 
@@ -410,7 +410,7 @@ export function ActivityModal({
     const handleRunSubCategoryClick = (sub: 'EASY' | 'LONG_RUN' | 'INTERVALS' | 'RECOVERY') => {
         lastChanged.current = 'pace'; // Treat sub-category click as pace change for recovery
         setRunSubCategory(sub);
-        
+
         // Auto-update pace based on sub-category and history
         let targetPaceDecimal = runStats.avgEasyPace;
         if (sub === 'RECOVERY') {
@@ -480,7 +480,7 @@ export function ActivityModal({
             const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
             const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
             const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
-            
+
             if (isPush) title = 'Styrka: Push';
             else if (isPull) title = 'Styrka: Pull';
             else if (isLegs) title = 'Styrka: Ben';
@@ -858,11 +858,10 @@ export function ActivityModal({
                                                 setFormSubType(sub.id as any);
                                             }
                                         }}
-                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${
-                                            (formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id)
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${(formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id)
                                                 ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md`
                                                 : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300'
-                                        }`}
+                                            }`}
                                     >
                                         {sub.icon}
                                         {sub.label}
@@ -1117,7 +1116,7 @@ export function ActivityModal({
                                                         const parts = formPace.split(':');
                                                         const pm = parseInt(parts[0]);
                                                         const ps = parts.length === 2 ? parseInt(parts[1]) : 0;
-                                                        
+
                                                         const totalSeconds = (!isNaN(pm))
                                                             ? pm * 60 + (isNaN(ps) ? 0 : ps)
                                                             : 330; // Default 5:30

@@ -240,7 +240,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 };
             }
 
-            // Apply updates
+            // Support both flat updates and nested performance object
             if (updates.title !== undefined) {
                 if (!activity.plan) {
                     const type = activity.performance?.activityType || 'other';
@@ -264,28 +264,35 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     activity.performance.excludeFromStats = updates.excludeFromStats;
                 }
             }
+
+            // Performance related fields (support both top-level and performance object)
+            const perfUpdates: any = {};
+            if (updates.averageWatts !== undefined) perfUpdates.averageWatts = updates.averageWatts;
+            if (updates.maxWatts !== undefined) perfUpdates.maxWatts = updates.maxWatts;
+            if (updates.distance !== undefined) perfUpdates.distanceKm = updates.distance;
+            if (updates.distanceKm !== undefined) perfUpdates.distanceKm = updates.distanceKm;
+            if (updates.durationMinutes !== undefined) perfUpdates.durationMinutes = updates.durationMinutes;
+            if (updates.calories !== undefined) perfUpdates.calories = updates.calories;
+            if (updates.caloriesBurned !== undefined) perfUpdates.calories = updates.caloriesBurned;
+            if (updates.isCalorieAdjusted !== undefined) perfUpdates.isCalorieAdjusted = updates.isCalorieAdjusted;
+            if (updates.originalCalories !== undefined) perfUpdates.originalCalories = updates.originalCalories;
+            if (updates.subType !== undefined) perfUpdates.subType = updates.subType;
+            if (updates.type !== undefined || updates.activityType !== undefined) {
+                perfUpdates.activityType = updates.type || updates.activityType;
+            }
+
+            // Apply flat performance updates
+            if (Object.keys(perfUpdates).length > 0) {
+                activity.performance = { ...(activity.performance || { durationMinutes: 0, calories: 0 }), ...perfUpdates };
+                // Also update plan type if changed
+                if (perfUpdates.activityType && activity.plan) {
+                    activity.plan.activityType = perfUpdates.activityType;
+                }
+            }
+
+            // Nested performance object update (highest precedence)
             if (updates.performance !== undefined) {
                 activity.performance = { ...(activity.performance || { durationMinutes: 0, calories: 0 }), ...updates.performance };
-            }
-            if (updates.subType !== undefined) {
-                if (!activity.performance) {
-                    activity.performance = { durationMinutes: 0, calories: 0, subType: updates.subType };
-                } else {
-                    activity.performance.subType = updates.subType;
-                }
-            }
-            if (updates.type !== undefined || updates.activityType !== undefined) {
-                const newType = updates.type || updates.activityType;
-                if (!activity.performance) {
-                    activity.performance = { durationMinutes: 0, calories: 0, activityType: newType };
-                } else {
-                    activity.performance.activityType = newType;
-                }
-                if (!activity.plan) {
-                    activity.plan = { title: activity.performance?.notes || 'Aktivitet', activityType: newType, distanceKm: activity.performance?.distanceKm || 0 };
-                } else {
-                    activity.plan.activityType = newType;
-                }
             }
 
             activity.updatedAt = new Date().toISOString();

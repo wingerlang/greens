@@ -98,21 +98,34 @@ const getDefaultData = (): AppData => ({
     purchaseLogs: []
 });
 
-// Helper to get token (if any)
+// Helper to get token (if any) - returns null for invalid/mock tokens
 const getToken = () => {
-    return localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token');
+    if (!token || token === 'mock' || token === 'null' || token === 'undefined' || token.length < 10) return null;
+    return token;
+};
+
+// Authenticated fetch wrapper - always includes credentials for cookie auth
+const authFetch = (url: string, options: RequestInit = {}) => {
+    const token = getToken();
+    const headers = new Headers(options.headers || {});
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...options, headers, credentials: 'include' });
 };
 
 export class LocalStorageService implements StorageService {
     async load(): Promise<AppData> {
         let data: AppData | null = null;
 
-        // 1. Try API first if token exists
+        // 1. Try API first (uses cookie-based auth or Bearer token)
         const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
+                const headers: HeadersInit = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
                 const res = await fetch('/api/data', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers,
+                    credentials: 'include'
                 });
                 if (res.ok) {
                     const cloudData = await res.json() as AppData;
@@ -306,11 +319,10 @@ export class LocalStorageService implements StorageService {
                     ...liteData
                 } = data;
 
-                const res = await fetch('/api/data', {
+                const res = await authFetch('/api/data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(liteData)
                 });

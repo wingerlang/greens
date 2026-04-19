@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React from 'react';
 import type { User } from '../models/types.ts';
 import type { LoginStat } from '../api/db/stats.ts';
 
@@ -14,20 +14,20 @@ interface AuthContextType {
     fetchStats: () => Promise<LoginStat[]>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
 import { safeFetch } from '../utils/http.ts';
 
 // ... (keep interface)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [token, setToken] = useState<string | null>(null);
+    const [user, setUser] = React.useState<User | null>(null);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState<string | null>(null);
+    const [token, setToken] = React.useState<string | null>(null);
 
     // Initial check
-    useEffect(() => {
+    React.useEffect(() => {
         const controller = new AbortController();
         const signal = controller.signal;
         let mounted = true;
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
+    const context = React.useContext(AuthContext);
     if (context === undefined) {
         throw new Error('useAuth must be used within an AuthProvider');
     }

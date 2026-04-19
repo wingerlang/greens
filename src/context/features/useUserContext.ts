@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     type User,
     type AppSettings,
@@ -17,7 +17,7 @@ export function useUserContext() {
     const [dailyVitals, setDailyVitals] = useState<Record<string, DailyVitals>>({});
 
     // Helper for Feed events
-    const emitFeedEvent = useCallback((type: FeedEventType, title: string, payload: any, metrics?: any[], summary?: string) => {
+    const emitFeedEvent = React.useCallback((type: FeedEventType, title: string, payload: any, metrics?: any[], summary?: string) => {
         if (!currentUser) return;
 
         // Map FeedEventType to Privacy Category
@@ -40,15 +40,15 @@ export function useUserContext() {
         }).catch(err => console.error("Feed event failed:", err));
     }, [currentUser]);
 
-    const setCurrentUser = useCallback((user: User | null) => {
+    const setCurrentUser = React.useCallback((user: User | null) => {
         setCurrentUserState(user);
     }, []);
 
-    const addUser = useCallback((user: User) => {
+    const addUser = React.useCallback((user: User) => {
         setUsers(prev => [...prev, user]);
     }, []);
 
-    const updateCurrentUser = useCallback((updates: Partial<User>) => {
+    const updateCurrentUser = React.useCallback((updates: Partial<User>) => {
         if (!currentUser) return;
 
         const updatedUser = { ...currentUser, ...updates };
@@ -57,7 +57,7 @@ export function useUserContext() {
         setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
     }, [currentUser]);
 
-    const updateVitals = useCallback((date: string, updates: Partial<DailyVitals>) => {
+    const updateVitals = React.useCallback((date: string, updates: Partial<DailyVitals>) => {
         setDailyVitals(prev => {
             const existing = prev[date] || {
                 water: 0,
@@ -89,7 +89,7 @@ export function useUserContext() {
         });
     }, [emitFeedEvent]);
 
-    const getVitalsForDate = useCallback((date: string): DailyVitals => {
+    const getVitalsForDate = React.useCallback((date: string): DailyVitals => {
         return dailyVitals[date] || {
             water: 0,
             sleep: 0,
@@ -99,7 +99,7 @@ export function useUserContext() {
         };
     }, [dailyVitals]);
 
-    const toggleIncompleteDay = useCallback((date: string) => {
+    const toggleIncompleteDay = React.useCallback((date: string) => {
         setDailyVitals(prev => {
             const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
             return {
@@ -113,7 +113,7 @@ export function useUserContext() {
         });
     }, []);
 
-    const toggleCompleteDay = useCallback((date: string) => {
+    const toggleCompleteDay = React.useCallback((date: string) => {
         setDailyVitals(prev => {
             const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
             return {
@@ -130,7 +130,7 @@ export function useUserContext() {
     }, []);
 
     // Sync userSettings state with currentUser.settings
-    useEffect(() => {
+    React.useEffect(() => {
         if (currentUser?.settings) {
             // Only update if they differ to avoid loops
             if (JSON.stringify(userSettings) !== JSON.stringify(currentUser.settings)) {

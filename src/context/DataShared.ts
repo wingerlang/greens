@@ -102,7 +102,7 @@ export interface DataContextType {
     calculateRecipeNutrition: (recipe: Recipe) => NutritionSummary;
     calculateDailyNutrition: (date: string) => NutritionSummary;
     calculateBMR: () => number;
-    calculateExerciseCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity) => number;
+    calculateExerciseCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string, averageWatts?: number, avgHr?: number, distance?: number) => number;
 
     // Vitals CRUD
     dailyVitals: Record<string, DailyVitals>;

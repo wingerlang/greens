@@ -13,7 +13,7 @@ export interface AuthContext {
 export async function authenticate(req: Request): Promise<AuthContext | null> {
     let token = req.headers.get("Authorization")?.replace("Bearer ", "");
 
-    if (!token || token === "null" || token === "undefined") {
+    if (!token || token === "null" || token === "undefined" || token === "mock" || token.length < 10) {
         const cookie = req.headers.get("cookie");
         token = cookie?.split("auth_token=")[1]?.split(";")[0];
     }

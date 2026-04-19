@@ -67,6 +67,7 @@ import { useUserContext } from './features/useUserContext.ts';
 import { useNutritionContext } from './features/useNutritionContext.ts';
 import { useBodyContext } from './features/useBodyContext.ts';
 import { useActivityContext } from './features/useActivityContext.ts';
+import { useAuth } from './AuthContext.tsx';
 
 // ============================================
 // Context Types
@@ -83,13 +84,14 @@ interface DataProviderProps {
 }
 
 export function DataProvider({ children }: DataProviderProps) {
-    const [selectedDate, setSelectedDate] = useState(getISODate());
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [databaseActions, setDatabaseActions] = useState<DatabaseAction[]>([]);
-    const [exercises, setExercises] = useState<ExerciseDefinition[]>([]);
-    const [permissionConfig, setPermissionConfig] = useState<PermissionConfig>(DEFAULT_PERMISSION_CONFIG);
-    const skipAutoSave = useRef(false);
-    const refreshCounterRef = useRef(0);
+    const { user: authUser } = useAuth();
+    const [selectedDate, setSelectedDate] = React.useState(getISODate());
+    const [isLoaded, setIsLoaded] = React.useState(false);
+    const [databaseActions, setDatabaseActions] = React.useState<DatabaseAction[]>([]);
+    const [exercises, setExercises] = React.useState<ExerciseDefinition[]>([]);
+    const [permissionConfig, setPermissionConfig] = React.useState<PermissionConfig>(DEFAULT_PERMISSION_CONFIG);
+    const skipAutoSave = React.useRef(false);
+    const refreshCounterRef = React.useRef(0);
 
     // ============================================
     // Feature Hooks
@@ -105,7 +107,7 @@ export function DataProvider({ children }: DataProviderProps) {
     } = useUserContext();
 
     // Helper: Log a database action
-    const logAction = useCallback((
+    const logAction = React.useCallback((
         actionType: DatabaseActionType,
         entityType: DatabaseEntityType,
         entityId: string,
@@ -172,7 +174,7 @@ export function DataProvider({ children }: DataProviderProps) {
     // Global Logic (Refresh & Persistence)
     // ============================================
 
-    const refreshData = useCallback(async () => {
+    const refreshData = React.useCallback(async () => {
         const currentLoadId = ++refreshCounterRef.current;
 
         // If already loaded, this is a background refresh. We should be careful.
@@ -210,7 +212,7 @@ export function DataProvider({ children }: DataProviderProps) {
         // User
         let loadedUsers = data.users || [];
 
-        // Online Sync - Proceed if we have a token OR to check for session cookies
+        // Online Sync - Proceed always (cookies handle auth) or with explicit token
         const token = localStorage.getItem('auth_token');
         const abortController = new AbortController();
         const signal = abortController.signal;
@@ -218,7 +220,10 @@ export function DataProvider({ children }: DataProviderProps) {
         try {
             console.log('[DataContext] Starting parallel sync...');
             const headers: HeadersInit = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            // Only send Bearer token if it looks like a real session ID (not "mock" or garbage)
+            if (token && token.length > 10 && token !== 'mock' && token !== 'null' && token !== 'undefined') {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
 
             // execute all independent fetches in parallel
             const [userPayload, mePayload, planData, strengthData, quickMealsData, exerciseData, permissionData] = await Promise.all([
@@ -374,12 +379,23 @@ export function DataProvider({ children }: DataProviderProps) {
         setIsLoaded(true);
     }, []);
 
-    useEffect(() => {
+    React.useEffect(() => {
         refreshData();
     }, [refreshData]);
 
+    // Re-fetch data when the auth user changes (e.g., after login)
+    const prevAuthUser = React.useRef<string | null>(null);
+    React.useEffect(() => {
+        const newId = authUser?.id || null;
+        if (newId && newId !== prevAuthUser.current) {
+            console.log('[DataContext] Auth user changed, refreshing data...');
+            prevAuthUser.current = newId;
+            refreshData();
+        }
+    }, [authUser]);
+
     // Save to storage on changes
-    useEffect(() => {
+    React.useEffect(() => {
         if (isLoaded) {
             const shouldSkipApi = skipAutoSave.current;
             if (shouldSkipApi) {
@@ -440,11 +456,11 @@ export function DataProvider({ children }: DataProviderProps) {
     // Derived Analytics (Cross-Domain)
     // ============================================
 
-    const calculateBMR = useCallback((): number => {
+    const calculateBMR = React.useCallback((): number => {
         return calculateBMRUtil(getLatestWeight(), currentUser?.settings);
     }, [currentUser, getLatestWeight]);
 
-    const calculateStreak = useCallback((referenceDate?: string): number => {
+    const calculateStreak = React.useCallback((referenceDate?: string): number => {
         return calculateStreakUtil(
             mealEntries,
             exerciseEntries,
@@ -454,15 +470,15 @@ export function DataProvider({ children }: DataProviderProps) {
         );
     }, [mealEntries, exerciseEntries, dailyVitals, weightEntries]);
 
-    const calculateTrainingStreak = useCallback((referenceDate?: string, type?: string): number => {
+    const calculateTrainingStreak = React.useCallback((referenceDate?: string, type?: string): number => {
         return calculateTrainingStreakUtil(exerciseEntries, referenceDate, type);
     }, [exerciseEntries]);
 
-    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string): number => {
+    const calculateWeeklyTrainingStreak = React.useCallback((referenceDate?: string): number => {
         return calculateWeeklyTrainingStreakUtil(exerciseEntries, referenceDate);
     }, [exerciseEntries]);
 
-    const calculateCalorieGoalStreak = useCallback((referenceDate?: string): number => {
+    const calculateCalorieGoalStreak = React.useCallback((referenceDate?: string): number => {
         if (!currentUser?.settings) return 0;
         return calculateCalorieGoalStreakUtil(calculateDailyNutrition, currentUser.settings, referenceDate);
     }, [calculateDailyNutrition, currentUser]);

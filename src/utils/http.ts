@@ -23,7 +23,7 @@ export class ApiError extends Error {
 export async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
     let response: Response;
     try {
-        response = await fetch(url, options);
+        response = await fetch(url, { credentials: 'include', ...options });
     } catch (error) {
         console.error(`[safeFetch] Network error for ${url}:`, error);
         throw new NetworkError(error);

@@ -425,12 +425,20 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
             }
 
             if (bestTime !== Infinity) {
-                const current = results[target.stravaName] || results[target.name];
+                // Find any existing effort for this specific distance (within 10m tolerance)
+                const existingKey = Object.keys(results).find(k => {
+                    const e = results[k];
+                    return Math.abs(e.distance - targetM) < 10;
+                });
                 
-                // If we found a faster time (or Strava didn't identify it), update
+                const current = existingKey ? results[existingKey] : undefined;
+                
+                // If we found a faster time (or none identified), update
                 if (!current || bestTime < current.movingTime) {
-                    results[target.name] = {
-                        name: target.name,
+                    // If we are overwriting a Strava record, keep the Strava name if it's special
+                    const key = existingKey || target.name;
+                    results[key] = {
+                        name: key,
                         distance: targetM,
                         movingTime: bestTime,
                         elapsedTime: bestTime,

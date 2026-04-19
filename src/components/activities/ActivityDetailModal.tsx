@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExerciseEntry, UniversalActivity, StravaAthlete } from '../../models/types.ts';
 import { StrengthWorkout } from '../../models/strengthTypes.ts';
@@ -9,6 +9,8 @@ import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatS
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown, getBestEffortsForActivity, getFastestSince } from '../../utils/performanceEngine.ts';
 import { useHRZones } from '../profile/hooks/useHRZones.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
+import { PowerZones } from '../training/PowerZones.tsx';
+import { extractFtpFromHistory, AssaultBikeMath } from '../../utils/cyclingCalculations.ts';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ReferenceArea, ComposedChart } from 'recharts';
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
@@ -17,7 +19,7 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 import { normalizeRaceTitle } from '../training/races/utils.ts';
 import { usePrepAggregation, PrepEvent } from '../training/hooks/usePrepAggregation.ts';
@@ -57,7 +59,8 @@ export function ActivityDetailModal({
         updateExercise,
         deleteExercise,
         addExercise,
-        calculateExerciseCalories
+        calculateExerciseCalories,
+        getLatestWeight
     } = useData();
     const { user, token } = useAuth();
     const { savedZones, detectedZones } = useHRZones();
@@ -78,12 +81,12 @@ export function ActivityDetailModal({
     }, [currentActivity.extractedFromId, universalActivities]);
 
     const perf = currentUniversal?.performance || (currentActivity as any).performance || (currentActivity as any)._mergeData?.universalActivity?.performance;
-    const [isEditing, setIsEditing] = useState(initiallyEditing);
-    const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
-    const [showKudos, setShowKudos] = useState(false);
-    const [kudos, setKudos] = useState<StravaAthlete[]>([]);
-    const [loadingKudos, setLoadingKudos] = useState(false);
-    const [isForcingFetch, setIsForcingFetch] = useState(false);
+    const [isEditing, setIsEditing] = React.useState(initiallyEditing);
+    const [viewMode, setViewMode] = React.useState<'combined' | 'diff' | 'raw'>('combined');
+    const [showKudos, setShowKudos] = React.useState(false);
+    const [kudos, setKudos] = React.useState<StravaAthlete[]>([]);
+    const [loadingKudos, setLoadingKudos] = React.useState(false);
+    const [isForcingFetch, setIsForcingFetch] = React.useState(false);
 
     // Make tabs linkable by parsing the selectedActivityId (if available) for a tab suffix.
     // E.g. activityId="123/splits" means tab="splits" for activity "123"
@@ -100,8 +103,8 @@ export function ActivityDetailModal({
         return 'stats';
     }, []);
 
-    const [activeTab, setActiveTabLocal] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep'>(initialTab);
-    const [timeframeWeeks, setTimeframeWeeks] = useState(12);
+    const [activeTab, setActiveTabLocal] = React.useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep'>(initialTab);
+    const [timeframeWeeks, setTimeframeWeeks] = React.useState(12);
 
     const setActiveTab = (tab: 'stats' | 'compare' | 'splits' | 'merge' | 'analysis' | 'prep') => {
         setActiveTabLocal(tab);
@@ -112,15 +115,15 @@ export function ActivityDetailModal({
         }
     };
 
-    const [isUnmerging, setIsUnmerging] = useState(false);
+    const [isUnmerging, setIsUnmerging] = React.useState(false);
 
     // Hyrox Parser State
-    const [showParser, setShowParser] = useState(false);
-    const [parseText, setParseText] = useState('');
+    const [showParser, setShowParser] = React.useState(false);
+    const [parseText, setParseText] = React.useState('');
 
     // Extraction State
-    const [showExtractForm, setShowExtractForm] = useState(false);
-    const [extractForm, setExtractForm] = useState({
+    const [showExtractForm, setShowExtractForm] = React.useState(false);
+    const [extractForm, setExtractForm] = React.useState({
         distance: '',
         duration: '', // hh:mm:ss
         title: '',
@@ -129,7 +132,7 @@ export function ActivityDetailModal({
     });
 
     // Edit Form State
-    const [editForm, setEditForm] = useState({
+    const [editForm, setEditForm] = React.useState({
         title: currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.notes || '',
         type: currentActivity.type,
         duration: Math.round(currentActivity.durationMinutes || 0).toString(),
@@ -145,22 +148,24 @@ export function ActivityDetailModal({
         startKm: '0',
         averageWatts: (perf?.averageWatts || currentActivity.averageWatts || '').toString(),
         placement: currentActivity.raceDetails?.placement?.toString() || '',
-        totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || ''
+        totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || '',
+        useTheoreticalKcal: perf?.isCalorieAdjusted || currentActivity.isCalorieAdjusted || false,
+        calculationMode: (perf?.isCalorieAdjusted || currentActivity.isCalorieAdjusted) ? 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts'
     });
 
-    const [hoveredExtractEffort, setHoveredExtractEffort] = useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
+    const [hoveredExtractEffort, setHoveredExtractEffort] = React.useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
 
     // Local title state for immediate optimistic updates
-    const [displayTitle, setDisplayTitle] = useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.type || 'Aktivitet');
+    const [displayTitle, setDisplayTitle] = React.useState(currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.type || 'Aktivitet');
 
     // Sync display title if prop/current changes
-    useEffect(() => {
+    React.useEffect(() => {
         const t = currentUniversal?.plan?.title || (currentActivity as any)._mergeData?.universalActivity?.plan?.title || currentActivity.title || currentActivity.type;
         if (t) setDisplayTitle(t);
     }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.type]);
 
     // Sync startKm from notes for Edit Form
-    useEffect(() => {
+    React.useEffect(() => {
         const startKmMatch = (currentActivity.notes || '').match(/\[START_KM:\s*([\d.]+)\]/);
         const startKm = startKmMatch ? startKmMatch[1] : '0';
         setEditForm(prev => ({ ...prev, startKm }));
@@ -374,6 +379,7 @@ export function ActivityDetailModal({
                 topEfforts: suggestions.map(e => ({
                     startKm: (e as any).startKm || 0,
                     durationSeconds: e.movingTime,
+                    distance: e.distance / 1000,
                     title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
                 }))
             };
@@ -480,7 +486,7 @@ export function ActivityDetailModal({
             }
         }
     };
-    useEffect(() => {
+    React.useEffect(() => {
         if (isEditing && editForm.subType === 'default' && parsedWorkout?.suggestedSubType &&
             parsedWorkout.suggestedSubType !== 'default' && parsedWorkout.suggestedSubType !== 'tempo') {
             setEditForm(prev => ({ ...prev, subType: parsedWorkout.suggestedSubType as any }));
@@ -564,6 +570,27 @@ export function ActivityDetailModal({
     // Derived variables for view logic
     const showStravaCard = activity.source === 'strava' || isTrulyMerged;
 
+    const calorieOptions = React.useMemo(() => {
+        const duration = parseInt(editForm.duration) || 0;
+        const weight = getLatestWeight() || 75;
+        const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
+        const effectiveAvgHr = perf?.avgHeartRate || activity.heartRateAvg || 0;
+        const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
+
+        const options = {
+            original: activity.originalCalories || activity.caloriesBurned || 0,
+            hr: calculateExerciseCalories(editForm.type, duration, editForm.intensity, editForm.notes, undefined, effectiveAvgHr, undefined),
+            distance: calculateExerciseCalories(editForm.type, duration, editForm.intensity, editForm.notes, undefined, undefined, distance),
+            met: calculateExerciseCalories(editForm.type, duration, editForm.intensity, editForm.notes, undefined, undefined, undefined),
+            watts: avgWatts ? AssaultBikeMath.calculateCyclingKcal(avgWatts, duration) : 0
+        };
+
+        const available = Object.values(options).filter(v => v > 0);
+        const average = available.length > 0 ? Math.round(available.reduce((a, b) => a + b, 0) / available.length) : 0;
+
+        return { ...options, average };
+    }, [editForm, activity, perf, calculateExerciseCalories, getLatestWeight]);
+
     // Unmerge handler
     const handleUnmerge = async () => {
         if (!universalActivity?.id || !token) return;
@@ -610,11 +637,11 @@ export function ActivityDetailModal({
 
 
 
-    const [isFetchingSplits, setIsFetchingSplits] = useState(false);
+    const [isFetchingSplits, setIsFetchingSplits] = React.useState(false);
     const [fetchSplitsResult, setFetchSplitsResult] = useState<'idle' | 'success' | 'error'>('idle');
 
     // Auto-fetch splits if Strava activity is missing them
-    useEffect(() => {
+    React.useEffect(() => {
         // Reset fetch state if the activity ID changes
         if (activity.id !== (window as any)._lastActivityId) {
             setFetchSplitsResult('idle');
@@ -652,12 +679,11 @@ export function ActivityDetailModal({
             activity._mergeData?.strengthWorkout != null;
 
         // We trigger fetch only if BOTH splits and laps are completely missing
-        // This avoids infinite loop fetches if an activity genuinely has zero laps on Strava.
         const needsFetch = (!existingSplits || existingSplits.length === 0) && (!existingLaps || existingLaps.length === 0);
 
         // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
         // but it's good practice to log if it's there. The backend handles the cookie.
-        if (effectivelyStrava && !isStrengthLike && externalId && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits) {
+        if (effectivelyStrava && !isStrengthLike && externalId && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits && token) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -772,7 +798,7 @@ export function ActivityDetailModal({
     };
 
     // Auto-apply category if confidence is high
-    useEffect(() => {
+    React.useEffect(() => {
         // Only if we have a suggestion and current is default
         if (parsedWorkout?.suggestedSubType &&
             parsedWorkout.suggestedSubType !== 'default' &&
@@ -802,7 +828,27 @@ export function ActivityDetailModal({
 
         const duration = parseInt(editForm.duration) || 0;
         const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
-        const calories = calculateExerciseCalories(editForm.type, duration, editForm.intensity, editForm.notes, avgWatts);
+        const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
+        let calories = calorieOptions[editForm.calculationMode as keyof typeof calorieOptions] || calorieOptions.original;
+        let isCalorieAdjusted = editForm.calculationMode !== 'original';
+
+        // Legacy/Special Watts handling (Keep for UI sync if needed, but calculationMode is the new master)
+        if (editForm.calculationMode === 'watts' && avgWatts && avgWatts > 0) {
+            calories = calorieOptions.watts;
+            isCalorieAdjusted = true;
+        } else if (editForm.calculationMode === 'average') {
+            calories = calorieOptions.average;
+            isCalorieAdjusted = true;
+        } else if (editForm.calculationMode === 'hr') {
+            calories = calorieOptions.hr;
+            isCalorieAdjusted = true;
+        } else if (editForm.calculationMode === 'distance') {
+            calories = calorieOptions.distance;
+            isCalorieAdjusted = true;
+        } else if (editForm.calculationMode === 'met') {
+            calories = calorieOptions.met;
+            isCalorieAdjusted = true;
+        }
 
         let updatedNotes = editForm.notes;
         if ((editForm as any).startKm && parseFloat((editForm as any).startKm) >= 0) {
@@ -821,6 +867,8 @@ export function ActivityDetailModal({
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
             averageWatts: avgWatts,
             caloriesBurned: calories,
+            isCalorieAdjusted,
+            originalCalories,
             location: editForm.location,
             excludeFromStats: editForm.excludeFromStats,
             isHiddenInCalendar: editForm.isHiddenInCalendar,
@@ -833,7 +881,31 @@ export function ActivityDetailModal({
         };
 
         // Local update (works for 'manual', 'strava', and 'merged')
-        updateExercise(activity.id, commonData);
+        // Local update and persistence (Context handles both)
+        updateExercise(activity.id, {
+            ...commonData,
+            averageWatts: avgWatts,
+            isCalorieAdjusted,
+            caloriesBurned: calories, // Explicitly pass to ensure it's not missed
+            performance: {
+                ...(perf || {}),
+                averageWatts: avgWatts,
+                calories: calories,
+                isCalorieAdjusted,
+                originalCalories,
+                durationMinutes: duration,
+                distanceKm: commonData.distance,
+                notes: updatedNotes,
+                activityType: editForm.type
+            },
+            plan: {
+                ...(universalActivity?.plan || {}),
+                title: editForm.title,
+                activityType: editForm.type,
+                distanceKm: commonData.distance
+            }
+        });
+
         setIsEditing(false);
     };
 
@@ -898,7 +970,7 @@ export function ActivityDetailModal({
     // Enforce Strava Title Priority on Mount
     const titleCheckedRef = React.useRef<string | null>(null);
 
-    useEffect(() => {
+    React.useEffect(() => {
         // Reset check if activity changes (though modal usually remounts, this handles prop changes)
         if (titleCheckedRef.current !== activity.id) {
             titleCheckedRef.current = null;
@@ -1003,7 +1075,7 @@ export function ActivityDetailModal({
     };
 
     // ESC to close
-    useEffect(() => {
+    React.useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
         };
@@ -1036,95 +1108,111 @@ export function ActivityDetailModal({
                             />
                         </div>
 
-                        {/* Type Selection */}
-                        <div className="grid grid-cols-4 gap-2">
+                        {/* Type Selection - Radically Compacted */}
+                        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 p-1.5 bg-slate-950/50 rounded-2xl border border-white/5">
                             {EXERCISE_TYPES.map(t => (
                                 <button
                                     key={t.type}
                                     type="button"
-                                    className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${editForm.type === t.type ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-white/5 text-slate-400 opacity-60 hover:opacity-100'}`}
+                                    className={`py-1.5 px-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all border ${editForm.type === t.type ? 'bg-emerald-500 border-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/20' : 'bg-slate-900/50 border-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
                                     onClick={() => setEditForm({ ...editForm, type: t.type })}
                                 >
-                                    <span className="text-xl">{t.icon}</span>
-                                    <span className="text-[10px] font-bold">{t.label}</span>
+                                    <span className="text-base">{t.icon}</span>
+                                    <span className="text-[8px] font-black uppercase tracking-tighter truncate w-full text-center px-0.5">{t.label}</span>
                                 </button>
                             ))}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-2">
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Längd (min)</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Längd (min)</label>
                                 <input
                                     type="number"
                                     value={editForm.duration}
                                     onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500/50"
+                                    className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all font-mono"
                                 />
-                                {perf?.elapsedTimeSeconds && perf?.durationMinutes && Math.abs((perf.elapsedTimeSeconds / 60) - perf.durationMinutes) > 0.1 && (
-                                    <div className="flex gap-2 mt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditForm({ ...editForm, duration: Math.round(perf.elapsedTimeSeconds! / 60).toString() })}
-                                            className="text-[10px] bg-slate-800 border border-white/10 px-2 py-1 rounded text-slate-400 hover:text-white"
-                                        >
-                                            Använd totaltid ({Math.round(perf.elapsedTimeSeconds / 60)} min)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditForm({ ...editForm, duration: Math.round((perf.durationMinutes || 0)).toString() })}
-                                            className="text-[10px] bg-slate-800 border border-white/10 px-2 py-1 rounded text-slate-400 hover:text-white"
-                                        >
-                                            Använd rörelsetid ({Math.round(perf.durationMinutes || 0)} min)
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Intensitet</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Intensitet</label>
                                 <select
                                     value={editForm.intensity}
                                     onChange={e => setEditForm({ ...editForm, intensity: e.target.value as ExerciseIntensity })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none focus:outline-none focus:border-emerald-500/50"
+                                    className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-3 py-1.5 text-sm text-white appearance-none focus:outline-none focus:border-emerald-500/50 transition-all cursor-pointer"
                                 >
-                                    {INTENSITIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+                                    {INTENSITIES.map(i => <option key={i.value} value={i.value} className="bg-slate-900">{i.label}</option>)}
                                 </select>
                             </div>
-                        </div>
-
-                        {/* Variable Inputs */}
-                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Kategori</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Kategori</label>
                                 <select
                                     value={editForm.subType || 'default'}
                                     onChange={e => setEditForm({ ...editForm, subType: e.target.value as ExerciseSubType })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none text-xs focus:outline-none focus:border-emerald-500/50"
+                                    className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-3 py-1.5 text-sm text-white appearance-none focus:outline-none focus:border-emerald-500/50 transition-all cursor-pointer"
                                 >
                                     <option value="default">Standard</option>
                                     <option value="interval">Intervaller</option>
                                     <option value="long-run">Långpass</option>
-                                    <option value="race">Tävling</option>
-                                    <option value="tonnage">Styrka (Tonnage)</option>
-                                    <option value="competition">Tävlingsmoment</option>
-                                    <option value="default">Standard</option>
+                                    <option value="race">Lopp</option>
+                                    <option value="tonnage">Styrka</option>
+                                    <option value="competition">Tävling</option>
                                 </select>
                             </div>
+                        </div>
 
-                            {/* Average Watts (Cycling only) */}
-                            {editForm.type === 'cycling' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Average Watts / Distance / Tonnage - Dynamic Row */}
+                            {editForm.type === 'cycling' ? (
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-amber-500 uppercase flex items-center gap-1">
+                                    <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 ml-1">
                                         <Zap size={10} /> Effekt (Watt)
                                     </label>
                                     <input
                                         type="number"
-                                        placeholder="Avg Watts..."
+                                        placeholder="Avg..."
                                         value={editForm.averageWatts}
                                         onChange={e => setEditForm({ ...editForm, averageWatts: e.target.value })}
-                                        className="w-full bg-slate-800 border-white/10 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-amber-500/50"
+                                        className="w-full bg-slate-800/80 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                                    />
+                                    {parseFloat(editForm.averageWatts) > 0 && (
+                                        <div 
+                                            onClick={() => setEditForm(prev => ({ ...prev, useTheoreticalKcal: !prev.useTheoreticalKcal }))}
+                                            className={`mt-1.5 flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer ${editForm.useTheoreticalKcal ? 'bg-amber-500/20 border-amber-500/30' : 'bg-slate-900/50 border-white/5 opacity-60'}`}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black uppercase text-amber-500 tracking-tighter">Beräkna Kcal från Watt</span>
+                                                <span className="text-[10px] text-white font-mono">{Math.round((parseFloat(editForm.averageWatts) * (parseInt(editForm.duration) || 0) * 60) / 1000)} kcal</span>
+                                            </div>
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${editForm.useTheoreticalKcal ? 'bg-amber-500 border-amber-400' : 'border-white/20'}`}>
+                                                {editForm.useTheoreticalKcal && <Zap size={10} className="text-slate-900" fill="currentColor" />}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming' || editForm.type === 'hyrox') ? (
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Distans (km)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={editForm.distance}
+                                        onChange={e => setEditForm({ ...editForm, distance: e.target.value })}
+                                        className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all font-mono"
                                     />
                                 </div>
-                            )}
+                            ) : editForm.type === 'strength' ? (
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tonnage (kg)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="Totalt..."
+                                        value={editForm.tonnage}
+                                        onChange={e => setEditForm({ ...editForm, tonnage: e.target.value })}
+                                        className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all font-mono"
+                                    />
+                                </div>
+                            ) : null}
 
                             {/* Race Toggle */}
                             <div className="md:col-span-2">
@@ -1171,19 +1259,6 @@ export function ActivityDetailModal({
                                 </div>
                             )}
 
-                            {(editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming' || editForm.type === 'hyrox') && (
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Distans (km)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="-"
-                                        value={editForm.distance}
-                                        onChange={e => setEditForm({ ...editForm, distance: e.target.value })}
-                                        className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
-                                    />
-                                </div>
-                            )}
 
                             {/* Placement Inputs for Race Mode */}
                             {(editForm.subType === 'race' || editForm.subType === 'competition') && (
@@ -1248,14 +1323,14 @@ export function ActivityDetailModal({
                             )}
 
                             {/* Location Input */}
-                            <div className="space-y-1 col-span-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Plats / Ort</label>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plats / Ort</label>
                                 <input
                                     type="text"
                                     placeholder="T.ex. Stockholm, Båstad..."
                                     value={editForm.location}
                                     onChange={e => setEditForm({ ...editForm, location: e.target.value })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
+                                    className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all"
                                 />
                             </div>
 
@@ -1287,7 +1362,44 @@ export function ActivityDetailModal({
                             />
                         </div>
 
-                        {/* HYROX EDITOR - Only show if type is hyrox */}
+                        {/* Kaloriberäkning Source Selector */}
+                        <div className="md:col-span-2 space-y-2 pt-2 border-t border-white/5">
+                            <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest ml-1 flex items-center gap-1">
+                                <Search size={10} /> Kaloriberäkning (Källa)
+                            </label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                                {[
+                                    { id: 'original', label: activity.source === 'strava' ? 'Strava' : 'Original', val: calorieOptions.original, icon: <Activity size={12} />, color: 'text-orange-400' },
+                                    { id: 'hr', label: 'Pulsdata', val: calorieOptions.hr, icon: <HeartPulse size={12} />, color: 'text-rose-400', disabled: calorieOptions.hr === 0 },
+                                    { id: 'distance', label: 'kg/km', val: calorieOptions.distance, icon: <Footprints size={12} />, color: 'text-emerald-400', disabled: calorieOptions.distance === 0 },
+                                    { id: 'met', label: 'Schablon', val: calorieOptions.met, icon: <Clock size={12} />, color: 'text-sky-400' },
+                                    { id: 'watts', label: 'Watt', val: calorieOptions.watts, icon: <Zap size={12} />, color: 'text-amber-400', disabled: calorieOptions.watts === 0 },
+                                    { id: 'average', label: 'Snitt', val: calorieOptions.average, icon: <Calculator size={12} />, color: 'text-purple-400' }
+                                ].map(opt => (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        disabled={opt.disabled}
+                                        onClick={() => setEditForm({ ...editForm, calculationMode: opt.id as any })}
+                                        className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${opt.disabled ? 'opacity-20 cursor-not-allowed grayscale' :
+                                            editForm.calculationMode === opt.id
+                                                ? 'bg-white/10 border-white/20 shadow-lg scale-[1.02]'
+                                                : 'bg-slate-800/40 border-white/5 opacity-60 hover:opacity-100 hover:bg-slate-800'
+                                            }`}
+                                    >
+                                        <div className={`flex items-center gap-1.5 mb-1 ${opt.color} font-black uppercase text-[8px]`}>
+                                            {opt.icon} {opt.label}
+                                        </div>
+                                        <div className="text-xs font-mono font-bold text-white">
+                                            {opt.val} <span className="text-[8px] opacity-40 font-black">kcal</span>
+                                        </div>
+                                        {editForm.calculationMode === opt.id && (
+                                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         {editForm.type === 'hyrox' && (
                             <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-bottom-4">
                                 <div className="flex justify-between items-center">
@@ -1761,17 +1873,21 @@ export function ActivityDetailModal({
                                             onMouseLeave={() => setHoveredExtractEffort(null)}
                                             className="px-3 py-2 bg-slate-800/80 hover:bg-amber-500 hover:text-slate-900 border border-white/5 hover:border-amber-400 rounded-xl transition-all shadow-md text-slate-300 font-bold flex flex-col items-center justify-center group"
                                         >
-                                            <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(smartExtractInfo.distance)}</span>
-                                            <span className="text-sm font-black text-white group-hover:text-slate-950">
-                                                {(() => {
-                                                    const sec = effort.durationSeconds;
-                                                    const m = Math.floor(sec / 60);
-                                                    const s = Math.round(sec % 60);
-                                                    return `${m}:${s.toString().padStart(2, '0')}`;
-                                                })()}
-                                            </span>
+                                            <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(effort.distance)}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-black text-amber-500 group-hover:text-amber-900">{effort.distance >= 1 ? `${effort.distance}k` : `${Math.round(effort.distance * 1000)}m`}</span>
+                                                <span className="text-sm font-black text-white group-hover:text-slate-950">
+                                                    {(() => {
+                                                        const sec = effort.durationSeconds;
+                                                        const h = Math.floor(sec / 3600);
+                                                        const m = Math.floor((sec % 3600) / 60);
+                                                        const s = Math.round(sec % 60);
+                                                        return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m}:${s.toString().padStart(2, '0')}`;
+                                                    })()}
+                                                </span>
+                                            </div>
                                             <span className="text-[9px] text-slate-500 group-hover:text-slate-800">
-                                                {formatPace(effort.durationSeconds / smartExtractInfo.distance)} /km
+                                                {formatPace(effort.durationSeconds / effort.distance)} /km
                                             </span>
                                         </button>
                                     ))}
@@ -1900,24 +2016,20 @@ export function ActivityDetailModal({
 
                         {/* Recategorization Section - Only visible in EDIT mode */}
                         {isEditing && (
-                            <div className="bg-slate-800/20 rounded-2xl p-4 border border-white/5 space-y-3 mt-4">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Kategorisera om</p>
-                                    <span className="text-[10px] text-slate-600 italic">Ändra vid felaktig import</span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
+                            <div className="bg-slate-800/20 rounded-2xl p-3 border border-white/5 space-y-2 mt-4">
+                                <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] ml-1">Snabb-kategorisera</p>
+                                <div className="flex flex-wrap gap-1.5">
                                     {EXERCISE_TYPES.map(t => (
                                         <button
                                             key={t.type}
                                             type="button"
                                             onClick={() => handleRecategorize(t.type)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${activity.type === t.type
-                                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                                                : 'bg-slate-800/40 text-slate-400 border-white/5 hover:bg-slate-700/50 hover:text-slate-300'
+                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border ${activity.type === t.type
+                                                ? 'bg-amber-500 border-amber-400 text-slate-900 shadow-lg'
+                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:text-slate-200'
                                                 }`}
                                         >
                                             <span>{t.icon}</span> {t.label}
-                                            {activity.type === t.type && <span className="ml-1 opacity-50">✓</span>}
                                         </button>
                                     ))}
                                 </div>
@@ -2100,7 +2212,7 @@ export function ActivityDetailModal({
                                 {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
                                 {showStravaCard ? (
                                     <div className="space-y-4">
-                                        <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-2xl p-5 space-y-4 shadow-xl shadow-[#FC4C02]/5 mb-2">
+                                        <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-xl p-2 space-y-2 shadow-md shadow-[#FC4C02]/5 mb-2">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
                                                     <span>🔥</span> Strava-data
@@ -2151,49 +2263,37 @@ export function ActivityDetailModal({
                                                 </div>
                                             </div>
 
-                                            {/* Activity Notes / Description */}
-                                            {(perf?.notes || activity.notes) && (
-                                                <div className="bg-white/5 rounded-xl p-3 border border-white/5 shadow-inner">
-                                                    <p className="text-[10px] text-slate-500 uppercase font-black mb-2 opacity-50 tracking-widest">Beskrivning</p>
-                                                    <p className="text-sm text-slate-300 whitespace-pre-wrap italic leading-relaxed font-medium">
-                                                        {perf?.notes || activity.notes}
-                                                    </p>
-                                                </div>
-                                            )}
 
                                             {/* Hero Stats */}
-                                            <div className="grid grid-cols-3 gap-4 border-b border-[#FC4C02]/10 pb-5">
+                                            <div className="grid grid-cols-3 gap-2 border-b border-[#FC4C02]/10 pb-4">
                                                 {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Distans</span>
+                                                        <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">Distans</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-3xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
-                                                            {activity.extractedFromId && parentUniversal?.performance?.distanceKm && (
-                                                                <span className="text-xs text-slate-400 font-bold ml-1">(av {parentUniversal.performance.distanceKm.toFixed(1)}km)</span>
-                                                            )}
-                                                            <span className="text-xs uppercase text-slate-500 font-bold ml-1">km</span>
+                                                            <span className="text-2xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500 font-bold">km</span>
                                                         </div>
                                                     </div>
                                                 )}
 
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Tid</span>
+                                                    <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">Tid</span>
                                                     <div className="flex items-baseline gap-1">
-                                                        <span className="text-3xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                        <span className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
                                                     </div>
                                                 </div>
 
                                                 {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">{activity.type === 'cycling' ? 'Snittfart' : 'Snittempo'}</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-3xl font-black text-white">
+                                                        <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</span>
+                                                        <div className="flex items-baseline gap-1 min-w-0">
+                                                            <span className="text-2xl font-black text-white truncate">
                                                                 {activity.type === 'cycling'
                                                                     ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
                                                                     : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
                                                                 }
                                                             </span>
-                                                            <span className="text-xs uppercase text-slate-500 font-bold">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500 font-bold">{activity.type === 'cycling' ? 'km/h' : '/k'}</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -2266,11 +2366,11 @@ export function ActivityDetailModal({
                                                     <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
                                                     <div className="flex items-baseline gap-1">
                                                         <span
-                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''} flex items-center gap-1`}
-                                                            title={activity.calorieBreakdown || (activity.isCalorieAdjusted ? `Justerat från ${activity.originalCalories} kcal (Strava) pga låg puls/intensitet.` : undefined)}
+                                                            className={`text-xl font-black text-white ${currentActivity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''} flex items-center gap-1`}
+                                                            title={currentActivity.calorieBreakdown || (currentActivity.isCalorieAdjusted ? `Justerat från ${currentActivity.originalCalories} kcal (Strava) pga låg puls/intensitet.` : undefined)}
                                                         >
-                                                            {activity.caloriesBurned || perf?.calories || '-'}
-                                                            {activity.isCalorieAdjusted && (
+                                                            {currentActivity.caloriesBurned || perf?.calories || '-'}
+                                                            {currentActivity.isCalorieAdjusted && (
                                                                 <span className="text-xs text-amber-500">✨</span>
                                                             )}
                                                         </span>
@@ -2364,8 +2464,17 @@ export function ActivityDetailModal({
                                                         </div>
                                                     </div>
                                                 ) : null}
-                                            </div>
+                                            {/* Strava Description - Compact One-Row Style */}
+                                            {(perf?.notes || activity.notes) && (
+                                                <div className="bg-white/5 rounded-lg px-3 py-1.5 border border-white/5 mt-4 mx-2 mb-2 flex items-center gap-3">
+                                                    <span className="text-[8px] text-slate-500 uppercase font-black opacity-40 tracking-widest whitespace-nowrap">Beskrivning:</span>
+                                                    <p className="text-[10px] text-slate-400 italic truncate flex-1">
+                                                        {(perf?.notes || activity.notes).replace(/\n/g, ' ')}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
+                                    </div>
 
                                         {/* Interval Summary Block (Strava) */}
                                         {activity.subType === 'interval' && segmentedSplits && (
@@ -2545,6 +2654,28 @@ export function ActivityDetailModal({
                                                 maxHeartRate={effectiveMaxHr || undefined}
                                                 age={age}
                                                 duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                 {/* Power Zone Visualization (for activities with Watt data) */}
+                                {(() => {
+                                    const effectiveWatts = perf?.averageWatts || currentActivity.averageWatts;
+                                    const combinedType = (currentActivity.type || '').toLowerCase();
+                                    const isStrength = combinedType === 'strength';
+                                    
+                                    // Show power zones if we have watts and it's not a pure strength session
+                                    if (effectiveWatts && effectiveWatts > 0 && !isStrength) {
+                                        const ftpData = extractFtpFromHistory(universalActivities);
+                                        const ftp = ftpData?.watts || 250; 
+                                        
+                                        return (
+                                            <PowerZones 
+                                                avgWatts={effectiveWatts}
+                                                ftp={ftp}
+                                                duration={currentActivity.durationMinutes ? currentActivity.durationMinutes * 60 : undefined}
                                             />
                                         );
                                     }

@@ -52,6 +52,8 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         source: a.performance.source?.source || 'unknown',
         splits: a.performance.splits,
         laps: a.performance.laps,
+        isCalorieAdjusted: a.performance.isCalorieAdjusted,
+        originalCalories: a.performance.originalCalories,
         raceDetails: a.raceDetails || a.performance.raceDetails || a.plan?.raceDetails,
     };
 }

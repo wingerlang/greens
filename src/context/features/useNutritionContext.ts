@@ -1,4 +1,4 @@
-import { useState, useCallback, type MutableRefObject } from 'react';
+import React, { useState, useCallback, type MutableRefObject } from 'react';
 import {
     type FoodItem,
     type Recipe,
@@ -56,7 +56,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // Pantry CRUD
     // ============================================
 
-    const togglePantryItem = useCallback((item: string) => {
+    const togglePantryItem = React.useCallback((item: string) => {
         setPantryItems((prev: string[]) => {
             const next = [...prev];
             const index = next.indexOf(item);
@@ -70,7 +70,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     }, []);
 
     // Set specific quantity for a pantry item
-    const setPantryQuantity = useCallback((itemName: string, quantity: number, unit: string) => {
+    const setPantryQuantity = React.useCallback((itemName: string, quantity: number, unit: string) => {
         const key = itemName.toLowerCase();
         setPantryQuantitiesState(prev => {
             if (quantity <= 0) {
@@ -91,7 +91,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     }, []);
 
     // Get quantity of a pantry item
-    const getPantryQuantity = useCallback((itemName: string): { quantity: number; unit: string } | undefined => {
+    const getPantryQuantity = React.useCallback((itemName: string): { quantity: number; unit: string } | undefined => {
         return pantryQuantities[itemName.toLowerCase()];
     }, [pantryQuantities]);
 
@@ -100,7 +100,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // FoodItem CRUD
     // ============================================
 
-    const addFoodItem = useCallback((data: FoodItemFormData): FoodItem => {
+    const addFoodItem = React.useCallback((data: FoodItemFormData): FoodItem => {
         const now = new Date().toISOString();
         const newItem: FoodItem = {
             ...data,
@@ -125,7 +125,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         return newItem;
     }, [currentUser, logAction, skipAutoSave]);
 
-    const updateFoodItem = useCallback((id: string, data: Partial<FoodItemFormData>): void => {
+    const updateFoodItem = React.useCallback((id: string, data: Partial<FoodItemFormData>): void => {
         setFoodItems((prev: FoodItem[]) => {
             const next = prev.map((item: FoodItem) =>
                 item.id === id
@@ -149,7 +149,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         });
     }, [logAction, skipAutoSave]);
 
-    const deleteFoodItem = useCallback((id: string): void => {
+    const deleteFoodItem = React.useCallback((id: string): void => {
         const item = foodItems.find(f => f.id === id);
         setFoodItems((prev: FoodItem[]) => prev.filter((item: FoodItem) => item.id !== id));
         skipAutoSave.current = true;
@@ -157,7 +157,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         logAction('DELETE', 'food_item', id, item?.name);
     }, [foodItems, logAction, skipAutoSave]);
 
-    const getFoodItem = useCallback((id: string): FoodItem | undefined => {
+    const getFoodItem = React.useCallback((id: string): FoodItem | undefined => {
         return foodItems.find(item => item.id === id);
     }, [foodItems]);
 
@@ -165,7 +165,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // Recipe CRUD
     // ============================================
 
-    const addRecipe = useCallback((data: RecipeFormData): Recipe => {
+    const addRecipe = React.useCallback((data: RecipeFormData): Recipe => {
         const now = new Date().toISOString();
         const newRecipe: Recipe = {
             ...data,
@@ -183,7 +183,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         return newRecipe;
     }, [logAction, skipAutoSave]);
 
-    const updateRecipe = useCallback((id: string, data: Partial<RecipeFormData>): void => {
+    const updateRecipe = React.useCallback((id: string, data: Partial<RecipeFormData>): void => {
         const existing = recipes.find(r => r.id === id);
         if (!existing) return;
 
@@ -196,7 +196,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         logAction('UPDATE', 'recipe', id, updated.name);
     }, [recipes, logAction, skipAutoSave]);
 
-    const deleteRecipe = useCallback((id: string): void => {
+    const deleteRecipe = React.useCallback((id: string): void => {
         const recipe = recipes.find(r => r.id === id);
         setRecipes((prev: Recipe[]) => prev.filter((recipe: Recipe) => recipe.id !== id));
         skipAutoSave.current = true;
@@ -204,7 +204,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         logAction('DELETE', 'recipe', id, recipe?.name);
     }, [recipes, logAction, skipAutoSave]);
 
-    const getRecipe = useCallback((id: string): Recipe | undefined => {
+    const getRecipe = React.useCallback((id: string): Recipe | undefined => {
         return recipes.find(recipe => recipe.id === id);
     }, [recipes]);
 
@@ -212,11 +212,11 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // Nutrition Calculations
     // ============================================
 
-    const calculateRecipeNutrition = useCallback((recipe: Recipe): NutritionSummary => {
+    const calculateRecipeNutrition = React.useCallback((recipe: Recipe): NutritionSummary => {
         return calculateRecipeNutritionUtil(recipe, foodItems);
     }, [foodItems]);
 
-    const getRecipeWithNutrition = useCallback((id: string): RecipeWithNutrition | undefined => {
+    const getRecipeWithNutrition = React.useCallback((id: string): RecipeWithNutrition | undefined => {
         const recipe = recipes.find(r => r.id === id);
         if (!recipe) return undefined;
 
@@ -240,7 +240,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // MealEntry CRUD
     // ============================================
 
-    const addMealEntry = useCallback((data: MealEntryFormData): MealEntry => {
+    const addMealEntry = React.useCallback((data: MealEntryFormData): MealEntry => {
         const newEntry: MealEntry = {
             ...data,
             id: generateId(),
@@ -310,7 +310,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         return newEntry;
     }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent, logAction, skipAutoSave]);
 
-    const updateMealEntry = useCallback((id: string, data: Partial<MealEntry>): void => {
+    const updateMealEntry = React.useCallback((id: string, data: Partial<MealEntry>): void => {
         let entryToUpdate: MealEntry | undefined;
         let hasChanges = false;
 
@@ -346,7 +346,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         }
     }, [logAction, skipAutoSave]);
 
-    const deleteMealEntry = useCallback((id: string): void => {
+    const deleteMealEntry = React.useCallback((id: string): void => {
         let entryToDelete: MealEntry | undefined;
 
         setMealEntries((prev: MealEntry[]) => {
@@ -364,12 +364,12 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         }
     }, [logAction, skipAutoSave]);
 
-    const getMealEntriesForDate = useCallback((date: string): MealEntry[] => {
+    const getMealEntriesForDate = React.useCallback((date: string): MealEntry[] => {
         if (!Array.isArray(mealEntries)) return [];
         return mealEntries.filter(entry => entry.date === date);
     }, [mealEntries]);
 
-    const calculateDailyNutrition = useCallback((date: string): NutritionSummary => {
+    const calculateDailyNutrition = React.useCallback((date: string): NutritionSummary => {
         const entries = getMealEntriesForDate(date);
         const summary: NutritionSummary = {
             calories: 0,
@@ -446,11 +446,11 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // Weekly Plan CRUD
     // ============================================
 
-    const getWeeklyPlan = useCallback((weekStartDate: string): WeeklyPlan | undefined => {
+    const getWeeklyPlan = React.useCallback((weekStartDate: string): WeeklyPlan | undefined => {
         return weeklyPlans.find(p => p.weekStartDate === weekStartDate);
     }, [weeklyPlans]);
 
-    const saveWeeklyPlan = useCallback((weekStartDate: string, meals: WeeklyPlan['meals']): void => {
+    const saveWeeklyPlan = React.useCallback((weekStartDate: string, meals: WeeklyPlan['meals']): void => {
         const now = new Date().toISOString();
         const existingIndex = weeklyPlans.findIndex((p: WeeklyPlan) => p.weekStartDate === weekStartDate);
 
@@ -487,7 +487,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         storageService.saveWeeklyPlan(newPlan).catch(e => console.error("Failed to save weekly plan:", e));
     }, [weeklyPlans, skipAutoSave]);
 
-    const getPlannedMealsForDate = useCallback((date: string): { mealType: MealType; meal: PlannedMeal }[] => {
+    const getPlannedMealsForDate = React.useCallback((date: string): { mealType: MealType; meal: PlannedMeal }[] => {
         const weekStart = getWeekStartDate(new Date(date));
         const plan = weeklyPlans.find(p => p.weekStartDate === weekStart);
         if (!plan) return [];
@@ -515,7 +515,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     // Quick Meals & Aliases
     // ============================================
 
-    const addQuickMeal = useCallback((name: string, items: MealItem[]) => {
+    const addQuickMeal = React.useCallback((name: string, items: MealItem[]) => {
         const newMeal: QuickMeal = {
             id: generateId(),
             userId: currentUser?.id || 'unknown',
@@ -530,14 +530,14 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         return newMeal;
     }, [currentUser, logAction, skipAutoSave]);
 
-    const deleteQuickMeal = useCallback((id: string) => {
+    const deleteQuickMeal = React.useCallback((id: string) => {
         setQuickMeals(prev => prev.filter(m => m.id !== id));
         skipAutoSave.current = true;
         storageService.deleteQuickMeal(id).catch(console.error);
         logAction('DELETE', 'quick_meal', id);
     }, [logAction, skipAutoSave]);
 
-    const updateQuickMeal = useCallback((id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => {
+    const updateQuickMeal = React.useCallback((id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => {
         setQuickMeals(prev => prev.map(m => {
             if (m.id !== id) return m;
             const updated = { ...m, ...updates };
@@ -549,7 +549,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         skipAutoSave.current = true;
     }, [logAction, skipAutoSave]);
 
-    const updateFoodAlias = useCallback((foodId: string, alias: string) => {
+    const updateFoodAlias = React.useCallback((foodId: string, alias: string) => {
         setFoodAliases(prev => {
             const next = { ...prev };
             if (alias && alias.trim()) next[foodId] = alias.trim();
@@ -558,7 +558,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         });
     }, []);
 
-    const addPurchaseLog = useCallback((data: Omit<PurchaseLog, 'id' | 'userId'>) => {
+    const addPurchaseLog = React.useCallback((data: Omit<PurchaseLog, 'id' | 'userId'>) => {
         const id = generateId();
         const newLog: PurchaseLog = {
             ...data,
