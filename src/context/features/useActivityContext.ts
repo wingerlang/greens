@@ -494,7 +494,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         }
 
         // 5. Fallback to MET (Science Standard)
-        const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
+        const METS: Record<string, Record<string, number>> = {
             running: { low: 6, moderate: 8, high: 11, ultra: 14 },
             cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
             strength: { low: 2.5, moderate: 3.5, high: 5.0, ultra: 7.0 },
@@ -510,7 +510,19 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
 
-        const met = METS[type][intensity] || 4.5;
+        // Normalize type (e.g. 'run' -> 'running')
+        const normalizedType = (type?.toLowerCase() || 'other') as string;
+        const typeKey = METS[normalizedType] ? normalizedType : (
+            normalizedType === 'run' ? 'running' :
+            normalizedType === 'bike' ? 'cycling' :
+            normalizedType === 'rest' ? 'recovery' :
+            'other'
+        );
+
+        const intensityKey = intensity || 'moderate';
+        const typeGroup = METS[typeKey] || METS.other;
+        const met = typeGroup[intensityKey] || typeGroup.moderate || 4.5;
+        
         return Math.round(met * weight * (duration / 60));
     }, [getLatestWeight]);
 

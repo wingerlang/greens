@@ -1,9 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity } from 'lucide-react';
+import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity, Bike, FastForward, Waves, Footprints, Flower2 } from 'lucide-react';
 import { DashboardCardWrapper } from '../../../components/dashboard/DashboardCardWrapper.tsx';
 import { EXERCISE_TYPES } from '../../../components/training/ExerciseModal.tsx';
-import { ExerciseEntry, PlannedActivity, ExerciseType } from '../../../models/types.ts';
+import { ExerciseEntry, PlannedActivity, ExerciseType, UserSettings } from '../../../models/types.ts';
 
 export type DashboardTrainingCategory = 'running' | 'strength' | 'cardio' | 'all';
 
@@ -15,7 +15,7 @@ interface TrainingCardProps {
     todaysPlan?: PlannedActivity;
     deleteExercise: (id: string) => void;
     isHoveringTraining: boolean;
-    settings: { dailyTrainingGoal?: number };
+    settings: UserSettings;
     category?: DashboardTrainingCategory;
     className?: string;
 }
@@ -63,6 +63,15 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     iconBg: 'bg-blue-100 dark:bg-blue-900/30',
                     hoverColor: 'group-hover:bg-blue-600'
                 };
+            case 'cycling':
+                return {
+                    icon: Bike,
+                    label: 'Cykling',
+                    color: 'text-amber-500',
+                    bgColor: 'bg-amber-50 dark:bg-amber-900/30',
+                    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+                    hoverColor: 'group-hover:bg-amber-600'
+                };
             case 'strength':
                 return {
                     icon: Dumbbell,
@@ -90,6 +99,33 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     iconBg: 'bg-[#DCFCE7] dark:bg-emerald-900/30',
                     hoverColor: 'group-hover:bg-emerald-600'
                 };
+        }
+    };
+
+    const getHrZone = (avgHr: number) => {
+        const maxHr = settings.maxHr || 190;
+        const restingHr = settings.restingHr || 50;
+        const reserve = maxHr - restingHr;
+        const intensity = (avgHr - restingHr) / reserve;
+
+        if (intensity >= 0.90) return { zone: 'Z5', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' };
+        if (intensity >= 0.80) return { zone: 'Z4', color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/20' };
+        if (intensity >= 0.70) return { zone: 'Z3', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' };
+        if (intensity >= 0.60) return { zone: 'Z2', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' };
+        return { zone: 'Z1', color: 'text-slate-500 bg-slate-50 dark:bg-slate-900/20' };
+    };
+
+    const getExerciseIcon = (type: ExerciseType) => {
+        const size = density === 'compact' ? 14 : 18;
+        switch (type) {
+            case 'running': return <FastForward size={size} className="text-blue-500" />;
+            case 'cycling': return <Bike size={size} className="text-amber-500" />;
+            case 'strength': return <Dumbbell size={size} className="text-emerald-500" />;
+            case 'walking': return <Footprints size={size} className="text-slate-500" />;
+            case 'swimming': return <Waves size={size} className="text-cyan-500" />;
+            case 'yoga': return <Flower2 size={size} className="text-indigo-500" />;
+            case 'cardio': return <HeartPulse size={size} className="text-rose-500" />;
+            default: return <Activity size={size} className="text-slate-400" />;
         }
     };
 
@@ -169,10 +205,15 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     if (act.tonnage) {
                         metricParts.push(`${(act.tonnage / 1000).toFixed(1)} ton`);
                     }
+                    if (act.averageWatts) {
+                        metricParts.push(`<span class="text-amber-500 font-bold">${Math.round(act.averageWatts)}W</span>`);
+                    }
 
                     let hrString = '';
+                    let hrZone = null;
                     if (act.heartRateAvg) {
                         hrString = `HR ${act.heartRateAvg}`;
+                        hrZone = getHrZone(act.heartRateAvg);
                         if (act.heartRateMax) hrString += `/${act.heartRateMax}`;
                     }
 
@@ -186,12 +227,13 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                             className={`flex flex-col sm:flex-row items-stretch sm:items-center ${density === 'compact' ? 'gap-2 p-2 rounded-lg' : 'gap-3 p-2.5 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50 shrink-0`}>
-                                    {typeDef?.icon || '💪'}
+                                <div className={`${density === 'compact' ? 'p-1' : 'p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50 shrink-0 flex items-center justify-center min-w-[28px] sm:min-w-[36px]`}>
+                                    {getExerciseIcon(act.type)}
                                 </div>
                                 <div className="sm:hidden flex-1 font-bold text-slate-900 dark:text-white capitalize truncate">
                                     {typeDef?.label || act.type}
                                     {hrString && <span className="ml-2 text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide align-middle">{hrString}</span>}
+                                    {hrZone && <span className={`ml-1 text-[8px] font-black ${hrZone.color} px-1 py-0.5 rounded tracking-wide align-middle`}>{hrZone.zone}</span>}
                                 </div>
                                 <div className="sm:hidden flex items-center gap-1 opacity-100">
                                     <button
@@ -212,6 +254,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                 <div className="hidden sm:flex font-bold text-slate-900 dark:text-white leading-tight capitalize items-center gap-1.5 truncate">
                                     {typeDef?.label || act.type}
                                     {hrString && <span className="text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide">{hrString}</span>}
+                                    {hrZone && <span className={`text-[8px] font-black ${hrZone.color} px-1 py-0.5 rounded tracking-wide`}>{hrZone.zone}</span>}
                                 </div>
                                 <div className="text-[11px] text-slate-500 font-medium flex flex-wrap gap-x-1 items-center">
                                     {metricParts.map((part, i) => (

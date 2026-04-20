@@ -81,8 +81,15 @@ export function useHealth(date: string = getISODate()) {
         const plannedForDate = plannedActivities.filter(p => p.date === date && p.status === 'PLANNED');
         return plannedForDate.reduce((sum, p) => {
             const intensity = p.targetHrZone <= 2 ? 'low' : p.targetHrZone >= 4 ? 'high' : 'moderate';
+            
+            // Map PlannedActivity.type to ExerciseType
+            const typeValue = p.type === 'RUN' ? 'running' :
+                             p.type === 'BIKE' ? 'cycling' :
+                             p.type === 'REST' ? 'recovery' :
+                             p.type.toLowerCase();
+
             return sum + calculateExerciseCalories(
-                p.type.toLowerCase() as any,
+                typeValue as any,
                 p.durationMinutes || 0,
                 intensity,
                 p.description,

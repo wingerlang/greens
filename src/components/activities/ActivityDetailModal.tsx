@@ -833,6 +833,7 @@ export function ActivityDetailModal({
             const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
             let calories = calorieOptions[editForm.calculationMode as keyof typeof calorieOptions] || calorieOptions.original;
             let isCalorieAdjusted = editForm.calculationMode !== 'original';
+            const originalCalories = (activity as any).originalCalories || perf?.originalCalories || calorieOptions.original;
 
             // Legacy/Special Watts handling (Keep for UI sync if needed, but calculationMode is the new master)
             if (editForm.calculationMode === 'watts' && avgWatts && avgWatts > 0) {

@@ -385,7 +385,12 @@ export function DashboardPage() {
         selectedDate,
         trainingPeriods,
         performanceGoals,
-        settings.dailyCalorieGoal,
+        {
+            calories: settings.dailyCalorieGoal,
+            protein: settings.dailyProteinGoal,
+            carbs: settings.dailyCarbsGoal,
+            fat: settings.dailyFatGoal
+        },
         2500,
         settings.calorieMode || 'tdee',
         burned,
@@ -393,55 +398,31 @@ export function DashboardPage() {
     );
     const target = targetResult.calories;
 
-    const baseTarget = getActiveCalorieTarget(
+    const baseTargetResult = getActiveCalorieTarget(
         selectedDate,
         trainingPeriods,
         performanceGoals,
-        settings.dailyCalorieGoal,
+        {
+            calories: settings.dailyCalorieGoal,
+            protein: settings.dailyProteinGoal,
+            carbs: settings.dailyCarbsGoal,
+            fat: settings.dailyFatGoal
+        },
         2500,
         settings.calorieMode || 'tdee',
         0,
         settings.exerciseCalorieMultiplier ?? 1.0
-    ).calories;
+    );
+    const baseTarget = baseTargetResult.calories;
 
     const extraCalories = Math.max(0, target - baseTarget);
-    const baseProtein = settings.dailyProteinGoal || 160;
-    const baseCarbs = settings.dailyCarbsGoal || 250;
-    const baseFat = settings.dailyFatGoal || 80;
-
-    let finalProtein = baseProtein;
-    let finalCarbs = baseCarbs;
-    let finalFat = baseFat;
-
-    if (extraCalories > 0) {
-        const addedProteinCalories = extraCalories * 0.10;
-        const addedFatCalories = extraCalories * 0.20;
-        const addedCarbsCalories = extraCalories * 0.70;
-
-        let addedProtein = addedProteinCalories / 4;
-        const addedFat = addedFatCalories / 9;
-        let addedCarbs = addedCarbsCalories / 4;
-
-        const userWeight = latestWeightVal || 75;
-        const maxProtein = userWeight * 2.5;
-
-        if ((baseProtein + addedProtein) > maxProtein) {
-            const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
-            const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
-            addedProtein = allowedAddedProtein;
-            addedCarbs += surplusProteinCalories / 4;
-        }
-
-        finalProtein += addedProtein;
-        finalFat += addedFat;
-        finalCarbs += addedCarbs;
-    }
-
-    const proteinTarget = Math.round(finalProtein);
+    
+    // Always prioritize goal-derived macros before falling back to settings or defaults
+    const proteinTarget = Math.round(targetResult.protein || settings.dailyProteinGoal || 160);
     const proteinCurrent = dailyNutrition.protein;
-    const carbsTarget = Math.round(finalCarbs);
+    const carbsTarget = Math.round(targetResult.carbs || settings.dailyCarbsGoal || 250);
     const carbsCurrent = dailyNutrition.carbs;
-    const fatTarget = Math.round(finalFat);
+    const fatTarget = Math.round(targetResult.fat || settings.dailyFatGoal || 80);
     const fatCurrent = dailyNutrition.fat;
 
     const proteinRatio = latestWeightVal > 0 ? (proteinCurrent / latestWeightVal) : 0;
@@ -515,14 +496,14 @@ export function DashboardPage() {
 
             {/* Sticky Date Header */}
             <div className={`fixed top-12 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all`}>
-                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4">
+                <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-4">
                     <button onClick={() => changeDate(-1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft size={18} /></button>
                     <div onClick={() => setSelectedDate(today)} className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${selectedDate !== today ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700' : 'text-slate-900 dark:text-white'}`}>{selectedDate === today ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}{selectedDate !== today && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}</div>
                     <button onClick={() => changeDate(1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronRight size={18} /></button>
                 </div>
             </div>
 
-            <div className="w-full max-w-5xl mx-auto">
+            <div className="w-full max-w-7xl mx-auto">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-6 md:mb-10'} flex flex-col md:flex-row justify-between items-center gap-4`}>
                     <div className="flex flex-col gap-1 items-center md:items-start w-full md:w-auto">
                         <div className="flex items-center gap-4">

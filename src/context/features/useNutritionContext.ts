@@ -442,7 +442,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
     }, [getMealEntriesForDate, recipes, foodItems]);
 
     // Calculate nutrition for planned meals only
-    const calculateDailyPlannedNutrition = React.useCallback((date: string): NutritionSummary => {
+    const calculateDailyPlannedNutritionV2 = React.useCallback((date: string): NutritionSummary => {
         const entries = getMealEntriesForDate(date).filter(e => e.isPlanned);
         const summary: NutritionSummary = {
             calories: 0,
@@ -674,7 +674,7 @@ export function useNutritionContext({ currentUser, logAction, emitFeedEvent, ski
         deleteMealEntry,
         getMealEntriesForDate,
         calculateDailyNutrition,
-        calculateDailyPlannedNutrition,
+        calculateDailyPlannedNutritionV2,
         getWeeklyPlan,
         saveWeeklyPlan,
         getPlannedMealsForDate,

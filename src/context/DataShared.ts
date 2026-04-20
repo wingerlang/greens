@@ -101,7 +101,7 @@ export interface DataContextType {
     // Computed
     calculateRecipeNutrition: (recipe: Recipe) => NutritionSummary;
     calculateDailyNutrition: (date: string) => NutritionSummary;
-    calculateDailyPlannedNutrition: (date: string) => NutritionSummary;
+    calculateDailyPlannedNutritionV2: (date: string) => NutritionSummary;
     calculateBMR: () => number;
     calculateExerciseCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity, notes?: string, averageWatts?: number, avgHr?: number, distance?: number) => number;
 

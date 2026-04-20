@@ -96,7 +96,9 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                         <div className="flex items-center gap-4">
                             <div className="flex flex-col items-center md:items-end">
                                 <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-0.5">Mål</span>
-                                <span className={`font-black tracking-tighter text-sm ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>{target}</span>
+                                <span className={`font-black tracking-tighter text-sm ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                                    {Math.round(consumed)} <span className="opacity-40 text-[10px] mx-0.5">av</span> {Math.round(target)}
+                                </span>
                             </div>
                             <div className="flex flex-col items-center md:items-end">
                                 <span className="text-[8px] font-black text-indigo-500 uppercase leading-none mb-0.5">Netto</span>

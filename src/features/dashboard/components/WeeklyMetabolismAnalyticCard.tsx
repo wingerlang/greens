@@ -86,7 +86,12 @@ export function WeeklyMetabolismAnalyticCard() {
                 isoDate,
                 trainingPeriods,
                 performanceGoals,
-                settings.dailyCalorieGoal || 2000,
+                {
+                    calories: settings.dailyCalorieGoal,
+                    protein: settings.dailyProteinGoal,
+                    carbs: settings.dailyCarbsGoal,
+                    fat: settings.dailyFatGoal
+                },
                 2500,
                 settings.calorieMode || 'tdee',
                 dailyBurned,

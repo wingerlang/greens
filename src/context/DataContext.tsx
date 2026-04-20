@@ -146,7 +146,7 @@ export function DataProvider({ children }: DataProviderProps) {
         addFoodItem, updateFoodItem, deleteFoodItem, getFoodItem,
         addRecipe, updateRecipe, deleteRecipe, getRecipe, calculateRecipeNutrition, getRecipeWithNutrition,
         addMealEntry, updateMealEntry, deleteMealEntry, getMealEntriesForDate, calculateDailyNutrition,
-        calculateDailyPlannedNutrition,
+        calculateDailyPlannedNutritionV2 = (date: string) => ({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0, vitaminC: 0, vitaminA: 0, proteinCategories: [] }),
         getWeeklyPlan, saveWeeklyPlan, getPlannedMealsForDate,
         addQuickMeal, deleteQuickMeal, updateQuickMeal, updateFoodAlias, addPurchaseLog
     } = useNutritionContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, updateVitals, getVitalsForDate });
@@ -558,7 +558,7 @@ export function DataProvider({ children }: DataProviderProps) {
         deleteMealEntry,
         getMealEntriesForDate,
         calculateDailyNutrition,
-        calculateDailyPlannedNutrition, // Added for planned nutrition dashboard
+        calculateDailyPlannedNutritionV2,
         getWeeklyPlan,
         saveWeeklyPlan,
         getPlannedMealsForDate,
@@ -677,7 +677,7 @@ export function DataProvider({ children }: DataProviderProps) {
         updateTour,
         deleteTour,
         purchaseLogs,
-        addPurchaseLog,
+        addPurchaseLog
     };
 
     return (

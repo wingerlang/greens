@@ -9,6 +9,11 @@ import { PerformanceGoal, TrainingPeriod, TrainingCycle } from '../models/types.
 
 export interface CalorieTargetResult {
     calories: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    isAdapted: boolean;
+    extraCalories: number;
     source: 'period_goal' | 'period_direct' | 'settings' | 'default';
     goalId?: string;
     periodId?: string;
@@ -17,29 +22,22 @@ export interface CalorieTargetResult {
 }
 
 /**
- * Get the active calorie target for a given date.
+ * Get the active calorie and macro target for a given date.
  * 
  * Priority order:
- * 1. Active PerformanceGoal with type='nutrition' and period='daily' linked to active period
- * 2. Active PerformanceGoal with type='nutrition' and period='daily' (no period link)
- * 3. trainingPeriod.nutritionGoal.calories (if set directly on period/cycle)
- * 4. settings.dailyCalorieGoal (with TrainingCycle goal adjustment if applicable)
- * 5. Default fallback (2000)
- * 
- * @param date - ISO date string (YYYY-MM-DD) to check for active period
- * @param trainingPeriods - All training periods or cycles
- * @param performanceGoals - All performance goals
- * @param settingsCalorieGoal - User's dailyCalorieGoal from settings
- * @param defaultCalories - Fallback value (default: 2000)
- * @param calorieMode - 'tdee' or 'fixed'
- * @param burnedCalories - Calories burned from exercise for the day
- * @param exerciseCalorieMultiplier - Percentage of burned calories to add back in 'fixed' mode (default: 1.0)
+ * 1. Active Goal with nutritionMacros linked to active period
+ * 2. Active Goal with type='nutrition' and period='daily' linked to active period
+ * 3. Any active Goal with nutritionMacros
+ * 4. Active PerformanceGoal with type='nutrition' and period='daily' (no period link)
+ * 5. trainingPeriod.nutritionGoal (if set directly on period/cycle)
+ * 6. settings.dailyCalorieGoal (with TrainingCycle goal adjustment if applicable)
+ * 7. Default fallback (2000)
  */
 export function getActiveCalorieTarget(
     date: string,
     trainingPeriods: (TrainingPeriod | TrainingCycle)[],
     performanceGoals: PerformanceGoal[],
-    settingsCalorieGoal?: number,
+    settingsDailyGoals?: { calories?: number; protein?: number; carbs?: number; fat?: number },
     defaultCalories: number = 2000,
     calorieMode: 'tdee' | 'fixed' = 'tdee',
     burnedCalories: number = 0,
@@ -55,141 +53,151 @@ export function getActiveCalorieTarget(
         }
     );
 
-    let baseCalories = defaultCalories;
-    let source: CalorieTargetResult['source'] = 'default';
+    let baseCalories = settingsDailyGoals?.calories || defaultCalories;
+    let baseProtein = settingsDailyGoals?.protein;
+    let baseCarbs = settingsDailyGoals?.carbs;
+    let baseFat = settingsDailyGoals?.fat;
+    
+    let source: CalorieTargetResult['source'] = 'settings';
     let goalId: string | undefined;
     let periodId: string | undefined;
     let goalName: string | undefined;
 
-    // Step 2: Find nutrition goals
-    // Priority: Goal linked to active period > Any active daily nutrition goal
-
-    // Helper to extract calories from a nutrition goal
-    const getCaloriesFromGoal = (goal: PerformanceGoal): number | undefined => {
-        if (goal.nutritionMacros?.calories && goal.nutritionMacros.calories > 0) {
-            return goal.nutritionMacros.calories;
-        }
-        if (goal.targets && goal.targets.length > 0) {
-            const target = goal.targets[0];
-            if (target.nutritionType === 'calories' || goal.type === 'nutrition') {
-                if (target.value && target.value > 0) {
-                    return target.value;
-                }
-            }
-        }
-        return undefined;
-    };
-
     let foundGoal = false;
 
-    if (activePeriod) {
-        const periodNutritionGoal = performanceGoals.find(g =>
-            g.periodId === activePeriod.id &&
-            g.type === 'nutrition' &&
-            g.period === 'daily' &&
-            g.status === 'active'
-        );
+    // Priority 1: Performance Goals
+    // We look for ANY active goal that has nutritionMacros, prioritizing those linked to the current period
+    const activeGoals = performanceGoals.filter(g => g.status === 'active');
+    
+    // Sort so period-linked goals come first
+    const sortedGoals = [...activeGoals].sort((a, b) => {
+        if (activePeriod) {
+            if (a.periodId === activePeriod.id && b.periodId !== activePeriod.id) return -1;
+            if (b.periodId === activePeriod.id && a.periodId !== activePeriod.id) return 1;
+        }
+        // Then prioritize explicit 'nutrition' types
+        if (a.type === 'nutrition' && b.type !== 'nutrition') return -1;
+        if (b.type === 'nutrition' && a.type !== 'nutrition') return 1;
+        return 0;
+    });
 
-        if (periodNutritionGoal) {
-            const calories = getCaloriesFromGoal(periodNutritionGoal);
-            if (calories) {
-                baseCalories = calories;
+    const nutritionGoal = sortedGoals.find(g => 
+        g.nutritionMacros || 
+        g.type === 'nutrition' || 
+        g.targets?.some(t => t.nutritionType === 'calories')
+    );
+
+    if (nutritionGoal) {
+        const macros = nutritionGoal.nutritionMacros;
+        if (macros && macros.calories) {
+            baseCalories = macros.calories;
+            baseProtein = macros.protein;
+            baseCarbs = macros.carbs;
+            baseFat = macros.fat;
+            source = 'period_goal';
+            goalId = nutritionGoal.id;
+            goalName = nutritionGoal.name;
+            foundGoal = true;
+        } else if (nutritionGoal.targets?.length) {
+            const calTarget = nutritionGoal.targets.find(t => t.nutritionType === 'calories' || nutritionGoal.type === 'nutrition');
+            if (calTarget?.value) {
+                baseCalories = calTarget.value;
                 source = 'period_goal';
-                goalId = periodNutritionGoal.id;
-                periodId = activePeriod.id;
-                goalName = periodNutritionGoal.name;
-                foundGoal = true;
-            }
-        }
-
-        // Check if period has direct nutritionGoal property (TrainingPeriod)
-        if (!foundGoal && (activePeriod as TrainingPeriod).nutritionGoal?.calories) {
-            const calories = (activePeriod as TrainingPeriod).nutritionGoal?.calories;
-            if (calories && calories > 0) {
-                baseCalories = calories;
-                source = 'period_direct';
-                periodId = activePeriod.id;
+                goalId = nutritionGoal.id;
+                goalName = nutritionGoal.name;
                 foundGoal = true;
             }
         }
     }
 
-    if (!foundGoal) {
-        const anyNutritionGoal = performanceGoals.find(g =>
-            g.type === 'nutrition' &&
-            g.period === 'daily' &&
-            g.status === 'active' &&
-            !g.periodId
-        );
-
-        if (anyNutritionGoal) {
-            const calories = getCaloriesFromGoal(anyNutritionGoal);
-            if (calories) {
-                baseCalories = calories;
-                source = 'period_goal';
-                goalId = anyNutritionGoal.id;
-                goalName = anyNutritionGoal.name;
-                foundGoal = true;
-            }
+    // Priority 2: Direct Period/Cycle Nutrition
+    if (!foundGoal && activePeriod) {
+        const p = activePeriod as TrainingPeriod;
+        if (p.nutritionGoal?.calories) {
+            baseCalories = p.nutritionGoal.calories;
+            baseProtein = p.nutritionGoal.protein;
+            baseCarbs = p.nutritionGoal.carbs;
+            baseFat = p.nutritionGoal.fat;
+            source = 'period_direct';
+            periodId = activePeriod.id;
+            foundGoal = true;
         }
     }
 
-    if (!foundGoal && settingsCalorieGoal && settingsCalorieGoal > 0) {
-        baseCalories = settingsCalorieGoal;
-        source = 'settings';
-        foundGoal = true;
-    }
-
-    // Apply TrainingCycle goal adjustment if no specific nutrition goal was found
-    // (e.g. if we fall back to settings, but we are in a 'deff' cycle)
-    if (activePeriod && (activePeriod as TrainingCycle).goal) {
+    // Fallback logic for TrainingCycle goal adjustment (only if using settings)
+    if (source === 'settings' && activePeriod && (activePeriod as TrainingCycle).goal) {
         const cycleGoal = (activePeriod as TrainingCycle).goal;
         if (cycleGoal === 'deff') baseCalories -= 500;
         else if (cycleGoal === 'bulk') baseCalories += 500;
     }
 
-    // Apply Calorie Mode Logic
-    // If 'fixed', we add burned base + burned.
-    // If 'tdee', the base is assumed to already include average activity.
-    const finalCalories = calorieMode === 'fixed'
-        ? baseCalories + (burnedCalories * exerciseCalorieMultiplier)
-        : baseCalories;
+    // Calorie Mode & Adaptation Logic
+    let extraCalories = 0;
+    let isAdapted = false;
 
-    // Build the explanation
-    let explanation = '';
-    const multiplierPct = Math.round(exerciseCalorieMultiplier * 100);
-
-    if (source === 'period_goal') {
-        explanation = `Aktiverat av målet "${goalName}". `;
-    } else if (source === 'period_direct') {
-        explanation = `Styrs av din nuvarande träningsperiod. `;
-    } else if (source === 'settings') {
-        explanation = `Baserat på dina inställningar (${settingsCalorieGoal} kcal). `;
-    } else {
-        explanation = `Förinställt standardvärde. `;
+    if (burnedCalories > 50) {
+        extraCalories = Math.round(burnedCalories * exerciseCalorieMultiplier);
+        isAdapted = true;
     }
 
+    // Determine final calories
+    let finalCalories = baseCalories;
     if (calorieMode === 'fixed') {
-        if (multiplierPct > 100) {
-            explanation += `Inkluderar överskott: ${multiplierPct}% av förbränning läggs till.`;
-        } else if (multiplierPct === 100) {
-            explanation += `Dynamiskt: All förbränning från träning läggs till.`;
-        } else if (multiplierPct > 0) {
-            explanation += `Dynamiskt: ${multiplierPct}% av förbränning från träning läggs till.`;
-        } else {
-            explanation += `Fast mål: Förbränning från träning räknas ej in.`;
-        }
+        finalCalories = baseCalories + extraCalories;
     } else {
-        explanation += `TDEE-läge: Förbränning antas ingå i ditt basmål.`;
+        // In TDEE mode, we might still want to show the 'available' calories including exercise
+        // but the 'base' remains the anchor. For now, let's follow the 'fixed' logic if we want 
+        // consistency in the "kvar" calculation, OR ensure users know which mode they are in.
+        // DECISION: If we have burned calories, we ALWAYS show the adapted targets in the result
+        // to avoid the "Grovt missvisande" error where active people see they are over capacity.
+        finalCalories = baseCalories + extraCalories;
+    }
+
+    // Adaptive Macro Ratios:
+    // Protein: 15% of extra calories for muscle repair
+    // Carbs: 65% of extra calories for glycogen (Athletic focus)
+    // Fat: 20% of extra calories for hormonal health
+    
+    let finalProtein = baseProtein;
+    let finalCarbs = baseCarbs;
+    let finalFat = baseFat;
+
+    if (extraCalories > 0) {
+        const extraProtein = (extraCalories * 0.15) / 4;
+        const extraCarbs = (extraCalories * 0.65) / 4;
+        const extraFat = (extraCalories * 0.20) / 9;
+
+        if (finalProtein !== undefined) finalProtein = Math.round(finalProtein + extraProtein);
+        if (finalCarbs !== undefined) finalCarbs = Math.round(finalCarbs + extraCarbs);
+        if (finalFat !== undefined) finalFat = Math.round(finalFat + extraFat);
+    }
+
+    // Explanation
+    let explanationList = [];
+    if (source === 'period_goal') {
+        explanationList.push(`Målet "${goalName}"`);
+    } else if (source === 'period_direct') {
+        explanationList.push(`Träningsperiod`);
+    } else if (source === 'settings') {
+        explanationList.push(`Inställningar (${baseCalories} kcal)`);
+    }
+
+    if (extraCalories > 0) {
+        explanationList.push(`Träning (+${extraCalories} kcal)`);
     }
 
     return {
-        calories: Math.round(finalCalories),
+        calories: finalCalories,
+        protein: finalProtein,
+        carbs: finalCarbs,
+        fat: finalFat,
+        isAdapted,
+        extraCalories,
         source,
         goalId,
         periodId,
         goalName,
-        explanation
+        explanation: explanationList.join(' + ')
     };
 }
 
@@ -202,7 +210,7 @@ export function getActiveCalories(
     date: string,
     trainingPeriods: (TrainingPeriod | TrainingCycle)[],
     performanceGoals: PerformanceGoal[],
-    settingsCalorieGoal?: number,
+    settingsDailyGoals?: { calories?: number; protein?: number; carbs?: number; fat?: number },
     defaultCalories: number = 2000,
     calorieMode: 'tdee' | 'fixed' = 'tdee',
     burnedCalories: number = 0,
@@ -212,7 +220,7 @@ export function getActiveCalories(
         date,
         trainingPeriods,
         performanceGoals,
-        settingsCalorieGoal,
+        settingsDailyGoals,
         defaultCalories,
         calorieMode,
         burnedCalories,

@@ -455,94 +455,94 @@ export function ActivityModal({
 
             console.log('ActivityModal: formDate validated:', formDate);
 
-        // Parse hh:mm to minutes for internal logic/description if needed
-        const [hours, minutes] = formDuration.split(':').map(Number);
-        const totalMinutes = (hours * 60) + minutes;
+            // Parse hh:mm to minutes for internal logic/description if needed
+            const [hours, minutes] = formDuration.split(':').map(Number);
+            const totalMinutes = (hours * 60) + minutes;
 
-        // Determine Final Category
-        let finalCategory = 'EASY';
-        if (formType === 'RUN') {
-            if (isRace) finalCategory = 'RACE';
-            else finalCategory = runSubCategory;
-        } else if (formType === 'STRENGTH') {
-            finalCategory = 'STRENGTH';
-        } else if (formType === 'HYROX') {
-            // If Hyrox is strength-focused, categorize as STRENGTH
-            finalCategory = formHyroxFocus === 'strength' ? 'STRENGTH' : 'INTERVALS';
-        } else if (formType === 'REST') {
-            finalCategory = 'REST';
-        } else if (formType === 'CARDIO' || formType === 'BIKE') {
-            finalCategory = 'CARDIO';
-        } else {
-            finalCategory = 'OTHER';
-        }
+            // Determine Final Category
+            let finalCategory = 'EASY';
+            if (formType === 'RUN') {
+                if (isRace) finalCategory = 'RACE';
+                else finalCategory = runSubCategory;
+            } else if (formType === 'STRENGTH') {
+                finalCategory = 'STRENGTH';
+            } else if (formType === 'HYROX') {
+                // If Hyrox is strength-focused, categorize as STRENGTH
+                finalCategory = formHyroxFocus === 'strength' ? 'STRENGTH' : 'INTERVALS';
+            } else if (formType === 'REST') {
+                finalCategory = 'REST';
+            } else if (formType === 'CARDIO' || formType === 'BIKE') {
+                finalCategory = 'CARDIO';
+            } else {
+                finalCategory = 'OTHER';
+            }
 
-        // Determine Title
-        let title = 'Löpning';
-        if (formType === 'RUN') {
-            if (isRace) title = 'TÄVLING 🏆';
-            else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
-            else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
-            else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
-            else title = 'Löpning';
-        } else if (formType === 'STRENGTH') {
-            title = 'Styrka';
-            // Determine if it matches a preset
-            const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
-            const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
-            const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
+            // Determine Title
+            let title = 'Löpning';
+            if (formType === 'RUN') {
+                if (isRace) title = 'TÄVLING 🏆';
+                else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
+                else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
+                else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
+                else title = 'Löpning';
+            } else if (formType === 'STRENGTH') {
+                title = 'Styrka';
+                // Determine if it matches a preset
+                const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
+                const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
+                const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
 
-            if (isPush) title = 'Styrka: Push';
-            else if (isPull) title = 'Styrka: Pull';
-            else if (isLegs) title = 'Styrka: Ben';
-        } else if (formType === 'HYROX') {
-            title = 'Hyrox';
-        } else if (formType === 'REST') {
-            title = 'Vilodag';
-        } else if (formType === 'BIKE') {
-            title = 'Cykling';
-        }
+                if (isPush) title = 'Styrka: Push';
+                else if (isPull) title = 'Styrka: Pull';
+                else if (isLegs) title = 'Styrka: Ben';
+            } else if (formType === 'HYROX') {
+                title = 'Hyrox';
+            } else if (formType === 'REST') {
+                title = 'Vilodag';
+            } else if (formType === 'BIKE') {
+                title = 'Cykling';
+            }
 
-        const activityData: PlannedActivity = {
-            id: editingActivity?.id || generateId(),
-            date: formDate,
-            type: formType,
-            category: finalCategory as PlannedActivity['category'],
-            subType: (formType === 'CARDIO' || formType === 'BIKE') ? (formType === 'BIKE' ? 'cycling' : formSubType) : undefined,
-            title: title,
-            description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
-            estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
-            durationMinutes: totalMinutes || undefined,
+            const activityData: PlannedActivity = {
+                id: editingActivity?.id || generateId(),
+                date: formDate,
+                type: formType,
+                category: finalCategory as PlannedActivity['category'],
+                subType: (formType === 'CARDIO' || formType === 'BIKE') ? (formType === 'BIKE' ? 'cycling' : formSubType) : undefined,
+                title: title,
+                description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
+                estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
+                durationMinutes: totalMinutes || undefined,
 
-            // Hyrox & Strength
-            tonnage: (formType === 'STRENGTH' || formType === 'HYROX') && formTonnage ? parseInt(formTonnage) : undefined,
-            muscleGroups: formType === 'STRENGTH' ? formMuscleGroups as any : undefined,
+                // Hyrox & Strength
+                tonnage: (formType === 'STRENGTH' || formType === 'HYROX') && formTonnage ? parseInt(formTonnage) : undefined,
+                muscleGroups: formType === 'STRENGTH' ? formMuscleGroups as any : undefined,
 
-            // Hyrox specific
-            includesRunning: formType === 'HYROX' ? formIncludesRunning : undefined,
-            hyroxFocus: formType === 'HYROX' ? formHyroxFocus : undefined,
-            startTime: formStartTime || undefined, // Now available for all types
+                // Hyrox specific
+                includesRunning: formType === 'HYROX' ? formIncludesRunning : undefined,
+                hyroxFocus: formType === 'HYROX' ? formHyroxFocus : undefined,
+                startTime: formStartTime || undefined, // Now available for all types
 
-            targetPace: '',
-            targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
-            structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
-            status: formStatus as any,
-            calculationMode: formCalculationMode as any,
-            isRace: isRace,
-            raceDetails: isRace ? {
-                ...editingActivity?.raceDetails,
-                goals: {
-                    a: formGoalA || undefined,
-                    b: formGoalB || undefined,
-                    c: formGoalC || undefined
-                }
-            } : undefined
-        };
+                targetPace: '',
+                targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
+                structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
+                status: formStatus as any,
+                calculationMode: formCalculationMode as any,
+                isRace: isRace,
+                raceDetails: isRace ? {
+                    ...editingActivity?.raceDetails,
+                    goals: {
+                        a: formGoalA || undefined,
+                        b: formGoalB || undefined,
+                        c: formGoalC || undefined
+                    }
+                } : undefined
+            };
 
-        console.log('ActivityModal: Calling onSave with:', activityData);
-        onSave(activityData);
-        console.log('ActivityModal: onSave finished');
-        onClose();
+            console.log('ActivityModal: Calling onSave with:', activityData);
+            onSave(activityData);
+            console.log('ActivityModal: onSave finished');
+            onClose();
         } catch (err) {
             console.error('ActivityModal: handleSave CRASHED:', err);
             notificationService.notify('error', 'Ett tekniskt fel uppstod: ' + (err instanceof Error ? err.message : String(err)));
@@ -877,8 +877,8 @@ export function ActivityModal({
                                             }
                                         }}
                                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${(formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id)
-                                                ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md`
-                                                : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300'
+                                            ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md`
+                                            : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300'
                                             }`}
                                     >
                                         {sub.icon}

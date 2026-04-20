@@ -14,7 +14,7 @@ import {
     generateId,
 } from '../models/types.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
-import { getActiveCalories } from '../utils/calorieTarget.ts';
+import { getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { calculateMealItemNutrition } from '../utils/nutrition/calculations.ts';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
@@ -42,7 +42,7 @@ export function CaloriesPage() {
         getMealEntriesForDate,
         updateVitals,
         calculateDailyNutrition,
-        calculateDailyPlannedNutrition = () => ({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0, vitaminC: 0, vitaminA: 0, proteinCategories: [] }),
+        calculateDailyPlannedNutritionV2 = () => ({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0, vitaminC: 0, vitaminA: 0, proteinCategories: [] }),
         getRecipeWithNutrition,
         getFoodItem,
         getPlannedMealsForDate,
@@ -59,7 +59,7 @@ export function CaloriesPage() {
         setSelectedDate: setDataSelectedDate
     } = useData();
 
-    console.log('CaloriesPage: calculateDailyPlannedNutrition is:', typeof calculateDailyPlannedNutrition);
+    console.log('CaloriesPage: calculateDailyPlannedNutritionV2 is:', typeof calculateDailyPlannedNutritionV2);
 
     const { settings } = useSettings();
     const { logEvent } = useAnalytics();
@@ -167,8 +167,10 @@ export function CaloriesPage() {
     );
 
     const plannedNutrition = useMemo(
-        () => calculateDailyPlannedNutrition(selectedDate),
-        [calculateDailyPlannedNutrition, selectedDate]
+        () => typeof calculateDailyPlannedNutritionV2 === 'function' 
+            ? calculateDailyPlannedNutritionV2(selectedDate)
+            : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0, vitaminC: 0, vitaminA: 0, proteinCategories: [] },
+        [calculateDailyPlannedNutritionV2, selectedDate]
     );
 
     const { tdee: maintenance, bmr, dailyCaloriesBurned: burned } = useHealth(selectedDate);
@@ -573,16 +575,31 @@ export function CaloriesPage() {
 
 
     const goals = useMemo(() => {
-        const periodTarget = getActiveCalories(
+        const targetResult = getActiveCalorieTarget(
             selectedDate,
             trainingPeriods,
             performanceGoals,
-            settings.dailyCalorieGoal,
-            2000
+            {
+                calories: settings.dailyCalorieGoal,
+                protein: settings.dailyProteinGoal,
+                carbs: settings.dailyCarbsGoal,
+                fat: settings.dailyFatGoal
+            },
+            2000,
+            settings.calorieMode || 'tdee',
+            burned,
+            settings.exerciseCalorieMultiplier ?? 1.0
         );
 
-        return calculateAdaptiveGoals(settings as any, dailyExercises, periodTarget);
-    }, [settings, dailyExercises, trainingPeriods, selectedDate, performanceGoals]);
+        return {
+            calories: targetResult.calories,
+            protein: targetResult.protein || 160,
+            carbs: targetResult.carbs || 250,
+            fat: targetResult.fat || 80,
+            isAdapted: targetResult.isAdapted,
+            extraCalories: targetResult.extraCalories
+        };
+    }, [settings, burned, trainingPeriods, selectedDate, performanceGoals]);
 
     return (
         <div className="calories-page">
