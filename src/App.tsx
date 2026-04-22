@@ -228,7 +228,7 @@ export function App() {
                                                                 <Route path="/exercises" element={<ExercisesPage />} />
                                                                 <Route path="/övning" element={<ExercisesPage />} />
                                                                 <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
-                                                                <Route path="/training/load" element={<LoadAnalysisPage />} />
+                                                                <Route path="/health/load" element={<LoadAnalysisPage />} />
                                                                 <Route path="matchup" element={<MatchupPage />} />
                                                                 <Route path="kamrat" element={<MatchupPage />} />
                                                                 <Route path="feed" element={<LifeStreamPage />} />

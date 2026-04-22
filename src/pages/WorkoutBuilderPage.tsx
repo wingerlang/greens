@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WorkoutDefinition, WorkoutSection, WorkoutExercise } from '../models/workout.ts';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { generateId } from '../models/types.ts';
 import { ExerciseSelector } from '../components/workouts/ExerciseSelector.tsx';
@@ -10,10 +10,11 @@ import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { MUSCLE_MAP, BODY_PARTS } from '../data/muscleMap.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { StrengthSet } from '../models/strengthTypes.ts';
+import { RunWorkoutBuilder } from '../components/workouts/RunWorkoutBuilder.tsx';
 
 const SUBCATEGORIES: Record<string, string[]> = {
     'STRENGTH': ['Push', 'Pull', 'Ben', 'Överkropp', 'Underkropp', 'Hela Kroppen'],
-    'RUNNING': ['Distans', 'Långpass', 'Intervall', 'Tempo', 'Backe', 'Återhämtning'],
+    'RUNNING': ['Distans', 'Långpass', 'Intervaller (Korta)', 'Intervaller (Långa)', 'Backintervaller', 'Tempo', 'Återhämtning'],
     'HYROX': ['Simulering', 'Intervaller', 'Styrke-EMOM', 'Återhämtning'],
     'CROSSFIT': ['WOD', 'Metcon', 'Skills', 'Strength + WOD'],
 };
@@ -38,7 +39,20 @@ export function WorkoutBuilderPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { exerciseEntries, strengthSessions, universalActivities } = useData();
-    const [workout, setWorkout] = useState<WorkoutDefinition>(INITIAL_WORKOUT);
+    const location = useLocation();
+    
+    const [workout, setWorkout] = useState<WorkoutDefinition>(() => {
+        const initial = { ...INITIAL_WORKOUT };
+        if (location.state?.title) {
+            initial.title = location.state.title;
+        }
+        if (location.state?.category) {
+            const cat = location.state.category;
+            initial.category = cat === 'CYCLING' ? 'HYBRID' : cat; // map cycling to hybrid for now
+        }
+        return initial;
+    });
+    
     const [activeTab, setActiveTab] = useState<'BUILD' | 'ANALYZE' | 'COMPARE'>('BUILD');
 
     // ACTION: Derive Muscles from Exercises
@@ -311,7 +325,7 @@ export function WorkoutBuilderPage() {
     return (
         <div className="h-full flex flex-col bg-[#050510] text-white overflow-hidden font-sans">
             {/* HEADER TOOLBAR */}
-            <div className="h-20 border-b border-white/5 bg-slate-900/20 flex items-center justify-between px-8 backdrop-blur-2xl">
+            <div className="h-20 border-b border-white/5 bg-slate-900 flex items-center justify-between px-8">
                 <div className="flex items-center gap-6">
                     <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-white transition-all hover:scale-110">
                         <span className="text-2xl">←</span>
@@ -346,180 +360,198 @@ export function WorkoutBuilderPage() {
                 <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
                     <div className="max-w-4xl mx-auto space-y-12 pb-48">
 
-                        {/* PREMIUM METADATA CARD */}
-                        <div className="bg-slate-900/40 border border-white/10 rounded-[2.5rem] p-10 grid grid-cols-3 gap-10 relative overflow-hidden backdrop-blur-xl">
-                            <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none select-none">
-                                <span className="text-9xl text-white font-black italic tracking-tighter">GENUS</span>
+                        {/* TITLE INPUT */}
+                        <div className="mb-8">
+                            <input 
+                                type="text" 
+                                value={workout.title} 
+                                onChange={e => update('title', e.target.value)} 
+                                placeholder="Namnge passet (t.ex. 'Fyrahundringar')" 
+                                className="w-full bg-transparent text-4xl md:text-5xl font-black text-white placeholder-slate-600 focus:outline-none tracking-tight"
+                            />
+                        </div>
+
+                        {/* BASIC METADATA FORM */}
+                        <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 flex flex-col gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kategori</label>
+                                    <select
+                                        value={workout.category}
+                                        onChange={(e) => update('category', e.target.value)}
+                                        className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm font-medium focus:border-indigo-500 outline-none hover:border-white/10 transition-colors"
+                                    >
+                                        {['STRENGTH', 'HYROX', 'RUNNING', 'HYBRID', 'CROSSFIT', 'RECOVERY'].map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Typ av pass</label>
+                                    <select
+                                        value={workout.subCategory || ''}
+                                        onChange={(e) => handleSubCategoryChange(e.target.value)}
+                                        className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm font-medium focus:border-indigo-500 outline-none hover:border-white/10 transition-colors"
+                                    >
+                                        <option value="">Välj typ...</option>
+                                        {SUBCATEGORIES[workout.category]?.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nivå</label>
+                                    <select
+                                        value={workout.difficulty}
+                                        onChange={(e) => update('difficulty', e.target.value)}
+                                        className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm font-medium focus:border-indigo-500 outline-none hover:border-white/10 transition-colors"
+                                    >
+                                        {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
                             </div>
 
-                            <div className="space-y-3">
-                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Kategori</label>
-                                <select
-                                    value={workout.category}
-                                    onChange={(e) => update('category', e.target.value)}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
-                                >
-                                    {['STRENGTH', 'HYROX', 'RUNNING', 'HYBRID', 'CROSSFIT', 'RECOVERY'].map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Typ av pass</label>
-                                <select
-                                    value={workout.subCategory || ''}
-                                    onChange={(e) => handleSubCategoryChange(e.target.value)}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
-                                >
-                                    <option value="">Välj typ...</option>
-                                    {SUBCATEGORIES[workout.category]?.map(s => (
-                                        <option key={s} value={s}>{s}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Nivå</label>
-                                <select
-                                    value={workout.difficulty}
-                                    onChange={(e) => update('difficulty', e.target.value)}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
-                                >
-                                    {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="col-span-3 space-y-3">
-                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Beskrivning & Mål</label>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Beskrivning & Mål</label>
                                 <textarea
                                     value={workout.description}
                                     onChange={(e) => update('description', e.target.value)}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-[2rem] px-6 py-5 text-sm leading-relaxed focus:border-indigo-500 outline-none min-h-[120px] resize-none hover:bg-slate-950 transition-all"
+                                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm leading-relaxed focus:border-indigo-500 outline-none min-h-[80px] resize-none hover:border-white/10 transition-colors"
                                     placeholder="Vad är målet med dagens pass?"
                                 />
                             </div>
 
-                            <div className="col-span-3 flex flex-wrap gap-2 pt-2 border-t border-white/5">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest self-center mr-4">Tränar:</span>
-                                {workout.targetedMuscles && workout.targetedMuscles.length > 0 ? (
-                                    workout.targetedMuscles.map(m => (
-                                        <span key={m} className="px-4 py-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-black rounded-full uppercase tracking-wider">
-                                            {m}
-                                        </span>
-                                    ))
-                                ) : (
-                                    <span className="text-[10px] text-slate-600 italic">Lägg till övningar för att se muskelgrupper...</span>
-                                )}
-                            </div>
+                            {workout.category !== 'RUNNING' && (
+                                <div className="flex flex-wrap gap-2 pt-4 border-t border-white/5">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest self-center mr-4">Tränar:</span>
+                                    {workout.targetedMuscles && workout.targetedMuscles.length > 0 ? (
+                                        workout.targetedMuscles.map(m => (
+                                            <span key={m} className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-xs font-bold rounded-lg">
+                                                {m}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-xs text-slate-500 italic py-1">Inga muskler valda</span>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        {/* SECTIONS */}
-                        <div className="space-y-8">
-                            {workout.exercises?.map((section, idx) => (
-                                <div
-                                    key={section.id}
-                                    onClick={() => setActiveSectionId(section.id)}
-                                    className={`group transition-all duration-500 rounded-[2.5rem] p-8 border ${activeSectionId === section.id ? 'border-indigo-500/40 bg-indigo-500/5 shadow-3xl shadow-indigo-500/10' : 'border-white/5 bg-slate-900/20'}`}
-                                >
-                                    <div className="flex items-center justify-between mb-8">
-                                        <div className="flex flex-col">
-                                            <input
-                                                value={section.title}
-                                                onChange={(e) => {
-                                                    const newEx = [...(workout.exercises || [])];
-                                                    newEx[idx].title = e.target.value;
-                                                    update('exercises', newEx);
-                                                }}
-                                                className="bg-transparent text-2xl font-black text-white focus:outline-none placeholder-white/10"
-                                            />
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Sektion {idx + 1}</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); const newEx = workout.exercises!.filter(s => s.id !== section.id); update('exercises', newEx); }}
-                                            className="opacity-0 group-hover:opacity-100 p-3 hover:bg-rose-500/20 rounded-2xl text-rose-500 transition-all"
+
+                        {/* SECTIONS / WORKOUT BUILDER */}
+                        {workout.category === 'RUNNING' ? (
+                            <RunWorkoutBuilder workout={workout} updateWorkout={update} />
+                        ) : (
+                            <>
+                                <div className="space-y-8">
+                                    {workout.exercises?.map((section, idx) => (
+                                        <div
+                                            key={section.id}
+                                            onClick={() => setActiveSectionId(section.id)}
+                                            className={`group transition-all duration-200 rounded-3xl p-8 border ${activeSectionId === section.id ? 'border-indigo-500/40 bg-slate-800' : 'border-white/5 bg-slate-900'}`}
                                         >
-                                            <span className="font-bold">Ta bort</span>
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {section.exercises.map((ex, i) => (
-                                            <div key={ex.id} className="flex items-center gap-6 bg-slate-950/40 border border-white/5 p-6 rounded-3xl hover:border-white/20 transition-all hover:translate-x-1 group/ex">
-                                                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-xs font-black text-slate-500 border border-white/5">
-                                                    {i + 1}
+                                            <div className="flex items-center justify-between mb-8">
+                                                <div className="flex flex-col">
+                                                    <input
+                                                        value={section.title}
+                                                        onChange={(e) => {
+                                                            const newEx = [...(workout.exercises || [])];
+                                                            newEx[idx].title = e.target.value;
+                                                            update('exercises', newEx);
+                                                        }}
+                                                        className="bg-transparent text-2xl font-black text-white focus:outline-none placeholder-white/10"
+                                                    />
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Sektion {idx + 1}</span>
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="font-black text-lg text-white mb-1">{ex.name}</div>
-                                                    <div className="flex gap-8">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Set</span>
-                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.sets} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].sets = parseInt(e.target.value); setWorkout(newW); }} />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Rep / Sträcka</span>
-                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.reps} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].reps = e.target.value; setWorkout(newW); }} />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Last / Tempo</span>
-                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.weight} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].weight = e.target.value; setWorkout(newW); }} />
-                                                        </div>
-                                                    </div>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); const newEx = workout.exercises!.filter(s => s.id !== section.id); update('exercises', newEx); }}
+                                                    className="opacity-0 group-hover:opacity-100 p-3 hover:bg-rose-500/20 rounded-2xl text-rose-500 transition-all"
+                                                >
+                                                    <span className="font-bold">Ta bort</span>
+                                                </button>
+                                            </div>
 
-                                                    {/* Overload Engine Nudge */}
-                                                    {(() => {
-                                                        const target = getProgressionTarget(ex.name);
-                                                        if (!target) return null;
-                                                        return (
-                                                            <div className="mt-3 space-y-3">
-                                                                {target.sessionsSincePR >= 3 && (
-                                                                    <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
-                                                                        <span className="text-lg">⚠️</span>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider">Platå-varning ({target.sessionsSincePR} pass utan PR!)</span>
-                                                                            <span className="text-[9px] text-rose-500/70 font-bold uppercase tracking-widest">Rekommendation: Deload eller Byt Variant</span>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🎯 Mål (vs {target.date}):</span>
-                                                                    <button
-                                                                        onClick={() => applyTarget(section.id, ex.id, target.powerTarget.weight, target.powerTarget.reps)}
-                                                                        className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded text-[10px] font-bold text-indigo-400 transition-all flex items-center gap-1"
-                                                                        title="Öka vikt (+2.5%)"
-                                                                    >
-                                                                        ⚡ Power: {target.powerTarget.weight}kg x {target.powerTarget.reps}
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => applyTarget(section.id, ex.id, target.volumeTarget.weight, target.volumeTarget.reps)}
-                                                                        className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-[10px] font-bold text-emerald-400 transition-all flex items-center gap-1"
-                                                                        title="Öka repetitioner (+1)"
-                                                                    >
-                                                                        📈 Volym: {target.volumeTarget.weight}kg x {target.volumeTarget.reps}
-                                                                    </button>
+                                            <div className="space-y-3">
+                                                {section.exercises.map((ex, i) => (
+                                                    <div key={ex.id} className="flex items-center gap-6 bg-slate-950/40 border border-white/5 p-6 rounded-3xl hover:border-white/20 transition-all hover:translate-x-1 group/ex">
+                                                        <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-xs font-black text-slate-500 border border-white/5">
+                                                            {i + 1}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="font-black text-lg text-white mb-1">{ex.name}</div>
+                                                            <div className="flex gap-8">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Set</span>
+                                                                    <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.sets} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].sets = parseInt(e.target.value); setWorkout(newW); }} />
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Rep / Sträcka</span>
+                                                                    <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.reps} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].reps = e.target.value; setWorkout(newW); }} />
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Last / Tempo</span>
+                                                                    <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.weight} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].weight = e.target.value; setWorkout(newW); }} />
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <button onClick={() => removeExercise(section.id, ex.id)} className="opacity-0 group-hover/ex:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all">✕</button>
-                                            </div>
-                                        ))}
-                                        {section.exercises.length === 0 && (
-                                            <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2.5rem] bg-slate-900/10">
-                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">Sektionen är tom</p>
-                                                <button className="text-sm text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors">+ Sök i övningsarkivet</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
 
-                        <button
-                            onClick={() => update('exercises', [...(workout.exercises || []), { id: generateId(), title: "Ny Sektion", exercises: [] }])}
-                            className="w-full py-8 border-2 border-dashed border-white/5 hover:border-white/10 hover:bg-white/5 rounded-[2.5rem] text-slate-500 hover:text-white transition-all font-black uppercase tracking-[0.2em] text-xs"
-                        >
-                            + Lägg till sektion
-                        </button>
+                                                            {/* Overload Engine Nudge */}
+                                                            {(() => {
+                                                                const target = getProgressionTarget(ex.name);
+                                                                if (!target) return null;
+                                                                return (
+                                                                    <div className="mt-3 space-y-3">
+                                                                        {target.sessionsSincePR >= 3 && (
+                                                                            <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+                                                                                <span className="text-lg">⚠️</span>
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider">Platå-varning ({target.sessionsSincePR} pass utan PR!)</span>
+                                                                                    <span className="text-[9px] text-rose-500/70 font-bold uppercase tracking-widest">Rekommendation: Deload eller Byt Variant</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🎯 Mål (vs {target.date}):</span>
+                                                                            <button
+                                                                                onClick={() => applyTarget(section.id, ex.id, target.powerTarget.weight, target.powerTarget.reps)}
+                                                                                className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded text-[10px] font-bold text-indigo-400 transition-all flex items-center gap-1"
+                                                                                title="Öka vikt (+2.5%)"
+                                                                            >
+                                                                                ⚡ Power: {target.powerTarget.weight}kg x {target.powerTarget.reps}
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => applyTarget(section.id, ex.id, target.volumeTarget.weight, target.volumeTarget.reps)}
+                                                                                className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-[10px] font-bold text-emerald-400 transition-all flex items-center gap-1"
+                                                                                title="Öka repetitioner (+1)"
+                                                                            >
+                                                                                📈 Volym: {target.volumeTarget.weight}kg x {target.volumeTarget.reps}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                        <button onClick={() => removeExercise(section.id, ex.id)} className="opacity-0 group-hover/ex:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all">✕</button>
+                                                    </div>
+                                                ))}
+                                                {section.exercises.length === 0 && (
+                                                    <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2.5rem] bg-slate-900/10">
+                                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">Sektionen är tom</p>
+                                                        <button className="text-sm text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors">+ Sök i övningsarkivet</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={() => update('exercises', [...(workout.exercises || []), { id: generateId(), title: "Ny Sektion", exercises: [] }])}
+                                    className="w-full py-6 border-2 border-dashed border-white/10 hover:border-white/20 hover:bg-white/5 rounded-3xl text-slate-400 hover:text-white transition-all font-bold uppercase tracking-widest text-xs"
+                                >
+                                    + Lägg till sektion
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 

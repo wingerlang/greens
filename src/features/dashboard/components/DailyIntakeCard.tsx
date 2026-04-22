@@ -214,6 +214,7 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
 
                                 {showDetails && (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-2 p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        {/* RAD 1 */}
                                         <div className="flex flex-col items-center text-center">
                                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Bas</span>
                                             <span className="text-sm font-black text-slate-900 dark:text-white font-mono">{Math.round(baseTarget)}</span>
@@ -225,10 +226,12 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                                             <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">({Math.round(exerciseCalorieMultiplier * 100)}% bonus)</span>
                                         </div>
                                         <div className="flex flex-col items-center text-center">
-                                            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Budget (Tot)</span>
+                                            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Budget (Mål)</span>
                                             <span className="text-sm font-black text-indigo-400 font-mono">{Math.round(target)}</span>
                                             <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Justerat mål</span>
                                         </div>
+
+                                        {/* RAD 2 */}
                                         <div className="flex flex-col items-center text-center border-t border-slate-200 dark:border-white/10 pt-2">
                                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Basförbränning</span>
                                             <span className="text-sm font-black text-slate-700 dark:text-slate-300 font-mono">{Math.round((maintenance || 0) - burned)}</span>
@@ -240,9 +243,26 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                                             <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Brända kcal</span>
                                         </div>
                                         <div className="flex flex-col items-center text-center border-t border-slate-200 dark:border-white/10 pt-2">
-                                            <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Faktiskt Netto</span>
-                                            <span className="text-sm font-black text-emerald-500 font-mono">{Math.round((maintenance || 0) - consumed)}</span>
-                                            <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Verkligt underskott</span>
+                                            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Budget (Tot)</span>
+                                            <span className="text-sm font-black text-indigo-400 font-mono">{Math.round(baseTarget + burned)}</span>
+                                            <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Bas + Träning</span>
+                                        </div>
+
+                                        {/* RAD 3 */}
+                                        <div className="flex flex-col items-center text-center border-t border-slate-200 dark:border-white/10 pt-2">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Förbrukning</span>
+                                            <span className="text-sm font-black text-slate-700 dark:text-slate-300 font-mono">{Math.round(maintenance || 0)}</span>
+                                            <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Bas + Träning</span>
+                                        </div>
+                                        <div className="flex flex-col items-center text-center border-t border-x border-slate-200 dark:border-white/10 pt-2 px-2">
+                                            <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Netto (Mål)</span>
+                                            <span className="text-sm font-black text-emerald-500 font-mono">{Math.round((maintenance || 0) - target)}</span>
+                                            <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Målsatt Underskott</span>
+                                        </div>
+                                        <div className="flex flex-col items-center text-center border-t border-slate-200 dark:border-white/10 pt-2">
+                                            <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest mb-1">Netto (Faktiskt)</span>
+                                            <span className="text-sm font-black text-rose-500 font-mono">{Math.round((maintenance || 0) - consumed)}</span>
+                                            <span className="text-[7px] text-slate-400 mt-0.5 uppercase font-bold">Verkligt Underskott</span>
                                         </div>
                                     </div>
                                 )}

@@ -6,7 +6,16 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { useMessages } from '../context/MessageContext.tsx';
 import './Navigation.css';
 import { Logo } from './Logo.tsx';
-import { Star, MoreHorizontal, Edit2, X, ChevronDown, ChevronRight, Pin } from 'lucide-react';
+import { 
+    Star, MoreHorizontal, Edit2, X, ChevronDown, ChevronRight, Pin,
+    Activity, LayoutDashboard, HeartPulse, Scale, BarChart3,
+    Flame, CalendarRange, Sparkles, Home, BookOpen, Database,
+    TrendingUp, CalendarDays, Library, ClipboardList, Dumbbell,
+    Brain, Target, Rss, Swords, Trophy, PieChart, Search,
+    Zap, Briefcase, Timer, Gauge, ShieldAlert, Settings, User, Users,
+    MessageSquare, RefreshCw, LogOut, Menu, Wrench, Box, Package,
+    ChevronLeft, Bike, Stethoscope
+} from 'lucide-react';
 
 interface NavigationProps {
     onOpenOmnibox?: () => void;
@@ -18,60 +27,61 @@ type NavSection = 'health' | 'food' | 'training' | 'community' | 'tools' | 'admi
 interface NavItem {
     path: string;
     label: string;
-    icon: string;
+    icon: React.ElementType;
     section: NavSection;
     description?: string;
     adminOnly?: boolean;
     devOnly?: boolean;
+    color?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
     // Health
-    { path: '/health', label: 'Översikt', icon: '📊', section: 'health', description: 'Trender & Insikter' },
-    { path: '/health/body', label: 'Kropp', icon: '🧬', section: 'health', description: 'Mått & Vikt' },
-    { path: '/health/recovery', label: 'Recovery', icon: '🩹', section: 'health', description: 'Återhämtning' },
-    { path: '/training/load', label: 'Belastning', icon: '🏋️', section: 'health', description: 'Training Load' },
+    { path: '/health', label: 'Översikt', icon: LayoutDashboard, section: 'health', description: 'Trender & Insikter', color: 'text-emerald-500' },
+    { path: '/health/body', label: 'Kropp', icon: Scale, section: 'health', description: 'Mått & Vikt', color: 'text-blue-500' },
+    { path: '/health/recovery', label: 'Recovery', icon: HeartPulse, section: 'health', description: 'Återhämtning', color: 'text-rose-500' },
+    { path: '/health/load', label: 'Belastning', icon: BarChart3, section: 'health', description: 'Training Load', color: 'text-amber-500' },
 
     // Food
-    { path: '/veckan', label: 'Veckan', icon: '📅', section: 'food', description: 'Veckoöversikt' },
-    { path: '/planera', label: 'Planera', icon: '✨', section: 'food', description: 'Måltider & Pass' },
-    { path: '/pantry', label: 'Skafferi', icon: '🏠', section: 'food', description: 'Hantera ingredienser' },
-    { path: '/recipes', label: 'Recept', icon: '📖', section: 'food', description: 'Hitta & skapa' },
-    { path: '/database', label: 'Databas', icon: '🗄️', section: 'food', description: 'Matdatabas' },
-    { path: '/calories', label: 'Kalorier', icon: '🔥', section: 'food', description: 'Logga mat' },
+    { path: '/calories', label: 'Kalorier', icon: Flame, section: 'food', description: 'Logga mat', color: 'text-orange-500' },
+    { path: '/veckan', label: 'Veckan', icon: CalendarRange, section: 'food', description: 'Veckoöversikt', color: 'text-emerald-500' },
+    { path: '/planera', label: 'Planera', icon: Sparkles, section: 'food', description: 'Måltider & Pass', color: 'text-indigo-500' },
+    { path: '/pantry', label: 'Skafferi', icon: Home, section: 'food', description: 'Hantera ingredienser', color: 'text-amber-600' },
+    { path: '/recipes', label: 'Recept', icon: BookOpen, section: 'food', description: 'Hitta & skapa', color: 'text-blue-500' },
+    { path: '/database', label: 'Databas', icon: Database, section: 'food', description: 'Matdatabas', color: 'text-slate-400' },
 
     // Training
-    { path: '/training', label: 'Översikt', icon: '📈', section: 'training', description: 'Träningsöversikt' },
-    { path: '/planera/traning', label: 'Planera', icon: '🗓️', section: 'training', description: 'Planera pass' },
-    { path: '/pass', label: 'Passbank', icon: '📚', section: 'training', description: 'Sparade pass' },
-    { path: '/logg', label: 'Logg', icon: '📜', section: 'training', description: 'Aktivitetslogg' },
-    { path: '/styrka', label: 'Styrka', icon: '💪', section: 'training', description: 'Styrketräning' },
-    { path: '/exercises', label: 'Övningar', icon: '📚', section: 'training', description: 'Övningsbibliotek' },
-    { path: '/coach', label: 'Coach', icon: '🧠', section: 'training', description: 'Smart Coach' },
-    { path: '/goals', label: 'Mål', icon: '🎯', section: 'training', description: 'Sätt & nå mål' },
+    { path: '/training', label: 'Översikt', icon: TrendingUp, section: 'training', description: 'Träningsöversikt', color: 'text-emerald-500' },
+    { path: '/planera/traning', label: 'Planera', icon: CalendarDays, section: 'training', description: 'Planera pass', color: 'text-indigo-500' },
+    { path: '/pass', label: 'Passbank', icon: Library, section: 'training', description: 'Sparade pass', color: 'text-amber-500' },
+    { path: '/logg', label: 'Aktiviteter', icon: ClipboardList, section: 'training', description: 'Aktivitetslogg', color: 'text-slate-400' },
+    { path: '/styrka', label: 'Styrka', icon: Dumbbell, section: 'training', description: 'Styrketräning', color: 'text-purple-500' },
+    { path: '/exercises', label: 'Övningar', icon: Activity, section: 'training', description: 'Övningsbibliotek', color: 'text-cyan-500' },
+    { path: '/coach', label: 'Coach', icon: Brain, section: 'training', description: 'Smart Coach', color: 'text-indigo-400' },
+    { path: '/goals', label: 'Mål', icon: Target, section: 'training', description: 'Sätt & nå mål', color: 'text-rose-500' },
 
     // Community
-    { path: '/feed', label: 'Feed', icon: '📡', section: 'community', description: 'Life Stream' },
-    { path: '/matchup', label: 'Matchup', icon: '🥊', section: 'community', description: 'Jämför stats' },
-    { path: '/tävling', label: 'Tävling', icon: '🏆', section: 'community', description: 'Utmana vänner' },
-    { path: '/statistik', label: 'Statistik', icon: '📊', section: 'community', description: 'Global stats' },
-    { path: '/community', label: 'Hitta', icon: '👥', section: 'community', description: 'Sök användare' },
+    { path: '/feed', label: 'Feed', icon: Rss, section: 'community', description: 'Life Stream', color: 'text-orange-500' },
+    { path: '/matchup', label: 'Matchup', icon: Swords, section: 'community', description: 'Jämför stats', color: 'text-rose-500' },
+    { path: '/tävling', label: 'Tävling', icon: Trophy, section: 'community', description: 'Utmana vänner', color: 'text-amber-400' },
+    { path: '/statistik', label: 'Statistik', icon: PieChart, section: 'community', description: 'Global stats', color: 'text-blue-500' },
+    { path: '/community', label: 'Hitta', icon: Search, section: 'community', description: 'Sök användare', color: 'text-slate-400' },
 
     // Tools
-    { path: '/beast', label: 'The Beast', icon: '🦍', section: 'tools', description: 'Totalprofil' },
-    { path: '/tools', label: 'Översikt', icon: '🧰', section: 'tools', description: 'Alla verktyg' },
-    { path: '/tools/1rm', label: '1RM & Last', icon: '💪', section: 'tools' },
-    { path: '/tools/race', label: 'Race', icon: '🏃', section: 'tools' },
-    { path: '/tools/pace', label: 'Pace', icon: '⏱️', section: 'tools' },
-    { path: '/tools/cycling', label: 'Cykling & Assault', icon: '🚴', section: 'tools' },
-    { path: '/tools/health', label: 'Hälsa', icon: '🩺', section: 'tools' },
+    { path: '/beast', label: 'The Beast', icon: Zap, section: 'tools', description: 'Totalprofil', color: 'text-amber-500' },
+    { path: '/tools', label: 'Översikt', icon: Briefcase, section: 'tools', description: 'Alla verktyg', color: 'text-slate-400' },
+    { path: '/tools/1rm', label: '1RM & Last', icon: Dumbbell, section: 'tools' },
+    { path: '/tools/race', label: 'Race', icon: Timer, section: 'tools' },
+    { path: '/tools/pace', label: 'Pace', icon: Gauge, section: 'tools' },
+    { path: '/tools/cycling', label: 'Cykling & Assault', icon: Bike, section: 'tools' },
+    { path: '/tools/health', label: 'Hälsa', icon: Stethoscope, section: 'tools' },
 
     // Admin (Simplified)
-    { path: '/admin?tab=health', label: 'Dashboard', icon: '⚙️', section: 'admin', adminOnly: true },
-    { path: '/admin?tab=database', label: 'MatDB', icon: '📦', section: 'admin', adminOnly: true },
-    { path: '/admin/exercises', label: 'ÖvningDB', icon: '💪', section: 'admin', adminOnly: true },
-    { path: '/admin?tab=users', label: 'Användare', icon: '👥', section: 'admin', adminOnly: true },
-    { path: '/developer', label: 'Dev Tools', icon: '🛠️', section: 'admin', devOnly: true },
+    { path: '/admin?tab=health', label: 'Dashboard', icon: Settings, section: 'admin', adminOnly: true },
+    { path: '/admin?tab=database', label: 'MatDB', icon: Box, section: 'admin', adminOnly: true },
+    { path: '/admin/exercises', label: 'ÖvningDB', icon: Dumbbell, section: 'admin', adminOnly: true },
+    { path: '/admin?tab=users', label: 'Användare', icon: Users, section: 'admin', adminOnly: true },
+    { path: '/developer', label: 'Dev Tools', icon: Wrench, section: 'admin', devOnly: true },
 ];
 
 export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaSync }) => {
@@ -250,24 +260,6 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                             </div>
                         )}
 
-                        {/* Energy Meter (Desktop Mini) */}
-                        {targetCalories > 0 && (
-                            <div className="hidden xl:flex flex-col justify-center mr-4 w-24 gap-1" title={`${Math.round(dailyCaloriesConsumed)} / ${targetCalories} kcal`}>
-                                <div className="flex justify-between text-[9px] font-bold text-slate-500 leading-none">
-                                    <span>KCAL</span>
-                                    <span className={dailyCaloriesConsumed > targetCalories ? 'text-amber-500' : 'text-slate-500'}>
-                                        {Math.round((dailyCaloriesConsumed / targetCalories) * 100)}%
-                                    </span>
-                                </div>
-                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all duration-500 ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                        style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
                         {/* Sections */}
                         {(['health', 'food', 'training', 'community', 'tools', 'admin'] as NavSection[]).map(section => {
                             const sectionItems = sections[section];
@@ -276,7 +268,9 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                             return (
                                 <div key={section} className="relative group">
                                     <button className={getGroupClasses(section)}>
-                                        <span className="capitalize">{sectionItems[0].icon}</span>
+                                        <div className="flex items-center justify-center w-5">
+                                            {React.createElement(sectionItems[0].icon, { size: 16 })}
+                                        </div>
                                         <span className="hidden xl:inline capitalize">{section === 'food' ? 'Mat' : section === 'health' ? 'Hälsa' : section === 'training' ? 'Träning' : section === 'tools' ? 'Verktyg' : section}</span>
                                         <ChevronDown size={10} className="opacity-50 ml-1 group-hover:rotate-180 transition-transform" />
                                     </button>
@@ -288,7 +282,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                                     to={item.path}
                                                     className={getLinkClasses(item.path)}
                                                 >
-                                                    <span className="w-5 text-center">{item.icon}</span>
+                                                    <span className="w-5 flex justify-center"><item.icon size={14} /></span>
                                                     <span>{item.label}</span>
                                                 </NavLink>
                                             ))}
@@ -318,7 +312,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
                                 <NavLink to="/meddelanden" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
                                     <div className="relative w-5 text-center">
-                                        <span>💬</span>
+                                        <MessageSquare size={14} />
                                         {unreadCount > 0 && (
                                             <span className="absolute -top-1 -right-0 w-2 h-2 bg-rose-500 rounded-full"></span>
                                         )}
@@ -326,22 +320,22 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                     <span>Meddelanden</span>
                                 </NavLink>
                                 <NavLink to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
-                                    <span className="w-5 text-center">⚙️</span>
+                                    <span className="w-5 text-center"><Settings size={14} /></span>
                                     <span>Inställningar</span>
                                 </NavLink>
                                 <NavLink to="/sync" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
-                                    <span className="w-5 text-center">🔄</span>
+                                    <span className="w-5 text-center"><RefreshCw size={14} /></span>
                                     <span>Synkningar</span>
                                 </NavLink>
                                 {onStravaSync && (
                                     <button onClick={onStravaSync} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-all w-full text-left">
-                                        <span className="w-5 text-center">⚡</span>
+                                        <span className="w-5 text-center"><Zap size={14} /></span>
                                         <span>Strava Sync</span>
                                     </button>
                                 )}
                                 <div className="h-px bg-white/5 my-1" />
                                 <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left">
-                                    <span className="w-5 text-center">🚪</span>
+                                    <span className="w-5 text-center"><LogOut size={14} /></span>
                                     <span>Logga ut</span>
                                 </button>
                             </div>
@@ -351,15 +345,15 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                     {/* Mobile/Tablet Actions */}
                     <div className="flex items-center gap-2 lg:hidden">
                         <button onClick={onOpenOmnibox} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
-                            🔍
+                            <Search size={20} />
                         </button>
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
-                            {isMenuOpen ? <X size={20} /> : '☰'}
+                            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
                         </button>
                     </div>
                     <div className="hidden lg:flex items-center gap-2">
                         <button onClick={onOpenOmnibox} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors">
-                            🔍
+                            <Search size={20} />
                         </button>
                     </div>
                 </div>
@@ -395,7 +389,9 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                             className={getMobileLinkClasses(item.path)}
                                             onClick={() => !isEditMode && setIsMenuOpen(false)}
                                         >
-                                            <span className="text-xl">{item.icon}</span>
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color || 'bg-slate-800 text-slate-400'} bg-opacity-10 border border-current border-opacity-10`}>
+                                                <item.icon size={20} />
+                                            </div>
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-slate-100">{item.label}</span>
                                                 {item.description && <span className="text-[10px] text-slate-500 font-medium">{item.description}</span>}
@@ -449,10 +445,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                                     className={getMobileLinkClasses(item.path)}
                                                     onClick={() => !isEditMode && setIsMenuOpen(false)}
                                                 >
-                                                    <span className="text-xl opacity-70 group-hover:opacity-100">{item.icon}</span>
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.color || 'bg-slate-800 text-slate-400'} bg-opacity-10`}>
+                                                        <item.icon size={16} />
+                                                    </div>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-slate-200">{item.label}</span>
-                                                        <span className="text-[10px] text-slate-600 font-medium">{item.description}</span>
+                                                        <span className="text-sm font-bold text-slate-200">{item.label}</span>
+                                                        {item.description && <span className="text-[9px] text-slate-500 font-medium">{item.description}</span>}
                                                     </div>
                                                 </NavLink>
 
@@ -482,21 +480,25 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
                                 <span className="font-bold text-slate-200">Min Profil</span>
                             </NavLink>
                             <NavLink to="/meddelanden" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <div className="relative">
-                                    <span className="text-xl">💬</span>
+                                <div className="relative w-6 h-6 flex items-center justify-center text-slate-400">
+                                    <MessageSquare size={18} />
                                     {unreadCount > 0 && (
                                         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-900"></span>
                                     )}
                                 </div>
                                 <span className="font-bold text-slate-200">Meddelanden</span>
                             </NavLink>
-                            <button onClick={logout} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">
-                                <span className="text-xl">🚪</span>
+                            <button onClick={logout} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors text-left">
+                                <div className="w-6 h-6 flex items-center justify-center">
+                                    <LogOut size={18} />
+                                </div>
                                 <span className="font-bold">Logga ut</span>
                             </button>
                             {onStravaSync && (
-                                <button onClick={() => { onStravaSync(); setIsMenuOpen(false); }} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-colors">
-                                    <span className="text-xl">⚡</span>
+                                <button onClick={() => { onStravaSync(); setIsMenuOpen(false); }} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-[#FC4C02] hover:bg-[#FC4C02]/10 transition-colors text-left">
+                                    <div className="w-6 h-6 flex items-center justify-center">
+                                        <Zap size={18} />
+                                    </div>
                                     <span className="font-bold">Strava Smart Sync</span>
                                 </button>
                             )}

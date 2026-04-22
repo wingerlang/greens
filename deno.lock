@@ -75,6 +75,7 @@
     "npm:recharts@^2.15.4": "2.15.4_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:remark-gfm@4": "4.0.1",
     "npm:remark-gfm@^4.0.1": "4.0.1",
+    "npm:ripgrep@*": "0.3.1",
     "npm:tailwind-merge@^2.5.5": "2.6.1",
     "npm:tailwind-merge@^3.4.0": "3.4.0",
     "npm:tailwindcss@^3.4.0": "3.4.17_postcss@8.5.10",
@@ -2516,6 +2517,10 @@
     },
     "reusify@1.0.4": {
       "integrity": "sha512-U9nH88a3fc/ekCF1l0/UP1IosiuIjyTh7hBvXVMHYgVcfGvt897Xguj2UOLDeI5BG2m7/uwyaLVT6fbtCwTyzw=="
+    },
+    "ripgrep@0.3.1": {
+      "integrity": "sha512-6bDtNIBh1qPviVIU685/4uv0Ap5t8eS4wiJhy/tR2LdIeIey9CVasENlGS+ul3HnTmGANIp7AjnfsztsRmALfQ==",
+      "bin": true
     },
     "rolldown@1.0.0-rc.15": {
       "integrity": "sha512-Ff31guA5zT6WjnGp0SXw76X6hzGRk/OQq2hE+1lcDe+lJdHSgnSX6nK3erbONHyCbpSj9a9E+uX/OvytZoWp2g==",

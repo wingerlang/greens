@@ -13,6 +13,7 @@ import { SmartFilter, parseSmartQuery, applySmartFilters } from '../utils/activi
 import { formatDuration } from '../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP } from '../utils/performanceEngine.ts';
 import { mergeStrengthWorkouts } from '../api/services/activityMergeService.ts';
+import { TrainingTabs } from '../components/training/TrainingTabs.tsx';
 
 interface ActivityRowProps {
     activity: ExerciseEntry & { source: string };
@@ -700,6 +701,7 @@ export function ActivitiesPage() {
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+            <TrainingTabs currentTab="logg" />
             <header className="flex flex-col gap-6">
                 <div className="flex justify-between items-end flex-wrap gap-4">
                     <div>

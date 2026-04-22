@@ -36,8 +36,35 @@ export interface WorkoutDefinition {
     targetedMuscles?: string[]; // e.g. ['Chest', 'Triceps']
     estimatedVolume?: number; // kg
 
+    // Running specific
+    flexibilityMin?: number; // e.g. 7 km
+    flexibilityMax?: number; // e.g. 20 km
+    estimatedDistance?: number; // km
+    runBlocks?: RunBlock[]; // Structured running data
+
     tips?: string;
 }
+
+// Strictly Typed Running Structures
+export type IntensityZone = 'Zon 1 (Återhämtning)' | 'Zon 2 (Distans)' | 'Zon 3 (Tempo)' | 'Zon 4 (Tröskel)' | 'Zon 5 (VO2 Max)';
+export type RunUnit = 'km' | 'm' | 'min' | 's';
+
+export interface RunBlock {
+    id: string;
+    type: 'warmup' | 'cooldown' | 'interval' | 'continuous';
+    amount: number; // e.g. 5, 400
+    unit: RunUnit;
+    zone?: IntensityZone;
+    targetPace?: string; // min/km, e.g. "4:30"
+    targetHr?: string; // e.g. "130 bpm", "140-150"
+    
+    // Interval Specifics
+    sets?: number; // e.g. 10
+    restType?: 'Ståvila' | 'Gåvila' | 'Joggvila';
+    restAmount?: number;
+    restUnit?: RunUnit;
+}
+
 
 export interface WorkoutSection {
     id: string;
@@ -57,4 +84,9 @@ export interface WorkoutExercise {
 
     // Smart tags
     primaryMuscle?: string;
+
+    // Running specific details
+    intervalType?: 'VO2' | 'Threshold' | 'Tempo' | 'Sprint' | 'Recovery';
+    restType?: 'Ståvila' | 'Gåvila' | 'Joggvila';
+    restAmount?: string; // "60s", "200m"
 }
