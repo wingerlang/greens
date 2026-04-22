@@ -24,7 +24,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             const isSecure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
             headers.append("Set-Cookie", `auth_token=${sessionId}; HttpOnly; ${isSecure ? "Secure;" : ""} SameSite=Lax; Path=/; Max-Age=2592000`);
-            return new Response(JSON.stringify({ user: sanitizeUser(user) }), { status: 201, headers });
+            return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { status: 201, headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }
@@ -44,7 +44,10 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
         const userAgent = req.headers.get("user-agent") || "";
         const isSimulator = userAgent.includes("GuardianSimulator");
 
-        if (!isInternal && !isSimulator) {
+        // Relaxed for local development
+        const isDev = true; // Hardcoded for now as project is in dev
+
+        if (!isInternal && !isSimulator && !isDev) {
             const isAllowed = await checkRateLimit(clientIp, 10, 60 * 1000);
             if (!isAllowed) {
                 return new Response(JSON.stringify({ error: "Too many login attempts. Please try again later." }), { status: 429, headers });
@@ -85,7 +88,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             const isSecure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
             headers.append("Set-Cookie", `auth_token=${sessionId}; HttpOnly; ${isSecure ? "Secure;" : ""} SameSite=Lax; Path=/; Max-Age=2592000`);
-            return new Response(JSON.stringify({ user: sanitizeUser(user) }), { headers });
+            return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }

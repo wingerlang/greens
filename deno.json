@@ -1,10 +1,10 @@
 {
   "tasks": {
-    "dev": "deno run -A --v8-flags=--max-old-space-size=4096 npm:vite@^8.0.8",
+    "dev": "deno run -A --v8-flags=--max-old-space-size=4096 npm:vite@5.4.11",
     "go": "deno run -A --unstable-kv scripts/guardian/runner.ts",
     "server": "DEBUG_MODE=true deno run -A --unstable-kv --watch --env src/api/main.ts",
-    "build": "deno run -A npm:vite@^8.0.8 build",
-    "preview": "deno run -A npm:vite@^8.0.8 preview"
+    "build": "deno run -A npm:vite@5.4.11 build",
+    "preview": "deno run -A npm:vite@5.4.11 preview"
   },
   "compilerOptions": {
     "lib": [
@@ -23,13 +23,13 @@
     "react-dom": "npm:react-dom@^19.0.0",
     "react-dom/client": "npm:react-dom@^19.0.0/client",
     "react-router-dom": "npm:react-router-dom@^7.0.2",
-    "vite": "npm:vite@^8.0.8",
-    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.0.1",
+    "vite": "npm:vite@5.4.11",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@4.3.4",
     "@types/react": "npm:@types/react@^19.0.0",
     "@types/react-dom": "npm:@types/react-dom@^19.0.0",
     "print-js": "npm:print-js@^1.6.0",
     "recharts": "npm:recharts@^2.15.0",
-    "lucide-react": "npm:lucide-react@^0.469.0",
+    "lucide-react": "npm:lucide-react@0.469.0",
     "@dnd-kit/core": "npm:@dnd-kit/core@^6.1.0",
     "@dnd-kit/sortable": "npm:@dnd-kit/sortable@^8.0.0",
     "@dnd-kit/utilities": "npm:@dnd-kit/utilities@^3.2.2",

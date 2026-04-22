@@ -655,8 +655,6 @@ export function DataProvider({ children }: DataProviderProps) {
         foodAliases,
         updateFoodAlias,
         unifiedActivities,
-        calculateExerciseCalories,
-
         refreshData,
         isLoading: !isLoaded,
         databaseActions,

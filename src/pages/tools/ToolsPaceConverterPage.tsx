@@ -9,6 +9,7 @@ import {
     formatSmartTime,
     parseSmartDistance
 } from '../../utils/runningCalculator.ts';
+import { getBestEffortsForActivity } from '../../utils/performanceEngine.ts';
 import { useData } from '../../context/DataContext.tsx';
 
 const TARGET_DISTANCES = [
@@ -70,6 +71,34 @@ export function ToolsPaceConverterPage() {
         }
     };
 
+    // All-time best efforts across all activities
+    const allTimeBests = useMemo(() => {
+        if (!unifiedActivities || unifiedActivities.length === 0) return [];
+        const targetDistances = [1, 2, 3, 5, 10, 21.0975, 42.195];
+        const bestMap: Record<number, { name: string; km: number; timeSec: number; date: string; pace: number }> = {};
+
+        for (const act of unifiedActivities) {
+            if (act.performance?.excludeFromStats || (act as any).excludeFromStats) continue;
+            const efforts = getBestEffortsForActivity(act);
+            for (const effort of efforts) {
+                const distKm = effort.distance / 1000;
+                const matched = targetDistances.find(t => Math.abs(t - distKm) < 0.05);
+                if (matched && effort.movingTime > 0) {
+                    if (!bestMap[matched] || effort.movingTime < bestMap[matched].timeSec) {
+                        bestMap[matched] = {
+                            name: effort.name,
+                            km: matched,
+                            timeSec: effort.movingTime,
+                            date: act.date,
+                            pace: effort.movingTime / matched
+                        };
+                    }
+                }
+            }
+        }
+        return Object.values(bestMap).sort((a, b) => a.km - b.km);
+    }, [unifiedActivities]);
+
     // Calculate Best / Quick select runs
     const bestActivities = useMemo(() => {
         if (!unifiedActivities || unifiedActivities.length === 0) return [];
@@ -102,6 +131,16 @@ export function ToolsPaceConverterPage() {
 
         return pbs.sort((a, b) => (b.distance || 0) - (a.distance || 0));
     }, [unifiedActivities]);
+
+    const handleUseBestEffort = (best: { km: number; timeSec: number }) => {
+        const pace = best.timeSec / best.km;
+        setPaceInput(formatSmartTime(pace));
+        setBaselineKm(best.km);
+        setBaselineInput(best.km.toString());
+        const nearestBaseline = BASELINE_DISTANCES.find(d => Math.abs(d.km - best.km) < 0.1);
+        setIsCustomBaseline(!nearestBaseline);
+        setMode('predict');
+    };
 
     const handleQuickSelect = (run: any) => {
         const d = run.distance || 1;
@@ -159,8 +198,8 @@ export function ToolsPaceConverterPage() {
                         <div className="space-y-5">
                             {mode === 'predict' && (
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Detta tempo är mitt kap för... (km)</label>
-                                    <div className="flex gap-2">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tempot gäller för distansen</label>
+                                    <div className="flex gap-2 items-center">
                                         <select
                                             value={!isCustomBaseline && BASELINE_DISTANCES.find(d => d.km === baselineKm) ? baselineKm : 'custom'}
                                             onChange={(e) => {
@@ -174,36 +213,66 @@ export function ToolsPaceConverterPage() {
                                                     setBaselineInput(newKm.toString());
                                                 }
                                             }}
-                                            className="w-1/2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
+                                            className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
                                         >
                                             {BASELINE_DISTANCES.map(d => (
                                                 <option key={d.name} value={d.km}>{d.name}</option>
                                             ))}
                                             <option value="custom">Anpassad...</option>
                                         </select>
-                                        <input
-                                            type="text"
-                                            value={baselineInput}
-                                            placeholder="t.ex. 2500m"
-                                            onChange={(e) => {
-                                                setIsCustomBaseline(true);
-                                                setBaselineInput(e.target.value);
-                                                const parsed = parseSmartDistance(e.target.value);
-                                                if (parsed > 0) setBaselineKm(parsed);
-                                            }}
-                                            onBlur={() => {
-                                                const parsed = parseSmartDistance(baselineInput);
-                                                if (parsed > 0) {
-                                                    setBaselineKm(parsed);
-                                                    setBaselineInput(parsed.toString());
-                                                }
-                                            }}
-                                            className="w-1/2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
-                                        />
+                                        {isCustomBaseline && (
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={baselineInput}
+                                                    placeholder="t.ex. 2500m"
+                                                    onChange={(e) => {
+                                                        setBaselineInput(e.target.value);
+                                                        const parsed = parseSmartDistance(e.target.value);
+                                                        if (parsed > 0) setBaselineKm(parsed);
+                                                    }}
+                                                    onBlur={() => {
+                                                        const parsed = parseSmartDistance(baselineInput);
+                                                        if (parsed > 0) {
+                                                            setBaselineKm(parsed);
+                                                            setBaselineInput(parsed.toString());
+                                                        }
+                                                    }}
+                                                    className="w-32 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 pr-10 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold">km</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <p className="text-[10px] text-slate-500 mt-2 italic">
-                                        Din VO2 Max (VDOT) kommer beräknas enligt detta och sedan appliceras på andra distanser.
+                                        Din VDOT beräknas utifrån tempo + distans och predicerar sedan realistiska tider på andra sträckor.
                                     </p>
+                                </div>
+                            )}
+
+                            {/* BEST EFFORT PBs */}
+                            {allTimeBests.length > 0 && (
+                                <div className="pt-3 border-t border-white/5">
+                                    <label className="block text-[10px] font-bold text-amber-500/80 uppercase tracking-wider mb-2">🏆 Dina bästa tider</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {allTimeBests.map(best => {
+                                            const mins = Math.floor(best.timeSec / 60);
+                                            const secs = Math.round(best.timeSec % 60);
+                                            const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+                                            const label = best.km >= 42 ? 'Maraton' : best.km >= 21 ? 'HM' : best.km >= 1 ? `${best.km}k` : `${Math.round(best.km * 1000)}m`;
+                                            return (
+                                                <button
+                                                    key={best.km}
+                                                    onClick={() => handleUseBestEffort(best)}
+                                                    className="bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/50 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-amber-300 transition-all flex flex-col items-center min-w-[60px]"
+                                                    title={`Bästa ${best.name} — ${best.date}`}
+                                                >
+                                                    <span className="text-[9px] text-amber-500/60 font-black uppercase">{label}</span>
+                                                    <span className="font-mono">{timeStr}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 

@@ -21,9 +21,24 @@ export class ApiError extends Error {
  * 4. Malformed JSON -> Throws Error
  */
 export async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-    let response: Response;
+    // Automatically inject auth token if available in localStorage
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const authHeaders: HeadersInit = {};
+    if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    const fetchOptions: RequestInit = {
+        credentials: 'include',
+        ...options,
+        headers: {
+            ...authHeaders,
+            ...options?.headers
+        }
+    };
+
     try {
-        response = await fetch(url, { credentials: 'include', ...options });
+        response = await fetch(url, fetchOptions);
     } catch (error) {
         console.error(`[safeFetch] Network error for ${url}:`, error);
         throw new NetworkError(error);

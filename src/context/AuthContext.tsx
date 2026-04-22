@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const login = async (username: string, password: string) => {
         setError(null);
         try {
-            const data = await safeFetch<{ user: User }>('/api/auth/login', {
+            const data = await safeFetch<{ user: User, token: string }>('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -66,6 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (!data) throw new Error('No response from server');
 
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+                setToken(data.token);
+            }
             setUser(data.user);
         } catch (e: any) {
             const msg = e.body ? JSON.parse(e.body).error : e.message;
@@ -77,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = async (username: string, password: string, email?: string) => {
         setError(null);
         try {
-            const data = await safeFetch<{ user: User }>('/api/auth/register', {
+            const data = await safeFetch<{ user: User, token: string }>('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password, email })
@@ -85,6 +89,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (!data) throw new Error('No response from server');
 
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+                setToken(data.token);
+            }
             setUser(data.user);
         } catch (e: any) {
             const msg = e.body ? JSON.parse(e.body).error : e.message;
@@ -95,6 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = () => {
         safeFetch('/api/auth/logout', { method: 'POST' }).catch(console.error);
+        localStorage.removeItem('auth_token');
+        setToken(null);
         setUser(null);
     };
 

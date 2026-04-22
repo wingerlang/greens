@@ -358,6 +358,7 @@ export function ActivityDetailModal({
     }, [exerciseEntries, currentActivity.id]);
 
     // Smart Extraction Detection (Performance Markers)
+    // Only show when there's a genuinely noteworthy effort (PB or fastest in ~90 days)
     const smartExtractInfo = React.useMemo(() => {
         if (activity.extractedFromId) return null; // Don't suggest extracts from extracts
         // Reality Checks: 
@@ -384,22 +385,47 @@ export function ActivityDetailModal({
             .slice(0, 3);
 
         if (suggestions.length > 0) {
+            const allActivities = universalActivities || [];
+            const currentDate = new Date(activity.date || currentActivity?.date || '').getTime();
+            const ninetyDaysAgo = currentDate - (90 * 24 * 60 * 60 * 1000);
+
+            const efforts = suggestions.map(e => {
+                const result = getFastestSince(currentUniversal || (currentActivity as any), e.distance, e.movingTime, allActivities);
+                const isPB = result === 'PB';
+                
+                // Check if this is the fastest in the last 90 days
+                let isFastestInQuarter = false;
+                if (!isPB && result === null) {
+                    // result === null means no historical effort found that's faster => could be PB or first time
+                    isFastestInQuarter = true;
+                }
+                if (!isPB && !isFastestInQuarter) {
+                    // There IS a faster effort somewhere in history. Check if it's older than 90 days.
+                    const fasterActivity = result as { id: string; date: string; title: string } | null;
+                    if (fasterActivity && new Date(fasterActivity.date).getTime() < ninetyDaysAgo) {
+                        isFastestInQuarter = true;
+                    }
+                }
+                
+                return {
+                    startKm: (e as any).startKm || 0,
+                    durationSeconds: e.movingTime,
+                    distance: e.distance / 1000,
+                    isPB,
+                    isFastestInQuarter,
+                    result,
+                    title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
+                };
+            });
+
+            // Only show the banner if at least one effort is noteworthy (PB or fastest in quarter)
+            const hasNoteworthyEffort = efforts.some(e => e.isPB || e.isFastestInQuarter);
+            if (!hasNoteworthyEffort) return null;
+
             return {
                 distance: suggestions[0].distance / 1000,
                 title: suggestions[0].name,
-                topEfforts: suggestions.map(e => {
-                    const result = getFastestSince(currentUniversal || (currentActivity as any), e.distance, e.movingTime, universalActivities);
-                    const isPB = result === 'PB';
-                    
-                    return {
-                        startKm: (e as any).startKm || 0,
-                        durationSeconds: e.movingTime,
-                        distance: e.distance / 1000,
-                        isPB,
-                        result,
-                        title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
-                    };
-                })
+                topEfforts: efforts
             };
         }
         return null;
@@ -1951,12 +1977,14 @@ export function ActivityDetailModal({
 
                         {/* SMART EXTRACTION HINT */}
                         {smartExtractInfo && !showExtractForm && !activity.extractedFromId && subPerformances.length === 0 && (
-                            <div className="bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col gap-3 shadow-xl shadow-amber-500/5">
+                            <div className={`bg-gradient-to-r ${smartExtractInfo.topEfforts.some(e => e.isPB) ? 'from-amber-500/10 to-indigo-500/10 border-amber-500/20' : 'from-emerald-500/10 to-indigo-500/10 border-emerald-500/20'} border rounded-2xl p-4 animate-in slide-in-from-top-2 flex flex-col gap-3 shadow-xl shadow-amber-500/5`}>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg shadow-inner">💡</div>
+                                    <div className={`w-10 h-10 rounded-full ${smartExtractInfo.topEfforts.some(e => e.isPB) ? 'bg-amber-500/20' : 'bg-emerald-500/20'} flex items-center justify-center text-lg shadow-inner`}>{smartExtractInfo.topEfforts.some(e => e.isPB) ? '🚀' : '⚡'}</div>
                                     <div>
                                         <h4 className="text-sm font-black text-white italic">
-                                            {smartExtractInfo.topEfforts.some(e => e.isPB) ? 'Rekord-potential identifierad! 🚀' : 'Mätning identifierad 📈'}
+                                            {smartExtractInfo.topEfforts.some(e => e.isPB)
+                                                ? 'Rekord-potential identifierad! 🚀'
+                                                : 'Snabbaste på 90 dagar! ⚡'}
                                         </h4>
                                         <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong>. Välj block att spara:</p>
                                     </div>
@@ -1968,11 +1996,12 @@ export function ActivityDetailModal({
                                             onClick={() => handleApplySmartExtract(effort)}
                                             onMouseEnter={() => setHoveredExtractEffort(effort)}
                                             onMouseLeave={() => setHoveredExtractEffort(null)}
-                                            className={`px-3 py-2 border rounded-xl transition-all shadow-md font-bold flex flex-col items-center justify-center group ${effort.isPB ? 'bg-amber-500/20 border-amber-500/50 hover:bg-amber-500 hover:text-slate-900 border-amber-400' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5'}`}
+                                            className={`px-3 py-2 border rounded-xl transition-all shadow-md font-bold flex flex-col items-center justify-center group ${effort.isPB ? 'bg-amber-500/20 border-amber-500/50 hover:bg-amber-500 hover:text-slate-900 border-amber-400' : effort.isFastestInQuarter ? 'bg-emerald-500/15 border-emerald-500/40 hover:bg-emerald-500 hover:text-slate-900' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5'}`}
                                         >
                                             <div className="flex items-center gap-1">
                                                 <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(effort.distance)}</span>
                                                 {effort.isPB && <span className="text-[10px]" title="Ditt snabbaste någonsin på denna distans!">🏆</span>}
+                                                {!effort.isPB && effort.isFastestInQuarter && <span className="text-[10px]" title="Snabbaste på 90 dagar!">⚡</span>}
                                             </div>
                                             <div className="flex items-center gap-1.5">
                                                 <span className={`text-[10px] font-black ${effort.isPB ? 'text-amber-500 group-hover:text-amber-900' : 'text-indigo-400'}`}>{effort.distance >= 1 ? `${effort.distance}k` : `${Math.round(effort.distance * 1000)}m`}</span>

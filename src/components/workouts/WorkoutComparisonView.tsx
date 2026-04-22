@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { WorkoutDefinition } from '../../models/workout.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { ExerciseEntry, StrengthSession } from '../../models/types.ts';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { Search, ArrowLeft } from 'lucide-react';
 
 interface Props {
     workout: WorkoutDefinition;
@@ -27,6 +28,8 @@ interface MatchItem {
 
 export function WorkoutComparisonView({ workout }: Props) {
     const { exerciseEntries, strengthSessions } = useData();
+    const [selectedMatch, setSelectedMatch] = useState<MatchItem | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // 1. EXTRACT WORKOUT SIGNATURE
     const signature = useMemo(() => {
@@ -161,20 +164,128 @@ export function WorkoutComparisonView({ workout }: Props) {
     }, [matches, signature.type]);
 
     const formatPace = (pace: number) => {
+        if (!pace || isNaN(pace)) return "-";
         const mins = Math.floor(pace);
         const secs = Math.round((pace - mins) * 60).toString().padStart(2, '0');
         return `${mins}:${secs}`;
     };
 
-    const renderBadge = (type: MatchType) => {
+    // SEARCH RESULTS
+    const searchResults = useMemo(() => {
+        if (!searchQuery) return null;
+        const q = searchQuery.toLowerCase();
+        
+        if (signature.type === 'RUNNING') {
+            return exerciseEntries
+                .filter(e => e.type === 'running' && (
+                    (e.title && e.title.toLowerCase().includes(q)) ||
+                    e.date.includes(q)
+                ))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 5)
+                .map(e => ({
+                    id: e.id,
+                    date: e.date,
+                    type: 'SEARCH' as MatchType,
+                    score: 1,
+                    data: e,
+                    details: `${e.distance?.toFixed(1) || 0} km`,
+                    pace: e.distance ? e.durationMinutes / e.distance : 0,
+                    diffs: {}
+                } as MatchItem));
+        } else {
+            return strengthSessions
+                .filter(s => (
+                    (s.title && s.title.toLowerCase().includes(q)) ||
+                    s.date.includes(q)
+                ))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 5)
+                .map(s => ({
+                    id: s.id,
+                    date: s.date,
+                    type: 'SEARCH' as MatchType,
+                    score: 1,
+                    data: s,
+                    details: `${s.exercises.length} övningar`,
+                    diffs: {}
+                } as MatchItem));
+        }
+    }, [searchQuery, exerciseEntries, strengthSessions, signature.type]);
+
+    const renderBadge = (type: MatchType | 'SEARCH') => {
         switch (type) {
             case 'EXACT': return <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-emerald-500/20">Perfekt</span>;
             case 'SUBSET': return <span className="bg-blue-500/20 text-blue-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-blue-500/20">Delmängd</span>;
             case 'SUPERSET': return <span className="bg-purple-500/20 text-purple-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-purple-500/20">Utökad</span>;
             case 'SIMILAR_DIST': return <span className="bg-indigo-500/20 text-indigo-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-indigo-500/20">Liknande</span>;
+            case 'SEARCH': return <span className="bg-amber-500/20 text-amber-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-amber-500/20">Sökresultat</span>;
             default: return <span className="bg-slate-500/20 text-slate-400 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-slate-500/20">Match</span>;
         }
     };
+
+    const ComparisonRow = ({ label, a, b, unit, isText = false }: { label: string, a: any, b: any, unit: string, isText?: boolean }) => (
+        <div className="grid grid-cols-[1fr_1fr_1fr] items-center gap-4 py-3 border-b border-white/5">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
+            <div className="text-center font-mono font-bold text-indigo-400 bg-indigo-500/10 py-1 rounded-lg">
+                {isText ? a : Number(a).toFixed(1)} <span className="text-[10px] text-indigo-500/50">{unit}</span>
+            </div>
+            <div className="text-center font-mono font-bold text-slate-300 bg-slate-900/50 py-1 rounded-lg">
+                {isText ? b : Number(b).toFixed(1)} <span className="text-[10px] text-slate-600">{unit}</span>
+            </div>
+        </div>
+    );
+
+    if (selectedMatch) {
+        const isRun = signature.type === 'RUNNING';
+        const past = selectedMatch.data as ExerciseEntry;
+        
+        return (
+            <div className="flex flex-col h-full bg-[#080815] animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="p-4 border-b border-white/5 flex items-center gap-4 bg-slate-900/50">
+                    <button onClick={() => setSelectedMatch(null)} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="flex flex-col">
+                        <h3 className="text-sm font-black text-white tracking-widest uppercase">Jämförelse</h3>
+                        <span className="text-[10px] text-slate-500 font-bold">Dagens pass vs {past.date}</span>
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    {/* Headers */}
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                        <div className="flex flex-col text-center p-5 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl">
+                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Dagens Plan</span>
+                            <span className="text-lg font-black text-white leading-tight">{workout.title || "Pass"}</span>
+                        </div>
+                        <div className="flex flex-col text-center p-5 bg-slate-900 border border-white/5 rounded-3xl">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{past.date}</span>
+                            <span className="text-lg font-black text-white leading-tight">{past.title || "Tidigare Pass"}</span>
+                        </div>
+                    </div>
+                    
+                    {/* Metrics */}
+                    {isRun && (
+                        <div className="space-y-1">
+                            <ComparisonRow label="Distans" a={(signature as any).distance} b={past.distance} unit="km" />
+                            <ComparisonRow label="Tid" a={(signature as any).duration} b={past.durationMinutes} unit="min" />
+                            <ComparisonRow label="Tempo" a={formatPace((signature as any).pace)} b={formatPace(selectedMatch.pace!)} unit="/km" isText />
+                            <ComparisonRow label="Snittpuls" a={"-"} b={past.averageHeartRate || '-'} unit="bpm" isText />
+                            <ComparisonRow label="Maxpuls" a={"-"} b={past.maxHeartRate || '-'} unit="bpm" isText />
+                        </div>
+                    )}
+                    
+                    {!isRun && (
+                        <div className="space-y-1">
+                            <ComparisonRow label="Övningar" a={(signature as any).exercises.size} b={(past as any).exercises?.length || 0} unit="st" />
+                            {/* Strength specifics could go here */}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     if (matches.length === 0) {
         return (
@@ -189,30 +300,54 @@ export function WorkoutComparisonView({ workout }: Props) {
 
     return (
         <div className="flex flex-col h-full bg-[#080815]">
-            {/* TREND CHART */}
-            {signature.type === 'RUNNING' && trendData.length > 1 && (
+            <div className="p-4 border-b border-white/5 bg-slate-900/30">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input 
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Sök pass (t.ex. tävling eller 2024)..."
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all"
+                    />
+                </div>
+            </div>
+
+            {/* SEARCH RESULTS OR TREND CHART */}
+            {searchResults ? (
                 <div className="p-6 border-b border-white/5 bg-slate-900/10">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Trend (Tempo över tid)</h4>
-                    <div className="h-40 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={trendData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                                <XAxis dataKey="datum" hide />
-                                <YAxis
-                                    reversed
-                                    domain={['auto', 'auto']}
-                                    hide
-                                />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }}
-                                    formatter={(val: number) => [formatPace(val), 'Tempo']}
-                                />
-                                <ReferenceLine y={signature.pace} stroke="#6366f1" strokeDasharray="3 3" label={{ position: 'right', value: 'Mål', fill: '#6366f1', fontSize: 10 }} />
-                                <Line type="monotone" dataKey="tempo" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e' }} activeDot={{ r: 6 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-4">Sökresultat</h4>
+                    <div className="space-y-3">
+                        {searchResults.length === 0 && <span className="text-slate-500 text-xs font-bold">Inga träffar.</span>}
+                        {searchResults.map(m => (
+                            <div key={m.id} onClick={() => setSelectedMatch(m)} className="flex items-center justify-between bg-slate-900/40 border border-white/5 p-3 rounded-xl hover:border-amber-500/40 transition-all cursor-pointer">
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-white text-sm">{(m.data as any).title || "Pass"}</span>
+                                    <span className="text-[9px] text-slate-500 font-bold">{m.date}</span>
+                                </div>
+                                {renderBadge(m.type)}
+                            </div>
+                        ))}
                     </div>
                 </div>
+            ) : (
+                signature.type === 'RUNNING' && trendData.length > 1 && (
+                    <div className="p-6 border-b border-white/5 bg-slate-900/10">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Trend (Tempo över tid)</h4>
+                        <div className="h-40 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={trendData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                                    <XAxis dataKey="datum" hide />
+                                    <YAxis reversed domain={['auto', 'auto']} hide />
+                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} formatter={(val: number) => [formatPace(val), 'Tempo']} />
+                                    <ReferenceLine y={signature.pace} stroke="#6366f1" strokeDasharray="3 3" label={{ position: 'right', value: 'Mål', fill: '#6366f1', fontSize: 10 }} />
+                                    <Line type="monotone" dataKey="tempo" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e' }} activeDot={{ r: 6 }} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                )
             )}
 
             {/* MATCH LIST */}
@@ -225,7 +360,7 @@ export function WorkoutComparisonView({ workout }: Props) {
                 </div>
 
                 {matches.map(m => (
-                    <div key={m.id} className="relative bg-slate-900/40 border border-white/5 p-5 rounded-3xl hover:border-indigo-500/40 transition-all group cursor-pointer overflow-hidden backdrop-blur-sm">
+                    <div key={m.id} onClick={() => setSelectedMatch(m)} className="relative bg-slate-900/40 border border-white/5 p-5 rounded-3xl hover:border-indigo-500/40 transition-all group cursor-pointer overflow-hidden backdrop-blur-sm">
                         {/* SCORE INDICATOR */}
                         <div className="absolute top-0 left-0 bottom-0 w-1 bg-indigo-500/20 group-hover:bg-indigo-500 transition-all" style={{ opacity: m.score }} />
 
