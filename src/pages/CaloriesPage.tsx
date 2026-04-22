@@ -22,7 +22,8 @@ import { CreateQuickMealModal } from '../components/calories/CreateQuickMealModa
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
-import { normalizeText, formatActivityDuration } from '../utils/formatters.ts';
+import { normalizeText } from '../utils/formatters.ts';
+import { formatActivityDuration } from '../utils/durationFormatter.ts';
 import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
@@ -424,6 +425,18 @@ export function CaloriesPage() {
         setSelectedIds(new Set());
     };
 
+    const handleConvertSelectedToPlanned = () => {
+        if (selectedIds.size === 0) return;
+        
+        selectedIds.forEach(id => {
+            const entry = mealEntries.find(e => e.id === id);
+            if (entry) {
+                updateMealEntry(id, { isPlanned: true });
+            }
+        });
+        setSelectedIds(new Set());
+    };
+
     const getItemName = (item: MealItem): string => {
         if (item.type === 'estimate') {
             return (item.estimateDetails?.uncertaintyEmoji ? `${item.estimateDetails.uncertaintyEmoji} ` : '') + (item.estimateDetails?.name || 'Estimering');
@@ -585,7 +598,7 @@ export function CaloriesPage() {
                 carbs: settings.dailyCarbsGoal,
                 fat: settings.dailyFatGoal
             },
-            2000,
+            settings.dailyCalorieGoal || 2000,
             settings.calorieMode || 'tdee',
             burned,
             settings.exerciseCalorieMultiplier ?? 1.0
@@ -728,7 +741,7 @@ export function CaloriesPage() {
                             <span className="text-[9px] text-slate-500 font-bold">kcal</span>
                         </div>
                         <div className="flex flex-col items-center justify-center p-3 bg-rose-500/5 rounded-2xl border border-rose-500/10">
-                            <span className="text-[10px] font-black uppercase text-rose-400 mb-1">Balans</span>
+                            <span className="text-[10px] font-black uppercase text-rose-400 mb-1">Underskott</span>
                             <span className="text-xl font-black text-rose-400">
                                 {Math.round(maintenance - dailyNutrition.calories)}
                             </span>
@@ -887,6 +900,7 @@ export function CaloriesPage() {
                 onToggleSelect={handleToggleSelect}
                 onSelectAll={handleSelectAll}
                 onDeleteSelected={handleDeleteSelected}
+                onConvertSelectedToPlanned={handleConvertSelectedToPlanned}
                 onCreateQuickMeal={handleCreateQuickMeal}
             />
 
@@ -1046,7 +1060,11 @@ export function CaloriesPage() {
                 <div className="flex items-center justify-between mb-6 px-2">
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Utveckling & Trender</h3>
                 </div>
-                <NutritionInsights onDateSelect={setSelectedDate} />
+                <NutritionInsights 
+                    onDateSelect={setSelectedDate} 
+                    performanceGoals={performanceGoals}
+                    trainingPeriods={trainingPeriods}
+                />
             </section>
 
             <div className="fixed bottom-6 right-6 flex flex-col gap-3">

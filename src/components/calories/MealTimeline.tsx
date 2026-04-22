@@ -28,6 +28,7 @@ interface MealTimelineProps {
     onToggleSelect: (id: string) => void;
     onSelectAll: () => void;
     onDeleteSelected: () => void;
+    onConvertSelectedToPlanned?: () => void;
     onCreateQuickMeal?: () => void;
 }
 
@@ -49,6 +50,7 @@ export function MealTimeline({
     onToggleSelect,
     onSelectAll,
     onDeleteSelected,
+    onConvertSelectedToPlanned,
     onCreateQuickMeal,
 }: MealTimelineProps) {
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; entryId: string | null }>({
@@ -102,14 +104,15 @@ export function MealTimeline({
             >
                 {/* Left: Name + Brand + Time */}
                 <div className="flex items-center gap-3 min-w-0" style={{ flex: '0 0 32%' }}>
-                    {isCompact && (
-                        <input
-                            type="checkbox"
-                            checked={selectedIds.has(entry.id)}
-                            onChange={() => onToggleSelect(entry.id)}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 shrink-0"
-                        />
-                    )}
+                    <input
+                        type="checkbox"
+                        checked={selectedIds.has(entry.id)}
+                        onChange={(e) => {
+                            e.stopPropagation(); // Prevent drag/click events if any
+                            onToggleSelect(entry.id);
+                        }}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 shrink-0"
+                    />
                     {isCompact && (
                         <div className="flex flex-col items-center w-10 shrink-0">
                             <span className={`text-[8px] uppercase font-black px-1 rounded ${MEAL_TYPE_COLORS[entry.mealType]}`}>
@@ -316,6 +319,14 @@ export function MealTimeline({
                                             <span>⚡</span> Spara som Snabbval
                                         </button>
                                     )}
+                                    {selectedIds.size > 0 && onConvertSelectedToPlanned && (
+                                        <button
+                                            onClick={onConvertSelectedToPlanned}
+                                            className="text-xs px-3 py-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition-colors font-bold flex items-center gap-1"
+                                        >
+                                            <ArrowRightLeft size={12} /> Planera markerade
+                                        </button>
+                                    )}
                                     {selectedIds.size > 0 && (
                                         <button
                                             onClick={onDeleteSelected}
@@ -363,6 +374,49 @@ export function MealTimeline({
     // Normal view (Detailed Sections)
     return (
         <div className="meals-timeline flex flex-col gap-2">
+            {/* Bulk Actions & Selection Bar for Normal Mode */}
+            {dailyEntries.length > 0 && (
+                <div className="flex items-center justify-between p-3 bg-slate-900 border border-white/5 rounded-2xl mb-2 animate-in slide-in-from-top-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={selectedIds.size === dailyEntries.length && dailyEntries.length > 0}
+                            onChange={onSelectAll}
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50"
+                        />
+                        <span className="text-xs text-white font-black uppercase tracking-widest">
+                            {selectedIds.size > 0 ? `${selectedIds.size} markerade` : 'Markera alla'}
+                        </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                        {selectedIds.size > 0 && onConvertSelectedToPlanned && (
+                            <button
+                                onClick={onConvertSelectedToPlanned}
+                                className="text-[10px] px-4 py-2 bg-indigo-500 text-white hover:bg-indigo-400 rounded-xl transition-all font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 flex items-center gap-2"
+                            >
+                                <ArrowRightLeft size={14} /> Markera som planerade
+                            </button>
+                        )}
+                        {selectedIds.size > 0 && onCreateQuickMeal && (
+                            <button
+                                onClick={onCreateQuickMeal}
+                                className="text-[10px] px-4 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-xl transition-all font-black uppercase tracking-widest border border-emerald-500/20"
+                            >
+                                Spara Snabbval
+                            </button>
+                        )}
+                        {selectedIds.size > 0 && (
+                            <button
+                                onClick={onDeleteSelected}
+                                className="text-[10px] px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all font-black uppercase tracking-widest border border-red-500/20"
+                            >
+                                Ta bort
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][])
                 .filter(([key, entries]) => {
                     if (key === 'beverage' || key === 'estimate') return entries.length > 0;

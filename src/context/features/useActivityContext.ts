@@ -268,7 +268,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats,
                                 calories: updates.caloriesBurned !== undefined ? updates.caloriesBurned : ua.performance?.calories,
                                 isCalorieAdjusted: updates.isCalorieAdjusted !== undefined ? updates.isCalorieAdjusted : ua.performance?.isCalorieAdjusted,
-                                originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories
+                                originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories,
+                                originalAvgHeartRate: ua.performance?.originalAvgHeartRate || ua.performance?.avgHeartRate,
+                                originalMaxHeartRate: ua.performance?.originalMaxHeartRate || ua.performance?.maxHeartRate,
+                                avgHeartRate: (updates as any).heartRateAvg !== undefined ? (updates as any).heartRateAvg : ua.performance?.avgHeartRate,
+                                maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate
                             },
                             raceDetails: updates.raceDetails || ua.raceDetails
                         } as UniversalActivity;
@@ -299,7 +303,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         raceDetails: updates.raceDetails,
                         calories: updates.caloriesBurned,
                         isCalorieAdjusted: updates.isCalorieAdjusted,
-                        originalCalories: updates.originalCalories
+                        originalCalories: updates.originalCalories,
+                        heartRateAvg: (updates as any).heartRateAvg,
+                        heartRateMax: (updates as any).heartRateMax
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
                 return;
@@ -336,7 +342,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         isCalorieAdjusted: updates.isCalorieAdjusted !== undefined ? updates.isCalorieAdjusted : ua.performance?.isCalorieAdjusted,
                         originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories,
                         splits: updates.splits || ua.performance?.splits,
-                        laps: updates.laps || ua.performance?.laps
+                        laps: updates.laps || ua.performance?.laps,
+                        originalAvgHeartRate: ua.performance?.originalAvgHeartRate || ua.performance?.avgHeartRate,
+                        originalMaxHeartRate: ua.performance?.originalMaxHeartRate || ua.performance?.maxHeartRate,
+                        avgHeartRate: (updates as any).heartRateAvg !== undefined ? (updates as any).heartRateAvg : ua.performance?.avgHeartRate,
+                        maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate
                     },
                     raceDetails: updates.raceDetails || ua.raceDetails
                 } as UniversalActivity;
@@ -367,7 +377,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         calories: updated.caloriesBurned,
                         isCalorieAdjusted: updated.isCalorieAdjusted,
                         originalCalories: updated.originalCalories,
-                        averageWatts: updated.averageWatts
+                        originalAvgHeartRate: (updated as any).performance?.originalAvgHeartRate || (updated as any).performance?.avgHeartRate || updated.heartRateAvg,
+                        originalMaxHeartRate: (updated as any).performance?.originalMaxHeartRate || (updated as any).performance?.maxHeartRate || updated.heartRateMax,
+                        averageWatts: updated.averageWatts,
+                        avgHeartRate: (updated as any).heartRateAvg,
+                        maxHeartRate: (updated as any).heartRateMax
                     }
                 })
             }).catch(e => console.error("Failed to persist manual activity update:", e));
@@ -1173,30 +1187,30 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     }, [skipAutoSave]);
 
     const updatePlannedActivity = React.useCallback((id: string, updates: Partial<PlannedActivity>) => {
+        let updated: PlannedActivity | undefined;
+        
         setPlannedActivities(prev => {
             const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
-            const updated = next.find(a => a.id === id);
-            if (updated) {
-                skipAutoSave.current = true;
-                storageService.savePlannedActivity(updated).catch(e => console.error("Failed to update planned activity", e));
-            }
+            updated = next.find(a => a.id === id);
             return next;
         });
+
+        if (updated) {
+            skipAutoSave.current = true;
+            storageService.savePlannedActivity(updated, { skipNotification: true }).catch(e => console.error("Failed to update planned activity", e));
+        }
     }, [skipAutoSave]);
 
     const bulkSavePlannedActivities = React.useCallback((newActivities: PlannedActivity[]) => {
         setPlannedActivities(prev => {
             const ids = new Set(newActivities.map(a => a.id));
             const filtered = prev.filter(a => !ids.has(a.id));
-
-            const next = [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            // Sync to API
-            skipAutoSave.current = true;
-            storageService.savePlannedActivities(newActivities).catch(e => console.error("Failed to save planned activities", e));
-
-            return next;
+            return [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         });
+
+        // Sync to API (Moved outside of setter to avoid side effects in updater)
+        skipAutoSave.current = true;
+        storageService.savePlannedActivities(newActivities, { skipNotification: true }).catch(e => console.error("Failed to save planned activities", e));
     }, [skipAutoSave]);
 
     const completePlannedActivity = React.useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
@@ -1220,7 +1234,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
             if (completed && original?.status !== 'COMPLETED') {
                 skipAutoSave.current = true;
-                storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
+                storageService.savePlannedActivity(completed, { skipNotification: true }).catch(e => console.error("Failed to save completed plan", e));
 
                 // Automatically add to exercise log
                 const mappedType: ExerciseType = 
@@ -1488,6 +1502,16 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         }
                     }
 
+                    // Distance similarity bonus (up to +30 points)
+                    if (planned.estimatedDistance > 0 && actual.distance > 0) {
+                        const distDiff = Math.abs(actual.distance - planned.estimatedDistance) / planned.estimatedDistance;
+                        if (distDiff <= 0.25) { // Within 25% difference
+                            const bonus = Math.round(30 * (1 - distDiff / 0.25));
+                            score += bonus;
+                            reasons.push(`Liknande distans (+${bonus}p, diff: ${actual.distance.toFixed(1)}km vs ${planned.estimatedDistance}km)`);
+                        }
+                    }
+
                     // Time proximity bonus (up to +15 points)
                     if (planned.startTime && actual.date.includes('T')) {
                         const plannedHM = planned.startTime.split(':').map(Number);
@@ -1591,10 +1615,40 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
                 // Use bulk save instead of individual loop
                 skipAutoSave.current = true;
-                storageService.savePlannedActivities(newlyChanged).catch(e => console.error("Failed to persist reconciliation updates:", e));
+                storageService.savePlannedActivities(newlyChanged, { skipNotification: true }).catch(e => console.error("Failed to persist reconciliation updates:", e));
             }
         }
     }, [unifiedActivities, plannedActivities, isLoaded, skipAutoSave]);
+
+    const reconcileActivity = React.useCallback((planId: string, activityId: string) => {
+        const plan = plannedActivities.find(p => p.id === planId);
+        const activity = unifiedActivities.find(a => a.id === activityId);
+
+        if (!plan || !activity) return;
+
+        const updatedPlan: PlannedActivity = {
+            ...plan,
+            status: 'COMPLETED',
+            externalId: activityId,
+            completedDate: activity.date,
+            actualDistance: activity.distance || plan.estimatedDistance,
+            actualTimeSeconds: (activity.durationMinutes || 0) * 60,
+            reconciliation: {
+                ...plan.reconciliation,
+                score: 100,
+                matchReason: 'Manuell matchning',
+                bestCandidateId: activityId,
+                reconciledAt: new Date().toISOString()
+            }
+        };
+
+        setPlannedActivities(prev => prev.map(p => p.id === planId ? updatedPlan : p));
+        
+        skipAutoSave.current = true;
+        storageService.savePlannedActivity(updatedPlan).catch(e => console.error("Failed to save reconciled activity", e));
+        
+        notificationService.notify('success', 'Passet har matchats!');
+    }, [plannedActivities, unifiedActivities, skipAutoSave]);
 
     console.log('[useActivityContext] Returning hook values');
     return {
@@ -1653,6 +1707,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         addCoachGoal,
         activateCoachGoal,
         deleteCoachGoal,
+        reconciliation: {
+            reconcileActivity,
+        },
         reorderActivity,
         // Race Defs
         raceDefinitions,
@@ -1669,6 +1726,6 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
         addTour,
         updateTour,
         deleteTour,
-        setTours, calculateExerciseCalories,
+        setTours,
     };
 }

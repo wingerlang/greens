@@ -79,30 +79,65 @@ export const calcStifa = (distKm: number | undefined, elevM: number | undefined)
     return Math.round(elevM / distKm).toString();
 };
 
-export const parseRaceGoal = (goalStr: string | undefined): number | null => {
+export const parseRaceGoal = (goalStr: string | undefined, distance?: number): number | null => {
     if (!goalStr) return null;
-    const s = goalStr.toLowerCase();
+    let s = goalStr.toLowerCase();
     
-    // 1. HH:MM:SS or HH:MM (e.g., "1:43:00", "01:22")
+    // Remove "sub", "under", "target" etc.
+    s = s.replace(/(sub|under|mål|target|ca|~)\s*/g, '').trim();
+    
+    // 1. HH:MM:SS or MM:SS (e.g., "1:43:00", "19:30", "01:22")
     const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
     if (timeMatch) {
-        const h = parseInt(timeMatch[1]);
-        const m = parseInt(timeMatch[2]);
+        let h = parseInt(timeMatch[1]);
+        let m = parseInt(timeMatch[2]);
         const sec = timeMatch[3] ? parseInt(timeMatch[3]) : 0;
-        return h * 60 + m + sec / 60;
+        
+        let totalMinutes = 0;
+        
+        if (timeMatch[3]) {
+            // HH:MM:SS
+            totalMinutes = h * 60 + m + sec / 60;
+        } else {
+            // HH:MM or MM:SS? This is where the reality check comes in.
+            // If distance is provided, we can see if HH:MM results in an insane pace.
+            const totalMinAsHHMM = h * 60 + m;
+            const totalMinAsMMSS = h + m / 60;
+            
+            if (distance && distance > 0) {
+                const paceAsHHMM = totalMinAsHHMM / distance;
+                const paceAsMMSS = totalMinAsMMSS / distance;
+                
+                // Reality check: Pace typically between 2:30 and 15:00 min/km
+                const isHHMMRealistic = paceAsHHMM >= 2.5 && paceAsHHMM <= 15;
+                const isMMSSRealistic = paceAsMMSS >= 2.5 && paceAsMMSS <= 15;
+                
+                if (isHHMMRealistic && !isMMSSRealistic) {
+                    totalMinutes = totalMinAsHHMM;
+                } else if (isMMSSRealistic && !isHHMMRealistic) {
+                    totalMinutes = totalMinAsMMSS;
+                } else {
+                    // If neither or both are realistic, use a heuristic.
+                    // If h > 6, it's almost certainly MM:SS (who targets a 6+ hour 5k?)
+                    if (h >= 6) totalMinutes = totalMinAsMMSS;
+                    else totalMinutes = totalMinAsHHMM;
+                }
+            } else {
+                // No distance? Heuristic: if h > 6, assume MM:SS.
+                if (h >= 6) totalMinutes = totalMinAsMMSS;
+                else totalMinutes = totalMinAsHHMM;
+            }
+        }
+        return totalMinutes;
     }
 
     // 2. Patterns like "1h 45min", "2h", "103m"
-    // Use individual matches for h and m to be flexible with order and junk text
     const hMatch = s.match(/(\d+)\s*h/);
-    const mMatch = s.match(/(\d+)\s*m/); // matches 'm' and 'min'
+    const mMatch = s.match(/(\d+)\s*m/); 
     
     if (hMatch || mMatch) {
         const h = hMatch ? parseInt(hMatch[1]) : 0;
         const m = mMatch ? parseInt(mMatch[1]) : 0;
-        
-        // Safety check: if we matched 'm' but it looks like a year (e.g., 2024), skip it
-        // (Though \s*m usually prevents this)
         if (h > 0 || (m > 0 && m < 1000)) {
             return h * 60 + m;
         }
@@ -114,11 +149,12 @@ export const parseRaceGoal = (goalStr: string | undefined): number | null => {
 export const getPlannedRaceTime = (race: PlannedActivity): number | undefined => {
     // For races, explicit goals should always take priority over the generic durationMinutes
     // which might just be a default value (like 5:30 min/km fallback)
-    const goalB = parseRaceGoal(race.raceDetails?.goals?.b);
+    const dist = race.distanceKm || 0;
+    const goalB = parseRaceGoal(race.raceDetails?.goals?.b, dist);
     if (goalB) return goalB;
-    const goalA = parseRaceGoal(race.raceDetails?.goals?.a);
+    const goalA = parseRaceGoal(race.raceDetails?.goals?.a, dist);
     if (goalA) return goalA;
-    const goalC = parseRaceGoal(race.raceDetails?.goals?.c);
+    const goalC = parseRaceGoal(race.raceDetails?.goals?.c, dist);
     if (goalC) return goalC;
 
     // Use manual duration if set and no goals matched

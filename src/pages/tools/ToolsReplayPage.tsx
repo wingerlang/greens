@@ -24,7 +24,7 @@ import {
     RotateCcw
 } from 'lucide-react';
 import { ExerciseEntry, WeightEntry } from '../../models/types.ts';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { EXERCISE_TYPES } from '../../components/training/ExerciseModal.tsx';
 
 // --- Types ---

@@ -1251,7 +1251,21 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                     )}
 
                     {/* NEW: METABOLIC CONFIGURATION SECTION (As requested) */}
-                    {(goal.type === 'weight' || goal.type === 'nutrition') && (
+                    {(goal.type === 'weight' || goal.type === 'nutrition') && (() => {
+                        const macros = goal.nutritionMacros || {
+                            calories: settings.dailyCalorieGoal || 2000,
+                            protein: settings.dailyProteinGoal || 150,
+                            carbs: settings.dailyCarbsGoal || 50,
+                            fat: settings.dailyFatGoal || 30
+                        };
+                        
+                        const base = settings.fixedCalorieBase || settings.dailyCalorieGoal || 2000;
+                        const deficit = base - macros.calories;
+                        const userWeight = weightStats?.currentWeight || settings.weight || 80;
+                        const proteinPerKg = macros.protein / userWeight;
+                        const multiplier = settings.exerciseCalorieMultiplier ?? 1.0;
+
+                        return (
                         <div className="p-4 bg-slate-900/50 rounded-xl border border-indigo-500/20 mb-4">
                             <div className="flex items-center gap-2 mb-3">
                                 <span className="text-indigo-400">⚙️</span>
@@ -1261,17 +1275,17 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="flex items-center gap-3">
                                     <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
-                                        <div className="text-lg font-black text-white">{settings.fixedCalorieBase || settings.dailyCalorieGoal || 2000}</div>
+                                        <div className="text-lg font-black text-white">{base}</div>
                                         <div className="text-[8px] text-slate-500 uppercase font-bold">Bas-kcal</div>
                                     </div>
                                     <span className="text-slate-600 font-black">-</span>
                                     <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
-                                        <div className="text-lg font-black text-rose-400">{(settings.fixedCalorieBase || settings.dailyCalorieGoal || 0) - (settings.dailyCalorieGoal || 0)}</div>
-                                        <div className="text-[8px] text-slate-500 uppercase font-bold">Deficit</div>
+                                        <div className={`text-lg font-black ${deficit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{Math.abs(deficit)}</div>
+                                        <div className="text-[8px] text-slate-500 uppercase font-bold">{deficit >= 0 ? 'Deficit' : 'Surplus'}</div>
                                     </div>
                                     <span className="text-slate-600 font-black">+</span>
                                     <div className="text-center p-2 bg-slate-950/50 rounded-lg border border-white/5 flex-1">
-                                        <div className="text-lg font-black text-amber-300">{Math.round((settings.exerciseCalorieMultiplier ?? 1.0) * 100)}%</div>
+                                        <div className="text-lg font-black text-amber-300">{Math.round(multiplier * 100)}%</div>
                                         <div className="text-[8px] text-slate-500 uppercase font-bold">Träning</div>
                                     </div>
                                 </div>
@@ -1282,20 +1296,21 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                                          <div className="flex justify-between items-baseline">
                                              <span className="text-[9px] font-black text-slate-500 uppercase">Proteinmål</span>
                                              <span className="text-xs font-black text-emerald-400">
-                                                 {settings.proteinMultiplier || (settings.dailyProteinGoal ? (settings.dailyProteinGoal / 80).toFixed(1) : '2.0')}g/kg
+                                                 {proteinPerKg.toFixed(1)}g/kg
                                              </span>
                                          </div>
                                          <div className="text-[10px] font-bold text-slate-400">
-                                             ~{settings.dailyProteinGoal || 160}g per dag
+                                             ~{macros.protein}g per dag
                                          </div>
                                      </div>
                                 </div>
                             </div>
                             <div className="mt-3 p-2 bg-slate-950/30 rounded-lg text-[9px] text-slate-600 leading-tight">
-                                <span className="font-bold text-slate-500">Logik:</span> Din dagsbudget baseras på din underhållsnivå (Bas) korrigerat för ditt målvikt-deficit, plus {Math.round((settings.exerciseCalorieMultiplier ?? 1.0) * 100)}% av energin du bränner under träning.
+                                <span className="font-bold text-slate-500">Logik:</span> Din dagsbudget ({macros.calories} kcal) baseras på din underhållsnivå ({base} kcal) korrigerat för ditt målvikt-{deficit >= 0 ? 'deficit' : 'surplus'}, plus {Math.round(multiplier * 100)}% av energin du bränner under träning.
                             </div>
                         </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Weight Statistics */}
                     {weightStats && (goal.type === 'weight' || goal.type === 'measurement') && (

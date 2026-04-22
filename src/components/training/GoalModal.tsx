@@ -109,17 +109,45 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     const [calculatedMacros, setCalculatedMacros] = useState<{ calories: number, protein: number, carbs: number, fat: number } | null>(null);
 
     // Get data from context
-    const { weightEntries = [], trainingPeriods = [], performanceGoals = [], calculateBMR, exerciseEntries = [], currentUser } = useData();
+    const { weightEntries = [], trainingPeriods = [], performanceGoals = [], calculateBMR, exerciseEntries = [], currentUser, addWeightEntry } = useData();
     const { settings, updateSettings } = useSettings();
 
-    // Get latest weight entry
-    const latestWeight = useMemo(() => {
+    // Get weight entry relative to start date
+    const activeWeightEntry = useMemo(() => {
         if (!weightEntries.length) return null;
+        
+        // Find entries on start date
+        const matches = weightEntries.filter(e => e.date === customStartDate);
+        
+        if (matches.length > 0) {
+            // If editing a goal, prefer the entry that matches the goal's recorded start weight
+            if (editingGoal?.milestoneProgress !== undefined) {
+                const match = matches.find(e => Math.abs(e.weight - editingGoal.milestoneProgress!) < 0.01);
+                if (match) return match;
+            }
+            // If user has entered a weight, prefer that match
+            if (currentWeight) {
+                const w = parseFloat(currentWeight);
+                const match = matches.find(e => Math.abs(e.weight - w) < 0.01);
+                if (match) return match;
+            }
+            // Otherwise return the first (usually latest) on that date
+            return matches[0];
+        }
+        
+        // Otherwise find closest PREVIOUS weight entry to customStartDate
+        const previous = [...weightEntries]
+            .filter(e => e.date <= customStartDate)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        if (previous.length > 0) return previous[0];
+        
+        // If no previous, take the absolute latest
         const sorted = [...weightEntries].sort((a, b) =>
             new Date(b.date).getTime() - new Date(a.date).getTime()
         );
         return sorted[0];
-    }, [weightEntries]);
+    }, [weightEntries, customStartDate, editingGoal?.milestoneProgress, currentWeight]);
 
     // Smart Stats
     const volumeStats = useMemo(() => {
@@ -215,7 +243,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             if (editingGoal.type === 'weight' || editingGoal.type === 'measurement') {
                 setTargetWeight(editingGoal.targetWeight?.toString() || '');
                 setWeeklyRate(editingGoal.targetWeightRate?.toString() || '0.5');
-                const startW = editingGoal.milestoneProgress || (latestWeight?.weight || 75);
+                const startW = editingGoal.milestoneProgress || (activeWeightEntry?.weight || currentUser?.settings?.weight || 75);
                 setCurrentWeight(startW.toString());
 
                 // Fixed direction calculation
@@ -234,6 +262,11 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                         fat: editingGoal.nutritionMacros.fat || 0
                     });
                 }
+
+                // --- FIX: Determine if we are currently linked to a weighing ---
+                const entriesOnDate = weightEntries.filter(e => e.date === (editingGoal.startDate || new Date().toISOString().split('T')[0]));
+                const linked = !!entriesOnDate.find(e => Math.abs(e.weight - startW) < 0.01);
+                setUseExistingWeight(linked);
             }
         } else if (isOpen) {
             setName('');
@@ -298,10 +331,19 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
     // Pre-fill weight when switching to weight goal type
     useEffect(() => {
-        if ((type === 'weight' || type === 'measurement') && latestWeight && useExistingWeight && !currentWeight) {
-            setCurrentWeight(latestWeight.weight.toString());
+        if ((type === 'weight' || type === 'measurement') && activeWeightEntry && useExistingWeight && !currentWeight) {
+            setCurrentWeight(activeWeightEntry.weight.toString());
         }
-    }, [type, latestWeight, useExistingWeight, currentWeight]);
+    }, [type, activeWeightEntry, useExistingWeight, currentWeight]);
+
+    // Sync weight when start date changes OR when switching to linked mode
+    useEffect(() => {
+        if (useExistingWeight && activeWeightEntry && isOpen) {
+            // Only sync if we're not currently editing a value manually (basic check)
+            // Or always sync if useExistingWeight is true, because that's what it means!
+            setCurrentWeight(activeWeightEntry.weight.toString());
+        }
+    }, [customStartDate, activeWeightEntry, useExistingWeight, isOpen]);
 
     // Smart input parsing
     useEffect(() => {
@@ -479,6 +521,15 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         };
 
         onSave(goalData);
+
+        // --- NEW: Persist weight as entry if requested ---
+        if (!useExistingWeight && (type === 'weight' || type === 'measurement')) {
+            const weightVal = parseFloat(currentWeight);
+            if (!isNaN(weightVal)) {
+                addWeightEntry(weightVal, customStartDate);
+            }
+        }
+
         onClose();
     };
 
@@ -546,10 +597,10 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             {showNutritionWizard ? (
                 <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                     <NutritionWizard
-                        initialWeight={parseFloat(currentWeight) || (latestWeight?.weight || undefined)}
+                        initialWeight={parseFloat(currentWeight) || (activeWeightEntry?.weight || undefined)}
                         initialTargetWeight={parseFloat(targetWeight)}
                         initialWeeks={(() => {
-                            const startW = parseFloat(currentWeight) || (latestWeight?.weight || 75);
+                            const startW = parseFloat(currentWeight) || (activeWeightEntry?.weight || currentUser?.settings?.weight || 75);
                             const targetW = parseFloat(targetWeight);
                             const rate = parseFloat(weeklyRate);
                             if (startW && targetW && rate > 0) {
@@ -562,7 +613,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                 setTargetWeight(profile.targetWeight.toString());
                                 if (profile.weeks) {
                                     // Calculate granular weekly rate based on wizard result
-                                    const startW = parseFloat(currentWeight) || (latestWeight?.weight || 75);
+                                    const startW = parseFloat(currentWeight) || (activeWeightEntry?.weight || currentUser?.settings?.weight || 75);
                                     const diff = Math.abs(startW - profile.targetWeight);
                                     const rate = (diff / profile.weeks).toFixed(2);
                                     setWeeklyRate(rate);
@@ -938,7 +989,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                             {/* Weight inputs */}
                                             <div className="space-y-3">
                                                 {/* Pre-fill indicator */}
-                                                {latestWeight && (
+                                                {activeWeightEntry && (
                                                     <div className={`flex items-center justify-between p-2.5 rounded-lg border ${useExistingWeight
                                                         ? 'bg-blue-500/10 border-blue-500/20'
                                                         : 'bg-slate-900/50 border-white/5'
@@ -946,16 +997,16 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-blue-400">⚖️</span>
                                                             <div className="text-xs">
-                                                                <span className="text-slate-400">Senaste vägning: </span>
-                                                                <span className="text-white font-bold">{latestWeight.weight} kg</span>
-                                                                <span className="text-slate-500 ml-1">({formatWeightDate(latestWeight.date)})</span>
+                                                                <span className="text-slate-400">Vägning vid startdatum: </span>
+                                                                <span className="text-white font-bold">{activeWeightEntry.weight} kg</span>
+                                                                <span className="text-slate-500 ml-1">({formatWeightDate(activeWeightEntry.date)})</span>
                                                             </div>
                                                         </div>
                                                         <button
                                                             onClick={() => {
                                                                 setUseExistingWeight(!useExistingWeight);
-                                                                if (!useExistingWeight && latestWeight) {
-                                                                    setCurrentWeight(latestWeight.weight.toString());
+                                                                if (!useExistingWeight && activeWeightEntry) {
+                                                                    setCurrentWeight(activeWeightEntry.weight.toString());
                                                                 }
                                                             }}
                                                             className={`text-[10px] font-bold px-2 py-1 rounded ${useExistingWeight
@@ -972,20 +1023,20 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                                 <div className="grid grid-cols-3 gap-3">
                                                     <div className="space-y-1.5">
                                                         <label className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-1">
-                                                            Nu (kg)
-                                                            {!useExistingWeight && (
+                                                            Start (kg)
+                                                            {!useExistingWeight && !editingGoal && (
                                                                 <span className="text-emerald-400 text-[8px]">NY</span>
                                                             )}
                                                         </label>
                                                         <input
                                                             type="number"
                                                             step="0.1"
-                                                            placeholder={latestWeight ? latestWeight.weight.toString() : "85"}
+                                                            placeholder={activeWeightEntry ? activeWeightEntry.weight.toString() : "85"}
                                                             value={currentWeight}
                                                             onChange={e => {
                                                                 setCurrentWeight(e.target.value);
                                                                 // If user types a different weight, mark as new
-                                                                if (latestWeight && e.target.value !== latestWeight.weight.toString()) {
+                                                                if (activeWeightEntry && e.target.value !== activeWeightEntry.weight.toString()) {
                                                                     setUseExistingWeight(false);
                                                                 }
                                                             }}
@@ -1028,7 +1079,10 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                                     <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                                                         <span className="text-emerald-400">✨</span>
                                                         <span className="text-xs text-emerald-300">
-                                                            En ny vägning på <strong>{currentWeight || '?'} kg</strong> kommer registreras
+                                                            {editingGoal 
+                                                                ? `Målets startvikt justeras till ${currentWeight || '?'} kg.`
+                                                                : `En ny vägning på ${currentWeight || '?'} kg kommer registreras den ${customStartDate}.`
+                                                            }
                                                         </span>
                                                     </div>
                                                 )}

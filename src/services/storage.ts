@@ -114,7 +114,20 @@ const authFetch = (url: string, options: RequestInit = {}) => {
 };
 
 export class LocalStorageService implements StorageService {
+    private loadPromise: Promise<AppData> | null = null;
+
     async load(): Promise<AppData> {
+        if (this.loadPromise) return this.loadPromise;
+
+        this.loadPromise = this.executeLoad();
+        try {
+            return await this.loadPromise;
+        } finally {
+            this.loadPromise = null;
+        }
+    }
+
+    private async executeLoad(): Promise<AppData> {
         let data: AppData | null = null;
 
         // 1. Try API first (uses cookie-based auth or Bearer token)
@@ -129,7 +142,6 @@ export class LocalStorageService implements StorageService {
                 });
                 if (res.ok) {
                     const cloudData = await res.json() as AppData;
-                    // CRITICAL: Only accept cloud data if it seems complete or at least exists
                     if (cloudData && Object.keys(cloudData).length > 2) {
                         console.log('[Storage] Loaded data from API');
 
@@ -142,21 +154,16 @@ export class LocalStorageService implements StorageService {
                                 cloudData.recipes = localData.recipes;
                                 if (!cloudData.foodItems || cloudData.foodItems.length < 5) cloudData.foodItems = localData.foodItems;
                             }
-                            // Safety: Merge performance goals intelligently
-                            // Combine local and cloud goals by ID, preferring cloud versions if they exist (unless local is newer - but we don't track localUpdatedAt robustly yet)
-                            // Ideally we would check timestamps, but for now: union of IDs is safer than overwrite.
+                            
                             const cloudGoals = cloudData.performanceGoals || [];
                             const localGoals = localData.performanceGoals || [];
 
                             if (localGoals.length > 0) {
-                                console.log('[Storage] Merging local goals with cloud goals');
                                 const mergedGoals = [...cloudGoals];
                                 const cloudIds = new Set(cloudGoals.map(g => g.id));
 
                                 localGoals.forEach(localG => {
                                     if (!cloudIds.has(localG.id)) {
-                                        // Goal exists locally but not in cloud -> Preserve it (it's likely new)
-                                        console.log(`[Storage] Preserving local-only goal: ${localG.name} (${localG.id})`);
                                         mergedGoals.push(localG);
                                     }
                                 });
@@ -165,23 +172,14 @@ export class LocalStorageService implements StorageService {
                         }
 
                         data = cloudData;
-                        // Update local mirror (optional, maybe skip if we want "never cached")
-                        // But writing to cache is okay, reading from it is the issue.
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-                        // RETURN IMMEDIATELY - Do not fallback/merge with local
                         return data;
-                    } else {
-                        console.log('[Storage] Cloud data empty or invalid');
                     }
                 } else {
-                    // Critical: Notify on load failure if server is reachable but errors
-                    notificationService.notify('error', 'Kunde inte ladda data från servern (API Error)');
+                    console.warn('[Storage] Cloud load returned non-OK response:', res.status);
                 }
             } catch (e) {
-                console.warn('[Storage] API load failed', e);
-                // Critical: Notify on network failure
-                notificationService.notify('error', 'Kunde inte ladda data från servern (Nätverksfel)');
+                console.warn('[Storage] API load failed (likely offline)', e);
             }
         }
 
@@ -1072,7 +1070,7 @@ export class LocalStorageService implements StorageService {
         }
     }
 
-    async savePlannedActivity(activity: PlannedActivity): Promise<void> {
+    async savePlannedActivity(activity: PlannedActivity, options?: { skipNotification?: boolean }): Promise<void> {
         // Optimistic local update not strictly needed as DataContext handles it, 
         // but storage service should ideally update the blob too if we keep using load() from blob.
         // However, with granular sync, we should be careful. 
@@ -1090,7 +1088,9 @@ export class LocalStorageService implements StorageService {
                     body: JSON.stringify(activity)
                 });
                 if (res.ok) {
-                    notificationService.notify('success', 'Passet sparat till servern');
+                    if (!options?.skipNotification) {
+                        notificationService.notify('success', 'Passet sparat till servern');
+                    }
                 } else {
                     console.error('[Storage] Failed to save planned activity');
                 }
@@ -1100,7 +1100,7 @@ export class LocalStorageService implements StorageService {
         }
     }
 
-    async savePlannedActivities(activities: PlannedActivity[]): Promise<void> {
+    async savePlannedActivities(activities: PlannedActivity[], options?: { skipNotification?: boolean }): Promise<void> {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
@@ -1113,7 +1113,9 @@ export class LocalStorageService implements StorageService {
                     body: JSON.stringify(activities)
                 });
                 if (res.ok) {
-                    notificationService.notify('success', `${activities.length} pass sparade`);
+                    if (!options?.skipNotification) {
+                        notificationService.notify('success', `${activities.length} pass sparade`);
+                    }
                 } else {
                     console.error('[Storage] Failed to bulk save planned activities');
                 }

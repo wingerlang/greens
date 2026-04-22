@@ -110,8 +110,13 @@ export function useHealth(date: string = getISODate()) {
         date,
         trainingCycles,
         performanceGoals,
-        settings.dailyCalorieGoal,
-        2000,
+        {
+            calories: settings.dailyCalorieGoal,
+            protein: settings.dailyProteinGoal,
+            carbs: settings.dailyCarbsGoal,
+            fat: settings.dailyFatGoal
+        },
+        settings.dailyCalorieGoal || 2000,
         settings.calorieMode || 'tdee',
         dailyCaloriesBurned,
         settings.exerciseCalorieMultiplier ?? 1.0

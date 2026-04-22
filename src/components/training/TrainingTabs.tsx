@@ -13,9 +13,8 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
     const getActiveTab = () => {
         if (propTab) return propTab;
         const path = location.pathname;
-        if (path === '/review') return 'review';
-        if (path === '/summary') return 'summary';
-        if (path.includes('/styrka')) return 'styrka';
+        if (path === '/review' || path === '/summary' || path.includes('/training/analys')) return 'analys';
+        if (path.includes('/planera/traning')) return 'planera';
 
         // For /training/:tab
         const parts = path.split('/');
@@ -29,14 +28,12 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
 
     const tabs = [
         { id: 'kalender', label: '📅 Kalender', path: '/träning/kalender', color: 'emerald' },
-        { id: 'styrka', label: '🏋️ Styrka', path: '/styrka', color: 'emerald' },
-        { id: 'kondition', label: '🏃 Kondition', path: '/training/kondition', color: 'sky' },
+        { id: 'planera', label: '🗓️ Planera', path: '/planera/traning', color: 'emerald' },
+        { id: 'analytics', label: '📊 Dashboard', path: '/training/analytics', color: 'emerald' },
         { id: 'races', label: '🏆 Tävlingar', path: '/training/races', color: 'amber' },
-        { id: 'lopstatistik', label: '⏱️ Löpstatistik', path: '/training/lopstatistik', color: 'indigo' },
-        { id: 'summary', label: '📊 Summering', path: '/summary', color: 'emerald' },
+        { id: 'lopstatistik', label: '⏱️ Rekord', path: '/training/lopstatistik', color: 'indigo' },
+        { id: 'analys', label: '🔍 Analys', path: '/training/analys', color: 'indigo' },
         { id: 'form', label: '📈 Aktuell Form', path: '/training/form', color: 'emerald' },
-        { id: 'dataanalys', label: '🔍 Dataanalys', path: '/training/dataanalys', color: 'indigo' },
-        { id: 'review', label: '📅 Årsöversikt', path: '/review', color: 'emerald' },
     ];
 
     const getColorClasses = (color: string, active: boolean) => {

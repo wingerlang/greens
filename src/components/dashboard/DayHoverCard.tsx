@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { EXERCISE_TYPES } from '../training/ExerciseModal.tsx';
 
 interface DayHoverCardProps {

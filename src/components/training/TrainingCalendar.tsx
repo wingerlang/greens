@@ -222,10 +222,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             : 0;
         const inactiveDays = Math.max(0, daysPassedForStats - uniqueActiveDays);
 
+        const timePerWeek = weeksForFreq > 0 ? (duration / weeksForFreq) : 0;
+        const tonnagePerWeek = weeksForFreq > 0 ? (tonnage / weeksForFreq) : 0;
+
         return { 
             distance, duration, count, warmupCount, warmups, 
             tonnage, timeDist, countDist, perWeek, freqPercent, 
-            timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays 
+            timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays,
+            timePerWeek, tonnagePerWeek
         };
     }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
 
@@ -1080,10 +1084,16 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                 {Math.round(stats.duration % 60)}<span className="text-xl font-bold text-slate-500 ml-1">m</span>
                             </p>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-white/5">
+                        <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/5">
+                            <div>
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / vecka</p>
+                                <p className="text-base font-black text-sky-400">
+                                    {Math.floor(stats.timePerWeek / 60)}h {Math.round(stats.timePerWeek % 60)}m
+                                </p>
+                            </div>
                             <div>
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / dag</p>
-                                <p className="text-base font-black text-sky-400">{stats.timePerDay} <span className="text-[10px] font-bold text-sky-500/70">min</span></p>
+                                <p className="text-base font-black text-slate-400">{stats.timePerDay} <span className="text-[10px] font-bold text-slate-500/70">min</span></p>
                             </div>
                             <div>
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/pass</p>
@@ -1118,8 +1128,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             <div className="flex items-baseline justify-between">
                                 <p className="text-3xl font-black text-indigo-400 leading-none">{(stats.tonnage / 1000).toFixed(1)} <span className="text-sm font-bold text-indigo-500/60">ton</span></p>
                                 <div className="text-right">
-                                    <p className="text-[9px] font-bold text-indigo-500/60 uppercase">Tonnage</p>
-                                    <p className="text-sm font-black text-indigo-400">{stats.tonnage.toLocaleString('sv-SE')} kg</p>
+                                    <p className="text-[9px] font-bold text-indigo-500/60 uppercase">Snitt / v</p>
+                                    <p className="text-sm font-black text-indigo-400">{(stats.tonnagePerWeek / 1000).toFixed(1)} t</p>
                                 </div>
                             </div>
                         </div>

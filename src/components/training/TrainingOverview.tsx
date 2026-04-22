@@ -14,9 +14,10 @@ interface TrainingOverviewProps {
     onExerciseClick?: (exercise: ExerciseEntry) => void;
     initialCalendarMonth?: number;
     initialCalendarDay?: number;
+    hideStats?: boolean;
 }
 
-export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay }: TrainingOverviewProps) {
+export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
     const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
     const [showYearlyStats, setShowYearlyStats] = useState(false);
 
@@ -175,17 +176,21 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 />
             </div>
 
-            <div className="flex items-center justify-between mt-8 mb-4">
-                <button 
-                    onClick={() => setShowYearlyStats(!showYearlyStats)}
-                    className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
-                >
-                    {showYearlyStats ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                    <h2 className="text-lg font-black uppercase tracking-widest text-white">Årsvolym & Detaljerad Statistik</h2>
-                </button>
-            </div>
+            {!hideStats && (
+                <>
+                    <div className="flex items-center justify-between mt-8 mb-4">
+                        <button 
+                            onClick={() => setShowYearlyStats(!showYearlyStats)}
+                            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                        >
+                            {showYearlyStats ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                            <h2 className="text-lg font-black uppercase tracking-widest text-white">Årsvolym & Detaljerad Statistik</h2>
+                        </button>
+                    </div>
+                </>
+            )}
 
-            {showYearlyStats && (
+            {showYearlyStats && !hideStats && (
                 <div className="animate-in slide-in-from-top-4 fade-in duration-300">
                     <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
                         <button

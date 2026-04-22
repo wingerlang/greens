@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trophy, Calendar, X, Target, Clock, Timer, Plus } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry, generateId } from '../../../models/types.ts';
 import { normalizeRaceTitle, isTrailRace, getAvgElevation, formatRaceDateCompact, MONTH_MAP } from './utils.ts';
-import { formatActivityDuration } from '../../../utils/formatters.ts';
+import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
 import { calculateVDOT } from '../../../utils/runningCalculator.ts';
 import { calculateAdjustedRaceTime } from '../../../utils/racePlannerCalculators.ts';
 

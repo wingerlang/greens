@@ -80,7 +80,8 @@ export function DashboardPage() {
         setSelectedDate,
         refreshData,
         plannedActivities,
-        unifiedActivities
+        unifiedActivities,
+        reconciliation
     } = useData();
     const { token } = useAuth();
     const { logEvent } = useAnalytics();
@@ -381,6 +382,7 @@ export function DashboardPage() {
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
 
+    const multiplier = settings.exerciseCalorieMultiplier ?? 1.0;
     const targetResult = getActiveCalorieTarget(
         selectedDate,
         trainingPeriods,
@@ -391,10 +393,10 @@ export function DashboardPage() {
             carbs: settings.dailyCarbsGoal,
             fat: settings.dailyFatGoal
         },
-        2500,
+        settings.dailyCalorieGoal || 2000,
         settings.calorieMode || 'tdee',
         burned,
-        settings.exerciseCalorieMultiplier ?? 1.0
+        multiplier
     );
     const target = targetResult.calories;
 
@@ -411,7 +413,7 @@ export function DashboardPage() {
         2500,
         settings.calorieMode || 'tdee',
         0,
-        settings.exerciseCalorieMultiplier ?? 1.0
+        multiplier
     );
     const baseTarget = baseTargetResult.calories;
 
@@ -429,7 +431,10 @@ export function DashboardPage() {
     const targetProteinRatio = latestWeightVal > 0 ? (proteinTarget / latestWeightVal) : 0;
 
     // Training Analysis
-    const todaysPlan = plannedActivities.find(p => p.date.split('T')[0] === selectedDate);
+    const todaysPlans = plannedActivities.filter(p => 
+        p.date.split('T')[0] === selectedDate && 
+        p.status === 'PLANNED'
+    );
     const completedTraining = unifiedActivities.filter(e => e.date.split('T')[0] === selectedDate);
 
     // Streak
@@ -503,7 +508,7 @@ export function DashboardPage() {
                 </div>
             </div>
 
-            <div className="w-full max-w-7xl mx-auto">
+            <div className="w-full max-w-[1440px] mx-auto">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-6 md:mb-10'} flex flex-col md:flex-row justify-between items-center gap-4`}>
                     <div className="flex flex-col gap-1 items-center md:items-start w-full md:w-auto">
                         <div className="flex items-center gap-4">
@@ -562,6 +567,7 @@ export function DashboardPage() {
                             onHoverTraining={setIsHoveringTraining}
                             maintenance={health.tdee}
                             explanation={targetResult.explanation}
+                            exerciseCalorieMultiplier={multiplier}
                             className="md:col-span-12 lg:col-span-6 h-full"
                         />
                     )}
@@ -573,10 +579,12 @@ export function DashboardPage() {
                             onToggle={toggleCardCompletion}
                             density={density}
                             completedTraining={completedTraining}
-                            todaysPlan={todaysPlan}
+                            todaysPlans={todaysPlans}
                             deleteExercise={deleteExercise}
                             isHoveringTraining={isHoveringTraining}
                             settings={settings}
+                            latestWeightVal={latestWeightVal}
+                            reconciliation={reconciliation}
                             className="md:col-span-12 lg:col-span-6 h-full"
                         />
                     )}
@@ -587,13 +595,108 @@ export function DashboardPage() {
                     </div>
 
                     <div className="md:col-span-8">
-                        <WeeklyMetabolismAnalyticCard />
+                        <WeeklyMetabolismAnalyticCard selectedDate={selectedDate} onDateSelect={setSelectedDate} />
                     </div>
                     <div className="md:col-span-4 flex flex-col gap-6">
-                        <ActiveGoalsCard fullWidth={false} />
+                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] flex flex-col gap-4">
+                             <div className="flex flex-col">
+                                 <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Metabolisk Status</span>
+                                 <div className="text-xl font-black text-white">
+                                     {consumed <= target ? (consumed < target - 100 ? '📈 Underskott' : '🎯 I Fas') : (consumed > target + 300) ? '🔥 Överskott' : '⚖️ Gränsland'}
+                                 </div>
+                             </div>
+                             
+                             <div className="grid grid-cols-2 gap-4 pt-2">
+                                 <div className="flex flex-col">
+                                     <span className="text-slate-600 text-[9px] font-bold uppercase">Saldo (Justerat)</span>
+                                     <span className={`text-lg font-black ${consumed <= target ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                         {consumed > target ? `+${Math.round(consumed - target)}` : Math.round(consumed - target)} 
+                                         <span className="text-[10px] font-bold opacity-40 ml-0.5">kcal</span>
+                                     </span>
+                                 </div>
+                                 <div className="flex flex-col">
+                                     <span className="text-slate-600 text-[9px] font-bold uppercase">Träningspott</span>
+                                     <span className="text-lg font-black text-amber-400">
+                                         +{Math.round(extraCalories)} 
+                                         <span className="text-[10px] font-bold opacity-40 ml-0.5">kcal</span>
+                                     </span>
+                                 </div>
+                             </div>
+
+                             <div className="space-y-1 mt-1">
+                                 <div className="flex justify-between items-center text-[9px] font-bold uppercase">
+                                     <span className="text-slate-500">Utnyttjad Pott</span>
+                                     <span className={consumed > baseTarget ? (consumed > target ? 'text-rose-400' : 'text-amber-400') : 'text-slate-600'}>
+                                         {Math.max(0, Math.round(consumed - baseTarget))} / {Math.round(extraCalories)} kcal
+                                     </span>
+                                 </div>
+                                 <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden flex">
+                                     <div 
+                                        className={`h-full ${consumed > target ? 'bg-rose-500' : 'bg-amber-500'}`} 
+                                        style={{ width: `${Math.min(100, extraCalories > 0 ? (Math.max(0, consumed - baseTarget) / extraCalories) * 100 : 0)}%` }}
+                                     />
+                                 </div>
+                                 {consumed > target && (
+                                     <div className="text-[8px] font-bold text-rose-500/80 mt-1 flex items-center gap-1">
+                                         <span>⚠️</span> Du har ätit {Math.round(consumed - target)} kcal över ditt {Math.round(multiplier * 100)}% utbyte.
+                                     </div>
+                                 )}
+                             </div>
+
+                             <div className="mt-4 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                 <div className="flex justify-between items-center mb-2">
+                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Mål: {Math.round(multiplier * 100)}% Utbyte</span>
+                                     <span className="text-[10px] font-bold text-white">{targetProteinRatio.toFixed(1)}g/kg Prot.</span>
+                                 </div>
+                                 <p className="text-[9px] text-slate-500 leading-relaxed">
+                                     Basmål: {Math.round(baseTarget)} kcal. Genom att äta {Math.round(multiplier * 100)}% av träningen ({Math.round(extraCalories)} kcal) behåller du energinivån för att nå ditt mål.
+                                 </p>
+                             </div>
+
+                             <button 
+                                onClick={() => navigate('/calories')}
+                                className="mt-2 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95"
+                             >
+                                Justera Mål & Multiplier
+                             </button>
+                        </div>
                     </div>
 
-                    {/* Vitals Grid (Shifted below primary cards) */}
+                     <div className="md:col-span-12">
+                         <ActiveGoalsCard fullWidth={true} />
+                     </div>
+
+                     <div className="md:col-span-8 xl:col-span-8">
+                        <HealthMetricsCard
+                            density={density}
+                            latestWeightVal={latestWeightVal}
+                            latestWaist={latestWaist}
+                            latestChest={latestChest}
+                            bmi={bmi}
+                            weightDiffRange={weightDiffRange}
+                            weightRange={weightRange}
+                            setWeightRange={setWeightRange}
+                            weightTrendEntries={weightTrendEntries}
+                            unifiedHistory={unifiedHistory}
+                            performanceGoals={performanceGoals}
+                            trainingPeriods={trainingPeriods}
+                            onDeleteEntry={(data) => {
+                                if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
+                                if (data.waistId) deleteBodyMeasurement(data.waistId);
+                                if (data.chestId) deleteBodyMeasurement(data.chestId);
+                            }}
+                            onOpenWeightModal={(data) => {
+                                setTempValue(data.weight?.toString() || "");
+                                setTempWaist(data.waist?.toString() || "");
+                                setTempChest(data.chest?.toString() || "");
+                                if (data.date) {
+                                    setSelectedDate(data.date);
+                                    setIsWeightModalOpen(true);
+                                }
+                            }}
+                        />
+                    </div>
+
                     {cardOrder.map((card) => {
                         if (card.id === 'intake' || card.id === 'training') return null;
                         if (card.id === 'sleep') {
@@ -689,38 +792,7 @@ export function DashboardPage() {
                         }
                     })}
 
-                    <div className="md:col-span-8 xl:col-span-8">
-                        <HealthMetricsCard
-                            density={density}
-                            latestWeightVal={latestWeightVal}
-                            latestWaist={latestWaist}
-                            latestChest={latestChest}
-                            bmi={bmi}
-                            weightDiffRange={weightDiffRange}
-                            weightRange={weightRange}
-                            setWeightRange={setWeightRange}
-                            weightTrendEntries={weightTrendEntries}
-                            unifiedHistory={unifiedHistory}
-                            performanceGoals={performanceGoals}
-                            trainingPeriods={trainingPeriods}
-                            onDeleteEntry={(data) => {
-                                if (data.weightEntryId) deleteWeightEntry(data.weightEntryId);
-                                if (data.waistId) deleteBodyMeasurement(data.waistId);
-                                if (data.chestId) deleteBodyMeasurement(data.chestId);
-                            }}
-                            onOpenWeightModal={(data) => {
-                                setTempValue(data.weight?.toString() || "");
-                                setTempWaist(data.waist?.toString() || "");
-                                setTempChest(data.chest?.toString() || "");
-                                if (data.date) {
-                                    setSelectedDate(data.date);
-                                }
-                                setIsWeightModalOpen(true);
-                            }}
-                        />
-                    </div>
-
-                    <div className="md:col-span-4 xl:col-span-4">
+                     <div className="md:col-span-4 xl:col-span-4">
                         <ReadinessStreakCard
                             density={density}
                             streakDays={streakDays}

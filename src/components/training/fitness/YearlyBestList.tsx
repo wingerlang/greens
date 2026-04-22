@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { UniversalActivity, BestEffort } from '../../../models/types.ts';
 import { Trophy, Timer, Calendar, ExternalLink, Zap } from 'lucide-react';
-import { formatActivityDuration } from '../../../utils/formatters.ts';
+import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
 import { getBestEffortsForActivity, PERFORMANCE_TARGETS } from '../../../utils/performanceEngine.ts';
 
 interface YearlyBestListProps {

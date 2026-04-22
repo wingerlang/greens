@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import {
     LineChart,
     Line,

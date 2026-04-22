@@ -321,6 +321,15 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
         });
     }, [data]);
 
+    const totalWeeks = useMemo(() => {
+        const now = new Date();
+        return data.reduce((sum, row) => {
+            const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
+            const weeks = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
+            return sum + weeks;
+        }, 0);
+    }, [data]);
+
     return (
         <div className="bg-slate-900 border border-white/10 rounded-xl shadow-sm">
             {/* Tabs */}
@@ -372,7 +381,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-[110px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
+            <div className="grid grid-cols-[140px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
                 <div className="p-2"></div> {/* Month col */}
                 <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                     <div className="text-center p-2 text-white/90">
@@ -387,7 +396,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Sub-Header */}
-            <div className="grid grid-cols-[110px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5">
+            <div className="grid grid-cols-[140px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5">
                 <div className="p-2 flex items-center gap-2 text-slate-400">
                     {selectionMode && (
                         <div
@@ -503,7 +512,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }}
-                                    className={`grid grid-cols-[110px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
+                                    className={`grid grid-cols-[140px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
                                         } ${selectedMonths.has(row.period) ? 'bg-sky-500/10' : ''}`}
                                 >
                                     <div className="p-0.5 px-2 text-slate-400 font-medium group-hover:text-white flex items-center gap-2 overflow-hidden shrink-0 border-r border-white/5 relative">
@@ -701,7 +710,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
                 {/* Footer Totals */}
-                <div className="grid grid-cols-[110px_1fr] text-sm font-bold bg-white/5 border-t border-white/10 italic">
+                <div className="grid grid-cols-[140px_1fr] text-sm font-bold bg-white/5 border-t border-white/10 italic">
                     <div className="p-2 text-white">Totalt:</div>
                     <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
                         <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
@@ -713,6 +722,11 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         <span className="text-slate-300">{totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-500">{totals.categories.cardio.count || '-'} pass</span>
+                                        {totalWeeks > 0 && (
+                                            <span className="text-emerald-500/60 font-bold ml-1.5 opacity-80 decoration-emerald-500/30 underline underline-offset-2">
+                                                • {(totals.categories.cardio.distance / totalWeeks).toFixed(1)}/v
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="p-2 text-right font-mono text-xs border-r border-white/5">
                                         <span className="text-indigo-400">{totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
@@ -720,6 +734,11 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                         <span className="text-slate-300">{totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}</span>
                                         <span className="text-slate-600 mx-1.5">•</span>
                                         <span className="text-slate-500">{totals.categories.strength.count || '-'} pass</span>
+                                        {totalWeeks > 0 && (
+                                            <span className="text-indigo-500/60 font-bold ml-1.5 opacity-80 decoration-indigo-500/30 underline underline-offset-2">
+                                                • {(totals.categories.strength.tonnage / (totalWeeks * 1000)).toFixed(1)}t/v
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other-total">
                                         {totals.categories.other.duration > 0 ? (

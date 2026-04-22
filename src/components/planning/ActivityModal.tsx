@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
 import { notificationService } from '../../services/notificationService.ts';
-import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer, Bike, Activity, Wind, Waves, Disc, TrendingUp } from 'lucide-react';
+import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer, Bike, Activity, Wind, Waves, Disc, TrendingUp, Target } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -59,8 +59,18 @@ export function ActivityModal({
     const [formStartTime, setFormStartTime] = useState('');
     const [formDate, setFormDate] = useState(selectedDate || '');
     const [formCalculationMode, setFormCalculationMode] = useState<'original' | 'distance'>('original');
+    const [formTargetSpeedKmh, setFormTargetSpeedKmh] = useState<string>('');
+    const [formTargetWattsRange, setFormTargetWattsRange] = useState<string>('');
 
-    const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser, universalActivities } = useData();
+    const { 
+        exerciseEntries, 
+        plannedActivities, 
+        currentUser, 
+        updateCurrentUser, 
+        universalActivities,
+        unifiedActivities,
+        reconciliation
+    } = useData();
     const { settings } = useSettings();
 
     const hasExistingActivity = React.useMemo(() => {
@@ -387,6 +397,8 @@ export function ActivityModal({
                 setFormStatus(editingActivity.status === 'DRAFT' ? 'PLANNED' : editingActivity.status as any);
                 setFormDate(editingActivity.date || selectedDate || '');
                 setFormCalculationMode(editingActivity.calculationMode as any || 'original');
+                setFormTargetSpeedKmh(editingActivity.targetSpeedKmh?.toString() || '');
+                setFormTargetWattsRange(editingActivity.targetWattsRange || '');
             } else {
                 setFormType('RUN');
                 setRunSubCategory('EASY');
@@ -406,6 +418,8 @@ export function ActivityModal({
                 setFormStatus('PLANNED');
                 setFormDate(selectedDate || '');
                 setFormCalculationMode('original');
+                setFormTargetSpeedKmh('');
+                setFormTargetWattsRange('');
             }
         }
     }, [isOpen, selectedDate, editingActivity]);
@@ -500,7 +514,8 @@ export function ActivityModal({
             } else if (formType === 'REST') {
                 title = 'Vilodag';
             } else if (formType === 'BIKE') {
-                title = 'Cykling';
+                const totalMins = (hours * 60) + minutes;
+                title = `Cykel ${totalMins} min`;
             }
 
             const activityData: PlannedActivity = {
@@ -528,6 +543,8 @@ export function ActivityModal({
                 structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
                 status: formStatus as any,
                 calculationMode: formCalculationMode as any,
+                targetSpeedKmh: formType === 'BIKE' && formTargetSpeedKmh ? parseFloat(formTargetSpeedKmh.replace(',', '.')) : undefined,
+                targetWattsRange: formType === 'BIKE' ? formTargetWattsRange : undefined,
                 isRace: isRace,
                 raceDetails: isRace ? {
                     ...editingActivity?.raceDetails,
@@ -638,6 +655,43 @@ export function ActivityModal({
                 </div>
 
                 <div className="p-6 overflow-y-auto custom-scrollbar grow">
+                    {/* Actual Performance for Completed Sessions */}
+                    {editingActivity && formStatus === 'COMPLETED' && (editingActivity.actualDistance || editingActivity.actualTimeSeconds) && (
+                        <div className="mb-6 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                            <div className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider mb-3 flex items-center gap-2">
+                                <Activity size={12} /> Genomfört resultat:
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                {editingActivity.actualDistance ? (
+                                    <div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Faktisk Distans</div>
+                                        <div className="text-sm font-black text-slate-900 dark:text-white flex items-baseline gap-1.5">
+                                            {editingActivity.actualDistance.toFixed(2)} <span className="text-[10px] text-slate-400">km</span>
+                                            {editingActivity.estimatedDistance > 0 && (
+                                                <span className={`text-[10px] font-bold ${editingActivity.actualDistance >= editingActivity.estimatedDistance ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                    ({(editingActivity.actualDistance - editingActivity.estimatedDistance) > 0 ? '+' : ''}{(editingActivity.actualDistance - editingActivity.estimatedDistance).toFixed(1)})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : null}
+                                {editingActivity.actualTimeSeconds ? (
+                                    <div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Faktisk Tid</div>
+                                        <div className="text-sm font-black text-slate-900 dark:text-white">
+                                            {Math.floor(editingActivity.actualTimeSeconds / 60)} <span className="text-[10px] text-slate-400">min</span>
+                                            {editingActivity.durationMinutes && (
+                                                <span className={`ml-1.5 text-[10px] font-bold ${editingActivity.actualTimeSeconds/60 >= editingActivity.durationMinutes ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                    ({Math.round(editingActivity.actualTimeSeconds/60 - editingActivity.durationMinutes)}m)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Double Session Warning */}
                     {hasExistingActivity && !editingActivity && (
                         <div className="mb-6 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
@@ -1184,6 +1238,39 @@ export function ActivityModal({
                                     )}
                                 </div>
 
+                                {/* Cycling Specific: Tempo (km/h) and Watts */}
+                                {formType === 'BIKE' && (
+                                    <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Tempo (km/h)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={formTargetSpeedKmh}
+                                                    onChange={(e) => setFormTargetSpeedKmh(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                                    placeholder="30.0"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">km/h</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Watt-intervall</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={formTargetWattsRange}
+                                                    onChange={(e) => setFormTargetWattsRange(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                                    placeholder="t.ex. 200-220"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">W</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Intensity Selector for RUN/BIKE - moved to separate row */}
                                 {(formType === 'RUN' || formType === 'BIKE') && (
                                     <div>
@@ -1415,6 +1502,48 @@ export function ActivityModal({
                                 placeholder="Beskriv passet..."
                             />
                         </div>
+
+                        {/* Manual Match UI */}
+                        {editingActivity && formStatus === 'PLANNED' && (() => {
+                            const unmatchedOnDay = unifiedActivities.filter(act => 
+                                act.date.split('T')[0] === formDate &&
+                                !plannedActivities.some(p => p.externalId === act.id)
+                            );
+                            
+                            const bestCandidateId = editingActivity.reconciliation?.bestCandidateId;
+                            
+                            if (unmatchedOnDay.length > 0) {
+                                return (
+                                    <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                        <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider mb-2 flex items-center gap-2">
+                                            <Target size={12} /> Pass genomfört? Matcha för att dölja:
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            {unmatchedOnDay.map(act => {
+                                                const isBest = act.id === bestCandidateId;
+                                                return (
+                                                    <button 
+                                                        key={act.id}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            reconciliation.reconcileActivity(editingActivity.id, act.id);
+                                                            onClose();
+                                                        }}
+                                                        className={`text-left px-3 py-2 rounded-xl text-xs font-bold transition-all border ${isBest ? 'bg-indigo-500 text-white border-indigo-400 shadow-md' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:text-indigo-500'}`}
+                                                    >
+                                                        {isBest ? '✨ Matcha förslag: ' : ''}{act.title || act.type} ({Math.round(act.durationMinutes)} min)
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="mt-2 text-[9px] text-slate-400 leading-tight">
+                                            Genom att matcha flyttas passet till "Genomfört" och dess statistik används för analys.
+                                        </p>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
 
                         {editingActivity && (
                             <button

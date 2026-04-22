@@ -10,14 +10,15 @@ import {
     WEEKDAYS,
     Weekday
 } from '../models/types.ts';
-import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle, Heart, Copy, Trash2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
-import { formatDuration } from '../utils/dateUtils.ts';
+import { formatDuration, formatPace } from '../utils/dateUtils.ts';
 import { getPlannedRaceTime, calcPace } from '../components/training/races/utils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
 import { notificationService } from '../services/notificationService.ts';
 import { ActivityModal } from '../components/planning/ActivityModal.tsx';
 import { WeeklyStatsAnalysis } from '../components/planning/WeeklyStatsAnalysis.tsx';
+import { TrainingTabs } from '../components/training/TrainingTabs.tsx';
 
 const SHORT_WEEKDAYS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
@@ -37,6 +38,7 @@ export function TrainingPlanningPage() {
         unifiedActivities = [],
         currentUser,
         reorderActivity,
+        reconciliation,
         isLoading
     } = useData();
 
@@ -47,6 +49,33 @@ export function TrainingPlanningPage() {
     const [draggedOverDate, setDraggedOverDate] = useState<string | null>(null);
     const [swappingActivityId, setSwappingActivityId] = useState<string | null>(null);
     const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
+    const [ctrlHeld, setCtrlHeld] = useState(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.ctrlKey || e.metaKey) setCtrlHeld(true); };
+        const handleKeyUp = (e: KeyboardEvent) => { if (!e.ctrlKey && !e.metaKey) setCtrlHeld(false); };
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
+
+    const handleDuplicate = (act: PlannedActivity) => {
+        const newAct: PlannedActivity = {
+            ...act,
+            id: generateId(),
+            status: 'PLANNED',
+            autoMatchDisabled: true,
+            reconciliation: undefined,
+            externalId: undefined,
+            completedDate: undefined,
+            order: (act.order ?? 0) + 1
+        };
+        savePlannedActivities([newAct]);
+        notificationService.notify('success', 'Aktivitet kopierad!');
+    };
 
     const handleMoveToDate = (id: string, newDate: string) => {
         const act = plannedActivities.find(a => a.id === id);
@@ -293,11 +322,21 @@ export function TrainingPlanningPage() {
         const forecastStrengthTime = strengthTime + plannedStrengthTime;
         const forecastOtherTime = otherTime + plannedOtherTime;
 
+        // Average HR and Pace
+        const runningWithHr = runningActivities.filter((a: any) => a.heartRateAvg && a.heartRateAvg > 0);
+        const avgHr = runningWithHr.length > 0
+            ? runningWithHr.reduce((sum: number, a: any) => sum + a.heartRateAvg, 0) / runningWithHr.length
+            : 0;
+        
+        const avgPace = runningKm > 0 ? runningTime / runningKm : 0;
+
         return {
             running: {
                 sessions: runningSessions,
                 km: runningKm,
-                time: runningTime
+                time: runningTime,
+                avgHr,
+                avgPace
             },
             strength: {
                 sessions: strengthSessionCount,
@@ -511,12 +550,12 @@ export function TrainingPlanningPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-white">
-            <div className="max-w-[1400px] mx-auto mb-6">
-                <TrainingPeriodBanner />
-            </div>
+        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 font-sans text-slate-900 dark:text-white pb-8">
+            <TrainingTabs currentTab="planera" />
+            <div className="p-4 md:p-8 pt-4">
 
-            <div className="max-w-[1400px] mx-auto flex items-center justify-between mb-8">
+
+                <div className="max-w-[1400px] mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
                         <ChevronLeft />
@@ -557,8 +596,10 @@ export function TrainingPlanningPage() {
                                     <span className="text-base font-bold text-slate-400 ml-1">km</span>
                                 </span>
                             </div>
-                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
-                                {lastWeeklyStats.running.sessions} pass
+                            <div className="text-[10px] font-bold text-slate-500 uppercase flex flex-col gap-0.5 mt-1">
+                                <div className="flex items-center gap-1"><Clock size={10} /> {lastWeeklyStats.running.sessions} pass</div>
+                                {lastWeeklyStats.running.avgPace > 0 && <div className="flex items-center gap-1"><Zap size={10} className="text-amber-500" /> {formatPace(lastWeeklyStats.running.avgPace * 60)}</div>}
+                                {lastWeeklyStats.running.avgHr > 0 && <div className="flex items-center gap-1"><Heart size={10} className="text-rose-500" /> {Math.round(lastWeeklyStats.running.avgHr)} bpm</div>}
                             </div>
                         </div>
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
@@ -570,8 +611,8 @@ export function TrainingPlanningPage() {
                                     <span className="text-base font-bold text-slate-400 ml-1">pass</span>
                                 </span>
                             </div>
-                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
-                                {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton
+                            <div className="text-[10px] font-bold text-slate-500 uppercase mt-1">
+                                <div className="flex items-center gap-1"><Dumbbell size={10} /> {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton</div>
                             </div>
                         </div>
                         <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch shrink-0"></div>
@@ -583,22 +624,27 @@ export function TrainingPlanningPage() {
                                     <span className="text-base font-bold text-slate-400 ml-1">pass</span>
                                 </span>
                             </div>
-                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
-                                {formatDurationHHMM(lastWeeklyStats.other.time)}
+                            <div className="text-[10px] font-bold text-slate-500 uppercase mt-1">
+                                <div className="flex items-center gap-1"><Clock size={10} /> {formatDurationHHMM(lastWeeklyStats.other.time)}</div>
                             </div>
                         </div>
                     </div>
+                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Total tid</span>
+                        <span className="text-sm font-black text-slate-600 dark:text-slate-400">{formatDurationHHMM(lastWeeklyStats.total.completedTime)}</span>
+                    </div>
+
                 </div>
 
                 {/* 1. Denna Vecka (Actuals vs Planned) */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                         <TrendingUp size={16} className="text-emerald-500" />
                         <span className="text-sm font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
                     </div>
                     <div className="flex items-start gap-4">
                         <div className="flex flex-col flex-1">
-                            <div className="text-xs font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Zap size={12} className="text-amber-500" /> Löpning</div>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-3xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.running.km.toFixed(1)}
@@ -608,22 +654,33 @@ export function TrainingPlanningPage() {
                             <div className="text-sm font-medium text-slate-500 flex items-center gap-2 flex-wrap">
                                 <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
                                 <span className="text-slate-300">•</span>
-                                <span>{formatDurationHHMM(weeklyStats.running.time)}{weeklyStats.forecast.runningTime > weeklyStats.running.time ? ` / ${formatDurationHHMM(weeklyStats.forecast.runningTime)}` : ''}</span>
-                                <span className="text-slate-300">•</span>
                                 <span className="text-emerald-600 dark:text-emerald-400 font-bold">Snitt: {monthWeeklyAvg.toFixed(1)} km/v</span>
                             </div>
                         </div>
                         <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
                         <div className="flex flex-col flex-1">
-                            <div className="text-xs font-black uppercase text-slate-400 mb-1 whitespace-nowrap">💪 Styrka</div>
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Dumbbell size={12} className="text-purple-500" /> Styrka</div>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-3xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.strength.sessions}
                                     <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.strengthSessions} pass</span>
                                 </span>
                             </div>
-                            <div className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                            <div className="text-sm font-medium text-slate-500">
                                 {(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton
+                            </div>
+                        </div>
+                        <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
+                        <div className="flex flex-col flex-1">
+                            <div className="text-xs font-black uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Activity size={12} className="text-cyan-500" /> Cardio</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-3xl font-black text-slate-900 dark:text-white">
+                                    {weeklyStats.other.sessions}
+                                    <span className="text-sm font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.otherSessions} pass</span>
+                                </span>
+                            </div>
+                            <div className="text-sm font-medium text-slate-500">
+                                {formatDurationHHMM(weeklyStats.other.time)}
                             </div>
                         </div>
                     </div>
@@ -643,73 +700,6 @@ export function TrainingPlanningPage() {
                             )}
                         </div>
                     </div>
-                </div>
-
-                {/* 2. Veckomål & Prognos (Compact Combined) */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm relative overflow-hidden">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <Target size={16} className="text-indigo-500" />
-                            <span className="text-sm font-black uppercase tracking-wider text-slate-500">Mål & Prognos</span>
-                        </div>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={handleMoveAllToNextWeek}
-                                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-500 transition-colors flex items-center gap-1.5"
-                                title="Flytta alla planerade pass till nästa vecka"
-                            >
-                                <ChevronRight size={12} /> Flytta v.
-                            </button>
-                            <div className="flex gap-2 text-xs uppercase font-black text-slate-400">
-                                <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500 fill-amber-500" /> {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {goalProgress.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">Inga aktiva veckomål.</p>
-                    ) : (
-                        <div className="space-y-3">
-                            {goalProgress.map((goal) => {
-                                const currentPct = Math.min(100, (goal.current / goal.target) * 100);
-                                const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
-                                const isActuallyMet = goal.current >= goal.target;
-                                const isProjectedMet = (goal.current + goal.planned) >= goal.target;
-                                const overPerformance = Math.max(0, goal.current - goal.target);
-
-                                return (
-                                    <div key={goal.id}>
-                                        <div className="flex justify-between text-xs font-black uppercase mb-1">
-                                            <span className="text-slate-500 dark:text-slate-400 truncate pr-2 flex items-center gap-1.5">
-                                                {goal.name}
-                                                {isActuallyMet ? <Check size={12} className="text-emerald-500 stroke-[3]" /> : (isProjectedMet ? <Check size={12} className="text-emerald-500/50 stroke-[3]" /> : null)}
-                                            </span>
-                                            <span className={isActuallyMet ? 'text-emerald-500' : 'text-slate-500'}>
-                                                {overPerformance > 0 ? (
-                                                    <span className="flex items-center gap-1">
-                                                        <span>{goal.target} {goal.unit}</span>
-                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[10px]">+{overPerformance.toFixed(1)}</span>
-                                                    </span>
-                                                ) : (
-                                                    <>
-                                                        {goal.current.toFixed(goal.unit === 'km' ? 1 : 0)}
-                                                        <span className="text-slate-300 mx-1">/</span>
-                                                        {goal.target} {goal.unit}
-                                                    </>
-                                                )}
-                                            </span>
-                                        </div>
-                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex relative">
-                                            <div className={`h-full transition-all ${isActuallyMet ? 'bg-emerald-500' : goal.colorClass}`} style={{ width: `${currentPct}%` }} />
-                                            {plannedPct > 0 && (
-                                                <div className={`h-full transition-all ${goal.plannedClass}`} style={{ width: `${plannedPct}%`, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)' }} />
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -811,7 +801,7 @@ export function TrainingPlanningPage() {
                                                     draggable={!isCompleted}
                                                     onDragStart={(e) => { e.dataTransfer.setData('activityId', act.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                     onClick={() => swappingActivityId ? handleSwapActivities(act.id) : handleOpenModal(day.date, act)}
-                                                    className={`relative p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col gap-2 
+                                                    className={`relative p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col ${isCompleted ? 'gap-0.5' : 'gap-2'} 
                                                         ${isRace ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 ring-1 ring-amber-400/20' : 
                                                           (act.type === 'REST' || act.category === 'REST' ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800' :
                                                           (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' :
@@ -822,7 +812,7 @@ export function TrainingPlanningPage() {
                                                         ${swappingActivityId === act.id ? 'ring-2 ring-blue-500' : ''}
                                                     `}
                                                 >
-                                                    <div className="relative mb-1">
+                                                    <div className="relative">
                                                         <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-full ${isRace ? 'text-amber-600 dark:text-amber-400' : (act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' : (act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' : (act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? 'text-cyan-600 dark:text-cyan-400' : 'text-emerald-600 dark:text-emerald-400'))))}`}>
                                                             <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
                                                             <span className="leading-tight">
@@ -845,6 +835,33 @@ export function TrainingPlanningPage() {
                                                         </div>
                                                     </div>
 
+                                                    {swappingActivityId && swappingActivityId !== act.id && (
+                                                        <div className="absolute inset-0 bg-blue-500/20 backdrop-blur-[1px] flex items-center justify-center z-30 transition-all rounded-lg">
+                                                            <RefreshCcw className="text-blue-600 animate-spin-slow" size={24} />
+                                                        </div>
+                                                    )}
+
+                                                    {ctrlHeld && (
+                                                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center gap-3 z-40 transition-all rounded-lg animate-in fade-in zoom-in duration-200">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleDuplicate(act); }}
+                                                                className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:scale-110 transition-transform flex items-center justify-center group/btn"
+                                                                title="Kopiera"
+                                                            >
+                                                                <Copy size={16} />
+                                                                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap">Kopiera</span>
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete({ type: 'planned', id: act.id, data: act }); }}
+                                                                className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-lg hover:scale-110 transition-transform flex items-center justify-center group/btn"
+                                                                title="Ta bort"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap">Ta bort</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+
                                                     {movingActivityId === act.id && (
                                                         <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-blue-900/50 animate-in fade-in slide-in-from-top-1" onClick={e => e.stopPropagation()}>
                                                             <div className="text-[9px] font-black uppercase text-slate-500 mb-2">Flytta till datum:</div>
@@ -863,20 +880,73 @@ export function TrainingPlanningPage() {
                                                             const next = idx < sortedRaces.length - 1 ? sortedRaces[idx + 1] : null;
                                                             const daysPrev = prev ? getDaysBetween(prev.date, act.date) : null;
                                                             const daysNext = next ? getDaysBetween(act.date, next.date) : null;
-                                                            return <span className="font-bold block mb-0.5">{act.title}{act.estimatedDistance > 0 && <span className="text-amber-600 dark:text-amber-400 ml-1">({act.estimatedDistance.toFixed(1)} km)</span>}{(daysPrev !== null || daysNext !== null) && <span className="hidden group-hover/card:flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">{daysPrev !== null && <span>⏮️ {daysPrev} dgr sen</span>}{daysNext !== null && <span>⏭️ {daysNext} dgr kvar</span>}</span>}</span>;
+                                                            const distStr = isCompleted && act.actualDistance ? `${act.actualDistance.toFixed(1)} km (mål ${act.estimatedDistance.toFixed(1)})` : `${act.estimatedDistance.toFixed(1)} km`;
+                                                            return <span className="font-bold block mb-0.5">{act.title}{act.estimatedDistance > 0 && <span className="text-amber-600 dark:text-amber-400 ml-1">({distStr})</span>}{(daysPrev !== null || daysNext !== null) && <span className="hidden group-hover/card:flex gap-2 text-[9px] font-black uppercase tracking-tight text-amber-600 dark:text-amber-500/80 mt-0.5">{daysPrev !== null && <span>⏮️ {daysPrev} dgr sen</span>}{daysNext !== null && <span>⏭️ {daysNext} dgr kvar</span>}</span>}</span>;
                                                         })() : (
                                                             <>
-                                                                {act.title}
-                                                                {act.estimatedDistance > 0 && !isRace && <span className="text-slate-500 ml-1">({act.estimatedDistance.toFixed(1)} km)</span>}
+                                                                {act.type === 'BIKE' && act.title === 'Cykling' && act.durationMinutes 
+                                                                    ? `Cykel ${act.durationMinutes} min` 
+                                                                    : act.title}
+                                                                {isCompleted && (act.actualDistance || act.actualTimeSeconds) ? (
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        {act.actualDistance && <div className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1"><span>✅ {act.actualDistance.toFixed(1)} km</span><span className="text-slate-400 text-[10px] font-medium">(mål {act.estimatedDistance.toFixed(1)})</span></div>}
+                                                                        {act.actualTimeSeconds && <div className="text-slate-500 text-[10px] flex items-center gap-1"><span>⏱️ {formatDurationHHMM(act.actualTimeSeconds / 60)}</span><span className="opacity-50">(mål {formatDurationHHMM(act.durationMinutes || 0)})</span></div>}
+                                                                    </div>
+                                                                ) : (
+                                                                    act.estimatedDistance > 0 && !isRace && <span className="text-slate-500 ml-1">({act.estimatedDistance.toFixed(1)} km)</span>
+                                                                )}
                                                             </>
                                                         )}
                                                     </p>
-                                                    {(act.durationMinutes || 0) > 0 && <span className="text-[10px] text-slate-400 font-bold block mt-0.5">⏱️ {formatDurationHHMM(act.durationMinutes || 0)}</span>}
-                                                    {act.description && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 line-clamp-2 leading-tight">{act.description}</p>}
+                                                    {!isCompleted && (act.durationMinutes || 0) > 0 && <span className="text-[10px] text-slate-400 font-bold block">⏱️ {formatDurationHHMM(act.durationMinutes || 0)}</span>}
+                                                    
+                                                    {/* Bike specific targets */}
+                                                    {act.type === 'BIKE' && (act.targetSpeedKmh || act.targetWattsRange) && (
+                                                        <div className="flex flex-wrap gap-2 mt-1">
+                                                            {act.targetSpeedKmh && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-md border border-emerald-100 dark:border-emerald-800/30">🎯 {act.targetSpeedKmh} km/h</span>}
+                                                            {act.targetWattsRange && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 rounded-md border border-cyan-100 dark:border-cyan-800/30">⚡ {act.targetWattsRange} W</span>}
+                                                        </div>
+                                                    )}
+
+                                                    {act.description && <p className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 leading-tight">{act.description}</p>}
+                                                    
+                                                    {/* Manual Match UI */}
+                                                    {!isCompleted && !isSkipped && (() => {
+                                                        const unmatchedOnDay = allEvents.filter(e => e.type === 'actual');
+                                                        const bestCandidateId = act.reconciliation?.bestCandidateId;
+                                                        
+                                                        if (unmatchedOnDay.length > 0) {
+                                                            return (
+                                                                <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                                                                    <div className="text-[8px] font-black uppercase text-indigo-400/60 tracking-wider mb-1.5 flex items-center gap-1.5">
+                                                                        <Target size={8} /> Pass genomfört? Matcha:
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        {unmatchedOnDay.map(ev => {
+                                                                            const isBest = ev.id === bestCandidateId;
+                                                                            return (
+                                                                                <button 
+                                                                                    key={ev.id}
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        reconciliation.reconcileActivity(act.id, ev.id);
+                                                                                    }}
+                                                                                    className={`text-left px-2 py-1 rounded text-[9px] font-bold transition-all border ${isBest ? 'bg-indigo-500 text-white border-indigo-400 shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:text-indigo-500'}`}
+                                                                                >
+                                                                                    {isBest ? '✨ Förslag: ' : ''}{ev.data.title || ev.data.type} ({Math.round(ev.data.durationMinutes)} min)
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()}
 
                                                     {/* Developer Insights (Ignorera match) at Bottom */}
                                                     {(act.reconciliation || act.externalId) && (
-                                                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/50 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                                        <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-800/50 hidden group-hover/card:block animate-in fade-in slide-in-from-top-1">
                                                             <div className="flex items-center justify-between text-[8px] font-black uppercase text-slate-400 mb-1">
                                                                 <span>Data-matchning</span>
                                                                 {act.reconciliation?.score != null && <span className="text-emerald-500">{Math.round(act.reconciliation.score)}% Match</span>}
@@ -979,6 +1049,82 @@ export function TrainingPlanningPage() {
             />
 
             <WeeklyStatsAnalysis weekStart={currentWeekStart} weeklyStats={weeklyStats} />
+
+            {goalProgress.length > 0 && (
+                <div className="max-w-[1400px] mx-auto mt-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Target size={18} className="text-indigo-500" />
+                            <h3 className="text-base font-black uppercase tracking-wider text-slate-800 dark:text-white">Veckomål & Prognos</h3>
+                        </div>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={handleMoveAllToNextWeek}
+                                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 transition-colors flex items-center gap-2"
+                                title="Flytta alla planerade pass till nästa vecka"
+                            >
+                                <ChevronRight size={14} /> Flytta pass till nästa vecka
+                            </button>
+                            <div className="flex gap-2 text-sm uppercase font-black text-slate-500">
+                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg">
+                                    <Zap size={14} className="text-amber-500 fill-amber-500" /> 
+                                    {weeklyStats.forecast.runningKm.toFixed(1)} km planerat
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                        {goalProgress.map((goal) => {
+                            const currentPct = Math.min(100, (goal.current / goal.target) * 100);
+                            const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
+                            const isActuallyMet = goal.current >= goal.target;
+                            const isProjectedMet = (goal.current + goal.planned) >= goal.target;
+                            const overPerformance = Math.max(0, goal.current - goal.target);
+
+                            return (
+                                <div key={goal.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <div className="flex justify-between text-xs font-black uppercase mb-2">
+                                        <span className="text-slate-600 dark:text-slate-400 truncate pr-2 flex items-center gap-2">
+                                            {goal.name}
+                                            {isActuallyMet ? <Check size={14} className="text-emerald-500 stroke-[3]" /> : (isProjectedMet ? <Check size={14} className="text-emerald-500/50 stroke-[3]" /> : null)}
+                                        </span>
+                                        <span className={isActuallyMet ? 'text-emerald-500' : 'text-slate-500'}>
+                                            {overPerformance > 0 ? (
+                                                <span className="flex items-center gap-1.5">
+                                                    <span>{goal.target} {goal.unit}</span>
+                                                    <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1.5 rounded text-[10px]">+{overPerformance.toFixed(1)}</span>
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    {goal.current.toFixed(goal.unit === 'km' ? 1 : 0)}
+                                                    <span className="text-slate-300 mx-1.5">/</span>
+                                                    {goal.target} {goal.unit}
+                                                </>
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex relative">
+                                        <div className={`h-full transition-all ${isActuallyMet ? 'bg-emerald-500' : goal.colorClass}`} style={{ width: `${currentPct}%` }} />
+                                        {plannedPct > 0 && (
+                                            <div className={`h-full transition-all ${goal.plannedClass}`} style={{ width: `${plannedPct}%`, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px)' }} />
+                                        )}
+                                    </div>
+                                    <div className="mt-2 text-[10px] font-bold text-slate-400 uppercase flex justify-between">
+                                        <span>{Math.round(currentPct)}% klart</span>
+                                        {plannedPct > 0 && <span>+{Math.round(plannedPct)}% planerat</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <div className="max-w-[1400px] mx-auto mb-12">
+                <TrainingPeriodBanner />
+            </div>
+            </div>
         </div>
     );
 }

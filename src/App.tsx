@@ -25,6 +25,8 @@ const CaloriesPage = React.lazy(() => import('./pages/CaloriesPage.tsx'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage.tsx').then(m => ({ default: m.ProfilePage })));
 const TrainingPeriodPage = React.lazy(() => import('./pages/TrainingPeriodPage.tsx').then(m => ({ default: m.TrainingPeriodPage })));
 const TrainingPage = React.lazy(() => import('./pages/TrainingPage.tsx'));
+const TrainingAnalyticsPage = React.lazy(() => import('./pages/training/TrainingAnalyticsPage.tsx'));
+const AnalysisHubPage = React.lazy(() => import('./pages/training/AnalysisHubPage.tsx').then(m => ({ default: m.AnalysisHubPage })));
 const PlanningPage = React.lazy(() => import('./pages/PlanningPage.tsx').then(m => ({ default: m.PlanningPage })));
 const TrainingPlanningPage = React.lazy(() => import('./pages/TrainingPlanningPage.tsx').then(m => ({ default: m.TrainingPlanningPage })));
 const ApiPage = React.lazy(() => import('./pages/ApiPage.tsx'));
@@ -157,7 +159,10 @@ export function App() {
                                                                 <Route path="databas" element={<DatabasePage />} />
                                                                 <Route path="calories" element={<CaloriesPage />} />
                                                                 <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
+                                                                <Route path="training/analytics" element={<TrainingAnalyticsPage />} />
+                                                                <Route path="training/analys" element={<AnalysisHubPage />} />
                                                                 <Route path="training/:tab?/:subTab?/:id?" element={<TrainingPage />} />
+
                                                                 <Route path="träning/:tab?/:subTab?/:id?" element={<TrainingPage />} />
                                                                 <Route path="traning/:tab?/:subTab?/:id?" element={<TrainingPage />} />
                                                                 <Route path="profile/:tab?" element={<ProfilePage />} />
@@ -177,8 +182,10 @@ export function App() {
                                                                         <AdminPage />
                                                                     </RequireRole>
                                                                 } />
-                                                                <Route path="analytics" element={<Navigate to="/admin/analytics" replace />} />
-                                                                <Route path="analys" element={<Navigate to="/admin/analytics" replace />} />
+                                                                <Route path="analytics" element={<Navigate to="/training/analys" replace />} />
+                                                                <Route path="analys" element={<Navigate to="/training/analys" replace />} />
+                                                                <Route path="sammanfattning" element={<Navigate to="/training/analys" replace />} />
+                                                                <Route path="review" element={<Navigate to="/training/analys?tab=review" replace />} />
 
                                                                 {/* Developer Routes */}
                                                                 <Route path="developer" element={
@@ -229,8 +236,8 @@ export function App() {
                                                                 <Route path="review" element={<YearInReviewPage />} />
                                                                 <Route path="year-in-review" element={<Navigate to="/review" replace />} />
                                                                 <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
-                                                                <Route path="summary" element={<SummaryPage />} />
-                                                                <Route path="sammanfattning" element={<SummaryPage />} />
+                                                                <Route path="summary" element={<Navigate to="/training/analys" replace />} />
+                                                                <Route path="sammanfattning" element={<Navigate to="/training/analys" replace />} />
                                                                 <Route path="goals" element={<GoalsPage />} />
                                                                 <Route path="mal" element={<GoalsPage />} />
                                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />

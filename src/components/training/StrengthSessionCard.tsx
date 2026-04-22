@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StrengthSession, StrengthExercise, StrengthMuscleGroup, generateId } from '../../models/types.ts';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { useData } from '../../context/DataContext.tsx';
 
 interface StrengthSessionCardProps {

@@ -9,7 +9,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { PersonalBest } from '../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { PBHoverCard } from '../components/charts/PBHoverCard.tsx';
-import { formatActivityDuration } from '../utils/formatters.ts';
+import { formatActivityDuration } from '../utils/durationFormatter.ts';
 
 export function CommunityStatsPage() {
     const navigate = useNavigate();

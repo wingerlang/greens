@@ -20,14 +20,23 @@ import {
 
 type ViewMode = 'calories' | 'protein' | 'carbs' | 'fat' | 'training';
 
-export function WeeklyMetabolismAnalyticCard() {
+interface WeeklyMetabolismAnalyticCardProps {
+    selectedDate?: string;
+    onDateSelect?: (date: string) => void;
+}
+
+export function WeeklyMetabolismAnalyticCard({ selectedDate: globalSelectedDate, onDateSelect }: WeeklyMetabolismAnalyticCardProps) {
     const {
         unifiedActivities,
         trainingPeriods,
         performanceGoals,
         calculateDailyNutrition,
-        weightEntries
+        weightEntries,
+        selectedDate
     } = useData();
+    
+    // Use the prop if provided, otherwise context
+    const currentSelectedDate = globalSelectedDate || selectedDate;
     const { settings, updateSettings } = useSettings();
     const navigate = useNavigate();
     const [viewMode, setViewMode] = useState<ViewMode>('calories');
@@ -43,8 +52,9 @@ export function WeeklyMetabolismAnalyticCard() {
 
     const stats = useMemo(() => {
         const now = new Date();
+        const baseDate = currentSelectedDate ? new Date(currentSelectedDate) : new Date();
         const todayISO = toLocalISO(now);
-        const d = new Date(now);
+        const d = new Date(baseDate);
         const dayOfWeek = d.getDay();
         const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
         const monday = new Date(d.setDate(diff));
@@ -65,7 +75,10 @@ export function WeeklyMetabolismAnalyticCard() {
         const age = settings.birthYear ? (new Date().getFullYear() - settings.birthYear) : 34;
         const height = settings.height || 180;
         const gender = settings.gender || 'male';
-        const lastWeight = weightEntries.length > 0 ? weightEntries[weightEntries.length - 1].weight : (settings.weight || 75);
+        const weightAtMonday = weightEntries
+            .filter(w => w.date <= toLocalISO(monday))
+            .sort((a, b) => b.date.localeCompare(a.date))[0]?.weight || (settings.weight || 75);
+        const lastWeight = weightAtMonday;
         const metabolicBaselineRaw = (10 * lastWeight) + (6.25 * height) - (5 * age) + (gender === 'female' ? -161 : 5);
         const palMultiplier = settings.metabolicBaselineMultiplier || 1.2;
         const metabolicBaseline = metabolicBaselineRaw * palMultiplier;
@@ -92,7 +105,7 @@ export function WeeklyMetabolismAnalyticCard() {
                     carbs: settings.dailyCarbsGoal,
                     fat: settings.dailyFatGoal
                 },
-                2500,
+                settings.dailyCalorieGoal || 2000,
                 settings.calorieMode || 'tdee',
                 dailyBurned,
                 multiplier
@@ -150,6 +163,15 @@ export function WeeklyMetabolismAnalyticCard() {
         const sundayForecast = currentWeight + (avgDailyPhysicsDeficit * (7 - daysPassed) / 7700);
         const periodEndForecast = currentWeight + (avgDailyPhysicsDeficit * daysInPeriodRemaining / 7700);
 
+        // Resolve current goal macros for the summary stats
+        const todayTarget = dailyBreakdown.find(d => d.isToday)?.target || 
+                           dailyBreakdown.find(d => d.date === currentSelectedDate)?.target ||
+                           dailyBreakdown[0]?.target || 2000;
+        const currentActiveGoal = performanceGoals.find(g => (g.type === 'weight' || g.type === 'nutrition') && g.status === 'active' && !!g.nutritionMacros);
+        const resolvedProteinGoal = currentActiveGoal?.nutritionMacros?.protein || settings.dailyProteinGoal || 150;
+        const resolvedCarbsGoal = currentActiveGoal?.nutritionMacros?.carbs || settings.dailyCarbsGoal || 200;
+        const resolvedFatGoal = currentActiveGoal?.nutritionMacros?.fat || settings.dailyFatGoal || 60;
+
         return {
             totalConsumed, totalBurned, totalAdjustedTarget, totalProtein, totalCarbs, totalFat, daysPassed, dailyBreakdown,
             balance: bankedBalance, // KPI shows banked through yesterday
@@ -170,12 +192,25 @@ export function WeeklyMetabolismAnalyticCard() {
                 theoreticalChange: physicsDeficit / 7700,
                 totalDeficit: bankedBalance // budget deficit through yesterday
             },
-            goals: { protein: settings.dailyProteinGoal || 150, carbs: settings.dailyCarbsGoal || 200, fat: settings.dailyFatGoal || 60 },
+            goals: { 
+                calories: todayTarget,
+                protein: resolvedProteinGoal, 
+                carbs: resolvedCarbsGoal, 
+                fat: resolvedFatGoal 
+            },
             metabolicBaseline
         };
-    }, [unifiedActivities, trainingPeriods, performanceGoals, settings, calculateDailyNutrition, weightEntries]);
+    }, [unifiedActivities, trainingPeriods, performanceGoals, settings, calculateDailyNutrition, weightEntries, currentSelectedDate]);
 
-    const activeDay = selectedDayIdx !== null ? stats.dailyBreakdown[selectedDayIdx] : stats.dailyBreakdown.find(d => d.isToday);
+    const activeDay = useMemo(() => {
+        if (selectedDayIdx !== null) return stats.dailyBreakdown[selectedDayIdx];
+        if (currentSelectedDate) {
+            const found = stats.dailyBreakdown.find(d => d.date === currentSelectedDate);
+            if (found) return found;
+        }
+        return stats.dailyBreakdown.find(d => d.isToday);
+    }, [selectedDayIdx, stats.dailyBreakdown, currentSelectedDate]);
+
     const getVal = (day: any) => {
         if (viewMode === 'protein') return day.protein;
         if (viewMode === 'carbs') return day.carbs;
@@ -301,7 +336,10 @@ export function WeeklyMetabolismAnalyticCard() {
                     <span className="text-slate-700 text-[10px] font-bold">-</span>
                     <div className="flex flex-col">
                         <span className="text-[8px] font-black text-slate-600 uppercase">Underskott</span>
-                        <span className="text-[10px] font-black text-rose-400">-{Math.round(stats.metabolicBaseline - (settings.dailyCalorieGoal || 2000))}</span>
+                        <span className="text-[10px] font-black text-rose-400">
+                            {Math.round(stats.metabolicBaseline - stats.goals.calories) > 0 ? '-' : '+'}
+                            {Math.abs(Math.round(stats.metabolicBaseline - stats.goals.calories))}
+                        </span>
                     </div>
                     <span className="text-slate-700 text-[10px] font-bold">+</span>
                     <div className="flex flex-col">
@@ -312,7 +350,10 @@ export function WeeklyMetabolismAnalyticCard() {
                 <div className="h-3 w-[1px] bg-white/10 shrink-0" />
                 <div className="flex flex-col shrink-0">
                     <span className="text-[8px] font-black text-slate-600 uppercase">Protein</span>
-                    <span className="text-[10px] font-black text-emerald-400">{settings.proteinMultiplier || (stats.goals.protein / (stats.weightStats.current || 80)).toFixed(1)}g/kg <span className="text-slate-600 font-bold">({stats.goals.protein}g)</span></span>
+                    <span className="text-[10px] font-black text-emerald-400">
+                        {(stats.goals.protein / (stats.weightStats.current || 80)).toFixed(1)}g/kg 
+                        <span className="text-slate-600 font-bold ml-1">({stats.goals.protein}g)</span>
+                    </span>
                 </div>
             </div>
 
@@ -331,7 +372,10 @@ export function WeeklyMetabolismAnalyticCard() {
                                 <div
                                     key={day.date}
                                     className={`flex-1 flex flex-col items-center gap-2 group cursor-pointer relative transition-all ${day.isFuture ? 'opacity-15' : 'opacity-100'} ${selectedDayIdx === idx ? 'scale-105 filter drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]' : ''}`}
-                                    onClick={() => setSelectedDayIdx(selectedDayIdx === idx ? null : idx)}
+                                    onClick={() => {
+                                        setSelectedDayIdx(selectedDayIdx === idx ? null : idx);
+                                        if (onDateSelect) onDateSelect(day.date);
+                                    }}
                                 >
                                     <div className="w-full h-full relative flex items-end justify-center min-h-[40px]">
                                         {currentTgt > 0 && (
@@ -361,40 +405,52 @@ export function WeeklyMetabolismAnalyticCard() {
                             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{activeDay?.dayName} Analys</span>
                             <span className="text-[9px] font-bold text-slate-500">{activeDay?.date}</span>
                         </div>
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-[11px] font-bold">
-                                <span className="text-slate-500">INTAG</span>
-                                <span className="text-white">{activeDay?.consumed} <span className="text-[9px] opacity-40">kcal</span></span>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center text-[11px] font-bold">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center text-slate-400">🍴</div>
+                                    <span className="text-slate-500 uppercase tracking-tight">Mat & Dryck</span>
+                                </div>
+                                <span className="text-white font-mono">{activeDay?.consumed} <span className="text-[9px] opacity-40">kcal</span></span>
                             </div>
-                            <div className="flex justify-between text-[11px] font-bold">
-                                <span className="text-slate-500">TRÄNING</span>
-                                <span className="text-amber-400">
+
+                            <div className="flex justify-between items-center text-[11px] font-bold">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center">🏃</div>
+                                    <span className="text-slate-500 uppercase tracking-tight">Träning (Ut)</span>
+                                </div>
+                                <span className="text-amber-400 font-mono">
                                     +{activeDay?.effectiveBurned}
                                     <span className="text-[8px] opacity-40 ml-1">({Math.round(activeDay?.multiplier * 100)}%)</span>
                                 </span>
                             </div>
-                            <div className="flex justify-between text-[11px] font-bold">
-                                <span className="text-slate-500">METABOLISM</span>
-                                <span className="text-indigo-300">
+
+                            <div className="flex justify-between items-center text-[11px] font-bold">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center text-indigo-400">🔥</div>
+                                    <span className="text-slate-500 uppercase tracking-tight">Total Förbränning</span>
+                                </div>
+                                <span className="text-indigo-300 font-mono">
                                     {Math.round(stats.metabolicBaseline + (activeDay?.burned || 0))}
                                 </span>
                             </div>
-                            <div className="flex justify-between pt-2 border-t border-white/5 text-[14px] font-black">
-                                <span className="text-slate-400">NETTO</span>
-                                <span className={activeDay?.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                                    {activeDay?.balance >= 0 ? '+' : ''}{activeDay?.balance}
-                                </span>
+
+                            <div className="pt-2 border-t border-white/5 space-y-1">
+                                <div className="flex justify-between text-[10px] font-bold opacity-60">
+                                    <span className="text-slate-400 uppercase">Dagens Budget</span>
+                                    <span className="text-white font-mono">{activeDay?.target}</span>
+                                </div>
+                                <div className="flex justify-between items-baseline pt-1">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo (Kvar)</span>
+                                        <span className="text-[8px] text-slate-600 font-bold uppercase leading-none">Budget - Intag</span>
+                                    </div>
+                                    <span className={`text-[18px] font-black font-mono tracking-tighter ${activeDay?.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {activeDay?.balance >= 0 ? '+' : ''}{activeDay?.balance}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="bg-slate-950 p-3 rounded-xl border border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            {stats.balance >= 0 ? <Lock size={12} className="text-emerald-400" /> : <Unlock size={12} className="text-rose-400" />}
-                            <span className="text-[9px] font-black uppercase text-slate-500">Status</span>
-                        </div>
-                        <span className={`text-[10px] font-bold ${stats.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {stats.balance >= 0 ? 'SAFE' : 'OVER LIMIT'}
-                        </span>
                     </div>
                 </div>
             </div>

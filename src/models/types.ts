@@ -1280,6 +1280,8 @@ export interface ActivityPerformanceSection {
     // Physiological
     avgHeartRate?: number;
     maxHeartRate?: number;
+    originalAvgHeartRate?: number;
+    originalMaxHeartRate?: number;
     elevationGain?: number;
 
     // Cycling / Advanced
@@ -1497,6 +1499,10 @@ export interface PlannedActivity {
         source?: string;
     };
 
+    targetSpeedKmh?: number;
+    targetWatts?: number;
+    targetWattsRange?: string; // e.g. "200-220"
+    
     // Race Specific Details (Metadata)
     raceDetails?: RaceDetails;
 }

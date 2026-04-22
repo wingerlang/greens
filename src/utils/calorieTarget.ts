@@ -69,15 +69,24 @@ export function getActiveCalorieTarget(
     // We look for ANY active goal that has nutritionMacros, prioritizing those linked to the current period
     const activeGoals = performanceGoals.filter(g => g.status === 'active');
     
-    // Sort so period-linked goals come first
+    // Sort goals to find the most relevant "nutrition driver"
     const sortedGoals = [...activeGoals].sort((a, b) => {
+        // Priority 1: Goals with explicit nutrition macros
+        const aHasMacros = !!(a.nutritionMacros && a.nutritionMacros.calories);
+        const bHasMacros = !!(b.nutritionMacros && b.nutritionMacros.calories);
+        if (aHasMacros && !bHasMacros) return -1;
+        if (bHasMacros && !aHasMacros) return 1;
+
+        // Priority 2: Current period link
         if (activePeriod) {
             if (a.periodId === activePeriod.id && b.periodId !== activePeriod.id) return -1;
             if (b.periodId === activePeriod.id && a.periodId !== activePeriod.id) return 1;
         }
-        // Then prioritize explicit 'nutrition' types
+
+        // Priority 3: Explicit 'nutrition' types
         if (a.type === 'nutrition' && b.type !== 'nutrition') return -1;
         if (b.type === 'nutrition' && a.type !== 'nutrition') return 1;
+        
         return 0;
     });
 

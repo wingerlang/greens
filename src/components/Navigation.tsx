@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/health', label: 'Översikt', icon: '📊', section: 'health', description: 'Trender & Insikter' },
     { path: '/health/body', label: 'Kropp', icon: '🧬', section: 'health', description: 'Mått & Vikt' },
     { path: '/health/recovery', label: 'Recovery', icon: '🩹', section: 'health', description: 'Återhämtning' },
+    { path: '/training/load', label: 'Belastning', icon: '🏋️', section: 'health', description: 'Training Load' },
 
     // Food
     { path: '/veckan', label: 'Veckan', icon: '📅', section: 'food', description: 'Veckoöversikt' },
@@ -45,11 +46,8 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/pass', label: 'Passbank', icon: '📚', section: 'training', description: 'Sparade pass' },
     { path: '/logg', label: 'Logg', icon: '📜', section: 'training', description: 'Aktivitetslogg' },
     { path: '/styrka', label: 'Styrka', icon: '💪', section: 'training', description: 'Styrketräning' },
-    { path: '/training/lopstatistik', label: 'Löpstatistik', icon: '🏃', section: 'training', description: 'Löparstatistik & PB' },
-    { path: '/training/load', label: 'Belastning', icon: '🏋️', section: 'training', description: 'Training Load' },
     { path: '/exercises', label: 'Övningar', icon: '📚', section: 'training', description: 'Övningsbibliotek' },
     { path: '/coach', label: 'Coach', icon: '🧠', section: 'training', description: 'Smart Coach' },
-    { path: '/review', label: 'Årsöversikt', icon: '📅', section: 'training', description: 'Summering' },
     { path: '/goals', label: 'Mål', icon: '🎯', section: 'training', description: 'Sätt & nå mål' },
 
     // Community
@@ -85,6 +83,23 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [isScrolled, setIsScrolled] = useState(false);
+
+    useEffect(() => {
+        let timeoutId: NodeJS.Timeout;
+        const handleScroll = () => {
+            if (window.scrollY > 100) {
+                // User asked for "after a second" when scrolled down, maybe a slight delay? Or just smooth transition.
+                // We can add a delay to setting it, or just rely on CSS transition. The user means "when you have scrolled down for a bit".
+                setIsScrolled(true);
+            } else {
+                setIsScrolled(false);
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     // Filter items based on role and permissions
     const visibleItems = useMemo(() => {
@@ -209,9 +224,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
     };
 
     return (
-        <nav className="sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5 h-12 flex items-center">
-            <div className="max-w-7xl mx-auto px-4 md:px-4">
+        <nav className={`sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5 transition-all duration-700 ease-in-out flex items-center ${isScrolled ? 'h-8' : 'h-16'}`}>
+            <div className={`max-w-7xl mx-auto px-4 md:px-4 w-full transition-transform duration-700 ease-in-out origin-top ${isScrolled ? 'scale-[0.80]' : 'scale-100'}`}>
                 <div className="flex items-center justify-between h-8">
+
                     {/* Brand */}
                     <div className="flex-shrink-0">
                         <NavLink to="/" className="flex items-center gap-2 group">

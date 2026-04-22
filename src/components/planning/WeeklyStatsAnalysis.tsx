@@ -107,7 +107,9 @@ export function WeeklyStatsAnalysis({
 
         const insights: string[] = [];
         const completed = weekPlan.filter(p => p.status === 'COMPLETED');
-        const missed = weekPlan.filter(p => p.status === 'PLANNED' && new Date(p.date) < new Date());
+        const today = new Date().toISOString().split('T')[0];
+        const missed = weekPlan.filter(p => p.status === 'PLANNED' && p.date < today);
+        const plannedToday = weekPlan.filter(p => p.status === 'PLANNED' && p.date === today);
 
         // Adherence score
         const adherencePct = weekPlan.length > 0 ? (completed.length / weekPlan.length) * 100 : 100;
@@ -136,6 +138,10 @@ export function WeeklyStatsAnalysis({
 
         missed.forEach(p => {
             insights.push(`Missat pass: "${p.title}" (${p.date}).`);
+        });
+
+        plannedToday.forEach(p => {
+            insights.push(`Planerat för idag: "${p.title}". Ge järnet!`);
         });
 
         // Extra activities

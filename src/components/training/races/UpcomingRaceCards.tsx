@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Calendar, MapPin, Trophy, Target, CheckSquare, Clock, ChevronDown, ChevronUp, ExternalLink, Pencil, X, Trees } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry } from '../../../models/types.ts';
 import { normalizeRaceTitle, isTrailRace, isUltraRace, getDistanceStyle, formatRaceDateCompact, calcPace, getPlannedRaceTime, getAvgElevation } from './utils.ts';
-import { formatActivityDuration } from '../../../utils/formatters.ts';
+import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
 import { BarChart3 } from 'lucide-react';
 import { PrepAnalysisModal } from '../PrepAnalysisModal.tsx';
 

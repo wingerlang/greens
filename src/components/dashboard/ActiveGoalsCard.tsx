@@ -242,7 +242,7 @@ export const ActiveGoalsCard: React.FC<{ fullWidth?: boolean }> = ({ fullWidth =
             </div>
 
             {/* Goals List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
+            <div className={`grid grid-cols-1 ${fullWidth ? 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'md:grid-cols-2'} gap-3 relative z-10`}>
                 {activeGoals.slice(0, 4).map(goal => (
                     <div key={goal.id} className="md:col-span-1">
                          <ActiveGoalItem goal={goal} />

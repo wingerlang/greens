@@ -8,15 +8,30 @@ import { UniversalActivity } from '../models/types.ts';
  * Checks if an activity is a competition.
  */
 export function isCompetition(activity: UniversalActivity | any): boolean {
-    const title = (activity.plan?.title || activity.name || '').toLowerCase();
+    const title = (activity.plan?.title || activity.name || activity.title || '').toLowerCase();
     const notes = (activity.performance?.notes || activity.notes || '').toLowerCase();
+    
+    // Explicit race flags (Planned or Actual) take absolute priority
     const isRacePlanned = !!activity.plan?.isRace || activity.plan?.category === 'RACE';
-    const isRaceActual = activity.subType === 'race' || activity.isRace === true;
+    const isRaceActual = activity.subType === 'race' || activity.isRace === true || activity.performance?.subType === 'race';
+    if (isRacePlanned || isRaceActual) return true;
 
     const raceKeywords = ['tävling', ' race', 'lopp', 'competition', 'marathon', 'maraton', 'halvmarathon', 'halvmaraton', 'challenge'];
-    const matchesKeyword = raceKeywords.some(kw => title.includes(kw) || notes.includes(kw));
+    
+    // Strong signal: Keyword in title
+    if (raceKeywords.some(kw => title.includes(kw))) return true;
 
-    return isRacePlanned || isRaceActual || matchesKeyword;
+    // Weak signal: Keyword in notes - only trust if it's a short, specific label
+    // Avoid false positives from long descriptions mentioning other races (e.g., "sen Hässleholmsloppet")
+    if (notes.length > 0 && notes.length < 40) {
+        const retrospectiveWords = [' sen ', ' efter ', ' inför ', ' tränade ', ' snackade '];
+        const isContextual = retrospectiveWords.some(word => notes.includes(word));
+        if (!isContextual && raceKeywords.some(kw => notes.includes(kw))) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**

@@ -19,7 +19,7 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator, AlertTriangle } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 import { normalizeRaceTitle } from '../training/races/utils.ts';
 import { usePrepAggregation, PrepEvent } from '../training/hooks/usePrepAggregation.ts';
@@ -147,11 +147,22 @@ export function ActivityDetailModal({
         hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
         startKm: '0',
         averageWatts: (perf?.averageWatts || currentActivity.averageWatts || '').toString(),
+        averageHeartRate: (perf?.avgHeartRate || currentActivity.heartRateAvg || '').toString(),
+        maxHeartRate: (perf?.maxHeartRate || currentActivity.heartRateMax || '').toString(),
         placement: currentActivity.raceDetails?.placement?.toString() || '',
         totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || '',
-        useTheoreticalKcal: perf?.isCalorieAdjusted || currentActivity.isCalorieAdjusted || false,
-        calculationMode: (perf?.isCalorieAdjusted || currentActivity.isCalorieAdjusted) ? 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts'
+        originalCalories: (currentActivity.isCalorieAdjusted) ? (currentActivity as any).originalCalories : activity.originalCalories || 0,
+        calculationMode: (currentActivity.isCalorieAdjusted) ? 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts'
     });
+
+    const [showHrOverride, setShowHrOverride] = React.useState(!!(perf?.avgHeartRate && perf?.originalAvgHeartRate && perf.avgHeartRate !== perf.originalAvgHeartRate));
+    
+    const originalHr = useMemo(() => {
+        return {
+            avg: perf?.originalAvgHeartRate || (activity as any)._mergeData?.strava?.heartRateAvg || activity.heartRateAvg,
+            max: perf?.originalMaxHeartRate || (activity as any)._mergeData?.strava?.heartRateMax || activity.heartRateMax
+        };
+    }, [perf, activity]);
 
     const [hoveredExtractEffort, setHoveredExtractEffort] = React.useState<{ startKm: number; durationSeconds: number; title: string } | null>(null);
 
@@ -376,12 +387,19 @@ export function ActivityDetailModal({
             return {
                 distance: suggestions[0].distance / 1000,
                 title: suggestions[0].name,
-                topEfforts: suggestions.map(e => ({
-                    startKm: (e as any).startKm || 0,
-                    durationSeconds: e.movingTime,
-                    distance: e.distance / 1000,
-                    title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
-                }))
+                topEfforts: suggestions.map(e => {
+                    const result = getFastestSince(currentUniversal || (currentActivity as any), e.distance, e.movingTime, universalActivities);
+                    const isPB = result === 'PB';
+                    
+                    return {
+                        startKm: (e as any).startKm || 0,
+                        durationSeconds: e.movingTime,
+                        distance: e.distance / 1000,
+                        isPB,
+                        result,
+                        title: `${e.name} (${(e as any).startKm || 1}-${((e as any).startKm || 1) + Math.floor(e.distance / 1000)} km)`
+                    };
+                })
             };
         }
         return null;
@@ -574,7 +592,7 @@ export function ActivityDetailModal({
         const duration = parseInt(editForm.duration) || 0;
         const weight = getLatestWeight() || 75;
         const avgWatts = editForm.averageWatts ? parseFloat(editForm.averageWatts) : undefined;
-        const effectiveAvgHr = perf?.avgHeartRate || activity.heartRateAvg || 0;
+        const effectiveAvgHr = editForm.averageHeartRate ? parseInt(editForm.averageHeartRate) : (perf?.avgHeartRate || activity.heartRateAvg || 0);
         const distance = editForm.distance ? parseFloat(editForm.distance) : undefined;
 
         const options = {
@@ -868,6 +886,8 @@ export function ActivityDetailModal({
                 subType: editForm.subType as any,
                 tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
                 distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
+                heartRateAvg: editForm.averageHeartRate ? parseInt(editForm.averageHeartRate) : undefined,
+                heartRateMax: editForm.maxHeartRate ? parseInt(editForm.maxHeartRate) : undefined,
                 averageWatts: avgWatts,
                 caloriesBurned: calories,
                 isCalorieAdjusted,
@@ -893,6 +913,8 @@ export function ActivityDetailModal({
                 performance: {
                     ...(perf || {}),
                     averageWatts: avgWatts,
+                    avgHeartRate: commonData.heartRateAvg,
+                    maxHeartRate: commonData.heartRateMax,
                     calories: calories,
                     isCalorieAdjusted,
                     originalCalories,
@@ -1221,6 +1243,71 @@ export function ActivityDetailModal({
                                     />
                                 </div>
                             ) : null}
+
+                            {/* Heart Rate & Pulse Data */}
+                            <div className="md:col-span-2 space-y-3">
+                                <div className="flex items-center justify-between px-1">
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                                            <HeartPulse size={12} className="text-rose-500" /> Pulsdata
+                                        </label>
+                                        {(originalHr.avg || originalHr.max) ? (
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase">
+                                                Givarpuls: <span className="text-slate-300">{originalHr.avg || '-'}</span> snitt / <span className="text-slate-300">{originalHr.max || '-'}</span> max
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase italic">Ingen sensordata tillgänglig</p>
+                                        )}
+                                    </div>
+                                    
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowHrOverride(!showHrOverride)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all border ${
+                                            showHrOverride 
+                                            ? 'bg-rose-500 text-white border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]' 
+                                            : 'bg-slate-800 text-rose-500 border-rose-500/20 hover:border-rose-500/50'
+                                        }`}
+                                    >
+                                        {showHrOverride ? '✓ Aktiv Override' : 'Manuellt korrigera'}
+                                    </button>
+                                </div>
+
+                                {showHrOverride && (
+                                    <div className="grid grid-cols-2 gap-4 bg-rose-500/5 p-4 rounded-2xl border border-rose-500/20 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                                                Snittpuls (Manuell)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                placeholder={originalHr.avg?.toString() || "BPM..."}
+                                                value={editForm.averageHeartRate}
+                                                onChange={e => setEditForm({ ...editForm, averageHeartRate: e.target.value })}
+                                                className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-rose-500 outline-none font-mono text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                                                Maxpuls (Manuell)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                placeholder={originalHr.max?.toString() || "BPM..."}
+                                                value={editForm.maxHeartRate}
+                                                onChange={e => setEditForm({ ...editForm, maxHeartRate: e.target.value })}
+                                                className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-rose-500 outline-none font-mono text-sm"
+                                            />
+                                        </div>
+                                        <div className="col-span-2 flex items-start gap-2 bg-rose-500/10 p-2 rounded-lg">
+                                            <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+                                            <p className="text-[9px] text-rose-200 font-bold uppercase tracking-tight leading-relaxed">
+                                                Manuellt angiven puls prioriteras vid beräkningar av kalorier och intensitetspoäng för detta pass.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Race Toggle */}
                             <div className="md:col-span-2">
@@ -1868,8 +1955,10 @@ export function ActivityDetailModal({
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-lg shadow-inner">💡</div>
                                     <div>
-                                        <h4 className="text-sm font-black text-white italic">Rekord-potential identifierad! 🚀</h4>
-                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong>. Välj block att spara som eget rekord:</p>
+                                        <h4 className="text-sm font-black text-white italic">
+                                            {smartExtractInfo.topEfforts.some(e => e.isPB) ? 'Rekord-potential identifierad! 🚀' : 'Mätning identifierad 📈'}
+                                        </h4>
+                                        <p className="text-[10px] text-slate-400">Det verkar som att detta pass innehåller en <strong>{smartExtractInfo.title}</strong>. Välj block att spara:</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
@@ -1879,11 +1968,14 @@ export function ActivityDetailModal({
                                             onClick={() => handleApplySmartExtract(effort)}
                                             onMouseEnter={() => setHoveredExtractEffort(effort)}
                                             onMouseLeave={() => setHoveredExtractEffort(null)}
-                                            className="px-3 py-2 bg-slate-800/80 hover:bg-amber-500 hover:text-slate-900 border border-white/5 hover:border-amber-400 rounded-xl transition-all shadow-md text-slate-300 font-bold flex flex-col items-center justify-center group"
+                                            className={`px-3 py-2 border rounded-xl transition-all shadow-md font-bold flex flex-col items-center justify-center group ${effort.isPB ? 'bg-amber-500/20 border-amber-500/50 hover:bg-amber-500 hover:text-slate-900 border-amber-400' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/5'}`}
                                         >
-                                            <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(effort.distance)}</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] font-mono group-hover:text-slate-950 font-black">Km {effort.startKm}-{effort.startKm + Math.floor(effort.distance)}</span>
+                                                {effort.isPB && <span className="text-[10px]" title="Ditt snabbaste någonsin på denna distans!">🏆</span>}
+                                            </div>
                                             <div className="flex items-center gap-1.5">
-                                                <span className="text-[10px] font-black text-amber-500 group-hover:text-amber-900">{effort.distance >= 1 ? `${effort.distance}k` : `${Math.round(effort.distance * 1000)}m`}</span>
+                                                <span className={`text-[10px] font-black ${effort.isPB ? 'text-amber-500 group-hover:text-amber-900' : 'text-indigo-400'}`}>{effort.distance >= 1 ? `${effort.distance}k` : `${Math.round(effort.distance * 1000)}m`}</span>
                                                 <span className="text-sm font-black text-white group-hover:text-slate-950">
                                                     {(() => {
                                                         const sec = effort.durationSeconds;
@@ -2319,7 +2411,15 @@ export function ActivityDetailModal({
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}</span>
+                                                            <span 
+                                                                className={`text-xl font-black text-white flex items-center gap-1 ${perf?.originalAvgHeartRate ? 'cursor-help' : ''}`}
+                                                                title={perf?.originalAvgHeartRate ? `Manuellt korrigerad från sensorpuls: ${perf.originalAvgHeartRate} bpm` : undefined}
+                                                            >
+                                                                {Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
+                                                                {perf?.originalAvgHeartRate && perf.avgHeartRate !== perf.originalAvgHeartRate && (
+                                                                    <span className="text-[10px] text-rose-500" title="Manuellt korrigerad">✏️</span>
+                                                                )}
+                                                            </span>
                                                             <span className="text-[10px] uppercase text-slate-500">bpm</span>
                                                             {perf?.maxHeartRate && <span className="text-[9px] text-rose-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
                                                         </div>

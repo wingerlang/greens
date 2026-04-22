@@ -236,43 +236,58 @@ export class ReconciliationService {
             const planType = c.plan?.activityType;
             const planTitleLower = (c.plan?.title || '').toLowerCase();
 
-            // 1. TYPE MATCH (Base score)
+            // 1. TYPE MATCH (Strong signal)
             if (planType === stravaType) {
-                score += 15;
+                // Base score for correct type is now enough to trigger match if no other signals
+                score += 20; 
             } else if (
                 (planType === 'running' && (stravaType === 'running' || stravaType === 'walking')) ||
                 (planType === 'cardio' && (stravaType === 'running' || stravaType === 'cycling' || stravaType === 'other')) ||
                 (planType === 'strength' && (stravaType === 'other'))
             ) {
                 // Approximate type match
-                score += 5;
+                score += 10;
             } else {
-                // Type mismatch penalty, but not fatal if titles match
-                score -= 5;
+                // Type mismatch penalty
+                score -= 10;
             }
 
-            // 2. TITLE SIMILARITY (High signal)
+            // 2. TITLE SIMILARITY
             const titleMatchScore = this.calculateTitleSimilarity(stravaTitleLower, planTitleLower);
-            score += titleMatchScore * 25; // Significant boost for title matches
+            score += titleMatchScore * 30;
 
-            // 3. DURATION MATCH (Important for non-distance activities)
+            // 3. DURATION MATCH
             if (c.plan?.durationMinutes && stravaDurationMin > 0) {
                 const diffMin = Math.abs(c.plan.durationMinutes - stravaDurationMin);
                 const diffPercent = diffMin / c.plan.durationMinutes;
                 
-                if (diffPercent < 0.10) score += 10;
-                else if (diffPercent < 0.25) score += 5;
-                else if (diffPercent > 0.50) score -= 10;
+                // Be lenient with over-performing (extension)
+                if (diffPercent < 0.15) score += 15;
+                else if (diffPercent < 0.40) score += 8;
+                else if (stravaDurationMin > c.plan.durationMinutes && diffPercent < 0.60) {
+                    // User ran longer than planned - this is often a match
+                    score += 5;
+                }
             }
 
-            // 4. DISTANCE MATCH (For running/cycling)
+            // 4. DISTANCE MATCH
             if (c.plan?.distanceKm && stravaDistKm > 0) {
                 const diffKm = Math.abs(c.plan.distanceKm - stravaDistKm);
                 const diffPercent = diffKm / c.plan.distanceKm;
 
-                if (diffPercent < 0.10) score += 10;
-                else if (diffPercent < 0.25) score += 4;
-                else if (diffPercent > 0.50) score -= 10;
+                if (diffPercent < 0.15) score += 15;
+                else if (diffPercent < 0.40) score += 8;
+                else if (stravaDistKm > c.plan.distanceKm && diffPercent < 0.60) {
+                    // User ran further than planned (like 8km -> 10.9km)
+                    score += 5;
+                }
+            }
+            
+            // 5. UNIQUENESS BOOST
+            // If this is the only plan of this type, give it a tiny boost
+            const sameTypePlans = candidates.filter(cand => cand.plan?.activityType === stravaType);
+            if (sameTypePlans.length === 1 && planType === stravaType) {
+                score += 5;
             }
 
             return { candidate: c, score };
@@ -280,11 +295,8 @@ export class ReconciliationService {
 
         scored.sort((a, b) => b.score - a.score);
         
-        // Debug
-        // console.log(`Matching Strava "${stravaActivity.name}" (${stravaType}):`, scored.map(s => `[${s.score}] ${s.candidate.plan?.title}`));
-
-        // Set a reasonable threshold for auto-matching
-        if (scored[0].score >= 20) return scored[0].candidate;
+        // Threshold check
+        if (scored[0].score >= 18) return scored[0].candidate;
         return null;
     }
 

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { RaceSeriesDetailModal } from './RaceSeriesDetailModal.tsx';
 import { TourManager } from './TourManager.tsx';
 import { Trophy, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';

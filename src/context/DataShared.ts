@@ -171,6 +171,9 @@ export interface DataContextType {
     activateCoachGoal: (goalId: string) => void;
     deleteCoachGoal: (goalId: string) => void;
     reorderActivity: (id: string, direction: 'up' | 'down') => void;
+    reconciliation: {
+        reconcileActivity: (planId: string, activityId: string) => void;
+    };
 
     // Data Integration
     sleepSessions: SleepSession[];

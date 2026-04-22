@@ -1,0 +1,513 @@
+import React, { useState, useMemo } from 'react';
+import { useData } from '../../context/DataContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
+import { useHealth } from '../../hooks/useHealth.ts';
+import { getISODate } from '../../models/types.ts';
+import { parseCycleString } from '../../utils/nlpParser.ts';
+import { CycleYearChart } from '../../components/training/CycleYearChart.tsx';
+import { CycleDetailModal } from '../../components/training/CycleDetailModal.tsx';
+import { GoalCard } from '../../components/training/GoalCard.tsx';
+import { GoalModal } from '../../components/training/GoalModal.tsx';
+import { TrainingLoadCorrelation } from '../../components/training/TrainingLoadCorrelation.tsx';
+import { HealthScoreCard } from '../../components/dashboard/HealthScoreCard.tsx';
+import { EXERCISE_TYPES } from '../../components/training/ExerciseModal.tsx';
+import type { PerformanceGoal, TrainingCycle } from '../../models/types.ts';
+import { TrainingTabs } from '../../components/training/TrainingTabs.tsx';
+import { KonditionView } from '../Health/KonditionView.tsx';
+
+export function TrainingAnalyticsPage() {
+    const {
+        exerciseEntries: legacyExerciseEntries = [],
+        weightEntries = [],
+        deleteExercise,
+        calculateBMR,
+        addTrainingCycle,
+        deleteTrainingCycle,
+        trainingCycles = [],
+        mealEntries = [],
+        foodItems = [],
+        recipes = [],
+        updateTrainingCycle,
+        performanceGoals = [],
+        addGoal,
+        updateGoal,
+        deleteGoal,
+        universalActivities = [],
+        unifiedActivities = []
+    } = useData();
+
+    // Period Filter State
+    const [activePreset, setActivePreset] = useState<'all' | 'ytd' | 'prev' | '3m' | '6m' | '9m' | 'ttm'>('all');
+    const [filterStartDate, setFilterStartDate] = useState<string | null>(null);
+    const [filterEndDate, setFilterEndDate] = useState<string | null>(null);
+
+    const applyPeriodPreset = (preset: typeof activePreset) => {
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        setActivePreset(preset);
+
+        switch (preset) {
+            case 'all':
+                if (legacyExerciseEntries.length > 0) {
+                    const sorted = [...legacyExerciseEntries].sort((a, b) => a.date.localeCompare(b.date));
+                    setFilterStartDate(sorted[0].date.split('T')[0]);
+                } else {
+                    setFilterStartDate(null);
+                }
+                setFilterEndDate(null);
+                break;
+            case 'ytd':
+                setFilterStartDate(`${now.getFullYear()}-01-01`);
+                setFilterEndDate(today);
+                break;
+            case 'prev':
+                setFilterStartDate(`${now.getFullYear() - 1}-01-01`);
+                setFilterEndDate(`${now.getFullYear() - 1}-12-31`);
+                break;
+            case '3m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 3);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '6m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 6);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '9m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 9);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case 'ttm': {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() - 1);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+        }
+    };
+
+    // Data Processing
+    const exerciseEntries = useMemo(() => unifiedActivities, [unifiedActivities]);
+
+    const filteredExerciseEntries = useMemo(() => {
+        return exerciseEntries
+            .filter(e => {
+                if (filterStartDate && e.date < filterStartDate) return false;
+                if (filterEndDate && e.date > filterEndDate) return false;
+                return true;
+            })
+            .sort((a, b) => b.date.localeCompare(a.date));
+    }, [exerciseEntries, filterStartDate, filterEndDate]);
+
+    const filteredWeightEntries = useMemo(() => {
+        return (weightEntries || []).filter(e => {
+            if (filterStartDate && e.date < filterStartDate) return false;
+            if (filterEndDate && e.date > filterEndDate) return false;
+            return true;
+        });
+    }, [weightEntries, filterStartDate, filterEndDate]);
+
+    const dailyNutrition = useMemo(() => {
+        const result: { date: string, calories: number }[] = [];
+        const entriesByDate: Record<string, typeof mealEntries> = {};
+
+        (mealEntries || []).forEach(entry => {
+            if (!entriesByDate[entry.date]) entriesByDate[entry.date] = [];
+            entriesByDate[entry.date].push(entry);
+        });
+
+        Object.keys(entriesByDate).forEach(date => {
+            let calories = 0;
+            entriesByDate[date].forEach(entry => {
+                entry.items.forEach(item => {
+                    let itemKcal = 0;
+                    if (item.type === 'foodItem') {
+                        const food = foodItems.find(f => f.id === item.referenceId);
+                        if (food) {
+                            const base = (food.unit === 'g' || food.unit === 'ml' || food.unit === 'l' || food.unit === 'kg') ? 100 : 1;
+                            itemKcal = (food.calories / base) * item.servings;
+                        }
+                    } else if (item.type === 'recipe') {
+                        const recipe = recipes.find(r => r.id === item.referenceId);
+                        if (recipe) {
+                            const totalKcal = (recipe.ingredients || []).reduce((sum, ing) => {
+                                const f = foodItems.find(fi => fi.id === ing.foodItemId);
+                                if (!f) return sum;
+                                const base = (f.unit === 'g' || f.unit === 'ml') ? 100 : 1;
+                                return sum + ((f.calories / base) * ing.quantity);
+                            }, 0);
+                            itemKcal = (recipe.servings > 0 ? totalKcal / recipe.servings : totalKcal) * item.servings;
+                        }
+                    }
+                    calories += itemKcal;
+                });
+            });
+            result.push({ date, calories });
+        });
+        return result;
+    }, [mealEntries, foodItems, recipes]);
+
+    const filteredDailyNutrition = useMemo(() => {
+        return dailyNutrition.filter(e => {
+            if (filterStartDate && e.date < filterStartDate) return false;
+            if (filterEndDate && e.date > filterEndDate) return false;
+            return true;
+        });
+    }, [dailyNutrition, filterStartDate, filterEndDate]);
+
+    // UI State
+    const [selectedDate, setSelectedDate] = useState(getISODate());
+    const [zoomLevel, setZoomLevel] = useState(6);
+    const [visibleMetrics, setVisibleMetrics] = useState({ calories: true, volume: true, workouts: true });
+    const [selectedCycle, setSelectedCycle] = useState<TrainingCycle | null>(null);
+    const [isCycleDetailOpen, setIsCycleDetailOpen] = useState(false);
+    const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+    const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
+    const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
+    const [cycleForm, setCycleForm] = useState({
+        goal: 'neutral' as 'neutral' | 'deff' | 'bulk',
+        startDate: getISODate(),
+        endDate: '',
+        name: ''
+    });
+
+    const { activeCycle } = useHealth(selectedDate);
+
+    const handleEditCycle = (cycle: TrainingCycle) => {
+        setSelectedCycle(cycle);
+        setIsCycleDetailOpen(true);
+    };
+
+    const handleCreateCycleAfter = (cycle: TrainingCycle) => {
+        const endDate = new Date(cycle.endDate || cycle.startDate);
+        const nextStart = new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const nextGoal = cycle.goal === 'deff' ? 'Bulk' : cycle.goal === 'bulk' ? 'Deff' : 'Mål';
+        setCycleForm(prev => ({ ...prev, name: `${nextGoal} ${nextStart}`, startDate: nextStart }));
+        setIsCycleCreatorOpen(true);
+    };
+
+    return (
+        <div className="training-analytics-page space-y-8 pb-20">
+            <TrainingTabs currentTab="analytics" />
+
+            {/* Period Selector */}
+            <div className="-mx-4 px-4 py-1 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl">
+                <div className="flex flex-nowrap items-center gap-2 max-w-7xl mx-auto overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-2 px-3 border-r border-white/5 mr-1">
+                        <span className="text-xl">📅</span>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest hidden sm:block">Visa Period</span>
+                    </div>
+                    {[
+                        { id: 'all', label: 'ALLT' },
+                        { id: 'ytd', label: 'I ÅR' },
+                        { id: 'prev', label: 'FÖREG. ÅR' },
+                        { id: '3m', label: '3 MÅN' },
+                        { id: '6m', label: '6 MÅN' },
+                        { id: '9m', label: '9 MÅN' },
+                        { id: 'ttm', label: 'TTM (12M)' }
+                    ].map(p => (
+                        <button
+                            key={p.id}
+                            onClick={() => applyPeriodPreset(p.id as any)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${activePreset === p.id
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                                : 'text-slate-500 hover:text-white hover:bg-white/5 border border-transparent'
+                                }`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Starta ny Träningsperiod */}
+            <section>
+                {activeCycle && !isCycleCreatorOpen ? (
+                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 p-6 shadow-2xl group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 text-[100px] leading-none select-none grayscale group-hover:grayscale-0 transition-all duration-500">
+                            {activeCycle.goal === 'deff' ? '🔥' : activeCycle.goal === 'bulk' ? '💪' : '⚖️'}
+                        </div>
+                        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                        Aktiv Period
+                                    </span>
+                                    <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                        {activeCycle.startDate} — {activeCycle.endDate}
+                                    </span>
+                                </div>
+                                <h2 className="text-3xl font-black text-white italic tracking-tighter mb-1">{activeCycle.name}</h2>
+                                <p className="text-sm text-slate-400 font-medium">
+                                    Mål: <span className="text-white">{activeCycle.goal === 'deff' ? 'Deff (-500 kcal)' : activeCycle.goal === 'bulk' ? 'Bulk (+500 kcal)' : 'Balans (0 kcal)'}</span>
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => confirm('Avsluta period?') && deleteTrainingCycle(activeCycle!.id)}
+                                    className="px-6 py-3 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/5 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 font-bold text-xs uppercase tracking-wider transition-all"
+                                >
+                                    Avsluta
+                                </button>
+                                <button
+                                    onClick={() => handleEditCycle(activeCycle)}
+                                    className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-white/5 hover:border-emerald-500"
+                                >
+                                    Redigera
+                                </button>
+                                <button
+                                    onClick={() => setIsCycleCreatorOpen(true)}
+                                    className="px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-emerald-500/20 hover:border-emerald-500 text-center"
+                                >
+                                    + Ny Period
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-4 hover:bg-slate-900/80 transition-all custom-dashed-border">
+                        {!isCycleCreatorOpen ? (
+                            <>
+                                <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-2xl text-emerald-500 mb-2">📅</div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white mb-1">Starta ny Träningsperiod</h3>
+                                    <p className="text-sm text-slate-400">Definiera ditt mål och följ din utveckling över tid.</p>
+                                </div>
+                                <button
+                                    onClick={() => setIsCycleCreatorOpen(true)}
+                                    className="mt-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+                                >
+                                    Skapa Period
+                                </button>
+                            </>
+                        ) : (
+                            <div className="w-full max-w-2xl text-left bg-slate-950 p-6 rounded-2xl border border-white/10 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <h3 className="text-lg font-bold text-white mb-6">Ny Period</h3>
+                                <div className="mb-6 p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                                    <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 block">✨ AI Snabb-skapare</label>
+                                    <input
+                                        type="text"
+                                        placeholder="t.ex. 'Sommardeff 2024-03-01 - 2024-06-01'"
+                                        className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setCycleForm(prev => ({ ...prev, name: val }));
+                                            const smart = parseCycleString(val);
+                                            if (smart) {
+                                                setCycleForm(prev => ({
+                                                    ...prev,
+                                                    name: smart.name,
+                                                    startDate: smart.startDate,
+                                                    endDate: smart.endDate,
+                                                    goal: smart.goal
+                                                }));
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Namn</label>
+                                        <input
+                                            type="text"
+                                            value={cycleForm.name}
+                                            onChange={e => setCycleForm({ ...cycleForm, name: e.target.value })}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mål</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'deff', label: 'Deff', icon: '🔥' },
+                                                { id: 'neutral', label: 'Normal', icon: '⚖️' },
+                                                { id: 'bulk', label: 'Bulk', icon: '💪' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => setCycleForm({ ...cycleForm, goal: opt.id as any })}
+                                                    className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${cycleForm.goal === opt.id ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900/50 text-slate-400 border-white/5'}`}
+                                                >
+                                                    <span className="text-lg">{opt.icon}</span>
+                                                    <span className="text-[10px] font-black uppercase">{opt.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Start</label>
+                                        <input type="date" value={cycleForm.startDate} onChange={e => setCycleForm({ ...cycleForm, startDate: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500 outline-none" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Slut (Preliminärt)</label>
+                                        <input type="date" value={cycleForm.endDate} onChange={e => setCycleForm({ ...cycleForm, endDate: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500 outline-none" />
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 justify-end">
+                                    <button onClick={() => setIsCycleCreatorOpen(false)} className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 font-bold text-xs uppercase">Avbryt</button>
+                                    <button disabled={!cycleForm.name || !cycleForm.endDate} onClick={() => { addTrainingCycle(cycleForm); setIsCycleCreatorOpen(false); }} className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black rounded-xl uppercase text-xs">Skapa Period</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </section>
+
+            {/* Årsöversikt & Health Score */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="content-card overflow-hidden">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">📊 Årsöversikt & Utveckling</h3>
+                            <p className="text-slate-400 text-xs mt-1">Vikt, kalorier och träningsbelastning</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                {['calories', 'volume', 'workouts'].map(m => (
+                                    <button
+                                        key={m}
+                                        onClick={() => setVisibleMetrics(prev => ({ ...prev, [m]: !prev[m as keyof typeof prev] }))}
+                                        className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all ${visibleMetrics[m as keyof typeof visibleMetrics] ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}
+                                    >
+                                        {m === 'calories' ? '🔥 Kcal' : m === 'volume' ? '⚖️ Volym' : '💪 Pass'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="h-[350px]">
+                        <CycleYearChart
+                            cycles={trainingCycles}
+                            weightEntries={filteredWeightEntries}
+                            nutrition={filteredDailyNutrition}
+                            exercises={filteredExerciseEntries}
+                            zoomMonths={zoomLevel}
+                            visibleMetrics={visibleMetrics}
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
+                            onEditCycle={handleEditCycle}
+                            onCreateCycleAfter={handleCreateCycleAfter}
+                        />
+                    </div>
+                </div>
+                <HealthScoreCard exercises={filteredExerciseEntries} meals={mealEntries} userSettings={{ bmr: calculateBMR() }} />
+            </div>
+
+            {/* Training Load & Weight */}
+            <TrainingLoadCorrelation exercises={filteredExerciseEntries} weightEntries={filteredWeightEntries} />
+
+            {/* Kondition & Cardio */}
+            <div className="content-card">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="section-title">🏃 Kondition & Cardio</h3>
+                </div>
+                <KonditionView 
+                    filterStartDate={filterStartDate} 
+                    filterEndDate={filterEndDate} 
+                    exerciseEntries={legacyExerciseEntries} 
+                    universalActivities={universalActivities} 
+                />
+            </div>
+
+            {/* Djupanalys & Statistik */}
+            <div className="content-card">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="section-title">Djupanalys & Statistik</h3>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
+                        <div className="text-2xl font-black text-rose-400">{Math.round(filteredExerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500">ton</span></div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
+                        <div className="text-2xl font-black text-sky-400">{Math.round(filteredExerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500">km</span></div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
+                        <div className="text-2xl font-black text-emerald-400">{Math.round(filteredExerciseEntries.length > 0 ? filteredExerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / filteredExerciseEntries.length : 0)} <span className="text-sm text-slate-500">min</span></div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Tid</div>
+                        <div className="text-2xl font-black text-indigo-400">{Math.round(filteredExerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500">h</span></div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
+                        <div className="space-y-2">
+                            {Object.entries(filteredExerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([type, count]) => (
+                                    <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
+                                            <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
+                                        </div>
+                                        <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                    {(exerciseEntries.some(e => e.tonnage) || exerciseEntries.some(e => e.distance)) && (
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & Milstolpar</h4>
+                            {exerciseEntries.some(e => e.tonnage) && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
+                                    <span className="text-4xl text-emerald-400">🏆</span>
+                                    <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
+                                    <p className="text-[10px] text-slate-400 mt-1">Du lyfte {Math.round(Math.max(0, ...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Mina Mål */}
+            <div id="mina-mal" className="content-card">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="section-title">🎯 Mina Mål</h3>
+                    <button onClick={() => { setEditingGoal(null); setIsGoalModalOpen(true); }} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs uppercase transition-all">+ Nytt Mål</button>
+                </div>
+                {performanceGoals.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {performanceGoals.map(goal => {
+                            const now = new Date();
+                            const weekStart = new Date(now);
+                            weekStart.setDate(now.getDate() - now.getDay() + 1);
+                            const weekStartStr = weekStart.toISOString().split('T')[0];
+                            let current = 0;
+                            if (goal.type === 'frequency' && goal.targets[0]?.exerciseType) {
+                                current = exerciseEntries.filter(e => e.type === goal.targets[0].exerciseType && e.date >= weekStartStr).length;
+                            } else if (goal.type === 'distance') {
+                                current = exerciseEntries.filter(e => e.date >= weekStartStr).reduce((sum, e) => sum + (e.distance || 0), 0);
+                            } else if (goal.type === 'tonnage') {
+                                current = exerciseEntries.filter(e => e.date >= weekStartStr).reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000;
+                            }
+                            const target = goal.targets[0]?.count || goal.targets[0]?.value || 1;
+                            const percentage = (current / target) * 100;
+                            return <GoalCard key={goal.id} goal={goal} progress={{ current, target, percentage }} onEdit={() => { setEditingGoal(goal); setIsGoalModalOpen(true); }} onDelete={() => deleteGoal(goal.id)} />;
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 text-slate-600"><span className="text-4xl block mb-3">🎯</span><p className="text-sm">Inga mål ännu. Skapa ett för att börja spåra din framgång!</p></div>
+                )}
+            </div>
+
+            {/* Modals */}
+            <CycleDetailModal isOpen={isCycleDetailOpen} onClose={() => setIsCycleDetailOpen(false)} cycle={selectedCycle} onSave={updateTrainingCycle} onDelete={deleteTrainingCycle} exercises={exerciseEntries} nutrition={dailyNutrition} onAddGoal={addGoal} />
+            <GoalModal isOpen={isGoalModalOpen} onClose={() => setIsGoalModalOpen(false)} onSave={(data) => editingGoal ? updateGoal(editingGoal.id, data) : addGoal(data)} cycles={trainingCycles} editingGoal={editingGoal} />
+        </div>
+    );
+}
+
+export default TrainingAnalyticsPage;

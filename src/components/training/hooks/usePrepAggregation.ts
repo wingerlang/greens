@@ -173,12 +173,9 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
                 }
 
                 const isQuality = !isRace && (
-                    act.title?.toLowerCase().includes('intervall') ||
-                    act.notes?.toLowerCase().includes('intervall') ||
-                    act.title?.toLowerCase().includes('tempo') ||
-                    act.title?.toLowerCase().includes('tröskel') ||
-                    act.subType === 'interval' ||
-                    act.subType === 'tempo'
+                    (act.title?.toLowerCase().includes('intervall') || act.title?.toLowerCase().includes('tempo') || act.title?.toLowerCase().includes('tröskel')) ||
+                    (act.subType === 'interval' || act.subType === 'tempo') ||
+                    (act.notes?.toLowerCase().includes('intervall') && act.notes.length < 50 && !act.notes.toLowerCase().includes(' sen '))
                 );
 
                 if (isRace) {

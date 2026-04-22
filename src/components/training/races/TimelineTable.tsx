@@ -1,7 +1,7 @@
 import { Target, Medal } from 'lucide-react';
 import { ExerciseEntry, UniversalActivity, PlannedActivity } from '../../../models/types.ts';
 import { formatRaceDateCompact, isTrailRace, isUltraRace, getDistanceStyle, calcPace, calcStifa, getAvgElevation } from './utils.ts';
-import { formatActivityDuration } from '../../../utils/formatters.ts';
+import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
 
 interface TimelineTableProps {
     races: ExerciseEntry[];

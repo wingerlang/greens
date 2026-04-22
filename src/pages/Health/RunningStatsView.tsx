@@ -387,7 +387,7 @@ export function RunningStatsView({
                 <div>
                     <h2 className="text-3xl font-black text-white flex items-center gap-3">
                         <TrendingUp className="text-amber-500" size={32} />
-                        Löpstatistik & Rekord
+                        Rekord
                     </h2>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
                         <p className="text-slate-400">Djupgående analys, top 10-listor och din utvecklingsresa.</p>
@@ -419,55 +419,7 @@ export function RunningStatsView({
                 </div>
             </div>
 
-            {/* Smart Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 rounded-3xl p-6 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Zap size={64} />
-                    </div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">Snabbaste Tempo</div>
-                    <div className="text-4xl font-black text-white mb-1">
-                        {smartStats.fastestPaceSecPerKm !== Infinity ? formatPace(smartStats.fastestPaceSecPerKm) : '-'}
-                    </div>
-                    {smartStats.fastestPaceRun && (
-                        <button
-                            onClick={() => setSelectedActivity(smartStats.fastestPaceRun)}
-                            className="text-xs font-bold text-slate-500 hover:text-indigo-400 transition-colors text-left"
-                        >
-                            Satt den {smartStats.fastestPaceRun.date.substring(0, 10)} ({smartStats.fastestPaceRun.distance?.toFixed(1)} km)
-                        </button>
-                    )}
-                </div>
 
-                <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-3xl p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Target size={64} />
-                    </div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">Längsta Distans</div>
-                    <div className="text-4xl font-black text-white mb-1">
-                        {smartStats.longestRun ? `${smartStats.longestRun.distance?.toFixed(1)}` : '-'}
-                        <span className="text-lg text-slate-400 ml-1">km</span>
-                    </div>
-                    {smartStats.longestRun && (
-                        <button
-                            onClick={() => setSelectedActivity(smartStats.longestRun)}
-                            className="text-xs font-bold text-slate-500 hover:text-emerald-400 transition-colors"
-                        >
-                            Sprangs den {smartStats.longestRun.date.substring(0, 10)}
-                        </button>
-                    )}
-                </div>
-
-                <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Snitt-tempo (Alla Pass)</div>
-                    <div className="text-4xl font-black text-slate-300 mb-1">
-                        {smartStats.avgPaceSecPerKm > 0 ? formatPace(smartStats.avgPaceSecPerKm) : '-'}
-                    </div>
-                    <div className="text-xs font-bold text-slate-600">
-                        Baserat på {filteredActivities.length} pass
-                    </div>
-                </div>
-            </div>
 
             {/* Main Content Layout */}
             <div className="space-y-12">

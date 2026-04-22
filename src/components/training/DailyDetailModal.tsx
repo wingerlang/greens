@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExerciseEntry } from '../../models/types.ts';
 import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp, ChevronRight, Plus, MessageSquare, PenSquare, StickyNote, AlertCircle, Heart, Thermometer, ShieldCheck } from 'lucide-react';
-import { formatActivityDuration } from '../../utils/formatters.ts';
+import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { formatSpeed } from '../../utils/dateUtils.ts';
 import { useData } from '../../context/DataShared.ts';
 

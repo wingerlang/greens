@@ -1,13 +1,16 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { useSettings } from '../../context/SettingsContext.tsx';
-import { getISODate } from '../../models/types.ts';
+import { getISODate, PerformanceGoal, TrainingPeriod, TrainingCycle } from '../../models/types.ts';
+import { getActiveCalorieTarget } from '../../utils/calorieTarget.ts';
 
 interface NutritionInsightsProps {
     onDateSelect?: (date: string) => void;
+    performanceGoals: PerformanceGoal[];
+    trainingPeriods: (TrainingPeriod | TrainingCycle)[];
 }
 
-export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
+export function NutritionInsights({ onDateSelect, performanceGoals, trainingPeriods }: NutritionInsightsProps) {
     const { mealEntries, recipes, foodItems, calculateDailyNutrition, unifiedActivities, dailyVitals, selectedDate } = useData();
     const { settings } = useSettings();
     const [range, setRange] = React.useState<7 | 14 | 30>(7);
@@ -78,8 +81,26 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
     const burnedAverage = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.burned, 0) / divisor);
     const proteinAverage = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.protein, 0) / divisor * 10) / 10;
 
-    const calorieGoal = settings.dailyCalorieGoal || 2000;
-    const proteinGoal = settings.dailyProteinGoal || 150;
+    const currentTarget = useMemo(() => {
+        return getActiveCalorieTarget(
+            getISODate(),
+            trainingPeriods,
+            performanceGoals,
+            {
+                calories: settings.dailyCalorieGoal,
+                protein: settings.dailyProteinGoal,
+                carbs: settings.dailyCarbsGoal,
+                fat: settings.dailyFatGoal
+            },
+            settings.dailyCalorieGoal || 2000,
+            settings.calorieMode || 'tdee',
+            0, // No exercise factor for the goal line usually
+            settings.exerciseCalorieMultiplier ?? 1.0
+        );
+    }, [trainingPeriods, performanceGoals, settings]);
+
+    const calorieGoal = currentTarget.calories;
+    const proteinGoal = currentTarget.protein || settings.dailyProteinGoal || 150;
 
     // SVG Chart Constants
     const chartHeight = 100;
@@ -196,7 +217,57 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                     </svg>
                 </div>
 
-                {/* Protein Trend */}
+                {/* Träningstrend (Now in Middle) */}
+                <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex justify-between items-end mb-4">
+                        <div>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Träningstrend</span>
+                            <span className="text-xl font-black text-amber-400">+{burnedAverage} <span className="text-[10px] uppercase text-slate-500">kcal snitt</span></span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500">Senaste {range}d</span>
+                    </div>
+                    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/burn">
+                        {daysData.map((day: any, i: number) => {
+                            const val = day.burned || 0;
+                            const maxBurn = Math.max(...daysData.map(d => d.burned), 100);
+                            const h = (val / maxBurn) * chartHeight;
+                            const x = i * (barWidth + gap);
+                            const isToday = day.isToday;
+
+                            return (
+                                <g
+                                    key={day.date}
+                                    className="cursor-pointer group/bar transition-all duration-300"
+                                    onClick={() => onDateSelect?.(day.date)}
+                                >
+                                    <rect
+                                        x={x} y={chartHeight - h}
+                                        width={barWidth} height={h}
+                                        fill={isToday ? '#fbbf24' : '#fbbf2444'}
+                                        className="hover:fill-amber-300 transition-colors duration-200"
+                                        rx="4"
+                                    />
+                                    <text
+                                        x={x + barWidth / 2} y={chartHeight - h - 5}
+                                        textAnchor="middle"
+                                        className="text-[9px] fill-amber-400 font-black"
+                                    >
+                                        {val > 0 ? val : '0'}
+                                    </text>
+                                    <text
+                                        x={x + barWidth / 2} y={chartHeight + 12}
+                                        textAnchor="middle"
+                                        className={`text-[8px] uppercase tracking-tighter transition-colors ${isToday ? 'fill-amber-400 font-bold' : 'fill-slate-500'}`}
+                                    >
+                                        {day.label}
+                                    </text>
+                                </g>
+                            );
+                        })}
+                    </svg>
+                </div>
+
+                {/* Protein Trend (Now on Right) */}
                 <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
@@ -251,56 +322,6 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                                         x={x + barWidth / 2} y={chartHeight + 12}
                                         textAnchor="middle"
                                         className={`text-[8px] uppercase tracking-tighter transition-colors ${isToday ? 'fill-violet-400 font-bold' : 'fill-slate-500'} group-hover/bar:fill-white`}
-                                    >
-                                        {day.label}
-                                    </text>
-                                </g>
-                            );
-                        })}
-                    </svg>
-                </div>
-
-                {/* Träningstrend */}
-                <div className="trend-card bg-white/5 p-4 rounded-2xl border border-white/5">
-                    <div className="flex justify-between items-end mb-4">
-                        <div>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Träningstrend</span>
-                            <span className="text-xl font-black text-amber-400">+{burnedAverage} <span className="text-[10px] uppercase text-slate-500">kcal snitt</span></span>
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-500">Senaste {range}d</span>
-                    </div>
-                    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-24 overflow-visible group/burn">
-                        {daysData.map((day: any, i: number) => {
-                            const val = day.burned || 0;
-                            const maxBurn = Math.max(...daysData.map(d => d.burned), 100);
-                            const h = (val / maxBurn) * chartHeight;
-                            const x = i * (barWidth + gap);
-                            const isToday = day.isToday;
-
-                            return (
-                                <g
-                                    key={day.date}
-                                    className="cursor-pointer group/bar transition-all duration-300"
-                                    onClick={() => onDateSelect?.(day.date)}
-                                >
-                                    <rect
-                                        x={x} y={chartHeight - h}
-                                        width={barWidth} height={h}
-                                        fill={isToday ? '#fbbf24' : '#fbbf2444'}
-                                        className="hover:fill-amber-300 transition-colors duration-200"
-                                        rx="4"
-                                    />
-                                    <text
-                                        x={x + barWidth / 2} y={chartHeight - h - 5}
-                                        textAnchor="middle"
-                                        className="text-[9px] fill-amber-400 font-black"
-                                    >
-                                        {val > 0 ? val : '0'}
-                                    </text>
-                                    <text
-                                        x={x + barWidth / 2} y={chartHeight + 12}
-                                        textAnchor="middle"
-                                        className={`text-[8px] uppercase tracking-tighter transition-colors ${isToday ? 'fill-amber-400 font-bold' : 'fill-slate-500'}`}
                                     >
                                         {day.label}
                                     </text>
