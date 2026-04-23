@@ -314,6 +314,7 @@ export class LocalStorageService implements StorageService {
                     racePlans,
                     users,           // Exclude from cloud sync blob (handled by auth/users API)
                     currentUserId,   // Exclude from cloud sync blob
+                    dailyVitals,     // Exclude from cloud sync blob (handled via vitals API)
                     ...liteData
                 } = data;
 

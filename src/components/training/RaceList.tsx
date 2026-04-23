@@ -1,10 +1,11 @@
+import * as React from 'react';
 import { useState, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { RaceSeriesDetailModal } from './RaceSeriesDetailModal.tsx';
 import { TourManager } from './TourManager.tsx';
-import { Trophy, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';
+import { Trophy as TrophyIcon, Plus, Medal, Copy as CopyIcon, Search } from 'lucide-react';
 
 // Modulära komponenter och hooks
 import { useRaceDashboard } from './races/hooks/useRaceDashboard.ts';
@@ -72,7 +73,7 @@ export function RaceList(props: RaceListProps) {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-6 gap-6">
                     <div>
                         <h2 className="text-4xl font-black text-white flex items-center gap-3">
-                            <Trophy className="text-amber-500" size={36} /> Kommande Tävlingar
+                            <TrophyIcon className="text-amber-500" size={36} /> Kommande Tävlingar
                         </h2>
                         <p className="text-slate-400 mt-2 font-medium">Planera dina mål och krossa motståndet.</p>
                     </div>
@@ -103,7 +104,7 @@ export function RaceList(props: RaceListProps) {
                     </div>
                 ) : (
                     <div className="text-center py-20 bg-slate-900/30 rounded-3xl border-2 border-dashed border-white/5">
-                        <Trophy className="mx-auto text-slate-800 mb-4" size={64} />
+                        <TrophyIcon className="mx-auto text-slate-800 mb-4" size={64} />
                         <h3 className="text-xl font-bold text-white mb-2">Inga lopp inplanerade</h3>
                         <button onClick={() => setIsAddModalOpen(true)} className="text-amber-500 font-black hover:underline uppercase tracking-widest text-xs">Lägg till ditt nästa mål nu →</button>
                     </div>

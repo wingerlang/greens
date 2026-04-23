@@ -129,6 +129,15 @@ function parseDuration(text: string): number | undefined {
     return undefined;
 }
 
+function parsePower(text: string): number | undefined {
+    // 220w, 220 w, @ 220w, @220w, 220 watts
+    const match = text.match(/(?:@\s*)?(\d+)\s*w(?:atts)?(?!\w)/);
+    if (match) {
+        return parseInt(match[1], 10);
+    }
+    return undefined;
+}
+
 function parseRecovery(line: string, prevSegmentReps: number = 1): RecoveryDefinition | undefined {
     // Variable list check: "vila: 500, 400, 300..."
     // Looking for a sequence of numbers separated by comma
@@ -293,6 +302,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         const dist = parseDistance(line);
         const time = parseDuration(line);
         const pace = parsePace(line);
+        const power = parsePower(line);
 
         // --- 3. Explicit Rest in same line? ---
         // "8x400m vila 60s"
@@ -310,7 +320,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
 
         // --- 4. Look ahead for Rest Line ---
         // If this line is work, and next line is purely rest
-        if ((dist || time) && !recovery && i + 1 < cleanLines.length) {
+        if ((dist || time || power) && !recovery && i + 1 < cleanLines.length) {
             const nextLine = cleanLines[i + 1];
             if (classifyLine(nextLine) === 'REST') {
                 const nextRec = parseRecovery(nextLine, currentReps);
@@ -325,7 +335,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         }
 
         // Construct Segment
-        if (dist || time || type === 'WARMUP' || type === 'COOLDOWN') {
+        if (dist || time || power || type === 'WARMUP' || type === 'COOLDOWN') {
             // If type is REST, we generally merge it into previous segment if possible. 
             // If standalone rest line (not consumed above), we might drop it or store as 'REST' segment?
             if (type === 'REST') {
@@ -345,7 +355,8 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
                 work: {
                     dist,
                     time,
-                    pace
+                    pace,
+                    power
                 },
                 recovery,
                 originalString: line
@@ -379,7 +390,7 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
     const deduplicatedSegments: WorkoutSegment[] = [];
     const seenKeys = new Set<string>();
     for (const seg of expandedSegments) {
-        const key = `${seg.type}-${seg.work.dist || 0}-${seg.work.time || 0}-${seg.reps}`;
+        const key = `${seg.type}-${seg.work.dist || 0}-${seg.work.time || 0}-${seg.work.power || 0}-${seg.reps}`;
         if (!seenKeys.has(key)) {
             seenKeys.add(key);
             deduplicatedSegments.push(seg);
@@ -413,9 +424,33 @@ export function parseWorkout(title: string, description: string): ParsedWorkout 
         // For now let's keep it safe.
     }
 
+    // Calculate Average Power
+    let totalWorkTime = 0;
+    let totalPowerSeconds = 0;
+    let standalonePowers: number[] = [];
+
+    deduplicatedSegments.forEach(s => {
+        const time = s.work.time || 0;
+        const power = s.work.power || 0;
+        if (time > 0 && power > 0) {
+            totalPowerSeconds += (power * time * s.reps);
+            totalWorkTime += (time * s.reps);
+        } else if (power > 0) {
+            standalonePowers.push(power);
+        }
+    });
+
+    let averagePower = totalWorkTime > 0 ? Math.round(totalPowerSeconds / totalWorkTime) : undefined;
+    
+    // Fallback: If no weighted average, use the first standalone power found (usually "Snitt: 270w")
+    if (averagePower === undefined && standalonePowers.length > 0) {
+        averagePower = standalonePowers[0];
+    }
+
     return {
         segments: deduplicatedSegments,
         totalDistance: deduplicatedSegments.reduce((sum, s) => sum + (s.work.dist || 0) * s.reps, 0),
+        averagePower,
         classification: suggestedSubType === 'interval' ? 'INTERVALS' : (suggestedSubType === 'tempo' ? 'TEMPO' : 'DISTANCE'),
         suggestedSubType
     };

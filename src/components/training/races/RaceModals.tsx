@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trophy, Calendar, X, Target, Clock, Timer, Plus } from 'lucide-react';
 import { PlannedActivity, ExerciseEntry, generateId } from '../../../models/types.ts';
 import { normalizeRaceTitle, isTrailRace, getAvgElevation, formatRaceDateCompact, MONTH_MAP } from './utils.ts';
@@ -151,8 +151,22 @@ export function AddRaceModal({
                 logistics: {
                     location: form.location
                 },
-                placement: parseInt(form.placement) || undefined,
-                totalParticipants: parseInt(form.totalParticipants) || undefined,
+                placement: (function() {
+                    const val = form.placement.trim();
+                    if (val.includes('/')) {
+                        const parts = val.split('/');
+                        return parseInt(parts[0]) || undefined;
+                    }
+                    return parseInt(val) || undefined;
+                })(),
+                totalParticipants: (function() {
+                    const val = form.placement.trim();
+                    if (val.includes('/')) {
+                        const parts = val.split('/');
+                        return parseInt(parts[1]) || parseInt(form.totalParticipants) || undefined;
+                    }
+                    return parseInt(form.totalParticipants) || undefined;
+                })(),
                 checklist: activityToEdit?.raceDetails?.checklist || [
                     { id: '1', item: 'Anmäld & Betald', checked: false, category: 'logistics' },
                     { id: '2', item: 'Boende bokat', checked: false, category: 'logistics' },
@@ -407,7 +421,13 @@ export function AddRaceModal({
                             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/10">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">🏁 Din Placering</label>
-                                    <input type="number" value={form.placement} onChange={e => setForm({...form, placement: e.target.value})} className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-white outline-none" />
+                                    <input 
+                                        type="text" 
+                                        value={form.placement} 
+                                        onChange={e => setForm({...form, placement: e.target.value})} 
+                                        placeholder="t.ex. 1/12"
+                                        className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-amber-500" 
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Deltagare</label>

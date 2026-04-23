@@ -1,5 +1,4 @@
-
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';

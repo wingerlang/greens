@@ -6,6 +6,7 @@ import {
 } from '../models/types.ts';
 import { calculateHeartRateCalories, calculateStrengthCaloriesMET } from '../utils/analytics.ts';
 import { parseWattsFromText, AssaultBikeMath } from '../utils/cyclingCalculations.ts';
+import { parseWorkout } from '../utils/workoutParser.ts';
 
 // Environment variables (set these in your deployment)
 // @ts-ignore: Deno is polyfilled
@@ -336,7 +337,7 @@ type ExerciseIntensity = 'low' | 'moderate' | 'high';
 /**
  * Map Strava activity type to app exercise type
  */
-export function mapStravaType(stravaType: string, name?: string): ExerciseType {
+export function mapStravaType(stravaType: string, name?: string, description?: string): ExerciseType {
     const mapping: Record<string, ExerciseType> = {
         'Run': 'running',
         'TrailRun': 'running',
@@ -361,13 +362,13 @@ export function mapStravaType(stravaType: string, name?: string): ExerciseType {
     
     let type = mapping[stravaType] || 'other';
 
-    // Retroactive override based on title if direct mapping resolves to strength/other
-    if (name && (type === 'strength' || type === 'other')) {
-        const lowerName = name.toLowerCase();
-        if (lowerName.includes('cycl') || lowerName.includes('cyk') || lowerName.includes('bike') || lowerName.includes('ride')) return 'cycling';
-        if (lowerName.includes('run') || lowerName.includes('löp')) return 'running';
-        if (lowerName.includes('walk') || lowerName.includes('gång')) return 'walking';
-        if (lowerName.includes('cardio') || lowerName.includes('cross') || lowerName.includes('elliptical') || lowerName.includes('trainer') || lowerName.includes('rowing')) return 'cardio';
+    // Retroactive override based on title/description if direct mapping resolves to strength/other
+    const searchString = `${name || ''} ${description || ''}`.toLowerCase();
+    if (type === 'strength' || type === 'other') {
+        if (searchString.includes('cycl') || searchString.includes('cyk') || searchString.includes('bike') || searchString.includes('ride') || searchString.includes(' watt')) return 'cycling';
+        if (searchString.includes('run') || searchString.includes('löp')) return 'running';
+        if (searchString.includes('walk') || searchString.includes('gång')) return 'walking';
+        if (searchString.includes('cardio') || searchString.includes('cross') || searchString.includes('elliptical') || searchString.includes('trainer') || searchString.includes('rowing')) return 'cardio';
     }
 
     return type;
@@ -429,7 +430,7 @@ export function mapStravaSubType(type: string, workoutType?: number): any {
 export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings, latestWeight?: number): { calories: number; breakdown: string } {
     const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
     const hr = activity.average_heartrate;
-    const type = mapStravaType(activity.type, activity.name);
+    const type = mapStravaType(activity.type, activity.name, activity.description);
 
     // Sanity limits per activity type (kcal/min) - based on research and Strava comparisons
     const KCAL_LIMITS: Record<string, { min: number; max: number }> = {
@@ -450,7 +451,12 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
     // 0. Check for Power (Watts) - The Gold Standard for Cycling
     if (type === 'cycling') {
         // Source priority: metadata.average_watts, or parsed from title/notes
-        const avgWatts = activity.average_watts || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : null);
+        let avgWatts = activity.average_watts;
+        
+        if (!avgWatts || avgWatts === 0) {
+            const parsed = parseWorkout(activity.name, activity.description || '');
+            avgWatts = parsed.averagePower || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : null);
+        }
         
         if (avgWatts && avgWatts > 0) {
             const powerCalories = AssaultBikeMath.calculateCyclingKcal(avgWatts, durationMin);
@@ -545,13 +551,13 @@ export function mapStravaActivityToExercise(activity: StravaActivity, userSettin
         externalId: `strava_${activity.id}`,
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
-        type: mapStravaType(activity.type, activity.name),
+        type: mapStravaType(activity.type, activity.name, activity.description),
         durationMinutes: (userSettings?.stravaTimePreference === 'elapsed' ? activity.elapsed_time : (activity.moving_time || activity.elapsed_time)) / 60,
         intensity: estimateIntensity(activity),
         caloriesBurned: calorieData.calories,
         calorieBreakdown: calorieData.breakdown,
         distance: activity.distance ? Math.round(activity.distance / 10) / 100 : undefined, // Convert to km
-        notes: activity.name,
+        notes: activity.description || activity.name,
         heartRateAvg: activity.average_heartrate,
         heartRateMax: activity.max_heartrate,
         elevationGain: activity.total_elevation_gain,
@@ -602,11 +608,13 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         calories: calorieData.calories,
         calorieBreakdown: calorieData.breakdown,
 
+        activityType: mapStravaType(activity.type, activity.name, activity.description),
+
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
         elevationGain: activity.total_elevation_gain,
 
-        averageWatts: activity.average_watts || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : undefined),
+        averageWatts: activity.average_watts || parseWorkout(activity.name, activity.description || "").averagePower || parseWattsFromText(activity.name) || (activity.description ? parseWattsFromText(activity.description) : undefined),
         maxWatts: activity.max_watts,
         averageSpeed: mapStravaType(activity.type, activity.name) !== 'strength' && activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
         maxSpeed: activity.max_speed ? activity.max_speed * 3.6 : 0, // m/s to km/h
@@ -615,9 +623,8 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         kudosCount: activity.kudos_count,
         achievementCount: activity.achievement_count,
 
-        activityType: mapStravaType(activity.type, activity.name),
         startTimeLocal: activity.start_date_local, // Full ISO for time-of-day analysis
-        notes: activity.description || "",
+        notes: activity.description || activity.name || "",
         subType: mapStravaSubType(activity.type, activity.workout_type),
         excludeFromStats: activity.excludeFromStats,
         splits: mapStravaType(activity.type, activity.name) !== 'strength' ? activity.splits_metric?.map(s => ({

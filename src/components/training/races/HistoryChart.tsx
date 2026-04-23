@@ -1,3 +1,4 @@
+import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface HistoryChartProps {

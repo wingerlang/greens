@@ -37,6 +37,7 @@ export async function safeFetch<T>(url: string, options?: RequestInit): Promise<
         }
     };
 
+    let response: Response;
     try {
         response = await fetch(url, fetchOptions);
     } catch (error) {

@@ -1,3 +1,4 @@
+import React from 'react';
 import { Medal } from 'lucide-react';
 
 interface RaceDashboardStatsProps {

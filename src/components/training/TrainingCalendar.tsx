@@ -388,7 +388,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     }, { replace: true });
                                                 }}
                                                 className={`
-                                            relative p-0.5 flex flex-col rounded-md sm:rounded-sm border group cursor-pointer transition-all duration-200 min-h-[70px] hover:z-50
+                                            relative p-0.5 flex flex-col rounded-md sm:rounded-sm border group cursor-pointer transition-all duration-200 min-h-[70px] hover:z-[100]
                                             ${!date.isCurrentMonth ? 'opacity-60 grayscale-[0.3] hover:opacity-90 hover:grayscale-0' : ''}
                                             ${isSick ? sickBg : 
                                                 isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50 hover:border-sky-400' :
@@ -404,7 +404,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                     hasExercise ? 'text-white' : 'text-slate-600'}`}>
                                                         {date.day}
                                                     </span>
-                                                    <div className="flex items-center gap-1 group/dayinfo relative">
+                                                    <div className="flex items-center gap-1 group/dayinfo relative hover:z-[110]">
                                                         {hasExercise && (() => {
                                                             const sessions = date.exercises.filter(e => !isWarmupOrCooldown(e));
                                                             const warmCount = date.exercises.filter(e => isWarmupOrCooldown(e)).length;
@@ -425,7 +425,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                                                         {/* Day Total Tooltip */}
                                                         {hasExercise && (
-                                                            <div className={`absolute mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 transition-all duration-300 translate-y-2 group-hover/dayinfo:translate-y-0 z-[9999] hidden md:block pointer-events-none scale-95 group-hover/dayinfo:scale-100`} style={{ left: '50%', transform: 'translateX(-50%)', top: '100%' }}>
+                                                            <div className={`absolute mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 transition-all duration-300 translate-y-2 group-hover/dayinfo:translate-y-0 z-[10000] hidden md:block pointer-events-none scale-95 group-hover/dayinfo:scale-100`} style={{ left: '50%', transform: 'translateX(-50%)', top: '100%' }}>
                                                                 <div className="text-xs text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
                                                                     <span>{date.day} {monthName}</span>
                                                                     {(() => {
@@ -512,7 +512,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         search: `?activityId=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                     }, { replace: true });
                                                                 }}
-                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md ${isLongName ? 'pb-1' : ''}`}>
+                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md hover:z-[110] ${isLongName ? 'pb-1' : ''}`}>
                                                                 <span className={`font-bold flex items-center min-w-0 shrink z-10 ${isLongName ? 'w-full mb-0.5' : 'truncate'}`}>
                                                                     <div className="opacity-70 shrink-0 z-0 scale-[1.1]">{icon}</div>
                                                                     <span className={`flex items-center gap-0.5 leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95 ${isLongName ? '' : 'truncate'}`}>
@@ -567,7 +567,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 </div>
 
                                                                 {/* Rich Tooltip per Activity - positioned absolutely inside the relative day cell */}
-                                                                <div className={`absolute ${weekIdx <= 1 ? 'mt-2 top-full' : 'mb-2 bottom-full'} ${dayIdx <= 3 ? 'left-[-10%]' : 'right-[-10%]'} w-56 sm:w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 sm:p-4 shadow-2xl opacity-0 group-hover/ex:opacity-100 transition-all duration-300 z-[9999] hidden md:block pointer-events-none scale-95 group-hover/ex:scale-100`}>
+                                                                <div className={`absolute ${weekIdx <= 1 ? 'mt-2 top-full' : 'mb-2 bottom-full'} ${dayIdx <= 3 ? 'left-[-10%]' : 'right-[-10%]'} w-56 sm:w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 sm:p-4 shadow-2xl opacity-0 group-hover/ex:opacity-100 transition-all duration-300 z-[10000] hidden md:block pointer-events-none scale-95 group-hover/ex:scale-100`}>
                                                                     <div className="flex flex-col gap-2 whitespace-normal">
                                                                         <div className="flex items-start gap-3 mb-2 pb-2 border-b border-white/10">
                                                                             <div className="p-2 rounded-xl bg-slate-800/80 text-white shrink-0 shadow-inner">

@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal';

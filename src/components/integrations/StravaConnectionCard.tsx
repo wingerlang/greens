@@ -100,7 +100,11 @@ export function StravaConnectionCard() {
     };
 
     const handleSync = async () => {
-        setIsImportModalOpen(true);
+        setConnecting(true); // Momentary loading feedback
+        setTimeout(() => {
+            setConnecting(false);
+            setIsImportModalOpen(true);
+        }, 300);
     };
 
     const handleDisconnect = async () => {
@@ -318,9 +322,10 @@ export function StravaConnectionCard() {
                         </button>
                         <button
                             onClick={handleSync}
-                            className="flex-1 py-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-bold text-xs uppercase tracking-wider transition-all border border-orange-500/30"
+                            disabled={connecting}
+                            className="flex-1 py-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-bold text-xs uppercase tracking-wider transition-all border border-orange-500/30 disabled:opacity-50"
                         >
-                            Synka Nu
+                            {connecting ? '⏳ Öppnar...' : 'Synka Nu'}
                         </button>
                     </div>
 

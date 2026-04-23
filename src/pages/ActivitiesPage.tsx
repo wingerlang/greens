@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, memo } from 'react';
 import { useDebounce } from '../hooks/useDebounce.ts';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
@@ -26,7 +26,7 @@ interface ActivityRowProps {
     onSelectActivity: (activity: (ExerciseEntry & { source: string })) => void;
 }
 
-const ActivityRow = ({
+const ActivityRow = memo(({
     activity,
     index,
     isSelectedForMerge,
@@ -238,6 +238,9 @@ const ActivityRow = ({
                 <td className="px-3 py-2 text-[10px] font-mono whitespace-nowrap text-emerald-400/90 font-bold">
                     {activity.distance && activity.distance > 0 ? `${activity.distance.toFixed(1)} km` : '-'}
                 </td>
+                <td className="px-3 py-2 text-[10px] font-mono whitespace-nowrap text-amber-400/90 font-bold">
+                    {activity.caloriesBurned ? `${activity.caloriesBurned} kcal` : '-'}
+                </td>
                 <td className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px]">
                         {pace && (
@@ -342,7 +345,7 @@ const ActivityRow = ({
             )}
         </React.Fragment>
     );
-};
+});
 
 export function ActivitiesPage() {
     const { unifiedActivities: allActivities, universalActivities, strengthSessions, addStrengthSession, deleteStrengthSession, isLoading } = useData();
@@ -690,6 +693,16 @@ export function ActivitiesPage() {
     // Get selected activities for preview
     const selectedActivitiesForMerge = processedActivities.filter(a => selectedForMerge.has(a.id));
 
+    const totals = useMemo(() => {
+        return processedActivities.reduce((acc, a) => {
+            acc.distance += (a.distance || 0);
+            acc.duration += (a.durationMinutes || 0);
+            acc.calories += (a.caloriesBurned || 0);
+            acc.count++;
+            return acc;
+        }, { distance: 0, duration: 0, calories: 0, count: 0 });
+    }, [processedActivities]);
+
     if (isLoading && allActivities.length === 0) {
         return (
             <div className="min-h-[50vh] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
@@ -709,6 +722,21 @@ export function ActivitiesPage() {
                         <p className="text-slate-400">
                             Visar <span className="text-emerald-400 font-bold">{processedActivities.length}</span> av <span className="text-slate-500">{allActivities.length}</span> aktiviteter.
                         </p>
+                    </div>
+
+                    <div className="flex gap-4 items-center">
+                        <div className="bg-slate-900 border border-white/5 rounded-2xl px-4 py-2 flex flex-col">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Totalt Distans</span>
+                            <span className="text-xl font-black text-white">{totals.distance.toFixed(1)} <span className="text-xs text-slate-500">km</span></span>
+                        </div>
+                        <div className="bg-slate-900 border border-white/5 rounded-2xl px-4 py-2 flex flex-col">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Totalt Tid</span>
+                            <span className="text-xl font-black text-white">{formatDuration(totals.duration * 60)}</span>
+                        </div>
+                        <div className="bg-slate-900 border border-white/5 rounded-2xl px-4 py-2 flex flex-col">
+                            <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Totalt Energi</span>
+                            <span className="text-xl font-black text-white">{totals.calories.toLocaleString()} <span className="text-xs text-slate-500">kcal</span></span>
+                        </div>
                     </div>
                 </div>
 
@@ -939,6 +967,9 @@ export function ActivitiesPage() {
                             </th>
                             <th className="px-3 py-2 w-20 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('distance')}>
                                 Dist. <SortIcon colKey="distance" />
+                            </th>
+                            <th className="px-3 py-2 w-20 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('caloriesBurned')}>
+                                Kcal <SortIcon colKey="caloriesBurned" />
                             </th>
                             <th className="px-3 py-2 w-auto min-w-[150px] cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('pace')}>
                                 Info <SortIcon colKey="pace" />

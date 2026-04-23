@@ -402,15 +402,25 @@ export function DataProvider({ children }: DataProviderProps) {
         }
     }, [authUser]);
 
-    // Save to storage on changes
-    React.useEffect(() => {
-        if (isLoaded && !isRefreshingRef.current) {
-            const shouldSkipApi = skipAutoSave.current;
-            if (shouldSkipApi) {
-                console.log("Optimizing auto-save: Skipping API sync for atomic update");
-                skipAutoSave.current = false;
-            }
+    // Save to storage on changes (Debounced for performance)
+    const saveTimeoutRef = React.useRef<number | null>(null);
 
+    React.useEffect(() => {
+        if (!isLoaded || isRefreshingRef.current) return;
+
+        const shouldSkipApi = skipAutoSave.current;
+        if (shouldSkipApi) {
+            skipAutoSave.current = false;
+        }
+
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Set new timeout (500ms delay)
+        saveTimeoutRef.current = setTimeout(() => {
+            console.log("[DataContext] Running debounced auto-save...");
             storageService.save({
                 foodItems,
                 recipes,
@@ -440,13 +450,18 @@ export function DataProvider({ children }: DataProviderProps) {
                 quickMeals: storedQuickMeals,
                 foodAliases,
                 exercises,
-                // PERSIST: Race Definitions & Tours
                 raceDefinitions,
                 raceIgnoreRules,
                 tours,
                 purchaseLogs
             }, { skipApi: shouldSkipApi });
-        }
+        }, 500);
+
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
     }, [
         foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities,
         userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries,
@@ -456,7 +471,6 @@ export function DataProvider({ children }: DataProviderProps) {
         injuryLogs, recoveryMetrics,
         bodyMeasurements,
         storedQuickMeals, foodAliases, exercises,
-        // DEPENDENCIES: Race Definitions & Tours
         raceDefinitions, raceIgnoreRules, tours, purchaseLogs
     ]);
 

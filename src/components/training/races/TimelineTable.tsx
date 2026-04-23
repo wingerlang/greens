@@ -1,4 +1,5 @@
-import { Target, Medal } from 'lucide-react';
+import React from 'react';
+import { Target, Medal, Trophy as TrophyIcon } from 'lucide-react';
 import { ExerciseEntry, UniversalActivity, PlannedActivity } from '../../../models/types.ts';
 import { formatRaceDateCompact, isTrailRace, isUltraRace, getDistanceStyle, calcPace, calcStifa, getAvgElevation } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
@@ -135,7 +136,7 @@ export function TimelineTable({
                             <td className="px-3 py-1.5">
                                 <div className={`font-bold transition-colors flex items-center gap-1.5 flex-wrap text-xs ${isWin ? 'text-amber-400 group-hover:text-amber-300' : 'text-white group-hover:text-amber-500'}`}>
                                     <span className="truncate max-w-[200px]">{title}</span>
-                                    {isWin && <Trophy size={10} className="text-amber-400" />}
+                                    {isWin && <TrophyIcon size={16} className="text-amber-500" />}
                                     {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest">Ultra</span>}
                                     {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
                                 </div>

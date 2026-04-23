@@ -303,6 +303,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         raceDetails: updates.raceDetails,
                         calories: updates.caloriesBurned,
                         isCalorieAdjusted: updates.isCalorieAdjusted,
+                        calculationMode: (updates as any).calculationMode,
                         originalCalories: updates.originalCalories,
                         heartRateAvg: (updates as any).heartRateAvg,
                         heartRateMax: (updates as any).heartRateMax
@@ -338,6 +339,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     performance: {
                         ...ua.performance,
                         subType: updates.subType || ua.performance?.subType,
+                        notes: updates.notes !== undefined ? updates.notes : ua.performance?.notes,
                         averageWatts: updates.averageWatts !== undefined ? updates.averageWatts : ua.performance?.averageWatts,
                         isCalorieAdjusted: updates.isCalorieAdjusted !== undefined ? updates.isCalorieAdjusted : ua.performance?.isCalorieAdjusted,
                         originalCalories: updates.originalCalories !== undefined ? updates.originalCalories : ua.performance?.originalCalories,
@@ -369,13 +371,16 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                     // Map critical performance metrics to the root for the backend handler
                     caloriesBurned: updated.caloriesBurned,
                     isCalorieAdjusted: updated.isCalorieAdjusted,
+                    calculationMode: (updated as any).calculationMode,
                     originalCalories: updated.originalCalories,
                     averageWatts: updated.averageWatts,
                     // Also ensure nested performance object is updated
                     performance: {
                         ...(updated as any).performance,
+                        notes: updated.notes,
                         calories: updated.caloriesBurned,
                         isCalorieAdjusted: updated.isCalorieAdjusted,
+                        calculationMode: (updated as any).calculationMode,
                         originalCalories: updated.originalCalories,
                         originalAvgHeartRate: (updated as any).performance?.originalAvgHeartRate || (updated as any).performance?.avgHeartRate || updated.heartRateAvg,
                         originalMaxHeartRate: (updated as any).performance?.originalMaxHeartRate || (updated as any).performance?.maxHeartRate || updated.heartRateMax,

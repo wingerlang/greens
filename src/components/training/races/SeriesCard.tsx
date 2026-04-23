@@ -1,3 +1,4 @@
+import React from 'react';
 import { Trophy, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { ExerciseEntry } from '../../../models/types.ts';
 import { formatRaceDateCompact } from './utils.ts';

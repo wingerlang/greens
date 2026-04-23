@@ -19,7 +19,7 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator, AlertTriangle } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy as TrophyIcon, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator, AlertTriangle } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 import { normalizeRaceTitle } from '../training/races/utils.ts';
 import { usePrepAggregation, PrepEvent } from '../training/hooks/usePrepAggregation.ts';
@@ -116,6 +116,13 @@ export function ActivityDetailModal({
     };
 
     const [isUnmerging, setIsUnmerging] = React.useState(false);
+    
+    // Parse workout for analysis & categorization
+    const parsedWorkout = React.useMemo(() => {
+        const title = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.type || 'Workout';
+        const desc = universalActivity?.plan?.description || activity._mergeData?.universalActivity?.plan?.description || activity.notes || '';
+        return parseWorkout(title, desc);
+    }, [universalActivity, activity]);
 
     // Hyrox Parser State
     const [showParser, setShowParser] = React.useState(false);
@@ -146,13 +153,14 @@ export function ActivityDetailModal({
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
         hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
         startKm: '0',
-        averageWatts: (perf?.averageWatts || currentActivity.averageWatts || '').toString(),
+        averageWatts: (parsedWorkout?.averagePower || perf?.averageWatts || currentActivity.averageWatts || '').toString(),
         averageHeartRate: (perf?.avgHeartRate || currentActivity.heartRateAvg || '').toString(),
         maxHeartRate: (perf?.maxHeartRate || currentActivity.heartRateMax || '').toString(),
         placement: currentActivity.raceDetails?.placement?.toString() || '',
         totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || '',
         originalCalories: (currentActivity.isCalorieAdjusted) ? (currentActivity as any).originalCalories : activity.originalCalories || 0,
-        calculationMode: (currentActivity.isCalorieAdjusted) ? 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts'
+        calculationMode: (currentActivity.isCalorieAdjusted) ? (currentActivity as any).calculationMode || 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts',
+        useTheoreticalKcal: currentActivity.isCalorieAdjusted && (currentActivity as any).calculationMode === 'watts'
     });
 
     const [showHrOverride, setShowHrOverride] = React.useState(!!(perf?.avgHeartRate && perf?.originalAvgHeartRate && perf.avgHeartRate !== perf.originalAvgHeartRate));
@@ -175,12 +183,53 @@ export function ActivityDetailModal({
         if (t) setDisplayTitle(t);
     }, [currentUniversal?.plan?.title, (currentActivity as any)._mergeData?.universalActivity?.plan?.title, currentActivity.title, currentActivity.type]);
 
-    // Sync startKm from notes for Edit Form
+    // Sync notes & title from activity data changes for Edit Form
     React.useEffect(() => {
         const startKmMatch = (currentActivity.notes || '').match(/\[START_KM:\s*([\d.]+)\]/);
         const startKm = startKmMatch ? startKmMatch[1] : '0';
-        setEditForm(prev => ({ ...prev, startKm }));
-    }, [currentActivity.notes]);
+        
+        // Only update notes in form if we aren't currently editing it, 
+        // OR if the current form notes are just the type (default) and we have real notes now
+        setEditForm(prev => {
+            const updates: any = { startKm };
+            if (currentActivity.notes && (prev.notes === currentActivity.type || !prev.notes || isForcingFetch)) {
+                updates.notes = currentActivity.notes;
+            }
+            if (currentUniversal?.plan?.title && (prev.title === currentActivity.type || !prev.title || isForcingFetch)) {
+                updates.title = currentUniversal.plan.title;
+            }
+            return { ...prev, ...updates };
+        });
+    }, [currentActivity.notes, currentUniversal?.plan?.title, isForcingFetch]);
+
+    // Sync editForm with activity data changes (e.g. from background sync or auto-apply)
+    React.useEffect(() => {
+        const activityWatts = (parsedWorkout?.averagePower || perf?.averageWatts || currentActivity.averageWatts || '').toString();
+        
+        // Map the internal state to the editForm calculationMode
+        // If it's calorie adjusted, we look at the specific mode if available
+        let activityMode: any = currentActivity.isCalorieAdjusted ? ((currentActivity as any).calculationMode || 'adjusted') : 'original';
+        
+        // Heuristic: If we have watts data and no specific mode is set, or it's 'original',
+        // we should probably be in 'watts' mode for cycling
+        if (activityWatts && activityWatts !== '0' && (activity.type === 'cycling' || activity.type === 'hyrox') && (activityMode === 'original' || activityMode === 'adjusted')) {
+            activityMode = 'watts';
+        }
+
+        // Only update if changed and we are NOT currently editing (to avoid jumping while typing)
+        // EXCEPT for the wattage field if it was empty/zero, then we want to auto-fill it even if editing
+        if (activityWatts && activityWatts !== '0' && activityWatts !== editForm.averageWatts && (!editForm.averageWatts || editForm.averageWatts === '0')) {
+             console.log("ActivityDetailModal: Syncing auto-detected watts to editForm:", activityWatts);
+             setEditForm(prev => ({ 
+                ...prev, 
+                averageWatts: activityWatts, 
+                calculationMode: activityMode,
+                useTheoreticalKcal: activityMode === 'watts'
+             }));
+        } else if (activityMode !== editForm.calculationMode && !isEditing) {
+             setEditForm(prev => ({ ...prev, calculationMode: activityMode, useTheoreticalKcal: activityMode === 'watts' }));
+        }
+    }, [perf?.averageWatts, currentActivity.averageWatts, parsedWorkout?.averagePower, currentActivity.isCalorieAdjusted, (currentActivity as any).calculationMode, isEditing, activity.type]);
 
     // Stations definition
     const HYROX_STATIONS: { id: HyroxStation; label: string; icon: string }[] = [
@@ -285,13 +334,6 @@ export function ActivityDetailModal({
     const parentMergedActivity = isMergedInto
         ? universalActivities.find(u => u.id === universalActivity?.mergedIntoId)
         : null;
-
-    // Parse workout for analysis & categorization
-    const parsedWorkout = React.useMemo(() => {
-        const title = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.type || 'Workout';
-        const desc = universalActivity?.plan?.description || activity._mergeData?.universalActivity?.plan?.description || activity.notes || '';
-        return parseWorkout(title, desc);
-    }, [universalActivity, activity]);
 
     // Hyrox Visualization Data
     // Fallback: If hyroxStats is missing (e.g. from Strava import), try to parse from notes
@@ -699,8 +741,9 @@ export function ActivityDetailModal({
         // More robust Strava detection
         const effectivelyStrava =
             source === 'strava' ||
+            (activity as any).platform === 'strava' ||
             (typeof externalId === 'string' && (externalId.startsWith('strava_') || /^\d+$/.test(externalId))) ||
-            (typeof externalId === 'number');
+            (typeof externalId === 'number' && externalId > 0);
 
         // Check for existing data
         const existingSplits = (perf?.splits && perf.splits.length > 0)
@@ -718,16 +761,17 @@ export function ActivityDetailModal({
             activity.type?.toLowerCase() === 'strength' ||
             activity.type?.toLowerCase() === 'weighttraining' ||
             activity.type?.toLowerCase() === 'workout' ||
-            activity.type?.toLowerCase().includes('styrka') ||
-            source === 'merged' ||
-            activity._mergeData?.strengthWorkout != null;
+            activity.type?.toLowerCase().includes('styrka');
 
         // We trigger fetch only if BOTH splits and laps are completely missing
         const needsFetch = (!existingSplits || existingSplits.length === 0) && (!existingLaps || existingLaps.length === 0);
 
         // Relaxed condition: we don't strictly REQUIRE token in state if we have cookies, 
         // but it's good practice to log if it's there. The backend handles the cookie.
-        if (effectivelyStrava && !isStrengthLike && externalId && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits && token) {
+        // If it's a force sync, we ignore the isStrengthLike check (user knows what they are doing)
+        const canSync = effectivelyStrava && (isForcingFetch || !isStrengthLike) && (externalId || source === 'strava');
+
+        if (canSync && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits && token) {
             console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
@@ -787,6 +831,13 @@ export function ActivityDetailModal({
                             updateExercise(activity.id, updates);
                             setFetchSplitsResult('success');
 
+                            // ALSO update the modal's local editForm so the user sees it immediately
+                            setEditForm(prev => ({
+                                ...prev,
+                                notes: updates.notes || prev.notes,
+                                title: updates.title || prev.title
+                            }));
+
                             // Persist to backend
                             const dateParam = activity.date.split('T')[0];
                             await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
@@ -832,7 +883,56 @@ export function ActivityDetailModal({
 
             fetchSplits();
         }
-    }, [activity.id, activity.source, activity.externalId, (activity as any).platform, universalActivity, token, existingSplits, fetchSplitsResult, updateExercise, isFetchingSplits]);
+    }, [activity.id, activity.source, activity.externalId, (activity as any).platform, universalActivity, token, existingSplits, fetchSplitsResult, updateExercise, isFetchingSplits, isForcingFetch]);
+
+    // Auto-apply power if found in description (specifically for cycling)
+    React.useEffect(() => {
+        // Only auto-apply if:
+        // 1. We found an average power in the description
+        // 2. It's a cycling activity
+        // 3. Current averageWatts is missing or different
+        if (parsedWorkout?.averagePower && 
+            activity.type === 'cycling' && 
+            (perf?.averageWatts !== parsedWorkout.averagePower)) {
+            
+            console.log("ActivityDetailModal: Auto-applying parsed average power:", parsedWorkout.averagePower);
+            
+            // Determine if we should also update calculation mode
+            // We do it if it's not already 'adjusted' or something specifically set by user
+            const shouldUpdateMode = !activity.isCalorieAdjusted || activity.caloriesBurned === 0;
+
+            updateExercise(activity.id, { 
+                averageWatts: parsedWorkout.averagePower,
+                performance: {
+                    ...(perf || {}),
+                    averageWatts: parsedWorkout.averagePower
+                },
+                ...(shouldUpdateMode ? {
+                    calculationMode: 'watts',
+                    isCalorieAdjusted: true
+                } : {})
+            });
+            
+            // Persist to backend if token exists
+            if (token) {
+                const dateParam = activity.date.split('T')[0];
+                fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        averageWatts: parsedWorkout.averagePower,
+                        ...(shouldUpdateMode ? {
+                            calculationMode: 'watts',
+                            isCalorieAdjusted: true
+                        } : {})
+                    })
+                }).catch(err => console.error('Failed to auto-apply power:', err));
+            }
+        }
+    }, [parsedWorkout?.averagePower, activity.id, activity.type, activity.averageWatts, perf?.averageWatts, token]);
 
     // Apply Category Helper - Updates the EXISTING activity's subType
     const handleApplyCategory = (category: ExerciseSubType) => {
@@ -924,8 +1024,16 @@ export function ActivityDetailModal({
                 hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
                 raceDetails: editForm.subType === 'race' || editForm.subType === 'competition' ? {
                     ...activity.raceDetails,
-                    placement: parseInt((editForm as any).placement) || undefined,
-                    totalParticipants: parseInt((editForm as any).totalParticipants) || undefined
+                    placement: (function() {
+                        const val = ((editForm as any).placement || '').toString().trim();
+                        if (val.includes('/')) return parseInt(val.split('/')[0]) || undefined;
+                        return parseInt(val) || undefined;
+                    })(),
+                    totalParticipants: (function() {
+                        const val = ((editForm as any).totalParticipants || '').toString().trim();
+                        if (val.includes('/')) return parseInt(val.split('/')[1]) || undefined;
+                        return parseInt(val) || undefined;
+                    })()
                 } : activity.raceDetails
             };
 
@@ -1387,9 +1495,9 @@ export function ActivityDetailModal({
                                     <div className="space-y-1">
                                         <label className="text-xs font-bold text-amber-500 uppercase">🏁 Placering</label>
                                         <input
-                                            type="number"
+                                            type="text"
                                             placeholder="t.ex. 1"
-                                            value={(editForm as any).placement}
+                                            value={editForm.placement}
                                             onChange={e => setEditForm({ ...editForm, placement: e.target.value })}
                                             className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
                                         />
@@ -1397,9 +1505,9 @@ export function ActivityDetailModal({
                                     <div className="space-y-1">
                                         <label className="text-xs font-bold text-amber-500 uppercase">Deltagare</label>
                                         <input
-                                            type="number"
+                                            type="text"
                                             placeholder="Totalt antal"
-                                            value={(editForm as any).totalParticipants}
+                                            value={editForm.totalParticipants}
                                             onChange={e => setEditForm({ ...editForm, totalParticipants: e.target.value })}
                                             className="w-full bg-slate-900 border-white/10 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
                                         />
@@ -2117,7 +2225,7 @@ export function ActivityDetailModal({
                         {fetchSplitsResult === 'success' && (
                             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4 transition-all duration-1000 delay-3000 opacity-100" style={{ animation: 'fadeOut 1s forwards 3s' }}>
                                 <span>✅</span>
-                                <p className="text-xs font-bold text-emerald-400">Kilometertider & laps hämtades från Strava!</p>
+                                <p className="text-xs font-bold text-emerald-400">Information hämtades från Strava och beskrivningen har analyserats!</p>
                             </div>
                         )}
 
@@ -2290,6 +2398,20 @@ export function ActivityDetailModal({
                                                         {perf?.avgHeartRate ? `${Math.round(perf.avgHeartRate)} bpm` : '-'}
                                                     </td>
                                                 </tr>
+                                                {/* Power */}
+                                                {(activity.type === 'cycling' || originalActivities.some(a => a.performance?.averageWatts)) && (
+                                                    <tr className="hover:bg-white/5 transition-colors">
+                                                        <td className="px-6 py-4 font-bold text-slate-400">Effekt</td>
+                                                        {originalActivities.map((a) => (
+                                                            <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono">
+                                                                {a.performance?.averageWatts ? `${Math.round(a.performance.averageWatts)} W` : '-'}
+                                                            </td>
+                                                        ))}
+                                                        <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                            {perf?.averageWatts ? `${Math.round(perf.averageWatts)} W` : '-'}
+                                                        </td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -2353,14 +2475,18 @@ export function ActivityDetailModal({
                                                             setIsForcingFetch(true);
                                                             setFetchSplitsResult('idle');
                                                         }}
-                                                        className={`text-[9px] font-black uppercase border px-2 py-1 rounded-lg transition-all flex items-center gap-1 ${isFetchingSplits ? 'bg-white/10 border-white/10 text-slate-500 cursor-not-allowed' : 'text-[#FC4C02]/60 hover:text-[#FC4C02] border-[#FC4C02]/20 hover:bg-[#FC4C02]/10'}`}
+                                                        className={`text-[9px] font-black uppercase border px-2 py-1 rounded-lg transition-all flex items-center gap-1 ${isFetchingSplits ? 'bg-white/10 border-white/10 text-slate-500 cursor-not-allowed' : fetchSplitsResult === 'success' ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : fetchSplitsResult === 'error' ? 'text-rose-500 border-rose-500/30 bg-rose-500/10' : 'text-[#FC4C02]/60 hover:text-[#FC4C02] border-[#FC4C02]/20 hover:bg-[#FC4C02]/10'}`}
                                                         title="Hämta om data från Strava"
                                                     >
                                                         {isFetchingSplits ? (
                                                             <>
-                                                                <div className="w-2 h-2 border border-[#FC4C02]/20 border-t-[#FC4C02] rounded-full animate-spin" />
+                                                                <div className="w-3.5 h-3.5 border-2 border-[#FC4C02]/20 border-t-[#FC4C02] rounded-full animate-spin" />
                                                                 Synkar...
                                                             </>
+                                                        ) : fetchSplitsResult === 'success' ? (
+                                                            <>✓ Synkad</>
+                                                        ) : fetchSplitsResult === 'error' ? (
+                                                            <>⚠ Fel</>
                                                         ) : (
                                                             <>↻ Synka om</>
                                                         )}
@@ -2516,12 +2642,19 @@ export function ActivityDetailModal({
                                                 </div>
 
                                                 {/* Watts */}
-                                                {!!perf?.averageWatts && (
+                                                {(!!perf?.averageWatts || !!parsedWorkout?.averagePower) && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{Math.round(perf.averageWatts)}</span>
+                                                            <span className="text-xl font-black text-white">
+                                                                {Math.round(parsedWorkout?.averagePower || perf?.averageWatts || 0)}
+                                                            </span>
                                                             <span className="text-[10px] uppercase text-slate-500">w</span>
+                                                            {parsedWorkout?.averagePower && perf?.averageWatts && Math.round(parsedWorkout.averagePower) !== Math.round(perf.averageWatts) ? (
+                                                                <span className="text-[8px] text-amber-500 font-bold ml-1 uppercase" title={`Identifierat ${Math.round(parsedWorkout.averagePower)}w i beskrivningen (Strava anger ${Math.round(perf.averageWatts)}w)`}>Justerad</span>
+                                                            ) : !perf?.averageWatts && parsedWorkout?.averagePower ? (
+                                                                <span className="text-[8px] text-amber-500 font-bold ml-1 uppercase" title="Identifierat i beskrivningen men ej sparat ännu">Identifierad</span>
+                                                            ) : null}
                                                         </div>
                                                     </div>
                                                 )}
@@ -2603,10 +2736,10 @@ export function ActivityDetailModal({
                                                 ) : null}
                                             {/* Strava Description - Compact One-Row Style */}
                                             {(perf?.notes || activity.notes) && (
-                                                <div className="bg-white/5 rounded-lg px-3 py-1.5 border border-white/5 mt-4 mx-2 mb-2 flex items-center gap-3">
-                                                    <span className="text-[8px] text-slate-500 uppercase font-black opacity-40 tracking-widest whitespace-nowrap">Beskrivning:</span>
-                                                    <p className="text-[10px] text-slate-400 italic truncate flex-1">
-                                                        {(perf?.notes || activity.notes).replace(/\n/g, ' ')}
+                                                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/5 mt-4 mx-2 mb-2">
+                                                    <span className="text-[8px] text-slate-500 uppercase font-black opacity-40 tracking-widest block mb-1">Beskrivning:</span>
+                                                    <p className="text-[10px] text-slate-400 italic whitespace-pre-wrap leading-relaxed">
+                                                        {perf?.notes || activity.notes}
                                                     </p>
                                                 </div>
                                             )}

@@ -74,6 +74,16 @@ export class ReconciliationService {
                     changes.push(`Duration: ${existingDuration.toFixed(1)} -> ${stravaDurationMin.toFixed(1)} min`);
                 }
 
+                // Compare Description (important for power parsing)
+                if ((s.description || "") !== (existing.performance?.notes || "")) {
+                    changes.push(`Beskrivning ändrad`);
+                }
+                
+                // Compare Title
+                if (s.name !== (existing.plan?.title || existing.performance?.source?.externalId)) {
+                    // Check if it's a generic name or something
+                }
+
                 if (changes.length > 0) {
                     report.changedActivities.push({ strava: s, existing, changes });
                 } else {
@@ -109,7 +119,7 @@ export class ReconciliationService {
                     // CREATE NEW
                     // FETCH DETAIL IF RUN (for best_efforts & splits)
                     let detailedActivity = stravaActivity;
-                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name);
+                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name, stravaActivity.description);
                     if (options.accessToken && activityType === 'running' && !stravaActivity.best_efforts) {
                         const detail = await getStravaActivityDetail(stravaActivity.id, options.accessToken);
                         if (detail) detailedActivity = detail;
@@ -133,7 +143,7 @@ export class ReconciliationService {
                 } else if (options.forceUpdate) {
                     // UPDATE EXISTING
                     let detailedActivity = stravaActivity;
-                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name);
+                    const activityType = mapStravaType(stravaActivity.type, stravaActivity.name, stravaActivity.description);
                     if (options.accessToken && activityType === 'running' && !stravaActivity.best_efforts) {
                         const detail = await getStravaActivityDetail(stravaActivity.id, options.accessToken);
                         if (detail) detailedActivity = detail;
@@ -144,7 +154,8 @@ export class ReconciliationService {
                     existing.performance = {
                         ...existing.performance,
                         ...freshPerformance,
-                        notes: existing.performance?.notes || freshPerformance.notes,
+                        // Favors fresh notes if forceUpdate is true (syncing changes from Strava)
+                        notes: freshPerformance.notes || existing.performance?.notes,
                         subType: existing.performance?.subType || freshPerformance.subType,
                         excludeFromStats: existing.performance?.excludeFromStats
                     };
@@ -228,7 +239,7 @@ export class ReconciliationService {
 
         const stravaDistKm = stravaActivity.distance / 1000;
         const stravaDurationMin = (stravaActivity.moving_time || stravaActivity.elapsed_time) / 60;
-        const stravaType = mapStravaType(stravaActivity.type, stravaActivity.name);
+        const stravaType = mapStravaType(stravaActivity.type, stravaActivity.name, stravaActivity.description);
         const stravaTitleLower = (stravaActivity.name || '').toLowerCase();
 
         const scored = candidates.map(c => {

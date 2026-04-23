@@ -24,6 +24,7 @@ export interface WorkoutSegment {
         dist?: number; // meters
         time?: number; // seconds
         pace?: PaceTarget;
+        power?: number; // Watts
     };
     recovery?: RecoveryDefinition;
     originalString: string;
@@ -32,6 +33,7 @@ export interface WorkoutSegment {
 export interface ParsedWorkout {
     segments: WorkoutSegment[];
     totalDistance: number;
+    averagePower?: number; // Calculated average watts
     classification: 'INTERVALS' | 'DISTANCE' | 'TEMPO';
     suggestedSubType?: 'interval' | 'long-run' | 'default' | 'tempo';
 }
