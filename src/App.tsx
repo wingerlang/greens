@@ -73,6 +73,7 @@ const ToolsReplayPage = React.lazy(() => import('./pages/tools/ToolsReplayPage.t
 const ToolsInterferencePage = React.lazy(() => import('./pages/tools/ToolsInterferencePage.tsx').then(m => ({ default: m.ToolsInterferencePage })));
 const ToolsTrainingReportPage = React.lazy(() => import('./pages/tools/ToolsTrainingReportPage.tsx'));
 const ToolsCyclingPage = React.lazy(() => import('./pages/tools/ToolsCyclingPage.tsx').then(m => ({ default: m.ToolsCyclingPage })));
+const ToolsRunningPage = React.lazy(() => import('./pages/tools/ToolsRunningPage.tsx'));
 const BeastModePage = React.lazy(() => import('./pages/BeastModePage.tsx'));
 const PlannerPage = React.lazy(() => import('./components/planner/PlannerPage.tsx').then(m => ({ default: m.PlannerPage })));
 const RoadmapPage = React.lazy(() => import('./pages/RoadmapPage.tsx').then(m => ({ default: m.RoadmapPage })));
@@ -249,15 +250,14 @@ export function App() {
                                                                 <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
                                                                 <Route path="tools/1rm/:exerciseName" element={<ToolsOneRepMaxPage />} />
                                                                 <Route path="rm/:exerciseName?" element={<ToolsOneRepMaxPage />} />
-                                                                <Route path="tools/race" element={<ToolsRacePredictorPage />} />
-                                                                <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
-                                                                <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
-                                                                <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
+                                                                <Route path="tools/running" element={<ToolsRunningPage />} />
+                                                                <Route path="tools/race" element={<Navigate to="/tools/running?tab=predict" replace />} />
+                                                                <Route path="tools/race-planner" element={<Navigate to="/tools/running?tab=planner" replace />} />
+                                                                <Route path="tools/race-predictor" element={<Navigate to="/tools/running?tab=predict" replace />} />
+                                                                <Route path="tools/pace" element={<Navigate to="/tools/running?tab=pace" replace />} />
+                                                                <Route path="tools/cooper" element={<Navigate to="/tools/running?tab=cooper" replace />} />
+                                                                <Route path="tools/hr" element={<Navigate to="/tools/running?tab=hr" replace />} />
                                                                 <Route path="tools/health" element={<ToolsHealthPage />} />
-                                                                <Route path="tools/power" element={<ToolsPowerPage />} />
-                                                                <Route path="tools/macros" element={<ToolsMacroPage />} />
-                                                                <Route path="tools/cooper" element={<ToolsCooperPage />} />
-                                                                <Route path="tools/hr" element={<ToolsHeartRatePage />} />
                                                                 <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
                                                                 <Route path="tools/olympic" element={<ToolsOlympicPage />} />
                                                                 <Route path="tools/hyrox" element={<ToolsHyroxPage />} />

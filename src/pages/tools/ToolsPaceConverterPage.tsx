@@ -164,7 +164,7 @@ export function ToolsPaceConverterPage() {
     };
 
     return (
-        <div className="space-y-8 animate-fade-in pb-20">
+        <div className="space-y-8 animate-fade-in pb-10">
             <div className="text-center md:text-left">
                 <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-emerald-400 mb-2">
                     Pace Converter 2.0

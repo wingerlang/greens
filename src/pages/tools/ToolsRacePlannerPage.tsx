@@ -354,7 +354,7 @@ export function ToolsRacePlannerPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white pb-20">
+        <div className="min-h-screen bg-slate-950 text-white pb-10">
             {/* Header */}
             <div className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-white/5">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">

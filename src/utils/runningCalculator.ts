@@ -22,7 +22,7 @@ export function calculateVDOT(distanceKm: number, timeSeconds: number): number {
         0.1894393 * Math.exp(-0.0115 * timeMinutes) +
         0.2989558 * Math.exp(-0.1932605 * timeMinutes);
 
-    return Math.round((vo2 / pctMax) * 10) / 10;
+    return vo2 / pctMax;
 }
 
 /**
@@ -128,7 +128,7 @@ export function predictRaceTime(vdot: number, distanceKm: number): number {
     // Initial guess: assume 5 min/km
     let timeMinutes = calcDistance * 5;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
         const velocity = (calcDistance * 1000) / timeMinutes;
         const vo2 = -4.60 + (0.182258 * velocity) + (0.000104 * Math.pow(velocity, 2));
         const pctMax = 0.8 +

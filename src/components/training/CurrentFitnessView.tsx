@@ -3,6 +3,7 @@ import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { CapacityChart } from './fitness/CapacityChart.tsx';
 import { PaceEfficiencyChart } from './fitness/PaceEfficiencyChart.tsx';
+import { RunningQuadrantChart } from './fitness/RunningQuadrantChart.tsx';
 import { YearlyBestList } from './fitness/YearlyBestList.tsx';
 import { RefreshCw } from 'lucide-react';
 
@@ -48,11 +49,35 @@ export function CurrentFitnessView({
         const legacy = exerciseEntries || [];
         const universal = universalActivities || [];
         const combined = [
-            ...legacy.filter(e => e.type && (e.type.toLowerCase() === 'löpning' || e.type.toLowerCase() === 'running') && !e.excludeFromStats),
+            ...legacy.filter(e => {
+                const isRunning = e.type && (e.type.toLowerCase() === 'löpning' || e.type.toLowerCase() === 'running');
+                
+                // Check if this legacy entry is a component of ANY merge in universalActivities
+                const isMergedComponent = universal.some(master => {
+                    if (!master.mergeInfo?.isMerged) return false;
+                    const componentIds = master.mergeInfo.originalActivityIds || [];
+                    return componentIds.includes(e.id) || (e.externalId && componentIds.includes(e.externalId));
+                }) || universal.some(u => (u.id === e.id || u.performance?.source?.externalId === e.id) && u.mergedIntoId);
+
+                return isRunning && !e.excludeFromStats && !isMergedComponent;
+            }),
             ...universal
-                .filter(u => u.performance?.activityType && 
-                    (u.performance.activityType.toLowerCase() === 'löpning' || u.performance.activityType.toLowerCase() === 'running') &&
-                    !u.performance?.excludeFromStats)
+                .filter(u => {
+                    const isRunning = u.performance?.activityType && 
+                        (u.performance.activityType.toLowerCase() === 'löpning' || u.performance.activityType.toLowerCase() === 'running');
+                    
+                    // Exclude if it's explicitly marked as a component
+                    if (u.mergedIntoId) return false;
+                    
+                    // Exclude if its ID is referenced as an originalActivityId in any OTHER activity
+                    const isPartOfOtherMerge = universal.some(other => 
+                        other.id !== u.id && 
+                        other.mergeInfo?.isMerged &&
+                        (other.mergeInfo.originalActivityIds?.includes(u.id) || (u.performance?.source?.externalId && other.mergeInfo.originalActivityIds?.includes(u.performance.source.externalId)))
+                    );
+                    
+                    return isRunning && !u.performance?.excludeFromStats && !isPartOfOtherMerge;
+                })
                 .map(mapUniversalToLegacyEntry)
                 .filter(e => e !== null) as ExerciseEntry[]
         ];
@@ -107,6 +132,11 @@ export function CurrentFitnessView({
 
             <PaceEfficiencyChart
                 allRuns={allRuns}
+            />
+
+            <RunningQuadrantChart
+                allRuns={allRuns}
+                onOpenActivity={onOpenActivity}
             />
         </div>
     );

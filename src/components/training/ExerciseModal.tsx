@@ -43,6 +43,7 @@ interface ExerciseModalProps {
         subType?: ExerciseSubType;
         tonnage?: string;
         distance?: string;
+        averageWatts?: string;
     };
     setExerciseForm: (val: any) => void;
     calculateCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity) => number;
@@ -208,7 +209,7 @@ export function ExerciseModal({
                             </div>
 
                             {/* Distance (Conditional) */}
-                            {['running', 'cycling', 'walking', 'swimming'].includes(effectiveExerciseType) && (
+                            {['running', 'cycling', 'walking', 'swimming', 'cardio'].includes(effectiveExerciseType) && (
                                 <div className="col-span-1 sm:col-span-4 space-y-1.5 animate-in fade-in slide-in-from-left-4">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Distans (km)</label>
                                     <div className="relative">
@@ -227,8 +228,25 @@ export function ExerciseModal({
                                 </div>
                             )}
 
+                            {/* Watt (Conditional) */}
+                            {['cycling', 'cardio', 'other'].includes(effectiveExerciseType) && (
+                                <div className="col-span-1 sm:col-span-4 space-y-1.5 animate-in fade-in slide-in-from-left-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Effekt (Watt)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="-"
+                                        value={exerciseForm.averageWatts || ''}
+                                        onChange={e => {
+                                            setExerciseForm({ ...exerciseForm, averageWatts: e.target.value });
+                                            setSmartInput('');
+                                        }}
+                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-slate-900 dark:text-white font-bold text-center focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700 outline-none transition-all"
+                                    />
+                                </div>
+                            )}
+
                             {/* Intensity */}
-                            <div className={`col-span-2 ${['running', 'cycling', 'walking', 'swimming'].includes(effectiveExerciseType) ? 'sm:col-span-4' : 'sm:col-span-8'} space-y-1.5`}>
+                            <div className={`col-span-2 ${['running', 'cycling', 'walking', 'swimming', 'cardio'].includes(effectiveExerciseType) ? 'sm:col-span-4' : 'sm:col-span-8'} space-y-1.5`}>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Intensitet</label>
                                 <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                                     {INTENSITIES.map(i => (

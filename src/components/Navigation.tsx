@@ -71,8 +71,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/beast', label: 'The Beast', icon: Zap, section: 'tools', description: 'Totalprofil', color: 'text-amber-500' },
     { path: '/tools', label: 'Översikt', icon: Briefcase, section: 'tools', description: 'Alla verktyg', color: 'text-slate-400' },
     { path: '/tools/1rm', label: '1RM & Last', icon: Dumbbell, section: 'tools' },
-    { path: '/tools/race', label: 'Race', icon: Timer, section: 'tools' },
-    { path: '/tools/pace', label: 'Pace', icon: Gauge, section: 'tools' },
+    { path: '/tools/running', label: 'Löpning', icon: Timer, section: 'tools' },
     { path: '/tools/cycling', label: 'Cykling & Assault', icon: Bike, section: 'tools' },
     { path: '/tools/health', label: 'Hälsa', icon: Stethoscope, section: 'tools' },
 
@@ -96,20 +95,18 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
     const [isScrolled, setIsScrolled] = useState(false);
 
     useEffect(() => {
-        let timeoutId: NodeJS.Timeout;
         const handleScroll = () => {
-            if (window.scrollY > 100) {
-                // User asked for "after a second" when scrolled down, maybe a slight delay? Or just smooth transition.
-                // We can add a delay to setting it, or just rely on CSS transition. The user means "when you have scrolled down for a bit".
+            const scrollY = window.scrollY;
+            if (scrollY > 60 && !isScrolled) {
                 setIsScrolled(true);
-            } else {
+            } else if (scrollY < 20 && isScrolled) {
                 setIsScrolled(false);
             }
         };
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
+    }, [isScrolled]);
 
     // Filter items based on role and permissions
     const visibleItems = useMemo(() => {
@@ -234,8 +231,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox, onStravaS
     };
 
     return (
-        <nav className={`sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5 transition-all duration-700 ease-in-out flex items-center ${isScrolled ? 'h-8' : 'h-16'}`}>
-            <div className={`max-w-7xl mx-auto px-4 md:px-4 w-full transition-transform duration-700 ease-in-out origin-top ${isScrolled ? 'scale-[0.80]' : 'scale-100'}`}>
+        <nav className={`sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5 transition-all duration-300 ease-in-out flex items-center ${isScrolled ? 'h-11 shadow-2xl' : 'h-16'}`}>
+            <div className={`max-w-7xl mx-auto px-4 md:px-4 w-full transition-all duration-300 ease-in-out origin-top ${isScrolled ? 'scale-[0.90]' : 'scale-100'}`}>
                 <div className="flex items-center justify-between h-8">
 
                     {/* Brand */}

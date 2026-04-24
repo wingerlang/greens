@@ -44,34 +44,10 @@ export default function ToolsPage() {
             icon: "🏃",
             tools: [
                 {
-                    name: "Race Predictor",
-                    desc: "Förutspå tider på 5k, 10k, Mara baserat på VDOT & Riegel.",
-                    path: "/tools/race",
+                    name: "Running Tools",
+                    desc: "Enhetligt gränssnitt för Pace, Race Predictor, Coopers och Pulszoner.",
+                    path: "/tools/running",
                     color: "from-emerald-500 to-teal-500"
-                },
-                {
-                    name: "Race Planner",
-                    desc: "Planera ditt lopp med splittider och pacingguide.",
-                    path: "/tools/race-planner",
-                    color: "from-violet-500 to-purple-500"
-                },
-                {
-                    name: "Pace Converter",
-                    desc: "Omvandla tempo (min/km) till sluttider för olika distanser.",
-                    path: "/tools/pace",
-                    color: "from-teal-500 to-cyan-500"
-                },
-                {
-                    name: "Coopers Test",
-                    desc: "Uppskatta VO2max baserat på 12 minuters löpning.",
-                    path: "/tools/cooper",
-                    color: "from-cyan-500 to-sky-500"
-                },
-                {
-                    name: "Pulszoner",
-                    desc: "Beräkna pulszoner (Karvonen & Maxpuls).",
-                    path: "/tools/hr",
-                    color: "from-sky-500 to-blue-500"
                 },
                 {
                     name: "Energiberäknare",

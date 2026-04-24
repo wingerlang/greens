@@ -1017,6 +1017,7 @@ export function ActivityDetailModal({
                 averageWatts: avgWatts,
                 caloriesBurned: calories,
                 isCalorieAdjusted,
+                calculationMode: editForm.calculationMode,
                 originalCalories,
                 location: editForm.location,
                 excludeFromStats: editForm.excludeFromStats,
@@ -1051,6 +1052,7 @@ export function ActivityDetailModal({
                     maxHeartRate: commonData.heartRateMax,
                     calories: calories,
                     isCalorieAdjusted,
+                    calculationMode: editForm.calculationMode,
                     originalCalories,
                     durationMinutes: duration,
                     distanceKm: commonData.distance,
@@ -1326,7 +1328,7 @@ export function ActivityDetailModal({
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Average Watts / Distance / Tonnage - Dynamic Row */}
-                            {editForm.type === 'cycling' ? (
+                            {['cycling', 'cardio', 'other'].includes(editForm.type) ? (
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 ml-1">
                                         <Zap size={10} /> Effekt (Watt)
@@ -1340,8 +1342,15 @@ export function ActivityDetailModal({
                                     />
                                     {parseFloat(editForm.averageWatts) > 0 && (
                                         <div 
-                                            onClick={() => setEditForm(prev => ({ ...prev, useTheoreticalKcal: !prev.useTheoreticalKcal }))}
-                                            className={`mt-1.5 flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer ${editForm.useTheoreticalKcal ? 'bg-amber-500/20 border-amber-500/30' : 'bg-slate-900/50 border-white/5 opacity-60'}`}
+                                            onClick={() => setEditForm(prev => {
+                                                const newUseTheoretical = !prev.useTheoreticalKcal;
+                                                return { 
+                                                    ...prev, 
+                                                    useTheoreticalKcal: newUseTheoretical,
+                                                    calculationMode: newUseTheoretical ? 'watts' : 'original'
+                                                };
+                                            })}
+                                            className={`mt-1.5 flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer ${editForm.calculationMode === 'watts' ? 'bg-amber-500/20 border-amber-500/30' : 'bg-slate-900/50 border-white/5 opacity-60'}`}
                                         >
                                             <div className="flex flex-col">
                                                 <span className="text-[8px] font-black uppercase text-amber-500 tracking-tighter">Beräkna Kcal från Watt</span>
@@ -1353,7 +1362,7 @@ export function ActivityDetailModal({
                                         </div>
                                     )}
                                 </div>
-                            ) : (editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming' || editForm.type === 'hyrox') ? (
+                            ) : (editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming' || editForm.type === 'hyrox' || editForm.type === 'cardio') ? (
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Distans (km)</label>
                                     <input
@@ -1609,7 +1618,11 @@ export function ActivityDetailModal({
                                         key={opt.id}
                                         type="button"
                                         disabled={opt.disabled}
-                                        onClick={() => setEditForm({ ...editForm, calculationMode: opt.id as any })}
+                                        onClick={() => setEditForm({ 
+                                            ...editForm, 
+                                            calculationMode: opt.id as any,
+                                            useTheoreticalKcal: opt.id === 'watts'
+                                        })}
                                         className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${opt.disabled ? 'opacity-20 cursor-not-allowed grayscale' :
                                             editForm.calculationMode === opt.id
                                                 ? 'bg-white/10 border-white/20 shadow-lg scale-[1.02]'
