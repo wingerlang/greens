@@ -178,7 +178,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             const foodData = intent.data;
             const hasExplicitQuantity = foodData.quantity !== undefined;
             if (hasExplicitQuantity && typeof foodData.quantity === 'number') {
-                setDraftFoodQuantity(foodData.quantity);
+                let finalQty = foodData.quantity;
+                if (lockedFood && (foodData.unit === 'st' || foodData.unit === 'portion' || foodData.unit === 'stycken' || foodData.unit === 'x' || foodData.unit === 'pcs')) {
+                    finalQty = foodData.quantity * (lockedFood.defaultPortionGrams || 100);
+                }
+                setDraftFoodQuantity(finalQty);
             }
             if (foodData.mealType) setDraftFoodMealType(foodData.mealType as MealType);
             if (intent.date) setDraftFoodDate(intent.date);

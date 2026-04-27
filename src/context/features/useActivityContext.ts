@@ -228,6 +228,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     }, [emitFeedEvent, logAction, skipAutoSave]);
 
     const updateExercise = React.useCallback((id: string, updates: Partial<ExerciseEntry>) => {
+        console.log(`[useActivityContext] updateExercise called for ${id}`, updates);
         const existing = exerciseEntries.find(e => e.id === id);
 
         if (!existing) {
@@ -261,6 +262,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 ...ua.performance,
                                 activityType: updates.type || ua.performance?.activityType,
                                 durationMinutes: updates.durationMinutes !== undefined ? updates.durationMinutes : ua.performance?.durationMinutes,
+                                elapsedTimeSeconds: (updates as any).elapsedTimeSeconds !== undefined ? (updates as any).elapsedTimeSeconds : ua.performance?.elapsedTimeSeconds,
                                 notes: updates.notes || ua.performance?.notes,
                                 subType: updates.subType || ua.performance?.subType,
                                 averageWatts: updates.averageWatts !== undefined ? updates.averageWatts : ua.performance?.averageWatts,
@@ -272,7 +274,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 originalAvgHeartRate: ua.performance?.originalAvgHeartRate || ua.performance?.avgHeartRate,
                                 originalMaxHeartRate: ua.performance?.originalMaxHeartRate || ua.performance?.maxHeartRate,
                                 avgHeartRate: (updates as any).heartRateAvg !== undefined ? (updates as any).heartRateAvg : ua.performance?.avgHeartRate,
-                                maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate
+                                maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate,
+                                splits: (updates as any).splits || ua.performance?.splits,
+                                laps: (updates as any).laps || ua.performance?.laps
                             },
                             raceDetails: updates.raceDetails || ua.raceDetails
                         } as UniversalActivity;

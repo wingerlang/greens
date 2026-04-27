@@ -140,7 +140,9 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 splits: detailedActivity.splits_metric || [], 
                 laps: detailedActivity.laps || [],
                 description: detailedActivity.description || "",
-                name: detailedActivity.name || ""
+                name: detailedActivity.name || "",
+                moving_time: detailedActivity.moving_time,
+                elapsed_time: detailedActivity.elapsed_time
             }), { headers });
 
         } catch (e) {

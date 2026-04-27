@@ -28,6 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initial check
     React.useEffect(() => {
+        const storedToken = localStorage.getItem('auth_token');
+        if (storedToken) setToken(storedToken);
+
         const controller = new AbortController();
         const signal = controller.signal;
         let mounted = true;
@@ -43,6 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // console.error('[AuthContext] Auth check failed:', e instanceof Error ? e.message : String(e));
                 if (mounted) {
                     setUser(null);
+                    setToken(null);
+                    localStorage.removeItem('auth_token');
                 }
             })
             .finally(() => {

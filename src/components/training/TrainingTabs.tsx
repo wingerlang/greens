@@ -31,6 +31,7 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
         { id: 'planera', label: '🗓️ Planera', path: '/planera/traning', color: 'emerald' },
         { id: 'logg', label: '📜 Aktiviteter', path: '/logg', color: 'emerald' },
         { id: 'analytics', label: '📊 Dashboard', path: '/training/analytics', color: 'emerald' },
+        { id: 'cardio', label: '🏃 Cardio', path: '/training/cardio', color: 'sky' },
         { id: 'races', label: '🏆 Tävlingar', path: '/training/races', color: 'amber' },
         { id: 'lopstatistik', label: '⏱️ Rekord', path: '/training/lopstatistik', color: 'indigo' },
         { id: 'analys', label: '🔍 Analys', path: '/training/analys', color: 'indigo' },

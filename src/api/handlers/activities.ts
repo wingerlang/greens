@@ -265,6 +265,15 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 }
             }
 
+            // Top-level fields
+            if (updates.location !== undefined) activity.location = updates.location;
+            if (updates.raceDetails !== undefined) activity.raceDetails = updates.raceDetails;
+            if (updates.hyroxStats !== undefined) activity.hyroxStats = updates.hyroxStats;
+            if (updates.isHiddenInCalendar !== undefined) {
+                activity.isHiddenInCalendar = updates.isHiddenInCalendar;
+                if (activity.performance) activity.performance.isHiddenInCalendar = updates.isHiddenInCalendar;
+            }
+
             // Performance related fields (support both top-level and performance object)
             const perfUpdates: any = {};
             if (updates.averageWatts !== undefined) perfUpdates.averageWatts = updates.averageWatts;
@@ -280,6 +289,10 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             if (updates.type !== undefined || updates.activityType !== undefined) {
                 perfUpdates.activityType = updates.type || updates.activityType;
             }
+
+            // Physiological data
+            if (updates.heartRateAvg !== undefined) perfUpdates.avgHeartRate = updates.heartRateAvg;
+            if (updates.heartRateMax !== undefined) perfUpdates.maxHeartRate = updates.heartRateMax;
 
             // Apply flat performance updates
             if (Object.keys(perfUpdates).length > 0) {

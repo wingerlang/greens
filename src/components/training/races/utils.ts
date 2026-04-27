@@ -149,11 +149,11 @@ export const parseRaceGoal = (goalStr: string | undefined, distance?: number): n
 export const getPlannedRaceTime = (race: PlannedActivity): number | undefined => {
     // For races, explicit goals should always take priority over the generic durationMinutes
     // which might just be a default value (like 5:30 min/km fallback)
-    const dist = race.distanceKm || 0;
-    const goalB = parseRaceGoal(race.raceDetails?.goals?.b, dist);
-    if (goalB) return goalB;
+    const dist = race.distanceKm || race.estimatedDistance || 0;
     const goalA = parseRaceGoal(race.raceDetails?.goals?.a, dist);
     if (goalA) return goalA;
+    const goalB = parseRaceGoal(race.raceDetails?.goals?.b, dist);
+    if (goalB) return goalB;
     const goalC = parseRaceGoal(race.raceDetails?.goals?.c, dist);
     if (goalC) return goalC;
 

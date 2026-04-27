@@ -31,6 +31,7 @@ export interface FitnessDatapoint {
     weeklyAvgVolume?: number;
     longRuns90dCount?: number;
     enduranceExponentUsed?: number;
+    isRace?: boolean;
 }
 
 interface CapacityChartProps {
@@ -53,6 +54,18 @@ const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (!cx || !cy) return null;
     const isExtrapolated = payload.isExtrapolated;
+    const isRace = payload.isRace;
+
+    if (isRace) {
+        // Race: Golden frame
+        return (
+            <g>
+                <circle cx={cx} cy={cy} r={8} fill="#0f172a" stroke="#fbbf24" strokeWidth={2} className="shadow-2xl shadow-amber-500/50" />
+                <circle cx={cx} cy={cy} r={4} fill="#fbbf24" />
+            </g>
+        );
+    }
+    
     if (!isExtrapolated) {
         // Actual PB/performance: Solid dot with glow
         return (
@@ -81,7 +94,7 @@ function CustomTooltipCapacity({ active, payload, label }: any) {
                         </div>
                         <div className="min-w-0">
                             <p className="text-[10px] text-slate-400 font-bold uppercase">
-                                {data.isExtrapolated ? '💡 Extrapolerat från' : '🏆 Bästa pass'}
+                                {data.isExtrapolated ? '💡 Extrapolerat från' : data.isRace ? '🥇 Tävling' : '🏆 Bästa pass'}
                             </p>
                             <p className="text-xs text-white truncate max-w-[180px] font-medium">{data.bestActivityTitle}</p>
                         </div>
@@ -106,6 +119,7 @@ function CustomTooltipCapacity({ active, payload, label }: any) {
 
 export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWindowDays, onOpenActivity }: CapacityChartProps) {
     const [useActualOnly, setUseActualOnly] = React.useState(false);
+    const [useRacesOnly, setUseRacesOnly] = React.useState(false);
     const [useEndurancePenalty, setUseEndurancePenalty] = React.useState(true);
     const [useTapering, setUseTapering] = React.useState(false);
     const [showInfo, setShowInfo] = React.useState(false);
@@ -210,7 +224,8 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                 estimateSecs,
                 extrapolated10kSecs,
                 isExtrapolatedEligible,
-                dateTimeMs: new Date(run.date).getTime()
+                dateTimeMs: new Date(run.date).getTime(),
+                isRace: run.isRace === true || run.subType === 'race' || run.performance?.subType === 'race' || run.category === 'RACE'
             };
         });
 
@@ -254,6 +269,7 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
 
             for (const item of enrichedRuns) {
                 if (item.run.date > dateStr) continue; // Skip future runs
+                if (useRacesOnly && !item.isRace) continue; // Filter by race if enabled
 
                 const ageDays = (currTimeMs - item.dateTimeMs) / (1000 * 60 * 60 * 24);
                 if (ageDays > LOOKUP_LIMIT) continue; // Out of window for this date
@@ -319,6 +335,7 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                     weeklyAvgVolume: Math.round(weeklyAvgVolume),
                     longRuns90dCount: longRuns90dCount,
                     enduranceExponentUsed: 1.06, // base for plots
+                    isRace: chosenRun ? (chosenRun as any).isRace === true || chosenRun.subType === 'race' || chosenRun.performance?.subType === 'race' : false
                 });
             }
 
@@ -352,7 +369,7 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
         }
 
         return filteredPoints;
-    }, [allRuns, calculationWindowDays, useActualOnly]);
+    }, [allRuns, calculationWindowDays, useActualOnly, useRacesOnly]);
 
     // recalculate sidebar values factoring details state local
     const sidebarDp = useMemo(() => {
@@ -512,6 +529,20 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                         Faktiska
                     </button>
 
+                    <button 
+                        onClick={() => setUseRacesOnly(!useRacesOnly)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${
+                            useRacesOnly 
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                            : 'bg-slate-800 border-white/5 text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <div className={`w-3 h-3 rounded flex items-center justify-center border ${useRacesOnly ? 'border-amber-400 bg-amber-400 text-slate-900' : 'border-slate-600'}`}>
+                            {useRacesOnly && <Check size={8} className="stroke-[4]" />}
+                        </div>
+                        Tävlingar
+                    </button>
+
                     <select
                         className="bg-slate-800 border border-white/5 text-white rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none cursor-pointer focus:border-white/10"
                         value={calculationWindowDays}
@@ -634,7 +665,7 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                                 <div className="p-2 bg-white/5 rounded-xl">
                                     <p className="text-[10px] font-black text-slate-500 uppercase">Typ</p>
                                     <p className="text-xs font-bold text-white">
-                                        {selectedDp.isExtrapolated ? '⚡ Extrapolering' : '🏆 Direkt Resultat'}
+                                        {selectedDp.isExtrapolated ? '⚡ Extrapolering' : selectedDp.isRace ? '🥇 Tävling' : '🏆 Direkt Resultat'}
                                     </p>
                                 </div>
                                 <div className="p-2 bg-white/5 rounded-xl">

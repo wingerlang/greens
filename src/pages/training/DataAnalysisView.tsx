@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ExerciseEntry, UniversalActivity, ExerciseSubType } from '../../models/types.ts';
+import { ExerciseEntry, UniversalActivity, ExerciseSubType, PlannedActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { formatSwedishDate, formatDuration } from '../../utils/dateUtils.ts';

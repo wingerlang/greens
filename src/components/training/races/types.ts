@@ -30,6 +30,6 @@ export interface SortConfig {
     direction: 'asc' | 'desc';
 }
 
-export type ViewMode = 'timeline' | 'series' | 'tours';
+export type ViewMode = 'timeline' | 'series' | 'tours' | 'map';
 export type UpcomingViewMode = 'cozy' | 'compact' | 'list';
 export type SeriesSortMode = 'count' | 'name' | 'latest';

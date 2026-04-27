@@ -51,6 +51,33 @@ export function ActivityDetailModal({
     initiallyEditing = false,
     onSelectActivity
 }: ActivityDetailModalProps) {
+    const handleSyncTimes = async (target: 'moving' | 'elapsed', seconds?: number) => {
+        const val = seconds ?? (target === 'moving' ? (perf?.elapsedTimeSeconds || 0) : (currentActivity.durationMinutes * 60));
+        if (val <= 0) return;
+
+        const updates: any = {};
+        if (target === 'moving') {
+            updates.durationMinutes = Math.round(val / 60);
+        } else {
+            updates.elapsedTimeSeconds = val;
+        }
+
+        updateExercise(activity.id, {
+            ...updates,
+            performance: {
+                ...(perf || {}),
+                ...updates
+            }
+        });
+        
+        // Also update local edit form if it exists
+        setEditForm(prev => ({
+            ...prev,
+            duration: target === 'moving' ? Math.round(val / 60).toString() : prev.duration,
+            elapsedTimeSeconds: target === 'elapsed' ? val : prev.elapsedTimeSeconds
+        }));
+    };
+
     const navigate = useNavigate();
     const {
         currentUser,
@@ -160,7 +187,8 @@ export function ActivityDetailModal({
         totalParticipants: currentActivity.raceDetails?.totalParticipants?.toString() || '',
         originalCalories: (currentActivity.isCalorieAdjusted) ? (currentActivity as any).originalCalories : activity.originalCalories || 0,
         calculationMode: (currentActivity.isCalorieAdjusted) ? (currentActivity as any).calculationMode || 'adjusted' : 'original' as 'original' | 'hr' | 'distance' | 'met' | 'average' | 'adjusted' | 'watts',
-        useTheoreticalKcal: currentActivity.isCalorieAdjusted && (currentActivity as any).calculationMode === 'watts'
+        useTheoreticalKcal: currentActivity.isCalorieAdjusted && (currentActivity as any).calculationMode === 'watts',
+        elapsedTimeSeconds: perf?.elapsedTimeSeconds || (currentActivity as any).elapsedTimeSeconds || (currentActivity.durationMinutes || 0) * 60
     });
 
     const [showHrOverride, setShowHrOverride] = React.useState(!!(perf?.avgHeartRate && perf?.originalAvgHeartRate && perf.avgHeartRate !== perf.originalAvgHeartRate));
@@ -818,6 +846,13 @@ export function ActivityDetailModal({
                             // Prepare updates for local UI
                             const updates: any = { splits: mappedSplits, laps: mappedLaps };
 
+                            if (data.moving_time && (isForcingFetch || !activity.durationMinutes)) {
+                                updates.durationMinutes = Math.round(data.moving_time / 60);
+                            }
+                            if (data.elapsed_time && (isForcingFetch || !perf?.elapsedTimeSeconds)) {
+                                updates.elapsedTimeSeconds = data.elapsed_time;
+                            }
+
                             if (data.description && (!activity.notes || activity.notes === activity.type || activity.notes === "" || isForcingFetch)) {
                                 updates.notes = data.description;
                             }
@@ -829,53 +864,89 @@ export function ActivityDetailModal({
 
                             // Update local UI state
                             updateExercise(activity.id, updates);
-                            setFetchSplitsResult('success');
-
+                            
                             // ALSO update the modal's local editForm so the user sees it immediately
                             setEditForm(prev => ({
                                 ...prev,
                                 notes: updates.notes || prev.notes,
-                                title: updates.title || prev.title
+                                title: updates.title || prev.title,
+                                duration: updates.durationMinutes ? updates.durationMinutes.toString() : prev.duration,
+                                elapsedTimeSeconds: updates.elapsedTimeSeconds || prev.elapsedTimeSeconds
                             }));
 
-                            // Persist to backend
+                            // We consider the "fetching" part done now
+                            setIsFetchingSplits(false);
+                            setIsForcingFetch(false);
+                            setFetchSplitsResult('success');
+
+                            // Persist to backend (Non-blocking)
                             const dateParam = activity.date.split('T')[0];
-                            await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                            fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
                                 method: 'PATCH',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${token}`
                                 },
                                 body: JSON.stringify({
-                                    title: updates.title, // Persist title if updated
+                                    title: updates.title,
+                                    durationMinutes: updates.durationMinutes || activity.durationMinutes,
                                     performance: {
                                         ...(perf || {}),
                                         splits: mappedSplits,
                                         laps: mappedLaps,
-                                        notes: updates.notes || perf?.notes || activity.notes
+                                        notes: updates.notes || perf?.notes || activity.notes,
+                                        durationMinutes: updates.durationMinutes || activity.durationMinutes,
+                                        elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds
                                     }
                                 })
-                            });
+                            }).then(async (pRes) => {
+                                if (pRes.status === 404) {
+                                    // If not found, it's likely a Strava activity not yet in our DB, try POST
+                                    console.log("Activity not found for PATCH, attempting upsert via POST...");
+                                    const { userId: _u, ...activityData } = universalActivity || {};
+                                    await fetch('/api/activities', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({
+                                            ...activityData,
+                                            id: activity.id,
+                                            date: activity.date,
+                                            type: activity.type,
+                                            title: updates.title || activity.title,
+                                            performance: {
+                                                ...(perf || {}),
+                                                splits: mappedSplits,
+                                                laps: mappedLaps,
+                                                notes: updates.notes || perf?.notes || activity.notes,
+                                                durationMinutes: updates.durationMinutes || activity.durationMinutes,
+                                                elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds
+                                            }
+                                        })
+                                    });
+                                }
+                            }).catch(err => console.error("Background persistence failed:", err));
                         } else {
                             console.log("No detailed data found in Strava API response");
                             setFetchSplitsResult('error');
+                            setIsFetchingSplits(false);
+                            setIsForcingFetch(false);
                         }
-                    } else if (res.status === 404) {
-                        console.warn("Strava splits not found (404)");
-                        setFetchSplitsResult('error');
                     } else {
                         const errorData = await res.json().catch(() => ({}));
                         console.error("❌ ActivityDetailModal: Split fetch failed:", {
                             status: res.status,
-                            error: errorData.error,
-                            details: errorData.details
+                            error: errorData.error
                         });
                         setFetchSplitsResult('error');
+                        setIsFetchingSplits(false);
+                        setIsForcingFetch(false);
                     }
                 } catch (err) {
                     console.error("❌ ActivityDetailModal: Split fetch error:", err);
                     setFetchSplitsResult('error');
-                } finally {
                     setIsFetchingSplits(false);
                     setIsForcingFetch(false);
                 }
@@ -1024,7 +1095,7 @@ export function ActivityDetailModal({
                 isHiddenInCalendar: editForm.isHiddenInCalendar,
                 hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
                 raceDetails: editForm.subType === 'race' || editForm.subType === 'competition' ? {
-                    ...activity.raceDetails,
+                    ...(activity.raceDetails || {}),
                     placement: (function() {
                         const val = ((editForm as any).placement || '').toString().trim();
                         if (val.includes('/')) return parseInt(val.split('/')[0]) || undefined;
@@ -1035,7 +1106,8 @@ export function ActivityDetailModal({
                         if (val.includes('/')) return parseInt(val.split('/')[1]) || undefined;
                         return parseInt(val) || undefined;
                     })()
-                } : activity.raceDetails
+                } : activity.raceDetails,
+                elapsedTimeSeconds: editForm.elapsedTimeSeconds
             };
 
             // Local update (works for 'manual', 'strava', and 'merged')
@@ -1044,7 +1116,7 @@ export function ActivityDetailModal({
                 ...commonData,
                 averageWatts: avgWatts,
                 isCalorieAdjusted,
-                caloriesBurned: calories, // Explicitly pass to ensure it's not missed
+                caloriesBurned: calories,
                 performance: {
                     ...(perf || {}),
                     averageWatts: avgWatts,
@@ -1289,14 +1361,67 @@ export function ActivityDetailModal({
                             ))}
                         </div>
 
+                        {/* Time Discrepancy Warning in Edit Mode */}
+                        {editForm.elapsedTimeSeconds > 0 && Math.abs(editForm.elapsedTimeSeconds - (parseInt(editForm.duration) || 0) * 60) > 120 && (
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500">
+                                        <Timer size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Tidsavvikelse</p>
+                                        <p className="text-[11px] text-white font-bold">
+                                            Rörelse: {formatDuration(parseInt(editForm.duration) * 60)} vs Totalt: {formatDuration(editForm.elapsedTimeSeconds)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditForm(prev => ({ ...prev, duration: Math.round(prev.elapsedTimeSeconds / 60).toString() }))}
+                                        className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black uppercase rounded-lg transition-all"
+                                    >
+                                        Använd Total ⚡
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            console.log("ActivityDetailModal: Resetting to moving time...");
+                                            // Find original moving time from sources
+                                            const stravaOrig = originalActivities.find(o => o.performance?.source?.source === 'strava');
+                                            const originalMovingMin = stravaOrig?.performance?.durationMinutes || perf?.durationMinutes || activity.durationMinutes;
+                                            
+                                            if (originalMovingMin) {
+                                                setEditForm(prev => ({ ...prev, duration: Math.round(originalMovingMin).toString() }));
+                                            } else {
+                                                console.warn("ActivityDetailModal: No original moving time found");
+                                            }
+                                        }}
+                                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-black uppercase rounded-lg transition-all border border-white/5"
+                                    >
+                                        Återställ Rörelse
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-3 gap-2">
                             <div className="space-y-1">
-                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Längd (min)</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Rörelse (min)</label>
                                 <input
                                     type="number"
                                     value={editForm.duration}
                                     onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
                                     className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all font-mono"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Totaltid (min)</label>
+                                <input
+                                    type="number"
+                                    value={Math.round(editForm.elapsedTimeSeconds / 60)}
+                                    onChange={e => setEditForm({ ...editForm, elapsedTimeSeconds: (parseInt(e.target.value) || 0) * 60 })}
+                                    className="w-full bg-slate-800/80 border border-white/5 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all font-mono opacity-60"
                                 />
                             </div>
                             <div className="space-y-1">
@@ -2235,7 +2360,7 @@ export function ActivityDetailModal({
                                 <p className="text-xs font-bold text-rose-400">Kunde inte hämta detaljer från Strava.</p>
                             </div>
                         )}
-                        {fetchSplitsResult === 'success' && (
+                        {fetchSplitsResult === 'success' && !isFetchingSplits && (
                             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 animate-in slide-in-from-top-2 mb-4 transition-all duration-1000 delay-3000 opacity-100" style={{ animation: 'fadeOut 1s forwards 3s' }}>
                                 <span>✅</span>
                                 <p className="text-xs font-bold text-emerald-400">Information hämtades från Strava och beskrivningen har analyserats!</p>
@@ -2531,6 +2656,43 @@ export function ActivityDetailModal({
                                                 </div>
                                             </div>
 
+                                            {/* Time Discrepancy Warning */}
+                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 && (
+                                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500">
+                                                            <Timer size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Tidsavvikelse identifierad</p>
+                                                            <p className="text-[11px] text-white font-bold">
+                                                                Rörelsetid ({formatDuration(activity.durationMinutes * 60)}) vs Totaltid ({formatDuration(perf.elapsedTimeSeconds)}).
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 shrink-0">
+                                                        <button 
+                                                            onClick={() => handleSyncTimes('moving', perf.elapsedTimeSeconds)}
+                                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-lg transition-all border border-white/10 shadow-sm"
+                                                            title="Sätt passets längd till den totala tiden (inklusive pauser)"
+                                                        >
+                                                            Använd Totaltid ⏱️
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => {
+                                                                // If we already have a smaller moving time in perf (rare but possible), use it
+                                                                // Otherwise, the button is for when we WANT to keep the shorter time
+                                                                // This is effectively "Ignore pauses"
+                                                            }}
+                                                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-900 text-[10px] font-black uppercase rounded-lg transition-all shadow-lg shadow-emerald-500/20"
+                                                            title="Behåll den kortare rörelsetiden (exkluderar pauser)"
+                                                        >
+                                                            Behåll Rörelsetid ✅
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
 
                                             {/* Hero Stats */}
                                             <div className="grid grid-cols-3 gap-2 border-b border-[#FC4C02]/10 pb-4">
@@ -2545,9 +2707,17 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">Tid</span>
+                                                    <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">
+                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 5 ? 'Rörelsetid' : 'Tid'}
+                                                    </span>
                                                     <div className="flex items-baseline gap-1">
                                                         <span className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 5 && (
+                                                            <div className="flex flex-col ml-2 border-l border-white/10 pl-2">
+                                                                <span className="text-[8px] text-slate-500 uppercase font-black leading-none mb-0.5">Total</span>
+                                                                <span className="text-[11px] text-slate-400 font-bold leading-none">{formatDuration(perf.elapsedTimeSeconds)}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -2774,9 +2944,17 @@ export function ActivityDetailModal({
                                                     Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 ? '(Rörelse)' : ''}
                                                 </p>
                                                 {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 60 && (
-                                                    <p className="text-[10px] text-rose-400 font-bold mt-1 bg-rose-500/10 px-2 py-0.5 rounded">
-                                                        Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
-                                                    </p>
+                                                    <div className="mt-1 flex flex-col items-center gap-1">
+                                                        <p className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded">
+                                                            Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
+                                                        </p>
+                                                        <button 
+                                                            onClick={() => handleSyncTimes('moving', perf.elapsedTimeSeconds)}
+                                                            className="text-[9px] font-black text-rose-500 uppercase hover:text-white transition-colors"
+                                                        >
+                                                            Fixa med Totaltid ⚡
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
 

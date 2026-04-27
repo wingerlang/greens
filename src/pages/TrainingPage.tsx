@@ -18,6 +18,7 @@ import { DataAnalysisView } from './training/DataAnalysisView.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
 import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
 import { CurrentFitnessView } from '../components/training/CurrentFitnessView.tsx';
+import { CardioVolumeDashboard } from '../components/training/CardioVolumeDashboard.tsx';
 import { EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
 import { formatActivityDuration } from '../utils/durationFormatter.ts';
 import './TrainingPage.css';
@@ -92,7 +93,7 @@ export function TrainingPage() {
         if (!tab) return 'kalender';
         if (tab === 'kalender') return 'kalender';
         if (/^\d{4}$/.test(tab)) return 'kalender';
-        return (['kalender', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys'].includes(tab) ? tab : 'kalender') as 'kalender' | 'styrka' | 'kondition' | 'form' | 'races' | 'lopstatistik' | 'dataanalys';
+        return (['kalender', 'styrka', 'kondition', 'form', 'races', 'lopstatistik', 'dataanalys', 'cardio'].includes(tab) ? tab : 'kalender') as any;
     }, [tab]);
 
     const initialCalendarMonth = useMemo(() => {
@@ -132,7 +133,7 @@ export function TrainingPage() {
 
 
     // Period Filter State
-    const [activePreset, setActivePreset] = useState<'all' | 'ytd' | 'prev' | '3m' | '6m' | '9m' | 'ttm'>('all');
+    const [activePreset, setActivePreset] = useState<'all' | 'ytd' | 'prev' | '3m' | '6m' | '9m' | 'ttm' | '3y' | '4w' | '8w' | '12w'>('all');
     const [filterStartDate, setFilterStartDate] = useState<string | null>(null);
     const [filterEndDate, setFilterEndDate] = useState<string | null>(null);
 
@@ -184,6 +185,34 @@ export function TrainingPage() {
             case 'ttm': {
                 const d = new Date();
                 d.setFullYear(d.getFullYear() - 1);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '3y': {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() - 3);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '4w': {
+                const d = new Date();
+                d.setDate(d.getDate() - 28);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '8w': {
+                const d = new Date();
+                d.setDate(d.getDate() - 56);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '12w': {
+                const d = new Date();
+                d.setDate(d.getDate() - 84);
                 setFilterStartDate(d.toISOString().split('T')[0]);
                 setFilterEndDate(today);
                 break;
@@ -251,17 +280,19 @@ export function TrainingPage() {
                     </div>
                     {[
                         { id: 'all', label: 'ALLT' },
+                        { id: '3y', label: '3 ÅR' },
                         { id: 'ytd', label: 'I ÅR' },
                         { id: 'prev', label: 'FÖREG. ÅR' },
+                        { id: 'ttm', label: 'TTM (12M)' },
                         { id: '3m', label: '3 MÅN' },
-                        { id: '6m', label: '6 MÅN' },
-                        { id: '9m', label: '9 MÅN' },
-                        { id: 'ttm', label: 'TTM (12M)' }
+                        { id: '12w', label: '12 V' },
+                        { id: '8w', label: '8 V' },
+                        { id: '4w', label: '4 V' }
                     ].map(p => (
                         <button
                             key={p.id}
                             onClick={() => applyPeriodPreset(p.id as any)}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${activePreset === p.id
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex-shrink-0 ${activePreset === p.id
                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
                                 : 'text-slate-500 hover:text-white hover:bg-white/5 border border-transparent'
                                 }`}
@@ -430,7 +461,16 @@ export function TrainingPage() {
             }
 
 
-            {/* Activity Detail Modal overlay */}
+            {
+                currentTab === 'cardio' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <CardioVolumeDashboard
+                            exercises={filteredExerciseEntries}
+                            universalActivities={universalActivities}
+                        />
+                    </div>
+                )
+            }
             {selectedActivityId && (
                 <>
                     {foundActivity ? (

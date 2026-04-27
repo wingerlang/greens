@@ -61,6 +61,7 @@ export const ActivitySchema = z.object({
         intensity: z.enum(["low", "moderate", "high", "ultra"]).optional(),
         notes: z.string().max(2000).optional(),
         excludeFromStats: z.boolean().optional(),
+        isHiddenInCalendar: z.boolean().optional(),
         subType: z.string().optional(),
         heartRateAvg: z.number().optional(),
         heartRateMax: z.number().optional(),
@@ -81,6 +82,21 @@ export const ActivitySchema = z.object({
         description: z.string().max(1000).optional(),
     }).optional(),
     extractedFromId: z.string().optional(),
+    isHiddenInCalendar: z.boolean().optional(),
+    location: z.string().optional(),
+    hyroxStats: z.any().optional(),
+    raceDetails: z.object({
+        isRegistered: z.boolean().optional(),
+        placement: z.number().optional(),
+        totalParticipants: z.number().optional(),
+        goals: z.object({
+            a: z.string().optional(),
+            b: z.string().optional(),
+            c: z.string().optional(),
+        }).optional(),
+    }).optional(),
+    mergedIntoId: z.string().optional(),
+    mergeInfo: z.any().optional(),
 });
 
 export const MealItemSchema = z.object({

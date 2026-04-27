@@ -165,9 +165,11 @@ END:VCALENDAR`;
                     </div>
                     <div className="bg-slate-950/50 p-2 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center relative overflow-hidden">
                         <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Måltid</div>
-                        <div className="text-base font-black text-white font-mono tabular-nums">{plannedTime ? formatActivityDuration(plannedTime) : 'TBD'}</div>
+                        <div className="text-base font-black text-white font-mono tabular-nums leading-tight">
+                            {plannedTime ? formatActivityDuration(plannedTime) : 'TBD'}
+                        </div>
                         {plannedPace !== '-' && (
-                            <div className="absolute top-1 right-2 text-[7px] font-black uppercase text-slate-600 bg-white/5 px-1 rounded-sm border border-white/5">
+                            <div className="text-[9px] font-black uppercase text-amber-500/80 mt-0.5 font-mono">
                                 {plannedPace}
                             </div>
                         )}
@@ -453,9 +455,9 @@ export function UpcomingRaceCardCompact({
                         </span>
                     )}
                     {plannedTime && (
-                         <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-white font-mono tabular-nums leading-none mb-0.5">{formatActivityDuration(plannedTime)}</span>
-                            {plannedPace !== '-' && <span className="text-[8px] font-bold text-slate-500 font-mono tracking-tighter leading-none">{plannedPace}</span>}
+                            {plannedPace !== '-' && <span className="text-[9px] font-black text-amber-500/80 font-mono tracking-tighter leading-none">{plannedPace}</span>}
                         </div>
                     )}
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${distStyle}`}>
@@ -481,6 +483,7 @@ export function UpcomingRaceCardList({
     const isTrail = isTrailRace(race.title);
     const distStyle = getDistanceStyle(race.estimatedDistance);
     const plannedTime = getPlannedRaceTime(race);
+    const plannedPace = calcPace(race.estimatedDistance, plannedTime);
 
     return (
         <div 
@@ -509,8 +512,9 @@ export function UpcomingRaceCardList({
             <div className="flex items-center gap-6 shrink-0">
                 {plannedTime && (
                     <div className="hidden sm:flex flex-col items-end">
-                        <div className="text-[10px] font-black text-slate-500 uppercase">Måltid</div>
-                        <div className="text-xl font-black text-white font-mono">{formatActivityDuration(plannedTime)}</div>
+                        <div className="text-[10px] font-black text-slate-500 uppercase">Mål & Tempo</div>
+                        <div className="text-xl font-black text-white font-mono leading-none">{formatActivityDuration(plannedTime)}</div>
+                        {plannedPace !== '-' && <div className="text-[11px] font-black text-amber-500 font-mono mt-1">{plannedPace}</div>}
                     </div>
                 )}
                 <div className={`p-3 rounded-xl border text-center min-w-[90px] ${distStyle}`}>

@@ -138,21 +138,34 @@ export function parsePlanningInput(input: string, contextDate: string = new Date
         'cykel': { type: 'CARDIO', category: 'CARDIO', subType: 'cycling', label: 'Cykling' },
         'cycling': { type: 'CARDIO', category: 'CARDIO', subType: 'cycling', label: 'Cycling' },
         'cross-trainer': { type: 'CARDIO', category: 'CARDIO', subType: 'cross-trainer', label: 'Crosstrainer' },
+        'cross trainer': { type: 'CARDIO', category: 'CARDIO', subType: 'cross-trainer', label: 'Crosstrainer' },
+        'crosstrainer': { type: 'CARDIO', category: 'CARDIO', subType: 'cross-trainer', label: 'Crosstrainer' },
+        'rodd': { type: 'CARDIO', category: 'CARDIO', label: 'Rodd' },
+        'row': { type: 'CARDIO', category: 'CARDIO', label: 'Rowing' },
+        'simning': { type: 'CARDIO', category: 'CARDIO', label: 'Simning' },
+        'swim': { type: 'CARDIO', category: 'CARDIO', label: 'Swimming' },
         'löpning': { type: 'RUN', category: 'EASY', label: 'Löpning' },
         'run': { type: 'RUN', category: 'EASY', label: 'Run' },
     };
 
     let typeFound = false;
-    for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        if (typeMap[p]) {
-            activity.type = typeMap[p].type;
-            activity.category = typeMap[p].category;
-            activity.subType = typeMap[p].subType;
-            activity.title = typeMap[p].label;
+    const sortedTypeKeys = Object.keys(typeMap).sort((a, b) => b.length - a.length);
+
+    for (const key of sortedTypeKeys) {
+        if (cleanInput.includes(key)) {
+            activity.type = typeMap[key].type;
+            activity.category = typeMap[key].category;
+            activity.subType = typeMap[key].subType;
+            activity.title = typeMap[key].label;
             typeFound = true;
-            parts.splice(i, 1);
-            break; 
+            
+            // Remove the keyword from parts if it exists as a word
+            const keyParts = key.split(/\s+/);
+            keyParts.forEach(kp => {
+                const idx = parts.indexOf(kp);
+                if (idx !== -1) parts.splice(idx, 1);
+            });
+            break;
         }
     }
 

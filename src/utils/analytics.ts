@@ -326,3 +326,52 @@ export function calculateStrengthCaloriesMET(
         met 
     };
 }
+ 
+ /**
+  * Suggests the most frequent activity type for a given weekday based on history.
+  */
+ export function suggestActivityForWeekday(
+     activities: { type: ExerciseType; date: string }[],
+     targetDate: string
+ ): ExerciseType | null {
+     if (!activities.length) return null;
+     
+     const targetDay = new Date(targetDate).getDay(); // 0-6 (Sun-Sat)
+     
+     // Filter activities from the last 90 days to keep suggestions fresh
+     const ninetyDaysAgo = new Date();
+     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+     const ninetyDaysAgoISO = getISODate(ninetyDaysAgo);
+ 
+     const historicalOnSameDay = activities.filter(a => {
+         const activityDate = a.date.split('T')[0];
+         return new Date(activityDate).getDay() === targetDay && activityDate >= ninetyDaysAgoISO;
+     });
+     
+     if (historicalOnSameDay.length === 0) {
+         // Fallback to all time if no recent activity on that day
+         const allTimeOnSameDay = activities.filter(a => new Date(a.date.split('T')[0]).getDay() === targetDay);
+         if (allTimeOnSameDay.length === 0) return null;
+         historicalOnSameDay.push(...allTimeOnSameDay);
+     }
+     
+     // Count frequencies
+     const counts: Record<string, number> = {};
+     historicalOnSameDay.forEach(a => {
+         const type = a.type as string;
+         counts[type] = (counts[type] || 0) + 1;
+     });
+     
+     // Find max
+     let bestType: ExerciseType | null = null;
+     let maxCount = 0;
+     
+     for (const [type, count] of Object.entries(counts)) {
+         if (count > maxCount) {
+             maxCount = count;
+             bestType = type as ExerciseType;
+         }
+     }
+     
+     return bestType;
+ }

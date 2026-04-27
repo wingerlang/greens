@@ -7,7 +7,7 @@ export const SplitsSparkline = React.memo(({ splits, highlightRange }: { splits:
     const data = splits.map((s, i) => ({
         index: i + 1,
         pace: s.movingTime / (Math.max(s.distance, 1) / 1000),
-        hr: s.averageHeartrate || 0,
+        hr: (s.averageHeartrate && s.averageHeartrate > 0) ? s.averageHeartrate : null,
     }));
 
     // Find min/max for better scaling

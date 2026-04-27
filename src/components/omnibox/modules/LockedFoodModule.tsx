@@ -112,6 +112,11 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
                         />
                         <span className="text-sm font-bold text-slate-400">g</span>
                     </div>
+                    {lockedFood.defaultPortionGrams && (
+                        <div className="text-[8px] text-emerald-500/60 mt-1 font-black uppercase tracking-tighter">
+                            1 st = {lockedFood.defaultPortionGrams}g
+                        </div>
+                    )}
                 </div>
 
                 {/* Meal Type */}

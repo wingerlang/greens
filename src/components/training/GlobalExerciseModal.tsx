@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { parseTrainingString, calculateCalories } from '../../utils/nlpParser.ts';
+import { suggestActivityForWeekday } from '../../utils/analytics.ts';
 import { ExerciseModal } from './ExerciseModal.tsx';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType } from '../../models/types.ts';
 
@@ -13,7 +14,7 @@ interface GlobalExerciseModalProps {
 }
 
 export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput, initialDate }: GlobalExerciseModalProps) {
-    const { addExercise, userSettings } = useData();
+    const { addExercise, userSettings, unifiedActivities, calculateExerciseCalories: contextCalc } = useData();
     const [smartInput, setSmartInput] = useState('');
     const [customDate, setCustomDate] = useState<string | null>(null);
 
@@ -38,12 +39,22 @@ export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput
     useEffect(() => {
         if (isOpen) {
             setSmartInput(initialInput || '');
-            setCustomDate(initialDate || null);
+            const dateStr = initialDate || new Date().toISOString().split('T')[0];
+            setCustomDate(dateStr);
+            
             if (initialType) {
                 setExerciseForm(prev => ({ ...prev, type: initialType }));
+            } else {
+                // Smart Suggestion: If no explicit type provided, check user's habits for this weekday
+                const suggestion = suggestActivityForWeekday(unifiedActivities as any, dateStr);
+                if (suggestion) {
+                    setExerciseForm(prev => ({ ...prev, type: suggestion }));
+                } else {
+                    setExerciseForm(prev => ({ ...prev, type: 'running' }));
+                }
             }
         }
-    }, [isOpen, initialType, initialInput, initialDate]);
+    }, [isOpen, initialType, initialInput, initialDate, unifiedActivities]);
 
     // Derived values for smart inputs
     const parsed = parseTrainingString(smartInput);
@@ -51,29 +62,11 @@ export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput
     const effectiveDuration = parsed?.duration?.toString() || exerciseForm.duration;
     const effectiveIntensity = parsed?.intensity || exerciseForm.intensity;
 
-    // Helper to calculate calories
-    const getCalories = (type: ExerciseType, duration: number, intensity: ExerciseIntensity) => {
-        // Simple weight fallback if no userSettings
-        const weight = 80; // This should ideally come from useData but sticking to local calc for now or import helper
-        // Actually, let's use the exported helper from nlpParser if available or duplicate simple logic
-        // TrainingPage uses useData().calculateExerciseCalories. 
-        // We should expose that from useData is better.
-        return calculateCalories(type, duration, intensity, weight);
-    };
-
-    // We need access to the real calculator from context better
-    // But `useData` context exposes `calculateExerciseCalories`? 
-    // Let's check DataContext. Yes it does.
-    const { calculateExerciseCalories: contextCalc } = useData();
-
-
     const handleSave = () => {
         const duration = parseInt(effectiveDuration) || 0;
 
         // Calculate calories
-        const caloriesBurned = contextCalc
-            ? contextCalc(effectiveExerciseType, duration, effectiveIntensity)
-            : getCalories(effectiveExerciseType, duration, effectiveIntensity);
+        const caloriesBurned = contextCalc(effectiveExerciseType, duration, effectiveIntensity);
 
         addExercise({
             date: customDate || new Date().toISOString().split('T')[0],

@@ -16,6 +16,7 @@ import { SeriesCard } from './races/SeriesCard.tsx';
 import { AddRaceModal, BulkAddRaceModal } from './races/RaceModals.tsx';
 import { HistoryChart } from './races/HistoryChart.tsx';
 import { RaceDashboardStats } from './races/RaceDashboardStats.tsx';
+import { RaceMapView } from './races/RaceMapView.tsx';
 
 interface RaceListProps {
     exerciseEntries: ExerciseEntry[];
@@ -135,9 +136,9 @@ export function RaceList(props: RaceListProps) {
                 <div className="flex flex-col gap-6">
                     <div className="flex items-center justify-between border-b border-white/5 pb-2">
                         <div className="flex gap-8">
-                            {(['timeline', 'series', 'tours'] as const).map(mode => (
+                            {(['timeline', 'series', 'tours', 'map'] as const).map(mode => (
                                 <button key={mode} onClick={() => handleViewModeChange(mode)} className={`pb-4 text-sm font-black uppercase tracking-widest transition-all relative ${viewMode === mode ? 'text-amber-500' : 'text-slate-500 hover:text-slate-300'}`}>
-                                    {mode === 'timeline' ? 'Tidslinje' : mode === 'series' ? 'Serier' : 'Tourer'}
+                                    {mode === 'timeline' ? 'Tidslinje' : mode === 'series' ? 'Serier' : mode === 'tours' ? 'Tourer' : 'Karta'}
                                     {viewMode === mode && <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500 rounded-full animate-in zoom-in-95 duration-300" />}
                                 </button>
                             ))}
@@ -152,7 +153,13 @@ export function RaceList(props: RaceListProps) {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {raceSeries.map(s => <SeriesCard key={s.name} series={s} onSelect={() => setSelectedSeries({ name: s.name, races: s.races })} setSelectedActivity={(a) => props.onSelectActivity?.(a.id)} formatActivityDuration={formatActivityDuration} />)}
                         </div>
-                    ) : (<TourManager />)}
+                    ) : viewMode === 'tours' ? (
+                        <TourManager />
+                    ) : (
+                        <div className="animate-in fade-in zoom-in-95 duration-500">
+                            <RaceMapView races={races} upcomingRaces={upcomingRaces} onSelectActivity={(id) => props.onSelectActivity?.(id)} />
+                        </div>
+                    )}
                 </div>
             </div>
 

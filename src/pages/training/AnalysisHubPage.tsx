@@ -19,7 +19,9 @@ export function AnalysisHubPage() {
     }, [searchParams]);
 
     const setSubTab = (tab: AnalysisTab) => {
-        setSearchParams({ tab }, { replace: true });
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('tab', tab);
+        setSearchParams(newParams, { replace: true });
     };
 
     const tabs = [

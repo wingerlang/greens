@@ -432,7 +432,8 @@ function parseExercise(input: string): OmniboxIntent | null {
         'simning': 'swimming', 'simn': 'swimming', 'sim': 'swimming', 'swim': 'swimming', 'bad': 'swimming',
         'yoga': 'yoga', 'pilates': 'yoga', 'stretch': 'yoga',
         'klättring': 'climbing', 'klättr': 'climbing', 'climbing': 'climbing', 'bouldering': 'climbing',
-        'fotboll': 'football', 'football': 'football', 'soccer': 'football'
+        'fotboll': 'football', 'football': 'football', 'soccer': 'football',
+        'cardio': 'cardio', 'crosstrainer': 'cardio', 'cross trainer': 'cardio', 'elliptical': 'cardio', 'skierg': 'cardio', 'rodd': 'cardio', 'rowing': 'cardio', 'row': 'cardio', 'stairmaster': 'cardio', 'trappmaskin': 'cardio'
     };
 
     let type: ExerciseType | null = null;

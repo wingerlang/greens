@@ -39,9 +39,11 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYea
             return `${year}-${month}-${day}`;
         };
 
-        const getSundayMidnight = (d: Date) => {
+        const getMondayMidnight = (d: Date) => {
             const res = new Date(d);
-            res.setDate(res.getDate() - res.getDay());
+            const day = res.getDay();
+            const diff = (day + 6) % 7; // Monday is 1, so (1+6)%7 = 0. Sunday is 0, so (0+6)%7 = 6.
+            res.setDate(res.getDate() - diff);
             res.setHours(0, 0, 0, 0);
             return res;
         };
@@ -74,7 +76,7 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYea
             minDate = getLocalMidnight(sortedWorkouts[0].date);
         }
 
-        const startOfFirstWeek = getSundayMidnight(minDate);
+        const startOfFirstWeek = getMondayMidnight(minDate);
         let current = new Date(startOfFirstWeek);
         while (current <= maxDate) {
             weeks[getDateKey(current)] = 0;
@@ -85,7 +87,7 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYea
             const date = getLocalMidnight(w.date);
             if (date < minDate || date > maxDate) return;
 
-            const weekStart = getSundayMidnight(date);
+            const weekStart = getMondayMidnight(date);
             const weekKey = getDateKey(weekStart);
             if (weeks[weekKey] !== undefined) {
                 weeks[weekKey] += w.totalVolume;

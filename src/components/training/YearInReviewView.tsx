@@ -6,9 +6,14 @@ import { calculatePerformanceScore } from '../../utils/performanceEngine.ts';
 import { formatDuration, formatSwedishDate, formatPace, getRelativeTime } from '../../utils/dateUtils.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend } from 'recharts';
-import { Dumbbell, Loader2, TrendingUp, History, Zap, Trophy, Medal, Target, BarChart3, Info, Clock, ArrowRight } from 'lucide-react';
+import { Dumbbell, Loader2, TrendingUp, History, Zap, Trophy, Medal, Target, BarChart3, Info, Clock, ArrowRight, MapPin } from 'lucide-react';
 import { WeeklyVolumeChart } from './WeeklyVolumeChart.tsx';
 import { WeeklyDistanceChart } from './WeeklyDistanceChart.tsx';
+import { TrainingHeatmap } from './TrainingHeatmap.tsx';
+import { CumulativeProgressChart } from './CumulativeProgressChart.tsx';
+import { PerformanceRadar } from './PerformanceRadar.tsx';
+import { MonthlyVolumeBarChart } from './MonthlyVolumeBarChart.tsx';
+import { TrainingInsights } from './TrainingInsights.tsx';
 import { PersonalBest } from '../../models/strengthTypes.ts';
 import { calculateGoalProgress } from '../../utils/goalCalculations.ts';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
@@ -81,6 +86,9 @@ export function YearInReviewView() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [selectedActivity, setSelectedActivity] = useState<UniversalActivity | null>(null);
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+    const [showSessionsList, setShowSessionsList] = useState(false);
+    const [sortConfigRuns, setSortConfigRuns] = useState<{ key: 'date' | 'dist' | 'pace' | 'hr', direction: 'asc' | 'desc' }>({ key: 'dist', direction: 'desc' });
+
 
     const availableYears = useMemo(() => {
         const years = new Set<number>();
@@ -106,13 +114,27 @@ export function YearInReviewView() {
         return [new Date().getFullYear()];
     });
 
+    const plannedRaces = useMemo(() => {
+        const today = new Date();
+        return unifiedActivities.filter(a => {
+            if (!a.date) return false;
+            const actDate = new Date(a.date);
+            if (actDate <= today) return false;
+            if (!selectedYears.includes(actDate.getFullYear())) return false;
+            
+            return a.isRace || a.performance?.subType === 'race' || a.plan?.title?.toLowerCase().includes('tävling') || a.performance?.activityType === 'race';
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [unifiedActivities, selectedYears]);
+
     useEffect(() => {
         if (selectedYears.length > 0) {
             const urlParam = formatYearRange(selectedYears).replace(/,\s*/g, '_');
-            setSearchParams({ years: urlParam }, { replace: true });
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('years', urlParam);
+            setSearchParams(newParams, { replace: true });
             localStorage.setItem('yir_years', JSON.stringify(selectedYears));
         }
-    }, [selectedYears, setSearchParams]);
+    }, [selectedYears, searchParams, setSearchParams]);
 
     const toggleYear = (year: number) => {
         setSelectedYears(prev => {
@@ -213,13 +235,28 @@ export function YearInReviewView() {
             dayTotals.set(date, existing);
         });
 
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        let totalDaysToCount = 0;
+        selectedYears.forEach(y => {
+            if (y < currentYear) {
+                const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+                totalDaysToCount += isLeap ? 366 : 365;
+            } else if (y === currentYear) {
+                const startOfYear = new Date(y, 0, 1);
+                const diffTime = Math.abs(today.getTime() - startOfYear.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                totalDaysToCount += diffDays;
+            }
+        });
+
         return {
             totalDist, totalTime, totalCals, totalSessions, runningPRs, strengthPRs, totalTonnage,
             activeDays: activeDays.size, types: Array.from(typeMap.entries()).map(([k, v]) => ({ name: k, ...v })),
-            longestRaces: allRuns.filter(a => a.performance?.subType === 'race').slice(0, 10),
-            longestTrainingRuns: allRuns.filter(a => a.performance?.subType !== 'race').slice(0, 10),
+            longestRaces: allRuns.filter(a => a.performance?.subType === 'race' || a.performance?.activityType === 'race').slice(0, 10),
+            longestTrainingRuns: allRuns.filter(a => a.performance?.subType !== 'race' && a.performance?.activityType !== 'race').slice(0, 10),
             biggestTrainingDays: Array.from(dayTotals.values()).sort((a, b) => b.totalMinutes - a.totalMinutes).slice(0, 14),
-            activePercentage: (activeDays.size / (selectedYears.length * 365)) * 100 // Approximation
+            activePercentage: totalDaysToCount > 0 ? (activeDays.size / totalDaysToCount) * 100 : 0
         };
     }, [yearlyActivities, strengthPBs, selectedYears, yearlyStrengthSessions]);
 
@@ -233,27 +270,30 @@ export function YearInReviewView() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-8 animate-in fade-in duration-700 pb-12">
             {/* Header */}
-            <header className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-6">
+            <header className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-6 relative">
+                <div className="absolute top-0 left-0 w-64 h-64 bg-emerald-500/10 blur-[100px] -z-10 rounded-full"></div>
                 <div>
-                    <h1 className="text-4xl md:text-6xl font-black bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                    <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-br from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
                         {formatYearRange(selectedYears)}
                     </h1>
-                    <p className="text-slate-400 uppercase tracking-widest font-bold mt-2">Annual Performance Review</p>
+                    <p className="text-emerald-400 uppercase tracking-widest font-bold mt-2 text-xs flex items-center gap-2">
+                        <TrendingUp size={14} /> Annual Performance Review
+                    </p>
                 </div>
 
-                <div className="flex gap-2 bg-slate-900 border border-white/10 rounded-lg p-1 overflow-x-auto max-w-full">
+                <div className="flex gap-2 bg-slate-900/80 backdrop-blur-sm border border-white/10 rounded-xl p-1.5 overflow-x-auto max-w-full">
                     {availableYears.map(y => (
                         <button
                             key={y}
                             onClick={() => toggleYear(y)}
-                            className={`px-4 py-2 rounded-md font-bold text-sm transition-all whitespace-nowrap ${selectedYears.includes(y)
-                                ? 'bg-emerald-500 text-white shadow-lg'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                            className={`px-4 py-2 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${selectedYears.includes(y)
+                                ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
-                            {selectedYears.includes(y) && <span className="mr-1">✓</span>}
+                            {selectedYears.includes(y) && <span className="mr-1.5 opacity-80">✓</span>}
                             {y}
                         </button>
                     ))}
@@ -261,59 +301,134 @@ export function YearInReviewView() {
             </header>
 
             {/* HERO STATS */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-emerald-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">🏃</div>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Total Distans</p>
-                    <p className="text-3xl font-black text-white">
-                        {Math.round(stats.totalDist).toLocaleString()} <span className="text-lg text-emerald-400">km</span>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 relative">
+                {/* Background glow for hero stats */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-1/2 bg-gradient-to-r from-emerald-500/5 via-purple-500/5 to-cyan-500/5 blur-3xl -z-10"></div>
+                
+                <div className="bg-slate-900/40 backdrop-blur-md p-5 rounded-xl border border-white/5 relative overflow-hidden group hover:border-emerald-500/40 hover:bg-slate-900/60 transition-all hover:-translate-y-0.5">
+                    <div className="absolute -top-6 -right-6 opacity-[0.03] group-hover:opacity-10 transition-all duration-500 group-hover:rotate-12 text-emerald-400">
+                        <MapPin size={100} strokeWidth={1} />
+                    </div>
+                    <div className="absolute top-4 right-4 opacity-20 text-emerald-400 group-hover:opacity-100 transition-opacity">
+                        <MapPin size={24} />
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Distans</p>
+                    <p className="text-3xl font-black text-white group-hover:text-emerald-50 transition-colors">
+                        {Math.round(stats.totalDist).toLocaleString()} <span className="text-base text-emerald-400">km</span>
                     </p>
                 </div>
-                <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-cyan-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">⏱️</div>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Total Tid</p>
-                    <p className="text-3xl font-black text-white">
-                        {Math.round(stats.totalTime / 60).toLocaleString()} <span className="text-lg text-cyan-400">h</span>
+                
+                <div className="bg-slate-900/40 backdrop-blur-md p-5 rounded-xl border border-white/5 relative overflow-hidden group hover:border-cyan-500/40 hover:bg-slate-900/60 transition-all hover:-translate-y-0.5">
+                    <div className="absolute -top-6 -right-6 opacity-[0.03] group-hover:opacity-10 transition-all duration-500 group-hover:-rotate-12 text-cyan-400">
+                        <Clock size={100} strokeWidth={1} />
+                    </div>
+                    <div className="absolute top-4 right-4 opacity-20 text-cyan-400 group-hover:opacity-100 transition-opacity">
+                        <Clock size={24} />
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Tid</p>
+                    <p className="text-3xl font-black text-white group-hover:text-cyan-50 transition-colors">
+                        {Math.round(stats.totalTime / 60).toLocaleString()} <span className="text-base text-cyan-400">h</span>
                     </p>
                 </div>
-                <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-purple-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">💪</div>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Muskelvolym</p>
-                    <p className="text-3xl font-black text-white">
-                        {Math.round(stats.totalTonnage / 1000).toLocaleString()} <span className="text-lg text-purple-400">ton</span>
+                <div className="bg-slate-900/40 backdrop-blur-md p-5 rounded-xl border border-white/5 relative overflow-hidden group hover:border-purple-500/40 hover:bg-slate-900/60 transition-all hover:-translate-y-0.5">
+                    <div className="absolute -top-6 -right-6 opacity-[0.03] group-hover:opacity-10 transition-all duration-500 group-hover:rotate-12 text-purple-400">
+                        <Dumbbell size={100} strokeWidth={1} />
+                    </div>
+                    <div className="absolute top-4 right-4 opacity-20 text-purple-400 group-hover:opacity-100 transition-opacity">
+                        <Dumbbell size={24} />
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Muskelvolym</p>
+                    <p className="text-3xl font-black text-white group-hover:text-purple-50 transition-colors">
+                        {Math.round(stats.totalTonnage / 1000).toLocaleString()} <span className="text-base text-purple-400">ton</span>
                     </p>
                 </div>
 
-                <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-amber-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">🏆</div>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Satta PRs</p>
+                <div className="bg-slate-900/40 backdrop-blur-md p-5 rounded-xl border border-white/5 relative overflow-hidden group hover:border-amber-500/40 hover:bg-slate-900/60 transition-all hover:-translate-y-0.5">
+                    <div className="absolute -top-6 -right-6 opacity-[0.03] group-hover:opacity-10 transition-all duration-500 group-hover:-rotate-12 text-amber-400">
+                        <Trophy size={100} strokeWidth={1} />
+                    </div>
+                    <div className="absolute top-4 right-4 opacity-20 text-amber-400 group-hover:opacity-100 transition-opacity">
+                        <Trophy size={24} />
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Satta PRs</p>
                     <div className="flex gap-4">
                         <div>
-                            <p className="text-2xl font-black text-white">{stats.runningPRs}</p>
+                            <p className="text-2xl font-black text-white group-hover:text-amber-50 transition-colors">{stats.runningPRs}</p>
                             <p className="text-[10px] text-emerald-400 font-bold uppercase">Löpning</p>
                         </div>
                         <div className="w-[1px] bg-white/10"></div>
                         <div>
-                            <p className="text-2xl font-black text-white">{stats.strengthPRs}</p>
+                            <p className="text-2xl font-black text-white group-hover:text-amber-50 transition-colors">{stats.strengthPRs}</p>
                             <p className="text-[10px] text-purple-400 font-bold uppercase">Styrka</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl select-none">📊</div>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Antal Pass</p>
-                    <p className="text-3xl font-black text-white">
-                        {stats.totalSessions} <span className="text-lg text-indigo-400">st</span>
-                    </p>
-                </div>
+                <button
+                    onClick={() => setShowSessionsList(!showSessionsList)}
+                    className={`bg-slate-900/40 backdrop-blur-md p-5 rounded-xl border relative overflow-hidden group transition-all text-left hover:-translate-y-0.5 ${showSessionsList ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'border-white/5 hover:border-indigo-500/40 hover:bg-slate-900/60'}`}
+                >
+                    <div className="absolute -top-6 -right-6 opacity-[0.03] group-hover:opacity-10 transition-all duration-500 group-hover:rotate-12 text-indigo-400">
+                        <History size={100} strokeWidth={1} />
+                    </div>
+                    <div className="absolute top-4 right-4 opacity-20 text-indigo-400 group-hover:opacity-100 transition-opacity">
+                        <History size={24} />
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Antal Pass</p>
+                    <div className="flex items-end justify-between">
+                        <p className="text-3xl font-black text-white group-hover:text-indigo-50 transition-colors">
+                            {stats.totalSessions} <span className="text-base text-indigo-400">st</span>
+                        </p>
+                        <div className={`p-1.5 rounded-lg bg-white/5 group-hover:bg-indigo-500/20 transition-all relative z-10 ${showSessionsList ? 'bg-indigo-500/20 text-indigo-400 rotate-180' : 'text-slate-400'}`}>
+                            <ArrowRight size={16} />
+                        </div>
+                    </div>
+                </button>
             </div>
+
+            {/* EXPANDABLE SESSIONS LIST */}
+            {showSessionsList && (
+                <div className="animate-in slide-in-from-top-4 fade-in duration-500">
+                    <div className="bg-slate-900/40 backdrop-blur-xl border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.1)] rounded-xl p-6 overflow-hidden relative">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] -z-10 rounded-full"></div>
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <History size={20} className="text-indigo-400" /> Detaljerad Passlista
+                            </h3>
+                            <button
+                                onClick={() => setShowSessionsList(false)}
+                                className="text-xs font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
+                            >
+                                Stäng
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 relative z-10">
+                            {stats.types.sort((a, b) => b.count - a.count).map((type, i) => (
+                                <div key={i} className="bg-slate-800/40 backdrop-blur-sm p-4 rounded-xl border border-white/5 flex flex-col items-center text-center group hover:border-indigo-500/40 hover:bg-slate-800/60 transition-all hover:-translate-y-0.5 shadow-sm">
+                                    <div className="mb-2 text-slate-400 group-hover:text-indigo-400 transition-colors">
+                                        {type.name.toLowerCase().includes('run') ? <Zap size={24} /> :
+                                            type.name.toLowerCase().includes('strength') ? <Dumbbell size={24} /> :
+                                                type.name.toLowerCase().includes('walk') ? <MapPin size={24} /> :
+                                                    type.name.toLowerCase().includes('cycle') ? <Zap size={24} /> : <Target size={24} />}
+                                    </div>
+                                    <p className="text-xl font-black text-white">{type.count}</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase truncate w-full">{type.name}</p>
+                                    <p className="text-[10px] text-indigo-400 font-bold mt-1">{Math.round(type.time / 60)}h</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI INSIGHTS */}
+            <TrainingInsights activities={yearlyActivities} />
 
             {/* GOALS SECTION */}
             {yearlyGoals.length > 0 && (
                 <div className="space-y-6">
-                    <h3 className="text-2xl font-black flex items-center gap-2">
-                        <span>🎯</span> Måluppfyllelse
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                        <Target size={20} className="text-blue-500" /> Måluppfyllelse
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {yearlyGoals.map(goal => {
@@ -321,9 +436,9 @@ export function YearInReviewView() {
                             const percent = Math.min(100, Math.round(progress.percentage));
                             const isCompleted = progress.isComplete;
                             return (
-                                <div key={goal.id} className={`p-4 rounded-2xl border ${isCompleted ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-slate-900/50 border-white/5'}`}>
+                                <div key={goal.id} className={`p-4 rounded-xl border backdrop-blur-sm transition-all hover:-translate-y-0.5 ${isCompleted ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-slate-900/40 border-white/5 hover:border-blue-500/30'}`}>
                                     <div className="flex justify-between items-start mb-2">
-                                        <div className="text-3xl">{goal.icon || '🎯'}</div>
+                                        <div className="text-blue-400"><Target size={24} /></div>
                                         {isCompleted && <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full">KLARAT</span>}
                                     </div>
                                     <h4 className="font-bold text-white mb-1 truncate">{goal.title}</h4>
@@ -337,15 +452,387 @@ export function YearInReviewView() {
                 </div>
             )}
 
-            {/* Additional content could be extracted here, but for brevity we've included the core hero sections */}
-            <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
-                    <TrendingUp size={32} />
+            {/* ACTIVITY HEATMAP (The "GitHub-aktivitetsgrafer") */}
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+                <TrainingHeatmap
+                    activities={yearlyActivities}
+                    years={selectedYears}
+                />
+            </div>
+
+            {/* CUMULATIVE PROGRESS & ANALYTICS */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <TrendingUp size={20} className="text-emerald-500" /> Ackumulerad Distans
+                        </h3>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">År över år</div>
+                    </div>
+                    <div className="h-80">
+                        <CumulativeProgressChart
+                            activities={yearlyActivities}
+                            years={selectedYears}
+                        />
+                    </div>
                 </div>
-                <div className="space-y-1">
-                    <h4 className="text-white font-bold uppercase text-xs tracking-widest">Analys Klar</h4>
-                    <p className="text-slate-400 text-xs leading-relaxed">
-                        Dina data för {formatYearRange(selectedYears)} har analyserats. Du har loggat {stats.totalSessions} pass och avverkat {Math.round(stats.totalDist)} km totalt.
+
+                <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <Target size={20} className="text-blue-500" /> Prestationsprofil
+                        </h3>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Balans</div>
+                    </div>
+                    <div className="h-80">
+                        <PerformanceRadar
+                            stats={stats}
+                            years={selectedYears}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* MAIN ANALYTICS GRID */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* Activity Distribution */}
+                <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 space-y-6">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <BarChart3 size={20} className="text-purple-500" /> Aktivitetsfördelning
+                    </h3>
+                    <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={stats.types}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="count"
+                                >
+                                    {stats.types.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={[
+                                            '#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#6366f1', '#ec4899'
+                                        ][index % 6]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                                />
+                                <Legend verticalAlign="bottom" height={36} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Training Consistency / Active Days */}
+                <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 space-y-6">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <Zap size={20} className="text-amber-500" /> Kontinuitet
+                    </h3>
+                    <div className="flex flex-col items-center justify-center h-64 gap-2">
+                        <div className="relative w-40 h-40">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle
+                                    cx="80"
+                                    cy="80"
+                                    r="70"
+                                    fill="transparent"
+                                    stroke="currentColor"
+                                    strokeWidth="12"
+                                    className="text-slate-800"
+                                />
+                                <circle
+                                    cx="80"
+                                    cy="80"
+                                    r="70"
+                                    fill="transparent"
+                                    stroke="currentColor"
+                                    strokeWidth="12"
+                                    strokeDasharray={440}
+                                    strokeDashoffset={440 - (440 * stats.activePercentage) / 100}
+                                    strokeLinecap="round"
+                                    className="text-emerald-500 transition-all duration-1000"
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-4xl font-black text-white">{Math.round(stats.activePercentage)}%</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Aktiva dagar</span>
+                            </div>
+                        </div>
+                        <p className="text-slate-400 text-sm font-medium text-center max-w-xs">
+                            Du har tränat <span className="text-white font-bold">{stats.activeDays}</span> dagar under perioden.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* TRENDS & VOLUME */}
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5">
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                            <TrendingUp size={20} className="text-emerald-500" /> Månadsvis Distans (Löpning)
+                        </h3>
+                        <div className="h-64">
+                            <MonthlyVolumeBarChart
+                                activities={yearlyActivities}
+                                year={new Date().getFullYear()}
+                            />
+                        </div>
+                    </div>
+                    <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5">
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                            <TrendingUp size={20} className="text-emerald-500" /> Veckovis Distans (Löpning)
+                        </h3>
+                        <div className="h-64">
+                            <WeeklyDistanceChart
+                                activities={yearlyActivities}
+                                fixedYear={selectedYears.length === 1 ? selectedYears[0] : undefined}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5">
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                        <Dumbbell size={20} className="text-purple-500" /> Veckovis Träningsvolym (Tid)
+                    </h3>
+                    <div className="h-64">
+                        <WeeklyVolumeChart
+                            workouts={yearlyStrengthSessions}
+                            fixedYear={selectedYears.length === 1 ? selectedYears[0] : undefined}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* PERFORMANCE LISTS - COMPACT & SHARP */}
+            <div className="space-y-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    {/* Tävlingar & Resultat */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                            <h3 className="text-xl font-bold flex items-center gap-2">
+                                <Trophy size={18} className="text-amber-500" />
+                                Tävlingar & Resultat
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Främsta lopp</span>
+                        </div>
+                        
+                        <div className="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                            {(() => {
+                                const combinedRaces = [...stats.longestRaces, ...plannedRaces].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                return combinedRaces.length > 0 ? (
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-500">
+                                            <tr>
+                                                <th className="py-2 px-4 font-bold">Lopp / Datum</th>
+                                                <th className="py-2 px-4 font-bold text-right">Distans</th>
+                                                <th className="py-2 px-4 font-bold text-right hidden sm:table-cell">Tid</th>
+                                                <th className="py-2 px-4 font-bold text-right">Tempo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {combinedRaces.map((a) => {
+                                                const isFuture = new Date(a.date) > new Date();
+                                                const paceSec = ((a.performance?.durationMinutes || 0) * 60) / (a.performance?.distanceKm || 1);
+                                                return (
+                                                    <tr key={a.id} onClick={() => setSelectedActivity(a)} className={`hover:bg-white/5 cursor-pointer transition-colors group ${isFuture ? 'opacity-50 hover:opacity-80 border-l-2 border-l-amber-500/50' : ''}`}>
+                                                        <td className="py-3 px-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-white group-hover:text-amber-400 transition-colors">{a.plan?.title || a.performance?.notes || 'Tävling'}</span>
+                                                                {isFuture && <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">Planerad</span>}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500">{formatSwedishDate(a.date)}</div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right font-bold text-white">{(a.performance?.distanceKm || 0).toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">km</span></td>
+                                                        <td className="py-3 px-4 text-right text-slate-300 hidden sm:table-cell">{isFuture ? '—' : formatDuration((a.performance?.durationMinutes || 0) * 60)}</td>
+                                                        <td className="py-3 px-4 text-right font-bold text-amber-400">{isFuture ? '—' : formatPace(paceSec)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="p-8 text-center text-slate-500 italic text-sm">Inga tävlingar registrerade.</div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+
+                    {/* Longest Training Runs */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                            <h3 className="text-xl font-bold flex items-center gap-2">
+                                <MapPin size={18} className="text-emerald-500" />
+                                Längsta Träningspass
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Uthållighet</span>
+                        </div>
+                        
+                        <div className="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                            {(() => {
+                                const handleSortRuns = (key: 'date' | 'dist' | 'pace' | 'hr') => {
+                                    setSortConfigRuns(prev => ({
+                                        key,
+                                        direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+                                    }));
+                                };
+
+                                const sortedRuns = [...stats.longestTrainingRuns].sort((a, b) => {
+                                    const aDist = a.performance?.distanceKm || 0;
+                                    const bDist = b.performance?.distanceKm || 0;
+                                    const aPace = ((a.performance?.durationMinutes || 0) * 60) / (aDist || 1);
+                                    const bPace = ((b.performance?.durationMinutes || 0) * 60) / (bDist || 1);
+                                    const aHr = a.performance?.avgHeartRate || 0;
+                                    const bHr = b.performance?.avgHeartRate || 0;
+                                    const aDate = new Date(a.date).getTime();
+                                    const bDate = new Date(b.date).getTime();
+
+                                    const modifier = sortConfigRuns.direction === 'asc' ? 1 : -1;
+
+                                    if (sortConfigRuns.key === 'dist') return (aDist - bDist) * modifier;
+                                    if (sortConfigRuns.key === 'pace') return (aPace - bPace) * modifier;
+                                    if (sortConfigRuns.key === 'hr') return (aHr - bHr) * modifier;
+                                    return (aDate - bDate) * modifier;
+                                });
+
+                                return sortedRuns.length > 0 ? (
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-500">
+                                            <tr>
+                                                <th className="py-2 px-4 font-bold w-8 text-center">#</th>
+                                                <th className="py-2 px-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSortRuns('date')}>Pass / Datum {sortConfigRuns.key === 'date' && (sortConfigRuns.direction === 'asc' ? '↑' : '↓')}</th>
+                                                <th className="py-2 px-4 font-bold text-right cursor-pointer hover:text-white" onClick={() => handleSortRuns('dist')}>Distans {sortConfigRuns.key === 'dist' && (sortConfigRuns.direction === 'asc' ? '↑' : '↓')}</th>
+                                                <th className="py-2 px-4 font-bold text-right hidden sm:table-cell cursor-pointer hover:text-white" onClick={() => handleSortRuns('pace')}>Tempo {sortConfigRuns.key === 'pace' && (sortConfigRuns.direction === 'asc' ? '↑' : '↓')}</th>
+                                                <th className="py-2 px-4 font-bold text-right cursor-pointer hover:text-white" onClick={() => handleSortRuns('hr')}>Puls {sortConfigRuns.key === 'hr' && (sortConfigRuns.direction === 'asc' ? '↑' : '↓')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {sortedRuns.map((a, i) => {
+                                                const paceSec = ((a.performance?.durationMinutes || 0) * 60) / (a.performance?.distanceKm || 1);
+                                                return (
+                                                    <tr key={a.id} onClick={() => setSelectedActivity(a)} className="hover:bg-white/5 cursor-pointer transition-colors group">
+                                                        <td className="py-3 px-4 text-center text-xs font-bold text-slate-600">{i + 1}</td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="font-bold text-white group-hover:text-emerald-400 transition-colors mr-2">{a.plan?.title || a.performance?.notes || 'Löpning'}</span>
+                                                            <span className="text-[10px] text-slate-500">{formatSwedishDate(a.date)}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right font-bold text-white">{(a.performance?.distanceKm || 0).toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">km</span></td>
+                                                        <td className="py-3 px-4 text-right text-slate-300 hidden sm:table-cell">{formatPace(paceSec)}</td>
+                                                        <td className="py-3 px-4 text-right font-bold text-rose-400">{a.performance?.avgHeartRate ? Math.round(a.performance.avgHeartRate) : '—'}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="p-8 text-center text-slate-500 italic text-sm">Inga långpass registrerade.</div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Största Träningsdagarna - Compact */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            <Clock size={18} className="text-indigo-500" />
+                            Största Träningsdagarna
+                        </h3>
+                        <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>Löpning</span>
+                            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>Övrigt</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {stats.biggestTrainingDays.length > 0 ? stats.biggestTrainingDays.map((day, i) => (
+                            <div key={day.date} className="bg-slate-900/50 rounded-xl border border-white/5 p-4 flex flex-col gap-4 relative hover:border-indigo-500/30 transition-colors">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                            <span className="text-slate-600">#{i+1}</span>
+                                            {formatSwedishDate(day.date)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-lg font-black text-white leading-none">{formatDuration(day.totalMinutes * 60)}</div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    {day.activities.map((act: any, idx: number) => {
+                                        const isRunning = (act.type || '').toLowerCase().includes('run');
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => act.id && setSelectedActivity(act)}
+                                                className={`w-full flex items-center justify-between py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+                                                    isRunning 
+                                                        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' 
+                                                        : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                                                }`}
+                                            >
+                                                <span className="truncate pr-2">{act.name || act.type}</span>
+                                                <span className="opacity-70 shrink-0">{Math.round(act.minutes)}m</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="col-span-full bg-slate-900/20 rounded-xl border border-dashed border-white/5 p-8 text-center text-slate-500 text-sm">
+                                Ingen data tillgänglig.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* GOALS SECTION */}
+            {yearlyGoals.length > 0 && (
+                <div className="space-y-6 pt-4">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                        <Target size={20} className="text-blue-500" /> Måluppfyllelse
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {yearlyGoals.map(goal => {
+                            const progress = calculateGoalProgress(goal, legacyActivities, mealEntries, foodItems, recipes, weightEntries);
+                            const percent = Math.min(100, Math.round(progress.percentage));
+                            const isCompleted = progress.isComplete;
+                            return (
+                                <div key={goal.id} className={`p-4 rounded-xl border backdrop-blur-sm transition-all hover:-translate-y-0.5 ${isCompleted ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-slate-900/40 border-white/5 hover:border-blue-500/30'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="text-blue-400"><Target size={24} /></div>
+                                        {isCompleted && <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full">KLARAT</span>}
+                                    </div>
+                                    <h4 className="font-bold text-white mb-1 truncate">{goal.title}</h4>
+                                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                        <div className={`h-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'} transition-all`} style={{ width: `${percent}%` }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <div className="bg-slate-900/40 backdrop-blur-xl border border-indigo-500/20 rounded-xl p-6 flex flex-col md:flex-row items-center gap-6 mt-8 relative overflow-hidden group hover:border-indigo-500/40 transition-colors">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-r from-indigo-500/5 to-purple-500/5 blur-3xl -z-10"></div>
+                
+                <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0 group-hover:scale-110 transition-transform">
+                    <TrendingUp size={24} />
+                </div>
+                <div className="space-y-1 relative z-10">
+                    <h4 className="text-white font-bold uppercase text-xs tracking-widest">Analys Sammanfattning</h4>
+                    <p className="text-slate-400 text-sm leading-relaxed max-w-2xl">
+                        Dina data för <span className="text-indigo-300 font-medium">{formatYearRange(selectedYears)}</span> har analyserats. Du har genomfört totalt <span className="text-white font-bold">{stats.totalSessions} pass</span> och avverkat <span className="text-white font-bold">{Math.round(stats.totalDist)} km</span>. Din träningsvolym har genererat en total lyftmängd på <span className="text-white font-bold">{Math.round(stats.totalTonnage / 1000)} ton</span>.
                     </p>
                 </div>
             </div>
