@@ -94,19 +94,7 @@ function QuickMealRow({
     }, [qm.items, getItemName]);
 
     const handleLog = () => {
-        if (pieces === 1) {
-            onLogQuickMeal?.(qm);
-        } else {
-            // Create a new QuickMeal with multiplied servings
-            const multipliedQm: QuickMeal = {
-                ...qm,
-                items: qm.items.map(item => ({
-                    ...item,
-                    servings: item.servings * pieces
-                }))
-            };
-            onLogQuickMeal?.(multipliedQm, pieces);
-        }
+        onLogQuickMeal?.(qm, pieces);
     };
 
     return (

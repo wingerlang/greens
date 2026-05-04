@@ -108,6 +108,7 @@ export interface UserSettings {
     stravaTimePreference?: 'moving' | 'elapsed';
     lastActiveRaceTab?: 'timeline' | 'series' | 'tours';
     runningCalorieFactor?: number; // Multiple of kg * km (e.g. 0.92 or 1.0)
+    restingHeartRate?: number; // bpm
 }
 
 /** Weekly Stats Interface */
@@ -731,6 +732,7 @@ export interface ExerciseEntry {
     calorieBreakdown?: string;
     notes?: string;
     excludeFromStats?: boolean;
+    excludeHeartRate?: boolean;
     order?: number;
     isHiddenInCalendar?: boolean;
     elapsedTimeSeconds?: number;
@@ -765,6 +767,7 @@ export interface ExerciseEntry {
     hyroxStats?: HyroxActivityStats;
     extractedFromId?: string;
     raceDetails?: RaceDetails;
+    isTrack?: boolean;
 
     // Performance Data
     splits?: Array<{
@@ -1297,6 +1300,7 @@ export interface ActivityPerformanceSection {
     // Usually RPE is subjective 'performance' data.
     rpe?: number; // 1-10
     feel?: 'good' | 'average' | 'bad';
+    isTrack?: boolean;
     notes?: string;
     subType?: ExerciseSubType;
     splits?: Array<{
@@ -1351,6 +1355,18 @@ export interface BestEffort {
     source?: 'strava' | 'splits' | 'laps';
     segmentName?: string;
     segmentDistance?: number;
+    startKm?: number;
+    endKm?: number;
+    isSnapped?: boolean;
+    segmentIndexes?: number[];
+    detailedSegments?: {
+        index: number;
+        originalDistance: number;
+        usedDistance: number;
+        usedTime: number;
+        isPartial: boolean;
+        isStartOffset?: boolean;
+    }[];
 }
 
 /**
@@ -1402,6 +1418,8 @@ export interface UniversalActivity {
     createdAt: string;
     updatedAt: string;
     raceDetails?: RaceDetails;
+    excludeFromStats?: boolean;
+    excludeHeartRate?: boolean;
 }
 
 // ============================================

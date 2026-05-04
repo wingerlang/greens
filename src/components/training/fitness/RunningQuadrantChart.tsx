@@ -13,10 +13,14 @@ import {
 } from 'recharts';
 import { ExerciseEntry } from '../../../models/types.ts';
 import { LayoutGrid, Info, Activity, Zap, Footprints, Timer, Trophy, TrendingUp, Medal } from 'lucide-react';
+import { useData } from '../../../context/DataContext.tsx';
+import { isQualitySession } from '../../../utils/activityUtils.ts';
 
 interface RunningQuadrantChartProps {
     allRuns: ExerciseEntry[];
     onOpenActivity?: (id: string) => void;
+    hoveredDate?: string | null;
+    onHoverDate?: (date: string | null) => void;
 }
 
 const formatPace = (secs: number) => {
@@ -128,15 +132,27 @@ function CustomTooltip({ active, payload, onOpenActivity }: any) {
                     </div>
                     <div>
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Tempo</p>
-                        <p className="text-xs text-emerald-400 font-mono font-black">{formatPace(data.paceSecs)}</p>
+                        <p className="text-xs text-emerald-400 font-mono font-black">
+                            {formatPace(data.paceSecs)}
+                            {data.elapsedTimeSeconds && Math.abs(data.elapsedTimeSeconds - (data.duration * 60)) > 0.1 && (
+                                <span className="text-[9px] text-slate-500 ml-1 block"> {formatPace(data.elapsedTimeSeconds / (data.distance || 1))} (T)</span>
+                            )}
+                        </p>
                     </div>
                     <div>
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Puls</p>
-                        <p className="text-xs text-rose-400 font-mono font-black">{data.hr || '-'} bpm</p>
+                        <p className="text-xs text-rose-400 font-mono font-black">
+                            {data.excludeHeartRate ? <span className="text-slate-500 italic">Dold</span> : `${Math.round(data.hr) || '-'} bpm`}
+                        </p>
                     </div>
                     <div>
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Tid</p>
-                        <p className="text-xs text-sky-400 font-mono font-black">{Math.floor(data.duration)} min</p>
+                        <p className="text-xs text-sky-400 font-mono font-black">
+                            {Math.floor(data.duration)} min
+                            {data.elapsedTimeSeconds && Math.abs(data.elapsedTimeSeconds - (data.duration * 60)) > 0.1 && (
+                                <span className="text-[9px] text-slate-500 ml-1"> (Tot: {Math.round(data.elapsedTimeSeconds / 60)}m)</span>
+                            )}
+                        </p>
                     </div>
                     <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Höjdmeter</p>
@@ -149,7 +165,10 @@ function CustomTooltip({ active, payload, onOpenActivity }: any) {
     return null;
 }
 
-export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadrantChartProps) {
+export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onHoverDate }: RunningQuadrantChartProps) {
+    const { userSettings } = useData();
+    const longRunThreshold = userSettings?.longRunThreshold || 20;
+
     const [xAxisMode, setXAxisMode] = React.useState<'distance' | 'hr' | 'elevation' | 'date' | 'pace'>('distance');
     const [yAxisMode, setYAxisMode] = React.useState<'pace' | 'hr' | 'elevation' | 'date' | 'distance'>('distance');
     const [activeFilters, setActiveFilters] = React.useState<Set<string>>(new Set(['all']));
@@ -180,8 +199,10 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
             date: run.date.split('T')[0],
             distance: run.distance || 0,
             duration: run.durationMinutes || 0,
+            elapsedTimeSeconds: run.performance?.elapsedTimeSeconds || (run.durationMinutes * 60),
             paceSecs: (run.durationMinutes * 60) / (run.distance || 1),
-            hr: run.heartRateAvg || 0,
+            hr: run.excludeHeartRate ? 0 : (run.heartRateAvg || 0),
+            excludeHeartRate: run.excludeHeartRate || false,
             elevationGain: run.elevationGain || run.performance?.elevationGain || 0,
             intensity: run.intensity,
             title: run.title || run.notes?.substring(0, 40),
@@ -192,14 +213,9 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
                     run.performance?.subType === 'competition' ||
                     run.category === 'RACE' ||
                     run.performance?.activityType === 'race',
-            isLongRun: (run.distance || 0) >= 20 && (run.distance || 0) < 44,
+            isLongRun: (run.distance || 0) >= longRunThreshold && (run.distance || 0) < 44,
             isUltra: (run.distance || 0) >= 44,
-            isInterval: run.title?.toLowerCase().includes('intervall') || 
-                       run.title?.toLowerCase().includes('reps') || 
-                       run.title?.toLowerCase().includes('fartlek') || 
-                       run.title?.toLowerCase().includes('backe') ||
-                       run.title?.toLowerCase().includes('tusen') ||
-                       run.title?.toLowerCase().match(/\d+x\d+/),
+            isInterval: isQualitySession(run),
             timestamp: new Date(run.date).getTime()
         })).filter(d => d.distance > 0 && d.paceSecs < 600);
     }, [allRuns]);
@@ -225,7 +241,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
         });
     }, [data, activeFilters, intensityFilter, distRange]);
 
-    const { distBuckets, totalRuns, medians, thresholds, chartData, trendData } = useMemo(() => {
+    const { distBuckets, totalRuns, medians, thresholds, chartData, trendData: regressionPoints } = useMemo(() => {
         let thresholdsList: number[] = [];
         let labelsList: string[] = [];
         if (xAxisMode === 'distance') {
@@ -253,13 +269,13 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
             const max = thresholdsList[i+1] || (xAxisMode === 'date' ? Infinity : Infinity);
             const runs = filteredData.filter(d => {
                 const val = xAxisMode === 'distance' ? d.distance : xAxisMode === 'hr' ? d.hr : xAxisMode === 'elevation' ? d.elevationGain : xAxisMode === 'pace' ? d.paceSecs : d.timestamp;
-                return val >= min && val < max && (xAxisMode !== 'hr' || d.hr > 50);
+                return val >= min && val < max && (xAxisMode !== 'hr' || (d.hr > 50 && !d.excludeHeartRate));
             });
             const avgPace = runs.length > 0 ? runs.reduce((sum, r) => sum + r.paceSecs, 0) / runs.length : 0;
             return { label, min, max, count: runs.length, avgPace };
         });
 
-        const validData = (xAxisMode === 'hr' || yAxisMode === 'hr') ? filteredData.filter(d => d.hr > 50) : filteredData;
+        const validData = (xAxisMode === 'hr' || yAxisMode === 'hr') ? filteredData.filter(d => d.hr > 50 && !d.excludeHeartRate) : filteredData;
 
         const sortedX = [...validData].sort((a, b) => {
             const valA = xAxisMode === 'distance' ? a.distance : xAxisMode === 'hr' ? a.hr : xAxisMode === 'elevation' ? a.elevationGain : xAxisMode === 'pace' ? a.paceSecs : a.timestamp;
@@ -529,6 +545,11 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
                         <Tooltip 
                             content={<CustomTooltip onOpenActivity={onOpenActivity} />} 
                             cursor={{ strokeDasharray: '3 3', stroke: '#ffffff20' }} 
+                            onMouseMove={(data: any) => {
+                                if (data && data.activePayload && onHoverDate) {
+                                    onHoverDate(data.activePayload[0].payload.date);
+                                }
+                            }}
                         />
 
                         {/* Quadrant Dividers */}
@@ -559,6 +580,12 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
                             name="Löppass" 
                             data={chartData}
                             isAnimationActive={false}
+                            onMouseMove={(data) => {
+                                if (data && data.date && onHoverDate) {
+                                    onHoverDate(data.date);
+                                }
+                            }}
+                            onMouseLeave={() => onHoverDate?.(null)}
                         >
                             {chartData.map((entry: any, index: number) => {
                                 // Determine color based on quadrant
@@ -574,16 +601,16 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
                                 if (!isYHigh && !isXHigh) color = "#0ea5e9"; // Bottom Left: Sky
                                 if (!isYHigh && isXHigh) color = "#6366f1";  // Bottom Right: Indigo
 
-                                // Intensity can also affect opacity
+                                const isHovered = hoveredDate === entry.date;
                                 const opacity = entry.intensity === 'high' ? 0.9 : entry.intensity === 'moderate' ? 0.6 : 0.4;
-
+                                
                                 return (
                                     <Cell 
                                         key={`cell-${index}`} 
-                                        fill={color} 
-                                        fillOpacity={entry.isCluster ? 0.3 : opacity}
-                                        stroke={entry.isRace ? '#fbbf24' : color}
-                                        strokeWidth={entry.isRace ? 1.5 : entry.isCluster ? 0.5 : 1}
+                                        fill={isHovered ? '#3b82f6' : color} 
+                                        fillOpacity={isHovered ? 1.0 : (entry.isCluster ? 0.3 : opacity)}
+                                        stroke={isHovered ? '#fff' : (entry.isRace ? '#fbbf24' : color)}
+                                        strokeWidth={isHovered ? 3 : (entry.isRace ? 1 : entry.isCluster ? 0.5 : 1)}
                                         className="transition-all duration-300 cursor-pointer"
                                         onClick={() => !entry.isCluster && onOpenActivity?.(entry.activityId)}
                                     />
@@ -594,7 +621,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity }: RunningQuadran
                         {showTrendline && (
                             <Scatter 
                                 name="Trendlinje" 
-                                data={trendData} 
+                                data={regressionPoints} 
                                 line={{ stroke: '#6366f1', strokeWidth: 2, strokeDasharray: '5 5' }} 
                                 shape={() => null} 
                                 isAnimationActive={false}

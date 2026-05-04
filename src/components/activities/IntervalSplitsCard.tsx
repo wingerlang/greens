@@ -1,11 +1,15 @@
+import React from 'react';
 import { ClassifiedSplit, SegmentedSplits } from '../../utils/splitsSegmenter.ts';
 import { getBestEffortsForActivity } from '../../utils/performanceEngine.ts';
 import { UniversalActivity, ExerciseEntry } from '../../models/types.ts';
+import { snapToTrack } from '../../utils/trackUtils.ts';
+import { Heart } from 'lucide-react';
 
 interface IntervalSplitsCardProps {
     activity: UniversalActivity | ExerciseEntry;
     segmented: SegmentedSplits;
     highlightRange?: { start: number; end: number };
+    onToggleTrack?: (isTrack: boolean) => void;
 }
 
 function formatPaceSec(seconds: number): string {
@@ -144,8 +148,70 @@ function SectionCard({
 }
 
 
-export function IntervalSplitsCard({ activity, segmented, highlightRange }: IntervalSplitsCardProps) {
-    const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = segmented;
+// Snapping logic moved to trackUtils.ts
+
+export function IntervalSplitsCard({ activity, segmented, highlightRange, onToggleTrack }: IntervalSplitsCardProps) {
+    const isTrackMode = !!(activity as any).isTrack || !!(activity as any).performance?.isTrack;
+
+    // Corrected data if in track mode
+    const correctedSegmented = React.useMemo(() => {
+        if (!isTrackMode) return segmented;
+
+        const correctSplit = (s: ClassifiedSplit): ClassifiedSplit => {
+            if (s.role !== 'interval' && s.role !== 'recovery') return s;
+            const newDist = snapToTrack(s.distance);
+            return { ...s, distance: newDist };
+        };
+
+        const newClassified = segmented.classified.map(correctSplit);
+        const newWarmup = segmented.warmupSplits.map(correctSplit);
+        const newCooldown = segmented.cooldownSplits.map(correctSplit);
+        
+        const newGroups = segmented.intervalGroups.map(g => {
+            const newIntervals = g.intervalSplits.map(correctSplit);
+            const newRecovery = g.recoverySplits.map(correctSplit);
+            const totalTime = newIntervals.reduce((sum, s) => sum + s.movingTime, 0);
+            const totalDist = newIntervals.reduce((sum, s) => sum + s.distance, 0);
+
+            // New summary for recovery
+            const totalRecTime = newRecovery.reduce((sum, s) => sum + s.movingTime, 0);
+            const totalRecHr = newRecovery.reduce((sum, s) => sum + (s.averageHeartrate || 0) * s.movingTime, 0);
+            const avgRecHR = totalRecTime > 0 ? Math.round(totalRecHr / totalRecTime) : 0;
+
+            return {
+                ...g,
+                intervalSplits: newIntervals,
+                recoverySplits: newRecovery,
+                avgPace: totalDist > 0 ? totalTime / (totalDist / 1000) : g.avgPace,
+                avgRecHR,
+                totalRecTime
+            };
+        });
+
+        // Recalculate summary
+        const intervals = newClassified.filter(s => s.role === 'interval');
+        const totalIntervalTime = intervals.reduce((sum, s) => sum + s.movingTime, 0);
+        const totalIntervalDist = intervals.reduce((sum, s) => sum + s.distance, 0);
+
+        const intervalPaces = intervals.map(sp => sp.movingTime / (Math.max(sp.distance, 1) / 1000));
+
+        return {
+            ...segmented,
+            classified: newClassified,
+            warmupSplits: newWarmup,
+            cooldownSplits: newCooldown,
+            intervalGroups: newGroups,
+            summary: {
+                ...segmented.summary,
+                totalIntervalKm: totalIntervalDist / 1000,
+                avgIntervalPace: totalIntervalDist > 0 ? totalIntervalTime / (totalIntervalDist / 1000) : segmented.summary.avgIntervalPace,
+                fastestIntervalPace: intervalPaces.length > 0 ? Math.min(...intervalPaces) : 0,
+                slowestIntervalPace: intervalPaces.length > 0 ? Math.max(...intervalPaces) : 0,
+            }
+        };
+    }, [segmented, isTrackMode]);
+
+    const { type, classified, intervalGroups, summary, warmupSplits, cooldownSplits } = correctedSegmented;
     const isSustained = type === 'sustained';
 
     if (!classified.length) return null;
@@ -158,17 +224,34 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
     const { avgWarmupPace, avgCooldownPace } = summary;
 
     const bestEfforts = getBestEffortsForActivity(activity as any);
+    const [expandedEffort, setExpandedEffort] = React.useState<number | null>(null);
 
     return (
         <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between px-2">
-                <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
-                    {isSustained ? 'Tempoanalys (Strava laps)' : 'Intervallanalys (Strava laps)'}
-                </h3>
-                <span className="text-[9px] bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20 font-black uppercase tracking-widest">
-                    {isSustained ? 'Sammanhängande' : `${intervalGroups.length} block`}
-                </span>
+                <div className="flex flex-col gap-1">
+                    <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                        {isSustained ? 'Tempoanalys (Strava laps)' : 'Intervallanalys (Strava laps)'}
+                    </h3>
+                    <div className="flex gap-2">
+                        <span className="text-[9px] bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20 font-black uppercase tracking-widest">
+                            {isSustained ? 'Sammanhängande' : `${intervalGroups.length} block`}
+                        </span>
+                    </div>
+                </div>
 
+                <button 
+                    onClick={() => onToggleTrack?.(!isTrackMode)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all ${
+                        isTrackMode 
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-lg shadow-amber-900/20' 
+                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800/60'
+                    }`}
+                >
+                    <span className="text-xs">🏃‍♂️</span>
+                    <span className="text-[9px] font-black uppercase tracking-wider">Banläge</span>
+                    {isTrackMode && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                </button>
             </div>
 
             <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-slate-800">
@@ -215,17 +298,71 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
                     <div className="px-4 py-2.5 border-b border-indigo-500/15 bg-indigo-500/10">
                         <div className="text-xs font-black uppercase tracking-wider text-indigo-300">Bästa insatser (sammanhängande)</div>
                     </div>
-                    <div className="p-3 grid grid-cols-3 md:grid-cols-6 gap-2">
+                    <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                         {bestEfforts.map(effort => (
-                            <div key={effort.distance} className="bg-slate-800/50 rounded-lg p-2 text-center border border-white/5">
-                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                            <button 
+                                key={effort.distance} 
+                                onClick={() => setExpandedEffort(expandedEffort === effort.distance ? null : effort.distance)}
+                                className={`bg-slate-800/50 rounded-lg p-2 text-center border transition-all flex flex-col items-center justify-center group ${expandedEffort === effort.distance ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/5 hover:border-white/20'}`}
+                            >
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 group-hover:text-slate-300">
                                     {effort.distance >= 1000 ? `${effort.distance / 1000} km` : `${effort.distance} m`}
                                 </div>
                                 <div className="text-sm font-black text-white">{formatDuration(effort.movingTime)}</div>
-                                <div className="text-[10px] text-indigo-300/80 font-mono mt-0.5">{formatPaceSec(effort.movingTime / (effort.distance / 1000))}/km</div>
-                            </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="text-[10px] text-indigo-300/80 font-mono leading-none">{formatPaceSec(effort.movingTime / (effort.distance / 1000))}/km</div>
+                                    {effort.avgHeartRate && (
+                                        <div className="text-[9px] text-rose-400/80 font-mono font-bold leading-none flex items-center gap-0.5">
+                                            <span className="opacity-30 text-white mx-0.5">|</span>
+                                            <Heart size={8} fill="currentColor" /> {Math.round(effort.avgHeartRate)}
+                                        </div>
+                                    )}
+                                </div>
+                            </button>
                         ))}
                     </div>
+                    {expandedEffort && (
+                        <div className="px-3 pb-3 border-t border-white/5 bg-black/20">
+                            <div className="mt-3 space-y-1">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    Varvs-detaljer för {expandedEffort >= 1000 ? `${expandedEffort / 1000} km` : `${expandedEffort} m`}
+                                </div>
+                                {(() => {
+                                    let accTime = 0;
+                                    return bestEfforts.find(e => e.distance === expandedEffort)?.segmentIndexes?.map(idx => {
+                                        const source = (bestEfforts.find(e => e.distance === expandedEffort)?.source === 'laps') ? existingLaps : splits;
+                                        const seg = source[idx];
+                                        if (!seg) return null;
+                                        const distM = isTrackMode ? snapToTrack(seg.distance) : seg.distance;
+                                        const time = seg.movingTime;
+                                        accTime += time;
+                                        const hr = seg.averageHeartrate || seg.avgHeartRate || (seg as any).heartRateAvg;
+                                        return (
+                                            <div key={idx} className="flex items-center justify-between py-1 px-2 rounded hover:bg-white/5 transition-colors border-l-2 border-transparent hover:border-amber-500/30">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-[10px] font-black text-slate-600 w-4">#{idx + 1}</span>
+                                                    <span className="text-[11px] font-bold text-slate-300 w-16">
+                                                        {distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${Math.round(distM)} m`}
+                                                    </span>
+                                                    <span className="text-[11px] font-mono text-white w-12">{formatDuration(time)}</span>
+                                                    <span className="text-[10px] font-mono text-slate-500 w-12">{formatDuration(accTime)}</span>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-[11px] font-mono text-emerald-400 font-bold">{formatPaceSec(time / (distM / 1000))}/k</span>
+                                                    {hr && (
+                                                        <span className="text-[10px] font-mono text-rose-400 flex items-center gap-1 min-w-[50px] justify-end">
+                                                            <HeartPulse size={10} /> {Math.round(hr)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -260,17 +397,26 @@ export function IntervalSplitsCard({ activity, segmented, highlightRange }: Inte
                             </div>
                             
                             {group.recoverySplits.length > 0 && (
-                                <div className="flex items-center gap-2 shrink-0 py-1.5 px-3 bg-white/[0.03] border border-white/5 rounded-lg md:min-w-[120px]">
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">Återhämtning</div>
+                                <div className="flex items-center gap-2 shrink-0 py-1.5 px-3 bg-white/[0.03] border border-white/5 rounded-lg md:min-w-[150px]">
+                                    <div className="flex flex-col gap-1.5 w-full">
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">Återhämtning</div>
+                                            {((group as any).totalRecTime || 0) > 0 && (
+                                                <div className="text-[8px] text-slate-500 font-mono flex items-center gap-1">
+                                                    <span>{formatDuration((group as any).totalRecTime)}</span>
+                                                    {(group as any).avgRecHR > 0 && <span className="text-rose-500/50">{(group as any).avgRecHR} bpm</span>}
+                                                </div>
+                                            )}
+                                        </div>
                                         <div className="flex flex-col gap-1">
                                             {group.recoverySplits.map(s => {
-                                                const roundedMeters = Math.round(s.distance / 10) * 10;
+                                                const finalDist = isTrackMode ? snapToTrack(s.distance) : s.distance;
+                                                const roundedMeters = Math.round(finalDist / 10) * 10;
                                                 const isUnderKm = roundedMeters < 1000;
                                                 return (
                                                     <div key={s.split} className="flex items-center justify-between gap-3 text-[10px] text-slate-400 font-mono">
-                                                        <span className="font-bold text-slate-300">{isUnderKm ? `${roundedMeters}m` : `${(s.distance / 1000).toFixed(2)}k`}</span>
-                                                        <span className="text-amber-500/50">{formatPaceSec(s.movingTime / (Math.max(s.distance, 1) / 1000))}</span>
+                                                        <span className="font-bold text-slate-300">{isUnderKm ? `${roundedMeters}m` : `${(finalDist / 1000).toFixed(2)}k`}</span>
+                                                        <span className="text-amber-500/50">{formatPaceSec(s.movingTime / (Math.max(finalDist, 1) / 1000))}</span>
                                                     </div>
                                                 );
                                             })}

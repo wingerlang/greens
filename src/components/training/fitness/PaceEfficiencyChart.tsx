@@ -47,6 +47,8 @@ export interface TimelineGroup {
 
 interface PaceEfficiencyChartProps {
     allRuns: ExerciseEntry[];
+    hoveredDate?: string | null;
+    onHoverDate?: (date: string | null) => void;
 }
 
 const formatPace = (secs: number) => {
@@ -101,7 +103,7 @@ function CustomTooltipProfile({ active, payload, label }: any) {
     return null;
 }
 
-export function PaceEfficiencyChart({ allRuns }: PaceEfficiencyChartProps) {
+export function PaceEfficiencyChart({ allRuns, hoveredDate, onHoverDate }: PaceEfficiencyChartProps) {
     const [viewMode, setViewMode] = React.useState<'profile' | 'trend' | 'timeline'>('timeline');
     const [basis, setBasis] = React.useState<'pace' | 'hr'>('pace');
     const [selectedBucketRange, setSelectedBucketRange] = React.useState<string>("");
@@ -413,8 +415,19 @@ export function PaceEfficiencyChart({ allRuns }: PaceEfficiencyChartProps) {
                             <YAxis domain={basis === 'pace' ? ['dataMin - 10', 'dataMax + 5'] : ['auto', 'auto']} stroke="#ffffff30" tick={{ fill: '#ffffff50', fontSize: 10 }} tickFormatter={(val) => basis === 'pace' ? `${val} bpm` : formatPace(val)} />
                             <Tooltip content={<CustomTooltipProfile />} cursor={{ fill: 'rgba(255, 255, 255, 0.03)' }} />
                             <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                            <Bar dataKey="avgOlder" name="Tidigare perioder" fill="#94a3b8" radius={[4, 4, 0, 0]} opacity={0.4} />
-                            <Bar dataKey="avgRecent" name="Senaste 60 dagarna" fill="#10b981" radius={[4, 4, 0, 0]} />
+                            <Bar 
+                                dataKey="avgOlder" 
+                                name="Tidigare perioder" 
+                                fill="#94a3b8" 
+                                radius={[4, 4, 0, 0]} 
+                                opacity={0.4} 
+                            />
+                            <Bar 
+                                dataKey="avgRecent" 
+                                name="Senaste 60 dagarna" 
+                                fill="#10b981" 
+                                radius={[4, 4, 0, 0]}
+                            />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -447,10 +460,29 @@ export function PaceEfficiencyChart({ allRuns }: PaceEfficiencyChartProps) {
                             />
                             <ZAxis dataKey="distance" type="number" range={[20, 150]} />
                             <Tooltip cursor={{strokeDasharray: '3 3'}} content={<CustomTooltipEfficiency />} />
-                            <Scatter name={basis === 'pace' ? "Puls per pass" : "Tempo per pass"} data={filteredEfficiencyData} shape="circle">
-                                {filteredEfficiencyData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.isNormalized ? '#fbbf24' : '#f43f5e'} fillOpacity={entry.isNormalized ? 0.4 : 0.6} />
-                                ))}
+                            <Scatter 
+                                name={basis === 'pace' ? "Puls per pass" : "Tempo per pass"} 
+                                data={filteredEfficiencyData} 
+                                shape="circle"
+                                onMouseMove={(data) => {
+                                    if (data && data.date && onHoverDate) {
+                                        onHoverDate(data.date);
+                                    }
+                                }}
+                                onMouseLeave={() => onHoverDate?.(null)}
+                            >
+                                {filteredEfficiencyData.map((entry, index) => {
+                                    const isHovered = hoveredDate === entry.date;
+                                    return (
+                                        <Cell 
+                                            key={`cell-${index}`} 
+                                            fill={isHovered ? '#3b82f6' : (entry.isNormalized ? '#fbbf24' : '#f43f5e')} 
+                                            fillOpacity={isHovered ? 1.0 : (entry.isNormalized ? 0.4 : 0.6)}
+                                            stroke={isHovered ? '#fff' : 'none'}
+                                            strokeWidth={isHovered ? 2 : 0}
+                                        />
+                                    );
+                                })}
                             </Scatter>
                         </ScatterChart>
                     </ResponsiveContainer>
@@ -479,6 +511,15 @@ export function PaceEfficiencyChart({ allRuns }: PaceEfficiencyChartProps) {
                                         setSelectedTimelineWeek(selectedTimelineWeek?.weekLabel === weekData.weekLabel ? null : weekData);
                                     }
                                 }}
+                                onMouseMove={(data) => {
+                                    if (data && data.activePayload && onHoverDate) {
+                                        const weekData = data.activePayload[0].payload as TimelineGroup;
+                                        if (weekData.runs.length > 0) {
+                                            onHoverDate(weekData.runs[0].date);
+                                        }
+                                    }
+                                }}
+                                onMouseLeave={() => onHoverDate?.(null)}
                             >
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                 <XAxis
@@ -520,7 +561,18 @@ export function PaceEfficiencyChart({ allRuns }: PaceEfficiencyChartProps) {
                                     dataKey="avgMetric" 
                                     stroke="#818cf8" 
                                     strokeWidth={3} 
-                                    dot={{ r: 4, fill: '#312e81', stroke: '#818cf8', strokeWidth: 2 }} 
+                                    dot={(props: any) => {
+                                        const { cx, cy, payload } = props;
+                                        const isHovered = hoveredDate && payload.runs.some((r: any) => r.date === hoveredDate);
+                                        return (
+                                            <circle 
+                                                cx={cx} cy={cy} r={isHovered ? 6 : 4} 
+                                                fill={isHovered ? '#3b82f6' : '#312e81'} 
+                                                stroke={isHovered ? '#fff' : '#818cf8'} 
+                                                strokeWidth={2} 
+                                            />
+                                        );
+                                    }}
                                     activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff' }} 
                                 />
                             </LineChart>

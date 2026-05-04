@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
+import { safeFetch } from '../../utils/http.ts';
 
 interface StravaActivity {
     id: number;
@@ -106,25 +107,29 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
         }
     }, [isOpen, autoStart, autoStartTriggered, step]);
 
+    const [abortController, setAbortController] = useState<AbortController | null>(null);
+
     const handleScan = async () => {
         setStep('scanning');
         setElapsedTime(0);
         const timer = setInterval(() => setElapsedTime(t => t + 1), 1000);
+        const controller = new AbortController();
+        setAbortController(controller);
 
         try {
             const fromDate = getFromDateForRange(scanRange);
 
-            const res = await fetch('/api/strava/scan', {
+            const data = await safeFetch<SyncDiffReport>('/api/strava/scan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                credentials: 'include',
-                body: JSON.stringify({ fromDate })
+                body: JSON.stringify({ fromDate }),
+                signal: controller.signal
             });
-            const data = await res.json();
 
-            if (data.error) throw new Error(data.error);
+            if (!data) throw new Error('Scan returned no data');
+            if ((data as any).error) throw new Error((data as any).error);
 
             setReport(data);
 
@@ -151,23 +156,36 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                 }
             }
 
-        } catch (err) {
-            console.error(err);
-            alert('Scan failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log('Scan aborted');
+            } else {
+                console.error(err);
+                alert('Scan failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+            }
             setStep('setup');
         } finally {
             clearInterval(timer);
+            setAbortController(null);
         }
+    };
+
+    const handleCancel = () => {
+        if (abortController) {
+            abortController.abort();
+        }
+        setStep('setup');
     };
 
     const autoImport = async (data: SyncDiffReport) => {
         setStep('importing');
         try {
             if (data.newActivities.length > 0) {
-                await fetch('/api/strava/import', {
+                await safeFetch('/api/strava/import', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ activities: data.newActivities, forceUpdate: false })
                 });
             }
@@ -197,20 +215,22 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
 
             // Batch 1: New
             if (newToImport.length > 0) {
-                await fetch('/api/strava/import', {
+                await safeFetch('/api/strava/import', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ activities: newToImport, forceUpdate: false })
                 });
             }
 
             // Batch 2: Changed (Force Update)
             if (changedToImport.length > 0) {
-                await fetch('/api/strava/import', {
+                await safeFetch('/api/strava/import', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ activities: changedToImport, forceUpdate: true })
                 });
             }
@@ -284,7 +304,7 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
     })();
 
     return (
-        <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+        <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => step !== 'scanning' && step !== 'importing' && onClose()}>
             <div
                 className="bg-slate-900 border border-white/10 shadow-2xl rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col h-[95vh] animate-in fade-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
@@ -304,9 +324,7 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                             {step === 'success' && 'Synk klar!'}
                         </p>
                     </div>
-                    {step !== 'importing' && step !== 'scanning' && (
-                        <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
-                    )}
+                    <button onClick={onClose} className="text-slate-400 hover:text-white p-2">✕</button>
                 </div>
 
                 {/* Body */}
@@ -389,7 +407,13 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                             <div className="text-center">
                                 <h3 className="text-lg font-bold text-white animate-pulse">Söker på Strava...</h3>
                                 <p className="text-slate-400 text-sm mt-2">Hämtar aktiviteter och jämför data.</p>
-                                <p className="text-slate-500 font-mono text-xs mt-4">{elapsedTime}s</p>
+                                <p className="text-slate-500 font-mono text-xs mt-4 mb-6">{elapsedTime}s</p>
+                                <button 
+                                    onClick={handleCancel}
+                                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold rounded-xl text-xs uppercase tracking-widest border border-white/5"
+                                >
+                                    Avbryt
+                                </button>
                             </div>
                         </div>
                     )}

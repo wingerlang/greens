@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { ExerciseEntry } from '../../../models/types.ts';
 import { subDays } from 'date-fns';
-import { calculateRiegelTime, formatSmartTime } from '../../../utils/runningCalculator.ts';
+import { calculateRiegelTime, formatSmartTime, calculateVDOTFromSubmaximalRun, predictRaceTime } from '../../../utils/runningCalculator.ts';
 import { Info, HelpCircle, Activity, Heart, Clock, Medal, Zap, Check, ExternalLink, Trophy } from 'lucide-react';
 
 export interface FitnessDatapoint {
@@ -39,6 +39,8 @@ interface CapacityChartProps {
     calculationWindowDays: number;
     setCalculationWindowDays: (days: number) => void;
     onOpenActivity?: (id: string) => void;
+    hoveredDate?: string | null;
+    onHoverDate?: (date: string | null) => void;
 }
 
 function timeToStr(timeMin: number): string {
@@ -75,9 +77,17 @@ const CustomDot = (props: any) => {
             </g>
         );
     }
-    // Extrapolated: Hollow dot
+    if (isExtrapolated) {
+        // Extrapolated: Hollow dot
+        const isHovered = props.hoveredDate === payload.date;
+        return (
+            <circle cx={cx} cy={cy} r={isHovered ? 6 : 3} fill="#0f172a" stroke={isHovered ? "#3b82f6" : "#ffffff40"} strokeWidth={isHovered ? 2 : 1} className="transition-all duration-200" />
+        );
+    }
+
+    const isHovered = props.hoveredDate === payload.date;
     return (
-        <circle cx={cx} cy={cy} r={3} fill="#0f172a" stroke="#ffffff40" strokeWidth={1} />
+        <circle cx={cx} cy={cy} r={isHovered ? 8 : 4} fill={isHovered ? "#3b82f6" : "#fff"} stroke="#3b82f6" strokeWidth={isHovered ? 4 : 2} className="transition-all duration-200" />
     );
 };
 
@@ -117,7 +127,7 @@ function CustomTooltipCapacity({ active, payload, label }: any) {
     return null;
 }
 
-export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWindowDays, onOpenActivity }: CapacityChartProps) {
+export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWindowDays, onOpenActivity, hoveredDate, onHoverDate }: CapacityChartProps) {
     const [useActualOnly, setUseActualOnly] = React.useState(false);
     const [useRacesOnly, setUseRacesOnly] = React.useState(false);
     const [useEndurancePenalty, setUseEndurancePenalty] = React.useState(true);
@@ -152,6 +162,38 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
         };
     }, [allRuns]);
 
+    const restingHR = 50; // TODO: Pull from actual user settings when available in context
+
+    const isSteadyState = (run: ExerciseEntry) => {
+        if (!run.laps || run.laps.length < 3) return true; // Assume steady if no lap data
+        
+        // Filter out very short laps (warmup/cooldown)
+        const relevantLaps = run.laps.filter(l => l.distance >= 0.5);
+        if (relevantLaps.length < 2) return true;
+
+        const paces = relevantLaps.map(l => l.elapsedTime / l.distance); // seconds per km
+        const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
+        const paceVariance = paces.reduce((a, b) => a + Math.pow(b - avgPace, 2), 0) / paces.length;
+        const paceCV = Math.sqrt(paceVariance) / avgPace;
+
+        const hrs = relevantLaps.filter(l => l.averageHeartrate).map(l => l.averageHeartrate!);
+        if (hrs.length < 2) return paceCV < 0.12; // 12% pace variation max for steady state
+
+        const avgHr = hrs.reduce((a, b) => a + b, 0) / hrs.length;
+        const hrVariance = hrs.reduce((a, b) => a + Math.pow(b - avgHr, 2), 0) / hrs.length;
+        const hrCV = Math.sqrt(hrVariance) / avgHr;
+
+        // Steady state: Pace CV < 10% AND HR CV < 5%
+        return paceCV < 0.10 && hrCV < 0.05;
+    };
+
+    const getRiegelExp = (weeklyKm: number) => {
+        if (weeklyKm < 50) return 1.10;
+        if (weeklyKm >= 50 && weeklyKm <= 80) return 1.085;
+        if (weeklyKm > 80 && weeklyKm <= 110) return 1.07;
+        return 1.06;
+    };
+
     React.useEffect(() => {
         if (selectedDp) {
             setTimeout(() => {
@@ -180,59 +222,63 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
             let extrapolated10kSecs = Infinity;
             let isExtrapolatedEligible = false;
 
-            if (run.distance! >= 3) {
+            const titleLower = run.title?.toLowerCase() || '';
+            const isTrail = titleLower.includes('trail') || titleLower.includes('terräng') || run.subType === 'trail';
+            // Flag as extreme if elevation gain is more than 20m per 1km (i.e. > 200m on a 10K)
+            const isExtremeElevation = run.elevationGain && run.distance && (run.elevationGain / run.distance) > 20;
+            const isTerrainExcluded = isTrail || isExtremeElevation;
+
+            const isRaceOrMax = run.isRace === true || run.subType === 'race' || run.performance?.subType === 'race' || run.category === 'RACE';
+
+            if (run.distance! >= 3 && isRaceOrMax && !isTerrainExcluded) {
                 estimateSecs = calculateRiegelTime(run.durationMinutes * 60, run.distance!, 10);
             }
 
+            const maxHRValue = typeof maxUserHR === 'object' && 'value' in maxUserHR ? (maxUserHR as any).value : 190;
+            const isEligible = !isTerrainExcluded && run.distance! >= 1 && run.heartRateAvg && run.heartRateAvg > 80 && run.durationMinutes >= 15;
+            
+            if (isEligible) {
+                const isSteady = isSteadyState(run);
+                
+                if (isSteady) {
+                    const minPerKm = run.durationMinutes / run.distance!;
+                    const speedMetersPerMin = 1000 / minPerKm;
 
+                    // Intensity using Heart Rate Reserve (Karvonen)
+                    // Intensity % = (HR_avg - HR_rest) / (HR_max - HR_rest)
+                    const intensity = (run.heartRateAvg! - restingHR) / (maxHRValue - restingHR);
 
-
-            if (run.distance! >= 1 && run.heartRateAvg && run.heartRateAvg > 80 && run.durationMinutes >= 15) {
-                const minPerKm = run.durationMinutes / run.distance!;
-                const speedMetersPerMin = 1000 / minPerKm;
-
-                const maxHRValue = typeof maxUserHR === 'object' && 'value' in maxUserHR ? (maxUserHR as any).value : 190;
-                const percentHRMax = run.heartRateAvg / maxHRValue;
-
-                if (percentHRMax >= 0.65) {
-                    // Effort Ceiling relative to distance
-                    // 100% up to 2km, 92.8% at 10k, 88% at 21k, 84% at 42k
-                    const getEffortCeiling = (d) => {
-                        if (d <= 2) return 1.0;
-                        if (d <= 10) return 1.0 - (d - 2) * 0.009; 
-                        if (d <= 21) return 0.928 - (d - 10) * 0.004; 
-                        return 0.88 - (d - 21) * 0.002; 
-                    };
-                    const effortCeiling = getEffortCeiling(run.distance || 10);
-                    const relativeEffort = Math.min(1.0, percentHRMax / effortCeiling);
-
-                    let estMaxSpeed = speedMetersPerMin / (0.5 + (0.5 * relativeEffort));
-                    
-                    // Interval Boost: 3.5% lift to offset recovery jogs drag
-                    const isInterval = run.subType === 'interval' || run.title?.toLowerCase().includes('intervall') || run.title?.toLowerCase().includes('x');
-                    if (isInterval) {
-                        estMaxSpeed *= 1.035;
+                    if (intensity >= 0.80) {
+                        let vdot = calculateVDOTFromSubmaximalRun(speedMetersPerMin, run.heartRateAvg!, maxHRValue, restingHR);
+                        
+                        if (vdot > 0) {
+                            // Only allow VDOT extrapolation for baseline if HRR% >= 85% with penalty
+                            if (intensity >= 0.85) {
+                                vdot *= 0.95; // Applied penalty for sub-max runs
+                                extrapolated10kSecs = predictRaceTime(vdot, 10);
+                                isExtrapolatedEligible = true;
+                            }
+                        }
                     }
-
-                    extrapolated10kSecs = (10000 / estMaxSpeed) * 60;
-                    isExtrapolatedEligible = true;
                 }
             }
+
+            const runPercentHRMax = run.heartRateAvg ? Math.round(((run.heartRateAvg - restingHR) / (maxHRValue - restingHR)) * 100) : undefined;
 
             return {
                 run,
                 estimateSecs,
                 extrapolated10kSecs,
                 isExtrapolatedEligible,
+                percentHRMax: runPercentHRMax,
                 dateTimeMs: new Date(run.date).getTime(),
-                isRace: run.isRace === true || run.subType === 'race' || run.performance?.subType === 'race' || run.category === 'RACE'
+                isRace: isRaceOrMax,
+                isTerrainExcluded
             };
         });
 
         const dataPoints: FitnessDatapoint[] = [];
-        const BASE_DECAY_RATE = 0.002; // 0.2% slower per day
-        const GRACE_PERIOD = calculationWindowDays / 2; // e.g. 15 days if 30 selected
-        const LOOKUP_LIMIT = Math.max(calculationWindowDays * 1.5, 90); // Look back at least 90 days
+        const ROLLING_WINDOW_DAYS = 45;
 
         const startDate = new Date(sortedRuns[0].date);
         const endDate = new Date(sortedRuns[sortedRuns.length - 1].date);
@@ -258,43 +304,36 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
 
             const weeklyAvgVolume = volume90d / (90 / 7);
 
-            // Dampen Decay based on volume (50% discount max at 100km / 30 days)
-            const volumeDiscount = Math.min(0.5, recentVolumeKm / 100); 
-            const DECAY_RATE = BASE_DECAY_RATE * (1 - volumeDiscount);
-
             let best10kEstimateSecs = Infinity;
             let bestRun = null;
             let extrapolated10kSecs = Infinity;
             let extrapolatedRun: any = null;
 
+            // Find the absolute best run in the rolling 45-day window
             for (const item of enrichedRuns) {
                 if (item.run.date > dateStr) continue; // Skip future runs
                 if (useRacesOnly && !item.isRace) continue; // Filter by race if enabled
 
                 const ageDays = (currTimeMs - item.dateTimeMs) / (1000 * 60 * 60 * 24);
-                if (ageDays > LOOKUP_LIMIT) continue; // Out of window for this date
-
-                const decayFactor = 1 + DECAY_RATE * Math.max(0, ageDays - GRACE_PERIOD);
+                if (ageDays > ROLLING_WINDOW_DAYS) continue; // Only look at last 45 days
 
                 if (item.estimateSecs !== Infinity) {
-                    const decayedSecs = item.estimateSecs * decayFactor;
-                    if (decayedSecs < best10kEstimateSecs) {
-                        best10kEstimateSecs = decayedSecs;
+                    if (item.estimateSecs < best10kEstimateSecs) {
+                        best10kEstimateSecs = item.estimateSecs;
                         bestRun = item.run;
                     }
                 }
 
                 if (item.isExtrapolatedEligible) {
-                    const decayedSecs = item.extrapolated10kSecs * decayFactor;
-                    if (decayedSecs < extrapolated10kSecs) {
-                        extrapolated10kSecs = decayedSecs;
+                    if (item.extrapolated10kSecs < extrapolated10kSecs) {
+                        extrapolated10kSecs = item.extrapolated10kSecs;
                         extrapolatedRun = item.run;
                     }
                 }
             }
 
-            // Decision Logic
-            let final10kSecs = best10kEstimateSecs;
+            // Decision Logic: Never override proven capacity with a theoretical worse value
+            let final10kSecs = Infinity;
             let isExtrapolated = false;
 
             if (useActualOnly) {
@@ -307,16 +346,22 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                 } else if (best10kEstimateSecs !== Infinity && extrapolated10kSecs !== Infinity) {
                     final10kSecs = Math.min(best10kEstimateSecs, extrapolated10kSecs);
                     isExtrapolated = extrapolated10kSecs < best10kEstimateSecs;
+                } else if (best10kEstimateSecs !== Infinity) {
+                    final10kSecs = best10kEstimateSecs;
+                    isExtrapolated = false;
                 }
             }
 
             const chosenRun = isExtrapolated ? extrapolatedRun : bestRun;
 
             if (final10kSecs !== Infinity && final10kSecs < (200 * 60)) {
+                const riegelExp = getRiegelExp(weeklyAvgVolume);
+                const bestRiegelExp = useEndurancePenalty ? riegelExp : 1.06;
+
                 // Return standard calculations for plotted dots
-                const estimate5kSecs = calculateRiegelTime(final10kSecs, 10, 5);
-                const estimate21kSecs = calculateRiegelTime(final10kSecs, 10, 21.0975);
-                const estimate42kSecs = calculateRiegelTime(final10kSecs, 10, 42.195);
+                const estimate5kSecs = calculateRiegelTime(final10kSecs, 10, 5, bestRiegelExp);
+                const estimate21kSecs = calculateRiegelTime(final10kSecs, 10, 21.0975, bestRiegelExp);
+                const estimate42kSecs = calculateRiegelTime(final10kSecs, 10, 42.195, bestRiegelExp);
 
                 dataPoints.push({
                     date: dateStr,
@@ -325,16 +370,16 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                     capacity21k: estimate21kSecs / 60,
                     capacity42k: estimate42kSecs / 60,
                     activitiesProcessed: enrichedRuns.filter(r => r.run.date <= dateStr).length,
-                    bestActivityTitle: chosenRun?.title || (chosenRun?.details ? chosenRun.details.substring(0, 30) : undefined),
+                    bestActivityTitle: chosenRun?.title || chosenRun?.type,
                     bestActivityId: chosenRun?.id,
                     isExtrapolated: isExtrapolated,
-                    percentHRMax: chosenRun?.heartRateAvg ? Math.round((chosenRun.heartRateAvg / (chosenRun.heartRateMax || 190)) * 100) : undefined,
+                    percentHRMax: (enrichedRuns.find(er => er.run.id === chosenRun?.id))?.percentHRMax,
                     actualDistance: chosenRun?.distance,
                     actualDurationMinutes: chosenRun?.durationMinutes,
                     actualHr: chosenRun?.heartRateAvg,
                     weeklyAvgVolume: Math.round(weeklyAvgVolume),
                     longRuns90dCount: longRuns90dCount,
-                    enduranceExponentUsed: 1.06, // base for plots
+                    enduranceExponentUsed: bestRiegelExp,
                     isRace: chosenRun ? (chosenRun as any).isRace === true || chosenRun.subType === 'race' || chosenRun.performance?.subType === 'race' : false
                 });
             }
@@ -396,12 +441,8 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
         const local21kSecs = calculateLocalSmartRiegel(local10kSecs, 10, 21.0975);
         const local42kSecs = calculateLocalSmartRiegel(local10kSecs, 10, 42.195);
 
-        let finalExponent = 1.06;
-        if (useEndurancePenalty && (selectedDp.weeklyAvgVolume || 0) > 0) {
-            const maxReq = 45;
-            const volDeficit = Math.max(0, maxReq - (selectedDp.weeklyAvgVolume || 0)) / maxReq;
-            finalExponent = 1.06 + (volDeficit * 0.08);
-        }
+        let finalExponent = getRiegelExp(selectedDp.weeklyAvgVolume || 0);
+        if (!useEndurancePenalty) finalExponent = 1.06;
 
         return {
             ...selectedDp,
@@ -435,6 +476,12 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                 <LineChart 
                     data={capacityData} 
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    onMouseMove={(data) => {
+                        if (data && data.activePayload && onHoverDate) {
+                            onHoverDate(data.activePayload[0].payload.date);
+                        }
+                    }}
+                    onMouseLeave={() => onHoverDate?.(null)}
                     onClick={(data) => {
                         if (data && data.activePayload) {
                             const dp = data.activePayload[0].payload;
@@ -463,16 +510,16 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
                     <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '11px' }} />
                     
                     {(selectedDistance === 'all' || selectedDistance === 'capacity5k') && (
-                        <Line type="monotone" dataKey="capacity5k" name="5 KM" stroke="#10b981" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot />} />
+                        <Line type="monotone" dataKey="capacity5k" name="5 KM" stroke="#10b981" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot hoveredDate={hoveredDate} />} />
                     )}
                     {(selectedDistance === 'all' || selectedDistance === 'capacity10k') && (
-                        <Line type="monotone" dataKey="capacity10k" name="10 KM" stroke="#3b82f6" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot />} />
+                        <Line type="monotone" dataKey="capacity10k" name="10 KM" stroke="#3b82f6" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot hoveredDate={hoveredDate} />} />
                     )}
                     {(selectedDistance === 'all' || selectedDistance === 'capacity21k') && (
-                        <Line type="monotone" dataKey="capacity21k" name="Halvmaraton" stroke="#6366f1" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot />} />
+                        <Line type="monotone" dataKey="capacity21k" name="Halvmaraton" stroke="#6366f1" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot hoveredDate={hoveredDate} />} />
                     )}
                     {(selectedDistance === 'all' || selectedDistance === 'capacity42k') && (
-                        <Line type="monotone" dataKey="capacity42k" name="Maraton" stroke="#a855f7" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot />} />
+                        <Line type="monotone" dataKey="capacity42k" name="Maraton" stroke="#a855f7" strokeWidth={selectedDistance === 'all' ? 2 : 3} dot={<CustomDot hoveredDate={hoveredDate} />} />
                     )}
                 </LineChart>
             </ResponsiveContainer>
@@ -780,39 +827,61 @@ export function CapacityChart({ allRuns, calculationWindowDays, setCalculationWi
 
                         {sidebarDp.actualDistance && sidebarDp.actualDurationMinutes && sidebarDp.percentHRMax && (
                             <div className="bg-white/5 border border-white/[0.05] rounded-xl p-3 text-xs opacity-90 space-y-2">
-                                <p className="font-bold text-blue-400 flex items-center gap-1">💡 {sidebarDp.isExtrapolated ? 'Matematiken bakom extrapoleringen' : 'Matematiken bakom beräkningen'}:</p>
+                                <p className="font-bold text-blue-400 flex items-center gap-1">💡 {sidebarDp.isExtrapolated ? 'Fysiologisk modellering' : 'Matematiken bakom beräkningen'}:</p>
                                 <div className="flex flex-col gap-2 text-slate-300">
                                     <div className="p-2 bg-slate-800/50 rounded-lg flex justify-between items-center">
                                         <div>
-                                            <p className="text-[9px] text-slate-400 uppercase font-black">1. ditt tempo</p>
+                                            <p className="text-[9px] text-slate-400 uppercase font-black">1. Karvonen-intensitet (%HRR)</p>
+                                            <p className="text-[10px] text-slate-500">Baserat på vilopuls {restingHR} bpm</p>
                                         </div>
                                         <p className="font-mono text-white text-sm font-black">
-                                            {formatPace(sidebarDp.actualDurationMinutes / sidebarDp.actualDistance)}
+                                            {sidebarDp.percentHRMax}%
                                         </p>
                                     </div>
+
+                                    {sidebarDp.isExtrapolated && sidebarDp.percentHRMax < 80 && (
+                                        <div className="p-2 bg-red-500/10 rounded-lg border border-red-500/20">
+                                            <p className="text-[10px] text-red-400 font-bold leading-tight">
+                                                ⚠️ Intensitet för låg för tillförlitlig extrapolering. Kräver tröskel- eller maxpass (&gt;80% HRR).
+                                            </p>
+                                        </div>
+                                    )}
                                     
                                     <div className="p-2 bg-slate-800/50 rounded-lg flex justify-between items-center border border-blue-500/10">
                                         <div>
-                                            <p className="text-[9px] text-slate-400 uppercase font-black">2. uppskattad maxfart</p>
-                                            <p className="text-[10px] text-slate-500">Vid 100% puls / Max effort</p>
+                                            <p className="text-[9px] text-slate-400 uppercase font-black">2. Beräknad VDOT</p>
+                                            <p className="text-[10px] text-slate-500">VO2 Oxygen Cost / Intensitet</p>
                                         </div>
                                         {(() => {
                                             const speedMpm = 1000 / (sidebarDp.actualDurationMinutes / sidebarDp.actualDistance);
-                                            const maxSpeedMpm = speedMpm / (0.5 + 0.5 * (sidebarDp.percentHRMax / 100));
-                                            const maxPaceMinPerKm = 1000 / maxSpeedMpm;
+                                            const maxHRValue = typeof maxUserHR === 'object' && 'value' in maxUserHR ? (maxUserHR as any).value : 190;
+                                            const hrAvg = sidebarDp.actualHr || (maxHRValue * 0.8);
+                                            const intensity = (hrAvg - restingHR) / (maxHRValue - restingHR);
+                                            let vdot = calculateVDOTFromSubmaximalRun(speedMpm, hrAvg, maxHRValue, restingHR);
+                                            
+                                            let appliedPenalty = 1.0;
+                                            if (sidebarDp.isExtrapolated) {
+                                                appliedPenalty = intensity < 0.85 ? (0.85 + (intensity * 0.15)) : 0.95;
+                                                vdot *= appliedPenalty;
+                                            }
+
                                             return (
-                                                <p className="font-mono text-emerald-400 text-sm font-black">
-                                                    {formatPace(maxPaceMinPerKm)}
-                                                </p>
+                                                <div className="text-right">
+                                                    <p className="font-mono text-emerald-400 text-sm font-black">
+                                                        {vdot.toFixed(1)}
+                                                    </p>
+                                                    <p className="text-[9px] text-slate-500 font-mono">ml/kg/min {appliedPenalty !== 1.0 && `(straff: ${appliedPenalty.toFixed(3)})`}</p>
+                                                </div>
                                             );
                                         })()}
                                     </div>
 
                                     <div className="p-2 bg-slate-800/50 rounded-lg">
-                                        <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Formeln</p>
-                                        <p className="font-mono text-blue-300 text-[11px] break-all">
-                                            Speed / (0.5 + 0.5 * {sidebarDp.percentHRMax / 100})
-                                        </p>
+                                        <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Algoritmer</p>
+                                        <div className="space-y-1 font-mono text-[10px]">
+                                            <p className="text-blue-300">VO2 = -4.60 + 0.182v + 0.000104v²</p>
+                                            <p className="text-indigo-300">T2 = T1 * (D2/D1)^{sidebarDp.enduranceExponentUsed?.toFixed(3)}</p>
+                                        </div>
                                     </div>
 
                                     <div className="p-2 bg-blue-500/10 rounded-lg flex justify-between items-center">

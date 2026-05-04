@@ -270,9 +270,15 @@ export function WorkoutComparisonView({ workout }: Props) {
                         <div className="space-y-1">
                             <ComparisonRow label="Distans" a={(signature as any).distance} b={past.distance} unit="km" />
                             <ComparisonRow label="Tid" a={(signature as any).duration} b={past.durationMinutes} unit="min" />
+                            {past.elapsedTimeSeconds && Math.abs(past.elapsedTimeSeconds - (past.durationMinutes * 60)) > 1 && (
+                                <ComparisonRow label="Total Tid" a={"-"} b={Math.round(past.elapsedTimeSeconds / 60)} unit="min" isText />
+                            )}
                             <ComparisonRow label="Tempo" a={formatPace((signature as any).pace)} b={formatPace(selectedMatch.pace!)} unit="/km" isText />
-                            <ComparisonRow label="Snittpuls" a={"-"} b={past.averageHeartRate || '-'} unit="bpm" isText />
-                            <ComparisonRow label="Maxpuls" a={"-"} b={past.maxHeartRate || '-'} unit="bpm" isText />
+                            {past.elapsedTimeSeconds && Math.abs(past.elapsedTimeSeconds - (past.durationMinutes * 60)) > 1 && past.distance && (
+                                <ComparisonRow label="Total Tempo" a={"-"} b={formatPace((past.elapsedTimeSeconds / 60) / past.distance)} unit="/km" isText />
+                            )}
+                            <ComparisonRow label="Snittpuls" a={"-"} b={past.heartRateAvg || '-'} unit="bpm" isText />
+                            <ComparisonRow label="Maxpuls" a={"-"} b={past.heartRateMax || '-'} unit="bpm" isText />
                         </div>
                     )}
                     

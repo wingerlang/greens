@@ -314,7 +314,6 @@ export class LocalStorageService implements StorageService {
                     racePlans,
                     users,           // Exclude from cloud sync blob (handled by auth/users API)
                     currentUserId,   // Exclude from cloud sync blob
-                    dailyVitals,     // Exclude from cloud sync blob (handled via vitals API)
                     ...liteData
                 } = data;
 
@@ -362,14 +361,12 @@ export class LocalStorageService implements StorageService {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // 2. Sync to Granular API
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/plans', {
+                const res = await authFetch('/api/plans', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(plan)
                 });
@@ -398,12 +395,10 @@ export class LocalStorageService implements StorageService {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // Sync to API
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC && planToDelete) {
+        if (ENABLE_CLOUD_SYNC && planToDelete) {
             try {
-                await fetch(`/api/plans?start=${planToDelete.weekStartDate}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/plans?start=${planToDelete.weekStartDate}`, {
+                    method: 'DELETE'
                 });
                 notificationService.notify('success', 'Veckoplan borttagen');
             } catch (e) {
@@ -415,14 +410,12 @@ export class LocalStorageService implements StorageService {
 
     async addWeightEntry(entry: WeightEntry): Promise<void> {
         // 1. API Optimization: Send ONLY weight entry
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/weight', {
+                const res = await authFetch('/api/weight', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(entry)
                 });
@@ -442,14 +435,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async addMealEntry(meal: any): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/meals', {
+                const res = await authFetch('/api/meals', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(meal)
                 });
@@ -466,14 +457,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async updateMealEntry(meal: any): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/meals/${meal.id}`, {
+                const res = await authFetch(`/api/meals/${meal.id}`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(meal)
                 });
@@ -490,12 +479,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteMealEntry(id: string, date: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/meals/${id}?date=${date}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await authFetch(`/api/meals/${id}?date=${date}`, {
+                    method: 'DELETE'
                 });
                 if (res.ok) {
                     notificationService.notify('success', 'Måltid borttagen');
@@ -510,14 +497,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async updateWeightEntry(entry: any, options?: { skipNotification?: boolean }): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/weight/${entry.id}`, {
+                const res = await authFetch(`/api/weight/${entry.id}`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(entry)
                 });
@@ -536,12 +521,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteWeightEntry(id: string, date: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/weight/${id}?date=${date}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await authFetch(`/api/weight/${id}?date=${date}`, {
+                    method: 'DELETE'
                 });
                 if (res.ok) {
                     notificationService.notify('success', 'Vikt borttagen');
@@ -556,14 +539,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async saveGoal(goal: PerformanceGoal): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/goals', {
+                const res = await authFetch('/api/goals', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(goal)
                 });
@@ -575,12 +556,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteGoal(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/goals?id=${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/goals?id=${id}`, {
+                    method: 'DELETE'
                 });
             } catch (e) {
                 console.error('[Storage] Goal delete failed:', e);
@@ -589,14 +568,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async savePeriod(period: TrainingPeriod): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/periods', {
+                const res = await authFetch('/api/periods', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(period)
                 });
@@ -608,12 +585,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deletePeriod(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/periods?id=${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/periods?id=${id}`, {
+                    method: 'DELETE'
                 });
             } catch (e) {
                 console.error('[Storage] Period delete failed:', e);
@@ -622,14 +597,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async createFeedEvent(event: any): Promise<any> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/feed/events', {
+                const res = await authFetch('/api/feed/events', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(event)
                 });
@@ -645,21 +618,19 @@ export class LocalStorageService implements StorageService {
     }
 
     async createFoodItem(food: any): Promise<any> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/foods', {
+                const res = await authFetch('/api/foods', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(food)
                 });
 
                 if (res.ok) {
                     const data = await res.json();
-                    return data.item; // Return updated item (e.g. with permanent image URL)
+                    return data.item;
                 } else {
                     throw new Error('API create failed');
                 }
@@ -667,25 +638,23 @@ export class LocalStorageService implements StorageService {
                 console.error('[Storage] Food create failed:', e);
             }
         }
-        return food; // Fallback to local
+        return food;
     }
 
     async updateFoodItem(food: any): Promise<any> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/foods/${food.id}`, {
+                const res = await authFetch(`/api/foods/${food.id}`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(food)
                 });
 
                 if (res.ok) {
                     const data = await res.json();
-                    return data.item; // Return updated item
+                    return data.item;
                 } else {
                     throw new Error('API update failed');
                 }
@@ -693,16 +662,14 @@ export class LocalStorageService implements StorageService {
                 console.error('[Storage] Food update failed:', e);
             }
         }
-        return food; // Fallback
+        return food;
     }
 
     async deleteFoodItem(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/foods/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/foods/${id}`, {
+                    method: 'DELETE'
                 });
             } catch (e) {
                 console.error('[Storage] Food delete failed:', e);
@@ -711,39 +678,15 @@ export class LocalStorageService implements StorageService {
     }
 
     async saveRecipe(recipe: any): Promise<any> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const method = recipe.createdAt === recipe.updatedAt ? 'POST' : 'PUT'; // Heuristic, or just upsert with PUT if ID exists? API supports POST for create, PUT for update.
-                // But addRecipe in DataContext passes a new recipe.
-                // We'll try POST if creating, PUT if updating.
-                // Actually, DataContext calls addRecipe then this.
-                // Let's rely on backend UPSERT or standard REST.
-                // Our API implementation: POST (Create), PUT (Update with ID).
-
-                // For simplicity, let's assume we can determine if it's new.
-                // If it's brand new, DataContext just created it.
-                // BUT, to be safe, we can check if we are updating.
-
-                // Let's use POST for create, PUT for update.
-                // But here we just receive "recipe".
-                // We can try to fetch it first? No that's slow.
-                // Let's try PUT if we have ID, but PUT usually requires existing resource.
-                // Our API: POST /api/recipes checks if ID exists? No, it just saves.
-                // Actually our POST /api/recipes implementation just does `recipeRepo.saveRecipe`.
-                // And PUT /api/recipes/:id also does `recipeRepo.saveRecipe`.
-                // So effectively both are UPSERT in the repo layer.
-                // But PUT checks if existing to return 404.
-                // So safe bet: Use POST for everything if we don't care about 404 on update.
-                // Or:
                 const url = recipe.createdAt === recipe.updatedAt ? '/api/recipes' : `/api/recipes/${recipe.id}`;
                 const fetchMethod = recipe.createdAt === recipe.updatedAt ? 'POST' : 'PUT';
 
-                const res = await fetch(url, {
+                const res = await authFetch(url, {
                     method: fetchMethod,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(recipe)
                 });
@@ -764,12 +707,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteRecipe(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/recipes/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/recipes/${id}`, {
+                    method: 'DELETE'
                 });
                 notificationService.notify('success', 'Recept borttaget');
             } catch (e) {
@@ -780,19 +721,16 @@ export class LocalStorageService implements StorageService {
     }
 
     async saveExerciseEntry(entry: any): Promise<any> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                // New entries won't have updatedAt. Use POST for new, PUT for existing.
                 const isNew = !entry.updatedAt || entry.createdAt === entry.updatedAt;
                 const url = isNew ? '/api/exercise-entries' : `/api/exercise-entries/${entry.id}`;
                 const fetchMethod = isNew ? 'POST' : 'PUT';
 
-                const res = await fetch(url, {
+                const res = await authFetch(url, {
                     method: fetchMethod,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(entry)
                 });
@@ -813,12 +751,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteExerciseEntry(id: string, date: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/exercise-entries/${id}?date=${date}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/exercise-entries/${id}?date=${date}`, {
+                    method: 'DELETE'
                 });
                 notificationService.notify('success', 'Träning borttagen');
             } catch (e) {
@@ -829,12 +765,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteUniversalActivity(id: string, date: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/activities/${id}?date=${date}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await authFetch(`/api/activities/${id}?date=${date}`, {
+                    method: 'DELETE'
                 });
                 if (res.ok) {
                     notificationService.notify('success', 'Aktivitet borttagen');
@@ -850,12 +784,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteStrengthSession(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/strength/workout/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await authFetch(`/api/strength/workout/${id}`, {
+                    method: 'DELETE'
                 });
                 if (res.ok) {
                     notificationService.notify('success', 'Styrkepass borttaget');
@@ -1072,19 +1004,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async savePlannedActivity(activity: PlannedActivity, options?: { skipNotification?: boolean }): Promise<void> {
-        // Optimistic local update not strictly needed as DataContext handles it, 
-        // but storage service should ideally update the blob too if we keep using load() from blob.
-        // However, with granular sync, we should be careful. 
-        // For now, let's just sync to API. DataContext manages local state.
-
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/planned-activities', {
+                const res = await authFetch('/api/planned-activities', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(activity)
                 });
@@ -1102,14 +1027,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async savePlannedActivities(activities: PlannedActivity[], options?: { skipNotification?: boolean }): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/planned-activities', {
+                const res = await authFetch('/api/planned-activities', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(activities)
                 });
@@ -1127,14 +1050,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deletePlannedActivity(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch(`/api/planned-activities?id=${id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                const res = await authFetch(`/api/planned-activities?id=${id}`, {
+                    method: 'DELETE'
                 });
                 if (!res.ok) {
                     console.error('[Storage] Failed to delete planned activity');
@@ -1155,14 +1074,12 @@ export class LocalStorageService implements StorageService {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // API
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('/api/quick-meals', {
+                const res = await authFetch('/api/quick-meals', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(meal)
                 });
@@ -1180,12 +1097,10 @@ export class LocalStorageService implements StorageService {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // API
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/quick-meals?id=${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/quick-meals?id=${id}`, {
+                    method: 'DELETE'
                 });
                 notificationService.notify('success', 'Snabbval borttaget');
             } catch (e) {
@@ -1196,14 +1111,12 @@ export class LocalStorageService implements StorageService {
 
     // Tours
     async saveTour(tour: Tour): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch('/api/tours', {
+                await authFetch('/api/tours', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(tour)
                 });
@@ -1214,12 +1127,10 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteTour(id: string): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`/api/tours/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                await authFetch(`/api/tours/${id}`, {
+                    method: 'DELETE'
                 });
             } catch (e) {
                 console.error('[Storage] Tour delete failed:', e);
@@ -1228,14 +1139,12 @@ export class LocalStorageService implements StorageService {
     }
 
     async savePurchaseLog(log: PurchaseLog): Promise<void> {
-        const token = getToken();
-        if (token && ENABLE_CLOUD_SYNC) {
+        if (ENABLE_CLOUD_SYNC) {
             try {
-                await fetch('/api/purchases', {
+                await authFetch('/api/purchases', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(log)
                 });

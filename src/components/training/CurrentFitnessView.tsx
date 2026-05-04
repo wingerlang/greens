@@ -24,6 +24,7 @@ export function CurrentFitnessView({
 }: CurrentFitnessViewProps) {
     const [calculationWindowDays, setCalculationWindowDays] = useState<number>(60);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
     const handleSyncBestEfforts = async () => {
         setIsSyncing(true);
@@ -123,6 +124,8 @@ export function CurrentFitnessView({
                 calculationWindowDays={calculationWindowDays}
                 setCalculationWindowDays={setCalculationWindowDays}
                 onOpenActivity={onOpenActivity}
+                hoveredDate={hoveredDate}
+                onHoverDate={setHoveredDate}
             />
 
             <YearlyBestList 
@@ -132,11 +135,15 @@ export function CurrentFitnessView({
 
             <PaceEfficiencyChart
                 allRuns={allRuns}
+                hoveredDate={hoveredDate}
+                onHoverDate={setHoveredDate}
             />
 
             <RunningQuadrantChart
                 allRuns={allRuns}
                 onOpenActivity={onOpenActivity}
+                hoveredDate={hoveredDate}
+                onHoverDate={setHoveredDate}
             />
         </div>
     );

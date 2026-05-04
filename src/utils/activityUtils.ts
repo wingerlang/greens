@@ -8,27 +8,36 @@ import { UniversalActivity } from '../models/types.ts';
  * Checks if an activity is a competition.
  */
 export function isCompetition(activity: UniversalActivity | any): boolean {
-    const title = (activity.plan?.title || activity.name || activity.title || '').toLowerCase();
+    // If it's a warmup/cooldown, it's NOT a competition
+    if (isWarmupOrCooldown(activity)) return false;
+
+    const title = (activity.plan?.title || activity.name || activity.title || activity.performance?.notes || '').toLowerCase();
     const notes = (activity.performance?.notes || activity.notes || '').toLowerCase();
     
     // Explicit race flags (Planned or Actual) take absolute priority
     const isRacePlanned = !!activity.plan?.isRace || activity.plan?.category === 'RACE';
-    const isRaceActual = activity.subType === 'race' || activity.isRace === true || activity.performance?.subType === 'race';
+    const isRaceActual = activity.subType === 'race' || activity.isRace === true || activity.performance?.subType === 'race' || activity.isCompetition === true || activity.performance?.activityType === 'race';
+    
     if (isRacePlanned || isRaceActual) return true;
 
+    // If it has a bib number or rank, it's definitely a race
+    if (activity.raceDetails?.bib || activity.raceDetails?.rank) return true;
+
     const raceKeywords = ['tävling', ' race', 'lopp', 'competition', 'marathon', 'maraton', 'halvmarathon', 'halvmaraton', 'challenge'];
+    const distance = activity.distance || activity.performance?.distanceKm || 0;
     
     // Strong signal: Keyword in title
-    if (raceKeywords.some(kw => title.includes(kw))) return true;
+    if (raceKeywords.some(kw => title.includes(kw))) {
+        // Special case: "1/10th Marathon" or similar short runs with "marathon/maraton" in name 
+        // should only be counted if explicit or if distance is significant (> 5km)
+        const isMarathonKW = title.includes('marathon') || title.includes('maraton');
+        if (isMarathonKW && distance > 0 && distance < 5 && !isRaceActual) return false;
+        
+        // Avoid "Uppjogg" or "Inför" etc. if not already caught by isWarmupOrCooldown
+        const exclusionKeywords = ['inför', 'efter', 'test', 'träning', 'pass', 'rehab', 'styrka'];
+        if (exclusionKeywords.some(kw => title.includes(kw)) && !isRaceActual) return false;
 
-    // Weak signal: Keyword in notes - only trust if it's a short, specific label
-    // Avoid false positives from long descriptions mentioning other races (e.g., "sen Hässleholmsloppet")
-    if (notes.length > 0 && notes.length < 40) {
-        const retrospectiveWords = [' sen ', ' efter ', ' inför ', ' tränade ', ' snackade '];
-        const isContextual = retrospectiveWords.some(word => notes.includes(word));
-        if (!isContextual && raceKeywords.some(kw => notes.includes(kw))) {
-            return true;
-        }
+        return true;
     }
 
     return false;
@@ -39,16 +48,20 @@ export function isCompetition(activity: UniversalActivity | any): boolean {
  */
 export function isWarmupOrCooldown(activity: any): boolean {
     const title = (activity.plan?.title || activity.name || activity.title || '').toLowerCase();
-    const notes = (activity.performance?.notes || activity.notes || '').toLowerCase();
     const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
     
     return subType === 'warmup' || 
            subType === 'cooldown' || 
-           title.includes('uppjogg') || 
-           title.includes('nerjogg') || 
+           title.startsWith('uppjogg') ||
+           title.includes(' uppjogg') ||
+           title.startsWith('nerjogg') ||
+           title.includes(' nerjogg') ||
            title.includes('warmup') || 
            title.includes('cooldown') ||
-           title.includes('nervärmning');
+           title.includes('nervärmning') ||
+           title.includes('nedvarvning') ||
+           title.includes('nedvärmning') ||
+           title.includes('uppvärmning');
 }
 
 /**
@@ -56,9 +69,10 @@ export function isWarmupOrCooldown(activity: any): boolean {
  */
 export function formatTime(seconds: number): string {
     if (seconds <= 0) return '-';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.round(seconds % 60);
+    const totalSeconds = Math.round(seconds);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
     return h > 0
         ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
         : `${m}:${s.toString().padStart(2, '0')}`;
@@ -131,4 +145,59 @@ export function detectRunningPBs(activities: (UniversalActivity | any)[]) {
     });
 
     return pbs;
+}
+
+/**
+ * Checks if an activity is a long run (default > 20km but < 42.2km).
+ */
+export function isLongRun(activity: any, threshold: number = 20): boolean {
+    const type = (activity.type || activity.performance?.activityType || '').toLowerCase();
+    if (type !== 'running' && type !== 'löpning') return false;
+    const dist = activity.distance || activity.performance?.distanceKm || 0;
+    return dist >= threshold && dist < 42.2;
+}
+
+/**
+ * Checks if an activity is an ultra (>= 42.2km).
+ */
+export function isUltra(activity: any): boolean {
+    const type = (activity.type || activity.performance?.activityType || '').toLowerCase();
+    if (type !== 'running' && type !== 'löpning') return false;
+    const dist = activity.distance || activity.performance?.distanceKm || 0;
+    return dist >= 42.2;
+}
+
+/**
+ * Checks if an activity is a quality session (interval, tempo, race, etc).
+ */
+export function isQualitySession(activity: any): boolean {
+    if (!activity) return false;
+    
+    // Warmups/cooldowns are never the "quality" part themselves in terms of categorization
+    if (isWarmupOrCooldown(activity)) return false;
+
+    const title = (activity.title || activity.plan?.title || activity.name || '').toLowerCase();
+    const notes = (activity.notes || activity.performance?.notes || '').toLowerCase();
+    const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
+    
+    // 1. Explicit subTypes or Competition status
+    if (subType === 'interval' || subType === 'tempo' || subType === 'race' || isCompetition(activity)) {
+        return true;
+    }
+
+    // 2. Specific Quality Keywords (avoiding overly broad ones like 'fart' or 'snabb')
+    const keywords = [
+        'intervall', 'tempo', 'tröskel', 'threshold', 'fartlek', 
+        'tusingar', 'snabbdistans', 'utdrag', 'reps', 'backe', 
+        'tusen', 'progression', 'repetition', 'fartpass'
+    ];
+    
+    const hasKeyword = keywords.some(kw => title.includes(kw) || notes.includes(kw));
+    if (hasKeyword) return true;
+
+    // 3. Pattern matching (e.g., 3x3km, 10x400m)
+    const pattern = /\d+\s*x\s*\d+/;
+    if (pattern.test(title) || pattern.test(notes)) return true;
+
+    return false;
 }

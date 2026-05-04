@@ -299,8 +299,18 @@ END:VCALENDAR`;
                                             <span className="text-[10px] text-slate-500">{h.distance?.toFixed(1) || '?'} km</span>
                                         </div>
                                         <div className="flex flex-col items-end">
-                                            <span className="text-emerald-400 font-black font-mono">{formatActivityDuration(h.durationMinutes)}</span>
-                                            <span className="text-[10px] text-slate-500 font-mono tracking-tighter">{calcPace(h.distance, h.durationMinutes)}</span>
+                                            <span className="text-emerald-400 font-black font-mono">
+                                                {formatActivityDuration(h.durationMinutes)}
+                                                {h.elapsedTimeSeconds && Math.abs(h.elapsedTimeSeconds - (h.durationMinutes * 60)) > 1 && (
+                                                    <span className="text-[9px] text-slate-500 ml-1"> (T: {formatActivityDuration(h.elapsedTimeSeconds / 60)})</span>
+                                                )}
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-mono tracking-tighter">
+                                                {calcPace(h.distance, h.durationMinutes)}
+                                                {h.elapsedTimeSeconds && Math.abs(h.elapsedTimeSeconds - (h.durationMinutes * 60)) > 1 && h.distance && (
+                                                    <span className="text-[9px] ml-1"> ({calcPace(h.distance, h.elapsedTimeSeconds / 60)})</span>
+                                                )}
+                                            </span>
                                         </div>
                                     </div>
                                 ));

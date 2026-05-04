@@ -26,6 +26,27 @@ export function calculateVDOT(distanceKm: number, timeSeconds: number): number {
 }
 
 /**
+ * Calculates VDOT from a submaximal run using HRR (Karvonen)
+ * Intensity % = (HR_avg - HR_rest) / (HR_max - HR_rest)
+ * VDOT = VO2_actual / Intensity%
+ */
+export function calculateVDOTFromSubmaximalRun(velocityMperMin: number, avgHr: number, maxHr: number, restingHr: number): number {
+    if (maxHr <= restingHr) return 0;
+    
+    // 1. Calculate actual VO2 cost of current velocity
+    const vo2Actual = -4.60 + (0.182258 * velocityMperMin) + (0.000104 * Math.pow(velocityMperMin, 2));
+    
+    // 2. Calculate intensity using HRR (Karvonen)
+    const intensity = (avgHr - restingHr) / (maxHr - restingHr);
+    
+    if (intensity <= 0.1) return 0; // Too low intensity to extrapolate reliably
+    
+    // 3. Extrapolate to VO2Max (VDOT)
+    // Note: Relationship between %HRR and %VO2max is very close to 1:1 in steady state
+    return vo2Actual / intensity;
+}
+
+/**
  * Predicts VDOT after weight change
  * Simple linear model: VO2max is loosely related to body mass (O2 per kg)
  */
@@ -240,10 +261,10 @@ export function estimateCardioCalories(type: 'running' | 'cycling', durationSeco
 /**
  * Predicts race time using Riegel's formula: T2 = T1 * (D2 / D1)^1.06
  */
-export function calculateRiegelTime(currentSeconds: number, currentDistKm: number, targetDistKm: number): number {
+export function calculateRiegelTime(currentSeconds: number, currentDistKm: number, targetDistKm: number, exponent: number = 1.06): number {
     if (currentDistKm <= 0 || targetDistKm <= 0) return 0;
-    // T2 = T1 * (D2 / D1)^1.06
-    return Math.round(currentSeconds * Math.pow((targetDistKm / currentDistKm), 1.06));
+    // T2 = T1 * (D2 / D1)^exponent
+    return Math.round(currentSeconds * Math.pow((targetDistKm / currentDistKm), exponent));
 }
 
 /**

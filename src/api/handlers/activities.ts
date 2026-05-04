@@ -286,6 +286,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             if (updates.isCalorieAdjusted !== undefined) perfUpdates.isCalorieAdjusted = updates.isCalorieAdjusted;
             if (updates.originalCalories !== undefined) perfUpdates.originalCalories = updates.originalCalories;
             if (updates.subType !== undefined) perfUpdates.subType = updates.subType;
+            if (updates.isTrack !== undefined) perfUpdates.isTrack = updates.isTrack;
             if (updates.type !== undefined || updates.activityType !== undefined) {
                 perfUpdates.activityType = updates.type || updates.activityType;
             }

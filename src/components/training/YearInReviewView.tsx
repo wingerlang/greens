@@ -231,7 +231,7 @@ export function YearInReviewView() {
             const date = a.date.split('T')[0];
             const existing = dayTotals.get(date) || { date, totalMinutes: 0, activities: [] };
             existing.totalMinutes += (a.performance?.durationMinutes || 0);
-            existing.activities.push({ type: a.performance?.activityType, minutes: a.performance?.durationMinutes, id: a.id, name: a.plan?.title || a.performance?.notes });
+            existing.activities.push(a);
             dayTotals.set(date, existing);
         });
 
@@ -256,7 +256,16 @@ export function YearInReviewView() {
             longestRaces: allRuns.filter(a => a.performance?.subType === 'race' || a.performance?.activityType === 'race').slice(0, 10),
             longestTrainingRuns: allRuns.filter(a => a.performance?.subType !== 'race' && a.performance?.activityType !== 'race').slice(0, 10),
             biggestTrainingDays: Array.from(dayTotals.values()).sort((a, b) => b.totalMinutes - a.totalMinutes).slice(0, 14),
-            activePercentage: totalDaysToCount > 0 ? (activeDays.size / totalDaysToCount) * 100 : 0
+            activePercentage: totalDaysToCount > 0 ? (activeDays.size / totalDaysToCount) * 100 : 0,
+            topPerformances: yearlyActivities
+                .filter(a => {
+                    const t = (a.performance?.activityType || '').toLowerCase();
+                    const dist = a.performance?.distanceKm || 0;
+                    return (t.includes('run') || t.includes('löp')) && dist >= 1.0;
+                })
+                .map(a => ({ ...a, score: calculatePerformanceScore(a, yearlyActivities) }))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 5)
         };
     }, [yearlyActivities, strengthPBs, selectedYears, yearlyStrengthSessions]);
 
@@ -634,6 +643,7 @@ export function YearInReviewView() {
                                                 <th className="py-2 px-4 font-bold text-right">Distans</th>
                                                 <th className="py-2 px-4 font-bold text-right hidden sm:table-cell">Tid</th>
                                                 <th className="py-2 px-4 font-bold text-right">Tempo</th>
+                                                <th className="py-2 px-4 font-bold text-right">Puls</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
@@ -645,6 +655,7 @@ export function YearInReviewView() {
                                                         <td className="py-3 px-4">
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-bold text-white group-hover:text-amber-400 transition-colors">{a.plan?.title || a.performance?.notes || 'Tävling'}</span>
+                                                                {a.source === 'strava' && <span className="text-[8px] bg-orange-500/20 text-orange-400 px-1 py-0.5 rounded font-bold uppercase tracking-widest flex items-center gap-1">STRAVA</span>}
                                                                 {isFuture && <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">Planerad</span>}
                                                             </div>
                                                             <div className="text-[10px] text-slate-500">{formatSwedishDate(a.date)}</div>
@@ -652,6 +663,9 @@ export function YearInReviewView() {
                                                         <td className="py-3 px-4 text-right font-bold text-white">{(a.performance?.distanceKm || 0).toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">km</span></td>
                                                         <td className="py-3 px-4 text-right text-slate-300 hidden sm:table-cell">{isFuture ? '—' : formatDuration((a.performance?.durationMinutes || 0) * 60)}</td>
                                                         <td className="py-3 px-4 text-right font-bold text-amber-400">{isFuture ? '—' : formatPace(paceSec)}</td>
+                                                        <td className="py-3 px-4 text-right font-bold text-rose-400">
+                                                            {a.performance?.avgHeartRate && !a.excludeHeartRate ? Math.round(a.performance.avgHeartRate) : '—'}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -724,7 +738,9 @@ export function YearInReviewView() {
                                                         </td>
                                                         <td className="py-3 px-4 text-right font-bold text-white">{(a.performance?.distanceKm || 0).toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">km</span></td>
                                                         <td className="py-3 px-4 text-right text-slate-300 hidden sm:table-cell">{formatPace(paceSec)}</td>
-                                                        <td className="py-3 px-4 text-right font-bold text-rose-400">{a.performance?.avgHeartRate ? Math.round(a.performance.avgHeartRate) : '—'}</td>
+                                                        <td className="py-3 px-4 text-right font-bold text-rose-400">
+                                                            {a.performance?.avgHeartRate && !a.excludeHeartRate ? Math.round(a.performance.avgHeartRate) : (a.excludeHeartRate ? <span className="text-slate-600 italic font-normal">Dold 🖤</span> : '—')}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -767,8 +783,8 @@ export function YearInReviewView() {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    {day.activities.map((act: any, idx: number) => {
-                                        const isRunning = (act.type || '').toLowerCase().includes('run');
+                                    {day.activities.map((act: UniversalActivity, idx: number) => {
+                                        const isRunning = (act.performance?.activityType || '').toLowerCase().includes('run');
                                         return (
                                             <button
                                                 key={idx}
@@ -779,8 +795,8 @@ export function YearInReviewView() {
                                                         : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
                                                 }`}
                                             >
-                                                <span className="truncate pr-2">{act.name || act.type}</span>
-                                                <span className="opacity-70 shrink-0">{Math.round(act.minutes)}m</span>
+                                                <span className="truncate pr-2">{act.plan?.title || act.performance?.notes || act.performance?.activityType}</span>
+                                                <span className="opacity-70 shrink-0">{Math.round(act.performance?.durationMinutes || 0)}m</span>
                                             </button>
                                         );
                                     })}
@@ -837,9 +853,48 @@ export function YearInReviewView() {
                 </div>
             </div>
 
+            {/* TOP PERFORMANCES SECTION */}
+            {stats.topPerformances.length > 0 && (
+                <div className="space-y-6 pt-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            <Zap size={20} className="text-amber-500" /> Mest Imponerande Prestationer
+                        </h3>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-white/5 px-2 py-1 rounded">Baserat på Greens Index (Pace + HR + Dist + Elevation)</div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {stats.topPerformances.map((act, i) => (
+                            <button
+                                key={act.id}
+                                onClick={() => setSelectedActivity(act)}
+                                className="bg-slate-950/40 border border-white/5 rounded-2xl p-5 flex flex-col items-center gap-3 hover:border-amber-500/30 transition-all group relative overflow-hidden text-center"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 opacity-20"></div>
+                                <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">#{i + 1} • {formatSwedishDate(act.date)}</div>
+                                <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 font-black text-2xl border border-amber-500/20 group-hover:scale-110 transition-transform">
+                                    {Math.round(act.score)}
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-sm font-bold text-white truncate max-w-[140px]">{act.plan?.title || act.performance?.notes || 'Löpning'}</div>
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                        {(act.performance?.distanceKm || 0).toFixed(1)} km • {formatPace(act.performance?.durationMinutes * 60 / (act.performance?.distanceKm || 1))}
+                                    </div>
+                                    {act.performance?.elevationGain > 0 && (
+                                        <div className="text-[10px] text-sky-400 font-bold flex items-center justify-center gap-1">
+                                            <TrendingUp size={10} /> {Math.round(act.performance.elevationGain)}m+
+                                        </div>
+                                    )}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {selectedActivity && (
                 <ActivityDetailModal
-                    activity={selectedActivity}
+                    activity={mapUniversalToLegacyEntry(selectedActivity)! as any}
+                    universalActivity={selectedActivity}
                     onClose={() => setSelectedActivity(null)}
                 />
             )}

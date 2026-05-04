@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { isWarmupOrCooldown } from '../../utils/activityUtils.ts';
+import { isWarmupOrCooldown, isCompetition, isLongRun, isUltra, isQualitySession } from '../../utils/activityUtils.ts';
 import { EXERCISE_TYPES } from './ExerciseModal.tsx';
 import { TrainingCalendar } from './TrainingCalendar.tsx';
 import { MonthlyTrainingTable } from './MonthlyTrainingTable.tsx';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Ruler, Trophy } from 'lucide-react';
 
 interface TrainingOverviewProps {
     exercises: ExerciseEntry[];
@@ -18,8 +18,21 @@ interface TrainingOverviewProps {
 }
 
 export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
-    const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
+    const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
+    const [distRange, setDistRange] = useState<[number, number]>([0, 999]);
     const [showYearlyStats, setShowYearlyStats] = useState(false);
+
+    const toggleFilter = (filter: string) => {
+        setActiveFilters(prev => {
+            if (filter === 'all') return ['all'];
+            const next = prev.filter(f => f !== 'all');
+            if (next.includes(filter)) {
+                const filtered = next.filter(f => f !== filter);
+                return filtered.length === 0 ? ['all'] : filtered;
+            }
+            return [...next, filter];
+        });
+    };
 
     const stats = useMemo(() => {
         const now = new Date();
@@ -35,49 +48,52 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         const baseExercises = (isFiltered ? exercises : exercises.filter(e => new Date(e.date).getFullYear() === currentYear))
             .filter(e => !e.extractedFromId);
 
-        // Apply Local Type Filter
-        const yearExercises = baseExercises.filter(e => {
-            if (statFilter === 'all') return true;
-            const t = e.type.toLowerCase();
-            if (statFilter === 'run') return t.includes('run') || t.includes('löp');
-            if (statFilter === 'bike') return t.includes('cycl') || t.includes('cyk');
-            if (statFilter === 'strength') return t.includes('strength') || t.includes('styrk') || t.includes('gym');
-            return true;
-        });
+        // Apply Local Type & Distance Filters
+        const matchesFilters = (e: ExerciseEntry) => {
+            const dist = e.distance || 0;
+            if (dist < distRange[0] || dist > distRange[1]) return false;
+
+            if (activeFilters.includes('all')) return true;
+            
+            return activeFilters.some(filter => {
+                const t = e.type.toLowerCase();
+                if (filter === 'run') return t.includes('run') || t.includes('löp');
+                if (filter === 'bike') return t.includes('cycl') || t.includes('cyk');
+                if (filter === 'strength') return t.includes('strength') || t.includes('styrk') || t.includes('gym');
+                if (filter === 'race') return isCompetition(e);
+                if (filter === 'long') return isLongRun(e);
+                if (filter === 'ultra') return isUltra(e);
+                if (filter === 'tempo') return isQualitySession(e);
+                return false;
+            });
+        };
+
+        const yearExercises = baseExercises.filter(matchesFilters);
 
         const monthExercises = exercises.filter(e => {
             if (e.extractedFromId) return false; // Exclude extracts
             const d = new Date(e.date);
-            // Apply Type Filter to Month too
-            const matchesType = statFilter === 'all' ||
-                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp'))) ||
-                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk'))) ||
-                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk')));
-
-            return matchesType && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            return matchesFilters(e) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
 
         const lastMonthExercises = exercises.filter(e => {
             if (e.extractedFromId) return false; // Exclude extracts
             const d = new Date(e.date);
-            // Apply Type Filter to Last Month too
-            const isHybrid = e.type === 'hybrid';
-            const matchesType = statFilter === 'all' ||
-                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp') || (isHybrid && (e.distance || 0) > 0))) ||
-                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk') || (isHybrid && (e.distance || 0) > 0))) ||
-                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk') || isHybrid));
-
-            return matchesType && d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+            return matchesFilters(e) && d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
         });
 
         const sumDistance = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => {
-            if (statFilter === 'all') {
+            if (activeFilters.includes('all')) {
                 const isRun = e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp');
                 return sum + (isRun ? (e.distance || 0) : 0);
             }
             return sum + (e.distance || 0);
         }, 0);
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
+        const sumTotalDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => {
+            const perf = (e as any)._mergeData?.universalActivity?.performance || e;
+            return sum + (perf.elapsedTimeSeconds ? perf.elapsedTimeSeconds / 60 : e.durationMinutes);
+        }, 0);
         const countSessions = (exs: ExerciseEntry[]) => {
             const sessions = exs.filter(e => !isWarmupOrCooldown(e));
             const warmups = exs.filter(e => isWarmupOrCooldown(e));
@@ -117,12 +133,14 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             year: {
                 distance: sumDistance(yearExercises),
                 time: sumDuration(yearExercises),
+                totalTime: sumTotalDuration(yearExercises),
                 count: countSessions(yearExercises),
                 calories: yearExercises.reduce((sum, e) => sum + e.caloriesBurned, 0)
             },
             month: {
                 distance: sumDistance(monthExercises),
                 time: sumDuration(monthExercises),
+                totalTime: sumTotalDuration(monthExercises),
                 count: countSessions(monthExercises),
                 weeklyAvg: {
                     distance: weeksInCurrentMonth > 0 ? sumDistance(monthExercises) / weeksInCurrentMonth : 0,
@@ -152,7 +170,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 maxWattSession // New
             }
         };
-    }, [exercises, statFilter, isFiltered]); // Depend on statFilter
+    }, [exercises, activeFilters, distRange, isFiltered]); // Depend on activeFilters and distRange
 
     return (
         <>
@@ -192,31 +210,103 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
             {showYearlyStats && !hideStats && (
                 <div className="animate-in slide-in-from-top-4 fade-in duration-300">
-                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                        <button
-                            onClick={() => setStatFilter('all')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'all' ? 'bg-slate-700 text-white border-slate-600' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                        >
-                            Alla
-                        </button>
-                        <button
-                            onClick={() => setStatFilter('run')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'run' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                        >
-                            🏃 Löpning
-                        </button>
-                        <button
-                            onClick={() => setStatFilter('bike')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'bike' ? 'bg-sky-900/30 text-sky-400 border-sky-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                        >
-                            🚴 Cykling
-                        </button>
-                        <button
-                            onClick={() => setStatFilter('strength')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'strength' ? 'bg-indigo-900/30 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                        >
-                            🏋️ Styrka
-                        </button>
+                    <div className="space-y-4 mb-8">
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => toggleFilter('all')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('all') ? 'bg-slate-700 text-white border-slate-600 shadow-lg' : 'text-slate-500 border-white/5 hover:bg-slate-800'}`}
+                            >
+                                Alla
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('run')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('run') ? 'bg-emerald-500 text-slate-900 border-emerald-400 font-black' : 'text-emerald-500/60 border-emerald-500/10 hover:bg-emerald-500/5'}`}
+                            >
+                                🏃 Löpning
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('bike')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('bike') ? 'bg-sky-500 text-slate-900 border-sky-400 font-black' : 'text-sky-500/60 border-sky-500/10 hover:bg-sky-500/5'}`}
+                            >
+                                🚴 Cykling
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('strength')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('strength') ? 'bg-indigo-500 text-slate-900 border-indigo-400 font-black' : 'text-indigo-500/60 border-indigo-500/10 hover:bg-indigo-500/5'}`}
+                            >
+                                🏋️ Styrka
+                            </button>
+                            
+                            <div className="w-px h-6 bg-white/10 mx-1" />
+
+                            <button
+                                onClick={() => toggleFilter('race')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 ${activeFilters.includes('race') ? 'bg-amber-500 text-slate-900 border-amber-400 font-black' : 'text-amber-500/60 border-amber-500/10 hover:bg-amber-500/5'}`}
+                            >
+                                <Trophy size={12} /> Tävling
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('long')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('long') ? 'bg-orange-500 text-slate-900 border-orange-400 font-black' : 'text-orange-500/60 border-orange-500/10 hover:bg-orange-500/5'}`}
+                            >
+                                🏔️ Långpass
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('ultra')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('ultra') ? 'bg-pink-500 text-slate-900 border-pink-400 font-black' : 'text-pink-500/60 border-pink-500/10 hover:bg-pink-500/5'}`}
+                            >
+                                🦅 Ultra
+                            </button>
+                            <button
+                                onClick={() => toggleFilter('tempo')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('tempo') ? 'bg-rose-500 text-slate-900 border-rose-400 font-black' : 'text-rose-500/60 border-rose-500/10 hover:bg-rose-500/5'}`}
+                            >
+                                ⚡ Intervall
+                            </button>
+                        </div>
+
+                        {/* Distance Filter */}
+                        <div className="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex items-center gap-2 text-slate-400">
+                                <Ruler size={16} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Distans (km)</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-1">
+                                <input 
+                                    type="number" 
+                                    value={distRange[0]} 
+                                    onChange={e => setDistRange([Math.max(0, parseInt(e.target.value) || 0), distRange[1]])}
+                                    className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white"
+                                />
+                                <span className="text-slate-600">—</span>
+                                <input 
+                                    type="number" 
+                                    value={distRange[1] === 999 ? '' : distRange[1]} 
+                                    placeholder="∞"
+                                    onChange={e => setDistRange([distRange[0], parseInt(e.target.value) || 999])}
+                                    className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white"
+                                />
+                            </div>
+                            <div className="flex gap-1">
+                                {[
+                                    { label: 'Alla', range: [0, 999] },
+                                    { label: '5k+', range: [4.8, 999] },
+                                    { label: '10k+', range: [9.7, 999] },
+                                    { label: '21k+', range: [20.8, 999] },
+                                    { label: '42k+', range: [41.5, 999] },
+                                    { label: '5-15k', range: [5, 15] },
+                                    { label: '21-42k', range: [21, 42.2] }
+                                ].map(p => (
+                                    <button
+                                        key={p.label}
+                                        onClick={() => setDistRange(p.range as [number, number])}
+                                        className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${distRange[0] === p.range[0] && distRange[1] === p.range[1] ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-500 border border-transparent hover:text-slate-300'}`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -245,7 +335,14 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                                 {Math.floor(stats.year.time / 60).toString().padStart(2, '0')}:{Math.round(stats.year.time % 60).toString().padStart(2, '0')}
                                 <span className="text-sm font-bold text-emerald-500/50 ml-1">h</span>
                             </div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase">Tid totalt</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center justify-between">
+                                <span>Tid totalt</span>
+                                {Math.abs(stats.year.totalTime - stats.year.time) > 1 && (
+                                    <span className="text-[9px] text-slate-500 normal-case font-medium">
+                                        (Tot: {Math.floor(stats.year.totalTime / 60)}h{Math.round(stats.year.totalTime % 60)}m)
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <div className="flex items-baseline gap-1.5">
@@ -376,7 +473,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     </span>
                 </button>
 
-                {statFilter === 'bike' && (stats.insights.maxWattSession as any)?.id ? (
+                {activeFilters.includes('bike') && (stats.insights.maxWattSession as any)?.id ? (
                     <button
                         onClick={() => (stats.insights.maxWattSession as any).id && onExerciseClick?.(stats.insights.maxWattSession as any)}
                         className="bg-slate-900/30 border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center text-center hover:bg-white/5 transition-all group"

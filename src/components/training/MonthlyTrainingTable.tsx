@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { Info } from 'lucide-react';
-import { isWarmupOrCooldown } from '../../utils/activityUtils.ts';
+import { isWarmupOrCooldown, isCompetition } from '../../utils/activityUtils.ts';
 
 interface MonthlyTrainingTableProps {
     exercises: ExerciseEntry[];
@@ -18,9 +18,9 @@ interface MonthBucket {
     period: string;
     year: number;
     monthIdx: number;
-    selected: { distance: number; duration: number; count: number; tonnage: number; hrSum: number; hrCount: number; };
+    selected: { distance: number; duration: number; count: number; tonnage: number; hrSum: number; hrCount: number; distDuration: number; };
     categories: {
-        cardio: { distance: number; duration: number; count: number; hrSum: number; hrCount: number; };
+        cardio: { distance: number; duration: number; count: number; hrSum: number; hrCount: number; distDuration: number; };
         strength: { tonnage: number; duration: number; count: number; };
         other: { duration: number; count: number; breakdown: Record<string, { duration: number, count: number }>; };
     };
@@ -65,7 +65,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
         const rows = Object.entries(byDay).map(([date, exs]) => {
             const summary = exs.map(ex => {
                 const parts = [];
-                const isRace = ex.subType === 'race' || ex.subType === 'competition' || ex.subType === 'simulation' || ex.subType === 'simulering';
+                const isRace = isCompetition(ex);
 
                 if (isRace) parts.push('[TÄVLING]');
                 if (ex.extractedFromId) parts.push('[UTDRAG]');
@@ -127,9 +127,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 year: y,
                 monthIdx: m - 1,
                 hasRace: false,
-                selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0 },
+                selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
                 categories: {
-                    cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0 },
+                    cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
                     strength: { tonnage: 0, duration: 0, count: 0 },
                     other: { duration: 0, count: 0, breakdown: {} }
                 },
@@ -138,7 +138,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             };
         });
 
-        const cardioTags = ['running', 'löpning', 'run', 'löp', 'cycling', 'cyk', 'cykel', 'bike', 'biking', 'swim', 'sim', 'simning'];
+        const cardioTags = ['running', 'löpning', 'run', 'löp'];
         const strengthTags = ['strength', 'styrka', 'gym', 'styrk', 'weight', 'träning'];
 
         // Pre-filter exercises by year to avoid unnecessary processing
@@ -157,20 +157,19 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             const isCardio = cardioTags.some(t => type.includes(t));
             const isStrength = strengthTags.some(t => type.includes(t));
 
-            if (e.subType === 'race') bucket.hasRace = true;
+            if (isCompetition(e)) bucket.hasRace = true;
 
             bucket.total.count++;
             bucket.total.duration += e.durationMinutes;
-            if (type.includes('run') || type.includes('löp') || type.includes('cyk') || type.includes('bike') || type.includes('sim')) {
+            if (type.includes('run') || type.includes('löp') || type.includes('cyk') || type.includes('bike') || type.includes('sim') || type.includes('walk')) {
                 bucket.total.distance += e.distance || 0;
             }
             bucket.total.tonnage += e.tonnage || 0;
 
             if (isCardio) {
                 bucket.categories.cardio.count++;
-                if (type.includes('run') || type.includes('löp') || type.includes('cyk') || type.includes('bike') || type.includes('sim')) {
-                    bucket.categories.cardio.distance += e.distance || 0;
-                }
+                bucket.categories.cardio.distance += e.distance || 0;
+                if (e.distance) bucket.categories.cardio.distDuration += e.durationMinutes;
                 bucket.categories.cardio.duration += e.durationMinutes;
             } else if (isStrength) {
                 bucket.categories.strength.count++;
@@ -201,8 +200,8 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             else if (activeTab === 'swimming') matchesTab = type.includes('swim') || type.includes('sim');
             else if (activeTab === 'other') matchesTab = !isCardio && !isStrength;
 
-            const hr = (e as any).averageHeartrate || (e as any).avgHeartRate;
-            if (hr) {
+            const hr = (e as any).averageHeartrate || (e as any).avgHeartRate || e.heartRateAvg;
+            if (hr && !e.excludeHeartRate) {
                 if (isCardio) {
                     bucket.categories.cardio.hrSum += hr;
                     bucket.categories.cardio.hrCount++;
@@ -217,6 +216,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 bucket.selected.count++;
                 bucket.selected.duration += e.durationMinutes;
                 bucket.selected.distance += e.distance || 0;
+                if (e.distance) bucket.selected.distDuration += e.durationMinutes;
                 bucket.selected.tonnage += e.tonnage || 0;
             }
         });
@@ -245,8 +245,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
     // Format helpers
     const fmtDur = (min: number) => {
         if (min === 0) return '-';
-        const h = Math.floor(min / 60);
-        const m = Math.round(min % 60);
+        const totalSeconds = Math.round(min * 60);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     };
 
@@ -255,8 +256,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
     const fmtPace = (dist: number, min: number) => {
         if (dist <= 0 || min <= 0) return '-';
         const paceDec = min / dist;
-        const pMin = Math.floor(paceDec);
-        const pSec = Math.round((paceDec % 1) * 60);
+        const totalSeconds = Math.round(paceDec * 60);
+        const pMin = Math.floor(totalSeconds / 60);
+        const pSec = totalSeconds % 60;
         return `${pMin}:${pSec.toString().padStart(2, '0')} min/km`;
     };
 
@@ -278,6 +280,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 tonnage: acc.selected.tonnage + curr.selected.tonnage,
                 hrSum: acc.selected.hrSum + curr.selected.hrSum,
                 hrCount: acc.selected.hrCount + curr.selected.hrCount,
+                distDuration: acc.selected.distDuration + curr.selected.distDuration,
             },
             categories: {
                 cardio: {
@@ -286,6 +289,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     count: acc.categories.cardio.count + curr.categories.cardio.count,
                     hrSum: (acc.categories.cardio.hrSum || 0) + curr.categories.cardio.hrSum,
                     hrCount: (acc.categories.cardio.hrCount || 0) + curr.categories.cardio.hrCount,
+                    distDuration: acc.categories.cardio.distDuration + curr.categories.cardio.distDuration,
                 },
                 strength: {
                     tonnage: acc.categories.strength.tonnage + curr.categories.strength.tonnage,
@@ -311,9 +315,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 tonnage: acc.total.tonnage + curr.total.tonnage,
             }
         }), {
-            selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0 },
+            selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
             categories: {
-                cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0 },
+                cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
                 strength: { tonnage: 0, duration: 0, count: 0 },
                 other: { duration: 0, count: 0, breakdown: {} as Record<string, { duration: number, count: number }> }
             },
@@ -572,7 +576,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                         <span className="text-slate-600">•</span>
                                                         <span className="text-slate-300">{row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}</span>
                                                         <span className="text-slate-600">•</span>
-                                                        <span className="text-emerald-400/80">{fmtPace(row.categories.cardio.distance, row.categories.cardio.duration).replace(' min/km', '')}</span>
+                                                        <span className="text-emerald-400/80">{fmtPace(row.categories.cardio.distance, row.categories.cardio.distDuration).replace(' min/km', '')}</span>
                                                         <span className="text-slate-600">•</span>
                                                         <span className="text-red-400">{row.categories.cardio.hrCount > 0 ? Math.round(row.categories.cardio.hrSum / row.categories.cardio.hrCount) : '-'} bpm</span>
                                                         <span className="text-slate-600">•</span>
@@ -658,7 +662,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                     <div className="p-2 text-right text-emerald-400 font-mono">
                                                         {activeTab === 'cycling' 
                                                             ? fmtSpeed(row.selected.distance, row.selected.duration).replace(' km/h', '')
-                                                            : fmtPace(row.selected.distance, row.selected.duration).replace(' min/km', '')}
+                                                            : fmtPace(row.selected.distance, row.selected.distDuration).replace(' min/km', '')}
                                                     </div>
                                                     <div className="p-2 text-right text-red-400 font-mono">{row.selected.hrCount > 0 ? Math.round(row.selected.hrSum / row.selected.hrCount) + ' bpm' : '-'}</div>
                                                     <div className="p-2 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>

@@ -825,6 +825,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 setDraftFoodQuantity(initialQty);
                 setDraftFoodMealType(foodData?.mealType || getSavedMealTypePreference() || null);
                 setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
+                if (foodData?.isPlanned !== undefined) {
+                    setIsPlanned(foodData.isPlanned);
+                }
                 return;
             }
         }
@@ -1027,6 +1030,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
             }],
             isPlanned
         });
+        setIsPlanned(false);
         console.log('[Omnibox] logFoodItem', {
             name: item.name,
             quantity,
@@ -1070,6 +1074,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (meal.itemType === 'recipe') {
             setLockedRecipe(meal);
             
+            // Sync isPlanned state from NLP indicator
+            if (intent.type === 'food' || intent.type === 'meal') {
+                setIsPlanned(!!intent.data.isPlanned);
+            }
+
             // Check intent for quantity
             if (intent.type === 'food' && intent.data.quantity) {
                 if (intent.data.unit === 'g' || intent.data.unit === 'kg') {
@@ -1139,6 +1148,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
                 isPlanned
             });
         }
+        setIsPlanned(false);
 
         // Analytics & Tracking
         const durationMs = openTimestamp ? Date.now() - openTimestamp : null;
@@ -1250,6 +1260,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCr
         if (!lockedFood) return;
         const stats = foodUsageStats[lockedFood.id];
         const quantity = draftFoodQuantity || stats?.frequentGrams || stats?.avgGrams || 100;
+        setIsPlanned(false);
         console.log('[Omnibox] handleLockedFoodAction', {
             draftFoodQuantity,
             frequentGrams: stats?.frequentGrams,

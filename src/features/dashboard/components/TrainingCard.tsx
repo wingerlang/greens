@@ -4,6 +4,7 @@ import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity, Bike, FastForward
 import { DashboardCardWrapper } from '../../../components/dashboard/DashboardCardWrapper.tsx';
 import { EXERCISE_TYPES } from '../../../components/training/ExerciseModal.tsx';
 import { ExerciseEntry, PlannedActivity, ExerciseType, UserSettings } from '../../../models/types.ts';
+import { formatPace } from '../../../utils/dateUtils.ts';
 
 export type DashboardTrainingCategory = 'running' | 'strength' | 'cardio' | 'all';
 
@@ -211,7 +212,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                             <span className="text-blue-500">{act.distance.toFixed(1)} km</span>
                                             {act.type === 'running' && (
                                                 <span className="text-slate-400 font-medium"> 
-                                                    ({Math.floor(act.durationMinutes / act.distance)}:{(Math.round(((act.durationMinutes / act.distance) % 1) * 60)).toString().padStart(2, '0')}/km)
+                                                    ({formatPace((act.durationMinutes / act.distance) * 60)})
                                                 </span>
                                             )}
                                         </>
@@ -259,7 +260,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                         </div>
                         <div className="flex flex-col gap-1.5">
                             {filteredPlans.map(plan => {
-                                const pace = plan.targetPace || (plan.estimatedDistance && plan.durationMinutes ? `${Math.floor(plan.durationMinutes / plan.estimatedDistance)}:${Math.round(((plan.durationMinutes / plan.estimatedDistance) % 1) * 60).toString().padStart(2, '0')}` : null);
+                                const pace = plan.targetPace || (plan.estimatedDistance && plan.durationMinutes ? formatPace((plan.durationMinutes / plan.estimatedDistance) * 60) : null);
                                 
                                 // Find un-matched completed activities for the dashboard category
                                 const unmatchedActivities = completedTraining.filter(act => 

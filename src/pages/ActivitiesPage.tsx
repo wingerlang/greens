@@ -156,11 +156,11 @@ const ActivityRow = memo(({
                         {/* Score badge inline */}
                         {score > 0 && (
                             <span
-                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                    score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
-                                        'bg-slate-500/20 text-slate-400'
+                                className={`min-w-[22px] px-1 h-5 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm ${score >= 600 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                    score >= 400 ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                                        'bg-slate-500/20 text-slate-400 border border-white/5'
                                     }`}
-                                title={`Poäng: ${score}`}
+                                title={`Greens Index: ${score}`}
                             >
                                 {score}
                             </span>
@@ -177,9 +177,12 @@ const ActivityRow = memo(({
                         {activity.extractedFromId && (
                             <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-500 px-1 rounded" title="Utdrag från annat pass">✂️</span>
                         )}
+                        {((activity as any).isTrack || universalMatch?.performance?.isTrack) && (
+                            <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-500 px-1 rounded" title="Banläge aktiverat">🏟️</span>
+                        )}
                     </div>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 min-w-[120px]">
                     {(() => {
                         if (isMergedActivity) {
                             return (
@@ -396,7 +399,13 @@ export function ActivitiesPage() {
         const linkedId = searchParams.get('activityId');
         if (!linkedId) return;
 
-        // 1. Check if already selected (avoid re-fetch)
+        // 1. Check if we need to update our local selection with fresh data from context
+        const currentMatch = allActivities.find(a => a.id === linkedId || a.externalId === linkedId);
+        if (currentMatch && JSON.stringify(currentMatch) !== JSON.stringify(selectedActivity)) {
+            setSelectedActivity(currentMatch);
+            return;
+        }
+
         if (selectedActivity?.id === linkedId) return;
 
         // 2. Try to find in local state

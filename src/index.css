@@ -409,3 +409,5 @@
         box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
     }
 }
+.animate-bounce-subtle { animation: bounce-subtle 2s infinite; }
+@keyframes bounce-subtle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }

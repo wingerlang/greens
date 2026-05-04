@@ -1,4 +1,5 @@
 import { UserSettings, ExerciseEntry, UniversalActivity, BestEffort } from '../models/types.ts';
+import { snapToTrack } from './trackUtils.ts';
 
 export interface AdaptiveGoals {
     calories: number;
@@ -140,8 +141,11 @@ export interface PerformanceBreakdown {
  * Provides a detailed breakdown of the Greens Score.
  */
 export function getPerformanceBreakdown(activity: any, history: any[] = []): PerformanceBreakdown {
-    const type = (activity.type || activity.activityType || '').toLowerCase();
-    const isRunning = ['running', 'run', 'walking', 'walk', 'hiking', 'trail'].some(t => type.includes(t));
+    // Extract properties robustly from both ExerciseEntry (flat) and UniversalActivity (nested in .performance)
+    const perf = activity.performance || activity;
+    const type = (perf.activityType || activity.type || '').toLowerCase();
+    
+    const isRunning = ['running', 'run', 'löpning', 'löp', 'walking', 'walk', 'hiking', 'trail'].some(t => type.includes(t));
     const isStrength = ['strength', 'weightlifting', 'gym', 'styrka', 'bodybuilding', 'crossfit'].some(t => type.includes(t));
 
     let components: ScoreComponent[] = [];
@@ -149,8 +153,6 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
     let totalScore = 0;
     let isPersonalBest = false;
 
-    // Filter history to current activity type and exclude current activity
-    // Also EXCLUDE any activities marked as faulty (excludeFromStats)
     const activityDate = new Date(activity.date).getTime();
     const historyBefore = history.filter(h =>
         h.id !== activity.id &&
@@ -162,10 +164,18 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
 
     // 1. RUNNING / CARDIO
     if (isRunning) {
-        const dist = activity.distance || activity.distanceKm || 0;
-        const dur = activity.durationMinutes || 0;
-        const hr = activity.heartRateAvg || activity.avgHeartRate || 0;
-        const gain = activity.elevationGain || 0;
+        let dist = perf.distanceKm || activity.distance || 0;
+        const dur = perf.durationMinutes || 0;
+        const hr = perf.avgHeartRate || activity.heartRateAvg || 0;
+        const gain = perf.elevationGain || 0;
+        const isTrack = !!perf.isTrack || !!activity.isTrack;
+
+        // Correct distance if track mode is on
+        if (isTrack && dist > 0) {
+            // snapToTrack takes meters
+            const snappedM = snapToTrack(dist * 1000);
+            dist = snappedM / 1000;
+        }
 
         if (dist === 0 || dur === 0) {
             return { totalScore: 0, type: 'cardio', components: [], summary: 'Ingen data för beräkning.', isPersonalBest: false };
@@ -174,39 +184,92 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
         const paceSec = (dur * 60) / dist;
         const gapSec = calculateGAP(paceSec, gain, dist);
 
-        if (hr === 0) {
-            totalScore = Math.min(100, Math.max(0, 120 - (gapSec / 5)));
-            summary = 'Poäng baserat enbart på tempo då puls saknas.';
+        /**
+         * EQUIVALENT 10K CALCULATION (Riegel's Formula)
+         * Predicts what a 10k time would be based on this effort.
+         * T2 = T1 * (D2/D1)^1.06
+         */
+        const predicted10kTimeSec = (gapSec * dist) * Math.pow(10 / dist, 1.06);
+        const predicted10kPace = predicted10kTimeSec / 10;
+        
+        // Scoring based on 10k potential
+        // 35:00 (2100s) = 100 pts
+        // 40:00 (2400s) = 85 pts
+        // 50:00 (3000s) = 65 pts
+        const potentialScore = 100 * (2100 / predicted10kTimeSec);
+        
+        // Efficiency = (Speed / HR) 
+        // Baseline: 4:00 pace (15km/h) at 150 HR = 1.0
+        const normalizedSpeed = 15000 / gapSec; 
+        const hrEfficiency = (hr > 0 && !activity.excludeHeartRate) ? (normalizedSpeed / (hr / 150)) * 50 : 0;
+
+        /**
+         * GREENS INDEX (Composite Score)
+         * Weights:
+         * 1. Potential Score (60% if HR exists, 100% if not)
+         * 2. HR Efficiency (40% if HR exists)
+         */
+        const hasHr = hr > 0 && !activity.excludeHeartRate;
+        let compositeScore = hasHr 
+            ? (potentialScore * 0.6) + (hrEfficiency * 0.4)
+            : potentialScore; // Pace only if no HR
+
+        // Elevation Bonus (Toughness)
+        const verticalBonus = 1 + (gain / 2000); 
+        compositeScore *= verticalBonus;
+
+        // Scale to 100-800 range
+        // 100 is base (poor), 800 is elite.
+        totalScore = 100 + (Math.min(100, compositeScore) * 7);
+        
+        components.push({
+            label: 'Greens Index',
+            value: `${Math.round(totalScore)}`,
+            score: Math.min(800, totalScore),
+            max: 800,
+            description: `Vägt betyg. Motsvarar en 10km-tid på ca ${Math.floor(predicted10kTimeSec / 60)} minuter.${!hasHr ? ' (Baserat enbart på tempo då puls saknas)' : ''}`,
+            icon: '💎',
+            color: 'text-indigo-400'
+        });
+
+        const total10kSec = Math.round(predicted10kTimeSec);
+        components.push({
+            label: '10k-Potential',
+            value: `${Math.floor(total10kSec / 60)}:${(total10kSec % 60).toString().padStart(2, '0')}`,
+            score: 100 + (Math.min(100, potentialScore) * 7),
+            max: 800,
+            description: 'Din beräknade 10k-kapacitet baserat på detta pass (GAP-justerat).',
+            icon: '⏱️',
+            color: 'text-amber-400'
+        });
+
+        if (hasHr) {
             components.push({
-                label: 'Tempo (GAP)',
-                value: `${Math.floor(gapSec / 60)}:${Math.round(gapSec % 60).toString().padStart(2, '0')}/km`,
-                score: totalScore,
-                max: 100,
-                description: 'Din hastighet justerad för backar.',
-                icon: '⚡',
-                color: 'text-indigo-400'
+                label: 'Löpekonomi',
+                value: `${(hrEfficiency/10).toFixed(1)} idx`,
+                score: 100 + (Math.min(100, hrEfficiency * 2) * 7),
+                max: 800,
+                description: 'Förhållandet mellan fart och puls.',
+                icon: '📈',
+                color: 'text-emerald-400'
             });
         }
 
-        // Efficiency = Work (Distance/GAP) / Cost (HR)
-        const efficiency = 1000000 / (gapSec * hr);
-        let baseScore = efficiency * 3.0;
-
-        totalScore = baseScore;
-        components.push({
-            label: 'Löpekonomi (idx)',
-            value: `${efficiency.toFixed(1)} idx`,
-            score: Math.min(100, baseScore),
-            max: 100,
-            description: 'Hur långt du kommer per hjärtslag. Högre är bättre.',
-            icon: '📈',
-            color: 'text-emerald-400'
-        });
+        if (gain > 100) {
+            components.push({
+                label: 'Klättring',
+                value: `+${Math.round((verticalBonus - 1) * 100)}%`,
+                score: 100 + (Math.min(100, (gain / 1000) * 100) * 7),
+                max: 800,
+                description: 'Bonus för höjdmeter.',
+                icon: '🏔️',
+                color: 'text-sky-400'
+            });
+        }
 
         if (dist > 10) {
             const bonus = dist > 35 ? 1.15 : (dist > 21 ? 1.1 : 1.05);
             const bonusPercent = Math.round((bonus - 1) * 100);
-            totalScore *= bonus;
             components.push({
                 label: 'Uthållighet',
                 value: `+${bonusPercent}%`,
@@ -218,21 +281,14 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             });
         }
 
-        // --- PERSONALIZATION BONUSES ---
-        if (dur >= 60) {
-            totalScore += 10;
-            components.push({ label: 'Uthållighets-boost', value: '+10', score: 100, max: 100, description: 'Bonus för pass över 60 minuter.', icon: '⏱️', color: 'text-blue-400' });
-        } else if (dur >= 30) {
-            totalScore += 5;
-            components.push({ label: 'Uthållighets-boost', value: '+5', score: 50, max: 100, description: 'Bonus för pass över 30 minuter.', icon: '⏱️', color: 'text-blue-400' });
-        }
+        const isInterval = (activity.subType === 'interval' || (activity.title || '').toLowerCase().includes('intervall'));
 
-        if (historyBefore.length > 0 && !isCurrentExcluded) {
+        if (historyBefore.length > 0 && !isCurrentExcluded && !isInterval) {
             const runningHistory = historyBefore.filter(h => {
                 const t = (h.type || h.activityType || '').toLowerCase();
                 return ['running', 'run'].some(tag => t.includes(tag));
             });
-            // ... (rest of running PB logic)
+            
             if (runningHistory.length > 0) {
                 const maxDist = Math.max(...runningHistory.map(h => h.distance || 0));
                 if (dist > maxDist && dist > 2) {
@@ -257,27 +313,28 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             components.push({ label: 'Data-varning', value: 'Exkluderad', score: 0, max: 100, description: 'Detta pass är markerat som felaktigt och räknas ej i statistik/PBs.', icon: '⚠️', color: 'text-red-400' });
         }
 
-        const roundedScore = Math.min(100, Math.round(totalScore));
-        summary = roundedScore > 85 ? 'Exceptionell prestation!' : (roundedScore > 65 ? 'Riktigt bra driv i passet.' : 'En stabil insats i banken.');
+        const roundedScore = Math.min(800, Math.round(totalScore));
+        summary = roundedScore > 700 ? 'Exceptionell prestation!' : (roundedScore > 400 ? 'Riktigt bra driv i passet.' : 'En stabil insats i banken.');
 
         return { totalScore: roundedScore, type: 'cardio', components, summary, isPersonalBest };
     }
 
     // 2. STRENGTH
     if (isStrength) {
-        const tonnage = activity.tonnage || 0;
-        const dur = activity.durationMinutes || 0;
+        const tonnage = perf.tonnage || activity.tonnage || 0;
+        const dur = perf.durationMinutes || 0;
         if (tonnage === 0 || dur === 0) return { totalScore: 0, type: 'strength', components: [], summary: 'Ingen tonnage-data tillgänglig.', isPersonalBest: false };
 
         const workRate = tonnage / dur;
-        let baseScore = workRate * 0.4;
-        totalScore = baseScore;
+        const baseScore = workRate * 0.4;
+        // Scale to 100-800 range
+        totalScore = 100 + (Math.min(100, baseScore) * 7);
 
         components.push({
             label: 'Arbetsinsats',
             value: `${Math.round(workRate)} kg/min`,
-            score: Math.min(100, baseScore),
-            max: 100,
+            score: 100 + (Math.min(100, baseScore) * 7),
+            max: 800,
             description: 'Hur mycket vikt du flyttar per minut (intensitet).',
             icon: '🔥',
             color: 'text-purple-400'
@@ -286,8 +343,8 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
         components.push({
             label: 'Totalvolym',
             value: `${(tonnage / 1000).toFixed(1)} t`,
-            score: Math.min(100, (tonnage / 20000) * 100),
-            max: 100,
+            score: 100 + (Math.min(100, (tonnage / 20000) * 100) * 7),
+            max: 800,
             description: 'Total mängd flyttad vikt.',
             icon: '🏋️',
             color: 'text-blue-400'
@@ -295,8 +352,8 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
 
         // --- PERSONALIZATION BONUSES ---
         if (dur >= 60) {
-            totalScore += 10;
-            components.push({ label: 'Volym-boost', value: '+10', score: 100, max: 100, description: 'Bonus för rejäl passlängd.', icon: '⏱️', color: 'text-indigo-400' });
+            totalScore += 70; // +10 raw points * 7 scale
+            components.push({ label: 'Volym-boost', value: '+70', score: 800, max: 800, description: 'Bonus för rejäl passlängd.', icon: '⏱️', color: 'text-indigo-400' });
         }
 
         if (historyBefore.length > 0 && !isCurrentExcluded) {
@@ -326,8 +383,8 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             components.push({ label: 'Data-varning', value: 'Exkluderad', score: 0, max: 100, description: 'Detta pass är markerat som felaktigt och räknas ej i statistik/PBs.', icon: '⚠️', color: 'text-red-400' });
         }
 
-        const roundedScore = Math.min(100, Math.round(totalScore));
-        summary = roundedScore > 85 ? 'Massivt pass! Grym volym.' : (roundedScore > 65 ? 'Stabilt och intensivt pass.' : 'Bra tempo genom passet.');
+        const roundedScore = Math.min(800, Math.round(totalScore));
+        summary = roundedScore > 700 ? 'Massivt pass! Grym volym.' : (roundedScore > 400 ? 'Stabilt och intensivt pass.' : 'Bra tempo genom passet.');
 
         return { totalScore: roundedScore, type: 'strength', components, summary, isPersonalBest };
     }
@@ -348,6 +405,8 @@ export const PERFORMANCE_TARGETS = [
     { name: '3k', km: 3.0, stravaName: '3k' },
     { name: '2k', km: 2.0, stravaName: '2k' },
     { name: '1 mile', km: 1.60934, stravaName: '1 mile' },
+    { name: '1600m', km: 1.6, stravaName: '1600m' },
+    { name: '1500m', km: 1.5, stravaName: '1500m' },
     { name: '1k', km: 1.0, stravaName: '1k' },
     { name: '800m', km: 0.8, stravaName: '800m' },
     { name: '400m', km: 0.4, stravaName: '400m' }
@@ -363,6 +422,8 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
     if (!perf || (perf.activityType !== 'running' && !['run', 'trail'].some(t => (activity.plan?.activityType || '').toLowerCase().includes(t)))) {
         return [];
     }
+
+    const isTrack = !!perf.isTrack || !!(activity as any).isTrack;
 
     const results: Record<string, BestEffort> = {};
 
@@ -384,21 +445,36 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
             const targetM = target.km * 1000;
             let bestTime = Infinity;
             let bestHr = 0;
-            let startKm = 0;
+            let bestStartKm = 0;
+            let bestEndKm = 0;
+            let bestIsSnapped = false;
+            let bestSegmentIndexes: number[] = [];
+            let bestDetailedSegments: any[] = [];
             let bestSegmentName = '';
             let bestSegmentDist = 0;
+
+            // Pre-calculate cumulative start distance for each segment to report ranges
+            const cumulativeDistances: number[] = [];
+            let currentCum = 0;
+            for (const s of segments) {
+                cumulativeDistances.push(currentCum);
+                currentCum += s.distance;
+            }
 
             // Sliding window over segments
             for (let i = 0; i < segments.length; i++) {
                 let distAcc = 0;
+                let rawDistAcc = 0;
                 let timeAcc = 0;
                 let hrSum = 0;
                 let hrTimeAcc = 0;
                 let j = i;
 
-                while (j < segments.length && distAcc < targetM) {
+                while (j < segments.length) {
                     const seg = segments[j];
-                    distAcc += seg.distance;
+                    const effDist = isTrack ? snapToTrack(seg.distance) : seg.distance;
+                    distAcc += effDist;
+                    rawDistAcc += seg.distance; // Keep track of raw distance for interpolation if needed
                     timeAcc += seg.movingTime;
                     
                     if (seg.averageHeartrate) {
@@ -406,18 +482,90 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
                         hrTimeAcc += seg.movingTime;
                     }
                     j++;
+
+                    // Since we are accumulating snapped distances, we can just stop when we hit the target.
+                    if (distAcc >= targetM) {
+                        break;
+                    }
                 }
 
                 if (distAcc >= targetM) {
-                    const overshootM = distAcc - targetM;
-                    const lastSegment = segments[j - 1];
-                    const pace = lastSegment.movingTime / Math.max(lastSegment.distance, 1);
-                    const correctedTime = timeAcc - (overshootM * pace);
+                    let correctedTime = timeAcc;
+                    let isSnapped = isTrack && distAcc === targetM;
+                    let cutFromStart = false;
+                    let overshootM = 0;
+                    
+                    // If we overshot, interpolate to find the exact time the target was crossed.
+                    // We check if it's faster to drop the overshoot from the start or the end of the window.
+                    if (distAcc > targetM) {
+                        overshootM = distAcc - targetM;
+                        
+                        const firstSegment = segments[i];
+                        const effDistFirst = isTrack ? snapToTrack(firstSegment.distance) : firstSegment.distance;
+                        const paceFirst = firstSegment.movingTime / Math.max(effDistFirst, 1);
+                        
+                        const lastSegment = segments[j - 1];
+                        const effDistLast = isTrack ? snapToTrack(lastSegment.distance) : lastSegment.distance;
+                        const paceLast = lastSegment.movingTime / Math.max(effDistLast, 1);
+                        
+                        // Option 1: Cut from the end
+                        const timeCutEnd = timeAcc - (overshootM * paceLast);
+                        
+                        // Option 2: Cut from the start (only valid if we can drop the overshoot entirely from the first segment)
+                        let timeCutStart = Infinity;
+                        if (overshootM <= effDistFirst) {
+                            timeCutStart = timeAcc - (overshootM * paceFirst);
+                        }
+                        
+                        if (timeCutStart < timeCutEnd) {
+                            correctedTime = timeCutStart;
+                            cutFromStart = true;
+                        } else {
+                            correctedTime = timeCutEnd;
+                        }
+                    }
 
                     if (correctedTime < bestTime) {
                         bestTime = correctedTime;
                         bestHr = hrTimeAcc > 0 ? Math.round(hrSum / hrTimeAcc) : 0;
-                        startKm = (segments[i] as any).split || (i + 1);
+                        bestStartKm = cumulativeDistances[i] / 1000;
+                        bestEndKm = (cumulativeDistances[i] + distAcc) / 1000;
+                        bestIsSnapped = isSnapped;
+                        bestSegmentIndexes = Array.from({ length: j - i }, (_, k) => i + k);
+                        
+                        const details = [];
+                        for (let k = i; k < j; k++) {
+                            const seg = segments[k];
+                            const effDist = isTrack ? snapToTrack(seg.distance) : seg.distance;
+                            let usedDistance = effDist;
+                            let usedTime = seg.movingTime;
+                            let isPartial = false;
+                            let isStartOffset = false;
+                            
+                            if (distAcc > targetM) {
+                                if (cutFromStart && k === i) {
+                                    usedDistance = effDist - overshootM;
+                                    usedTime = usedDistance * (seg.movingTime / Math.max(effDist, 1));
+                                    isPartial = true;
+                                    isStartOffset = true;
+                                } else if (!cutFromStart && k === j - 1) {
+                                    usedDistance = effDist - overshootM;
+                                    usedTime = usedDistance * (seg.movingTime / Math.max(effDist, 1));
+                                    isPartial = true;
+                                }
+                            }
+                            
+                            details.push({
+                                index: k,
+                                originalDistance: effDist,
+                                usedDistance,
+                                usedTime,
+                                isPartial,
+                                isStartOffset
+                            });
+                        }
+                        bestDetailedSegments = details;
+                        
                         bestSegmentName = (segments[i] as any).name || '';
                         bestSegmentDist = segments[i].distance;
                     }
@@ -433,8 +581,22 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
                 
                 const current = existingKey ? results[existingKey] : undefined;
                 
-                // If we found a faster time (or none identified), update
-                if (!current || bestTime < current.movingTime) {
+                // Prioritize manual laps in Track Mode. We trust the manual track lap markers 
+                // over raw GPS splits or Strava's backend, even if they are mathematically "slower".
+                let shouldOverwrite = false;
+                if (isTrack) {
+                    if (segmentType === 'laps') {
+                        // Laps always win in track mode
+                        shouldOverwrite = true;
+                    } else if (segmentType === 'splits') {
+                        // Splits only win if there are no laps already set
+                        shouldOverwrite = (!current || current.source !== 'laps') && (bestTime < (current?.movingTime || Infinity));
+                    }
+                } else {
+                    shouldOverwrite = !current || bestTime < current.movingTime;
+                }
+                
+                if (shouldOverwrite) {
                     // If we are overwriting a Strava record, keep the Strava name if it's special
                     const key = existingKey || target.name;
                     results[key] = {
@@ -442,12 +604,16 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
                         distance: targetM,
                         movingTime: bestTime,
                         elapsedTime: bestTime,
-                        startDate: perf.startTimeLocal || activity.date,
-                        startKm: startKm,
-                        avgHeartRate: bestHr > 0 ? bestHr : undefined,
-                        source: segmentType,
+                        startDate: activity.date,
+                        avgHeartRate: bestHr,
+                        source: segmentType === 'splits' ? 'splits' : 'laps',
                         segmentName: bestSegmentName,
-                        segmentDistance: bestSegmentDist
+                        segmentDistance: bestSegmentDist,
+                        startKm: bestStartKm,
+                        endKm: bestEndKm,
+                        isSnapped: bestIsSnapped,
+                        segmentIndexes: bestSegmentIndexes,
+                        detailedSegments: bestDetailedSegments
                     } as any;
                 }
             }

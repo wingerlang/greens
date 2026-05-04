@@ -73,6 +73,7 @@ export const ActivitySchema = z.object({
         kilojoules: z.number().optional(),
         averageWatts: z.number().optional(),
         maxWatts: z.number().optional(),
+        isTrack: z.boolean().optional(),
     }).optional(),
     plan: z.object({
         title: z.string().min(1).max(200),

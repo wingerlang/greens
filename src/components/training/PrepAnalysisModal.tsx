@@ -196,6 +196,60 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
             return b.date.localeCompare(a.date);
         }).filter(s => s.id !== event.id);
     }, [allActivities, event.id, event.title]);
+    
+    // 3. Hall of Fame - Top 10 for this distance
+    const leaderboard = useMemo(() => {
+        const targetM = event.distance * 1000;
+        if (targetM <= 0) return [];
+
+        const candidates = allActivities
+            .filter(act => {
+                const lowType = (act.type || '').toLowerCase();
+                const isInterval = (act.subType === 'interval' || (act.title || '').toLowerCase().includes('intervall'));
+                return (lowType.includes('run') || lowType.includes('löpning')) && !isInterval;
+            })
+            .map(act => {
+                const dist = act.distance || 0;
+                const time = (act.durationMinutes || 0) * 60;
+                
+                // Allow a small tolerance for "roughly" matching the target distance
+                // e.g. for a 5k, we accept 4.95 - 5.10km if it's a legacy entry
+                const tolerance = Math.max(0.05, targetM * 0.01 / 1000); 
+                if (Math.abs(dist - event.distance) <= tolerance && time > 0) {
+                    return {
+                        id: act.id,
+                        date: act.date,
+                        title: act.title || act.type,
+                        distance: dist,
+                        movingTime: time,
+                        isRace: isCompetition(act),
+                        isCurrent: act.id === event.id
+                    };
+                }
+                return null;
+            })
+            .filter((e): e is any => e !== null)
+            .sort((a, b) => a.movingTime - b.movingTime);
+
+        // Deduplicate by date (keep only one entry per day if multiple runs)
+        const unique = new Map<string, any>();
+        candidates.forEach(c => {
+            const day = c.date.substring(0, 10);
+            if (!unique.has(day) || unique.get(day).movingTime > c.movingTime) {
+                unique.set(day, c);
+            }
+        });
+
+        return Array.from(unique.values()).sort((a, b) => a.movingTime - b.movingTime).slice(0, 10);
+    }, [allActivities, event.distance, event.id]);
+
+    const allTimePB = leaderboard[0];
+    const previousPB = useMemo(() => {
+        if (!allTimePB) return null;
+        // If current is PB, find the next best
+        if (allTimePB.isCurrent) return leaderboard[1] || null;
+        return allTimePB;
+    }, [leaderboard, allTimePB]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -409,6 +463,103 @@ export function PrepAnalysisModal({ event, allActivities, onClose }: PrepAnalysi
                             )}
                         </div>
                     </div>
+
+                    {/* Performance Leaderboard Section */}
+                    {leaderboard.length > 0 && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                            <div className="lg:col-span-2 bg-slate-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
+                                <div className="flex justify-between items-center px-1">
+                                    <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Trophy size={14} className="text-amber-500" /> Topp 10 - {event.distance >= 1 ? event.distance.toFixed(1) + 'km' : (event.distance * 1000) + 'm'}
+                                    </h3>
+                                    {previousPB && (
+                                        <div className="text-[9px] font-black text-slate-500 uppercase">
+                                            Tidigare PB: <span className="text-indigo-300 font-mono ml-1">{formatTime(previousPB.movingTime)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {leaderboard.map((entry, idx) => (
+                                        <div 
+                                            key={entry.id} 
+                                            onClick={() => setSelectedDetailId(entry.id)}
+                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer group ${entry.isCurrent ? 'bg-indigo-500/20 border-indigo-500/40 shadow-lg shadow-indigo-500/10' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <span className={`text-[10px] font-black w-4 text-center ${idx === 0 ? 'text-amber-500' : 'text-slate-600'}`}>
+                                                    {idx + 1}
+                                                </span>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className={`text-[11px] font-bold truncate ${entry.isCurrent ? 'text-indigo-300' : 'text-slate-200'}`}>
+                                                        {entry.title}
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-500 font-mono">
+                                                        {entry.date.substring(0, 10)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end shrink-0">
+                                                <div className="text-xs font-black text-white font-mono leading-none">
+                                                    {formatTime(entry.movingTime)}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    {entry.isRace && (
+                                                        <span className="text-[8px] font-black bg-amber-500 text-slate-950 px-1 py-0.25 rounded uppercase tracking-tighter">Race</span>
+                                                    )}
+                                                    <span className="text-[9px] text-slate-500 font-mono">
+                                                        {formatPace(entry.movingTime / entry.distance)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-5 flex flex-col justify-center items-center text-center gap-4 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <Trophy size={120} className="text-white" />
+                                </div>
+                                <div className="z-10">
+                                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Ditt Personbästa</h4>
+                                    <div className="text-4xl font-black text-white italic tracking-tighter font-mono">
+                                        {allTimePB ? formatTime(allTimePB.movingTime) : '-'}
+                                    </div>
+                                    <div className="text-[11px] font-bold text-slate-400 mt-1 uppercase">
+                                        {allTimePB ? (allTimePB.isRace ? 'Satt på tävling 🏆' : 'Satt på träning ⚡') : 'Ingen tid loggad'}
+                                    </div>
+                                </div>
+                                {allTimePB && (
+                                    <div className="z-10 w-full pt-4 border-t border-white/10 space-y-2">
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className="text-slate-500 font-bold uppercase">Datum</span>
+                                            <span className="text-slate-300 font-mono">{allTimePB.date.substring(0, 10)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className="text-slate-500 font-bold uppercase">Tempo</span>
+                                            <span className="text-slate-300 font-mono">{formatPace(allTimePB.movingTime / allTimePB.distance)}</span>
+                                        </div>
+                                        {previousPB && allTimePB.isCurrent && (
+                                            <div className="mt-4 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20 animate-bounce-subtle">
+                                                <div className="text-[10px] font-black text-emerald-400 uppercase">Nytt Personbästa! 🚀</div>
+                                                <div className="text-[9px] text-emerald-500/60 leading-tight mt-0.5">
+                                                    Du är {formatTime(previousPB.movingTime - allTimePB.movingTime)} snabbare än ditt förra PB.
+                                                </div>
+                                            </div>
+                                        )}
+                                        {previousPB && !allTimePB.isCurrent && (
+                                            <div className="mt-4 p-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+                                                <div className="text-[10px] font-black text-indigo-400 uppercase">Målbild 🎯</div>
+                                                <div className="text-[9px] text-indigo-500/60 leading-tight mt-0.5">
+                                                    Du är {formatTime(allTimePB.movingTime - event.durationSeconds!)} ifrån ditt all-time PB.
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {isComparing && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

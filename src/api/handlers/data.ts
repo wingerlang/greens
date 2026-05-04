@@ -86,12 +86,6 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
 
     // --- Granular Routes ---
 
-    // Meals
-    if (url.pathname === "/api/meals" && method === "POST") {
-        const meal = await req.json();
-        await mealRepo.saveMeal(userId, meal);
-        return new Response(JSON.stringify({ success: true }), { headers });
-    }
 
     if (url.pathname.startsWith("/api/meals/") && method === "PUT") {
         const id = url.pathname.split("/").pop()!;

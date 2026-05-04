@@ -1,10 +1,10 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart, Footprints, Bike, Route } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 import { useData } from '../../context/DataContext.tsx';
-import { isWarmupOrCooldown } from '../../utils/activityUtils.ts';
+import { isWarmupOrCooldown, isCompetition, isQualitySession } from '../../utils/activityUtils.ts';
 
 interface TrainingCalendarProps {
     monthIndex: number; // 0-11
@@ -48,14 +48,43 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     const [pinnedTooltip, setPinnedTooltip] = useState<string | null>(null);
     const [distMode, setDistMode] = useState<'time' | 'count'>('time');
 
+    // Filter State
+    const [activeFilter, setActiveFilter] = useState<string | null>(null);
+
+    const { userSettings } = useData();
+    const longRunThreshold = userSettings?.longRunThreshold || 20;
+
+    const FILTER_OPTIONS = useMemo(() => [
+        { id: 'distance', label: 'Löpning', filter: (e: any) => (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp') },
+        { id: 'quality', label: 'Kvalitet', filter: (e: any) => isQualitySession(e) },
+        { id: 'longrun', label: 'Långpass', filter: (e: any) => {
+            const isRun = (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp');
+            if (isRun) {
+                if (e.distance) return e.distance >= longRunThreshold;
+                return e.durationMinutes >= 120;
+            }
+            return e.durationMinutes >= 150;
+        } },
+        { id: 'race', label: 'Tävling', filter: (e: any) => e.subType === 'race' || isCompetition(e) },
+        { id: 'cycling', label: 'Cykling', filter: (e: any) => (e.type || '').toLowerCase().includes('cycl') || (e.type || '').toLowerCase().includes('cykel') },
+        { id: 'strength', label: 'Styrka', filter: (e: any) => (e.type || '').toLowerCase().includes('strength') || (e.type || '').toLowerCase().includes('styrka') }
+    ], [longRunThreshold]);
+
     const monthName = MONTHS[monthIndex];
 
     const exercises = useMemo(() => {
-        return allExercises.filter(e => {
+        let base = allExercises.filter(e => {
             const perf = (e as any)._mergeData?.universalActivity?.performance;
             return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar);
         });
-    }, [allExercises]);
+
+        if (activeFilter) {
+            const opt = FILTER_OPTIONS.find(o => o.id === activeFilter);
+            if (opt) base = base.filter(opt.filter);
+        }
+
+        return base;
+    }, [allExercises, activeFilter, FILTER_OPTIONS]);
 
     // Handle clicks outside dropdowns
     useEffect(() => {
@@ -225,13 +254,129 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
         const timePerWeek = weeksForFreq > 0 ? (duration / weeksForFreq) : 0;
         const tonnagePerWeek = weeksForFreq > 0 ? (tonnage / weeksForFreq) : 0;
 
+        let sickDays = 0;
+        let sickFeelingDays = 0;
+        let longestStreak = 0;
+        let longestStreakPasses = 0;
+        let currentStreak = 0;
+        let currentStreakPasses = 0;
+
+        for (let day = 1; day <= calendarDays.daysInMonth; day++) {
+            const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const vitals = getVitalsForDate(dateStr);
+            if (vitals?.illnessStatus) {
+                if (vitals.illnessStatus === 'severe' || vitals.illnessStatus === 'moderate') {
+                    sickDays++;
+                } else if (vitals.illnessStatus === 'mild') {
+                    sickFeelingDays++;
+                }
+            }
+            
+            const isFutureDay = isCurrentMonth && day > today.getDate();
+            if (!isFutureDay) {
+                const dayEx = monthData.filter(e => e.date === dateStr && !isWarmupOrCooldown(e));
+                if (dayEx.length > 0) {
+                    currentStreak++;
+                    currentStreakPasses += dayEx.length;
+                    if (currentStreak > longestStreak) {
+                        longestStreak = currentStreak;
+                        longestStreakPasses = currentStreakPasses;
+                    } else if (currentStreak === longestStreak && currentStreakPasses > longestStreakPasses) {
+                        longestStreakPasses = currentStreakPasses;
+                    }
+                } else {
+                    currentStreak = 0;
+                    currentStreakPasses = 0;
+                }
+            }
+        }
+
+        const dailyCounts = {} as Record<string, number>;
+        const dailyVolumes = {} as Record<string, { duration: number, dist: number, hrSum: number, count: number }>;
+        let longestSession = { duration: 0, title: '', type: '', distance: 0, hr: 0, date: '' };
+        let qualityCount = 0;
+        let longRunCount = 0;
+        let raceCount = 0;
+
+        sessions.forEach(e => {
+            dailyCounts[e.date] = (dailyCounts[e.date] || 0) + 1;
+            
+            if (!dailyVolumes[e.date]) dailyVolumes[e.date] = { duration: 0, dist: 0, hrSum: 0, count: 0 };
+            dailyVolumes[e.date].duration += e.durationMinutes;
+            dailyVolumes[e.date].dist += (e.distance || 0);
+            if (e.heartRateAvg) {
+                dailyVolumes[e.date].hrSum += e.heartRateAvg;
+                dailyVolumes[e.date].count++;
+            }
+
+            if (e.subType === 'race' || isCompetition(e)) {
+                raceCount++;
+            }
+
+            if (e.durationMinutes > longestSession.duration) {
+                longestSession = { 
+                    duration: e.durationMinutes, 
+                    title: e.title || '', 
+                    type: e.type || '', 
+                    distance: e.distance || 0, 
+                    hr: e.heartRateAvg || 0,
+                    date: e.date
+                };
+            }
+
+            const isRun = (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp');
+            if (isQualitySession(e)) {
+                qualityCount++;
+            }
+            if (isRun) {
+                const dist = Number(e.distance) || 0;
+                if (dist >= longRunThreshold) {
+                    longRunCount++;
+                } else if (dist === 0 && e.durationMinutes >= 120) {
+                    longRunCount++;
+                }
+            } else if (e.durationMinutes >= 150) {
+                longRunCount++;
+            }
+        });
+
+        let maxDailyVol = 0;
+        let maxDailyDate = '';
+        Object.entries(dailyVolumes).forEach(([d, vol]) => {
+            if (vol.duration > maxDailyVol) {
+                maxDailyVol = vol.duration;
+                maxDailyDate = d;
+            }
+        });
+
+        const doubleDays = Object.values(dailyCounts).filter(c => c === 2).length;
+        const tripleDays = Object.values(dailyCounts).filter(c => c >= 3).length;
+        
+        const bDay = maxDailyDate ? dailyVolumes[maxDailyDate] : null;
+        const biggestDay = { 
+            duration: maxDailyVol, 
+            date: maxDailyDate, 
+            distance: bDay?.dist || 0, 
+            hr: bDay && bDay.count > 0 ? bDay.hrSum / bDay.count : 0 
+        };
+
+        const runningExercises = sessions.filter(e => e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp'));
+        const totalRunDist = runningExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
+        const totalRunTime = runningExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+        const avgRunPace = totalRunDist > 0 ? totalRunTime / totalRunDist : 0;
+
+        const distExercises = sessions.filter(e => e.distance && e.distance > 0);
+        const avgDist = distExercises.length > 0 ? distExercises.reduce((sum, e) => sum + (e.distance || 0), 0) / distExercises.length : 0;
+
         return { 
             distance, duration, count, warmupCount, warmups, 
             tonnage, timeDist, countDist, perWeek, freqPercent, 
             timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays,
-            timePerWeek, tonnagePerWeek
+            timePerWeek, tonnagePerWeek, sickDays, sickFeelingDays, longestStreak, 
+            longestStreakPasses, doubleDays, tripleDays, longestSession, biggestDay,
+            qualityCount, longRunCount, raceCount, avgRunPace, avgDist
         };
-    }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
+    }, [monthData, monthIndex, year, calendarDays.daysInMonth, getVitalsForDate]);
 
     if (monthIndex < 0) return null;
 
@@ -317,7 +462,25 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                         </div>
                     </div>
 
-
+                    {/* Filter Bar */}
+                    <div className="flex items-center gap-1.5 mt-3 overflow-x-auto custom-scrollbar pb-1">
+                        {FILTER_OPTIONS.map(opt => {
+                            const isActive = activeFilter === opt.id || activeFilter === null;
+                            return (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => setActiveFilter(activeFilter === opt.id ? null : opt.id)}
+                                    className={`px-3 py-1 text-[10px] sm:text-xs font-bold rounded-full transition-all whitespace-nowrap border shrink-0 ${
+                                        isActive
+                                            ? 'bg-slate-700/50 text-white border-slate-500/50 shadow-sm'
+                                            : 'bg-slate-900/50 text-slate-500 border-white/5 hover:bg-slate-800 hover:text-slate-300'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
@@ -369,7 +532,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                     {week.map((date, dayIdx) => {
                                         const isToday = todayStr === date.dateStr;
                                         const hasExercise = date.exercises.length > 0;
-                                        const isRace = date.exercises.some(e => e.subType === 'race');
+                                        const isRace = date.exercises.some(e => isCompetition(e));
                                         const vitals = getVitalsForDate(date.dateStr);
                                         const isSick = vitals.illnessStatus && vitals.illnessStatus !== 'none';
                                         
@@ -392,7 +555,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                             ${!date.isCurrentMonth ? 'opacity-60 grayscale-[0.3] hover:opacity-90 hover:grayscale-0' : ''}
                                             ${isSick ? sickBg : 
                                                 isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50 hover:border-sky-400' :
-                                                        isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/20 hover:border-amber-400' :
+                                                        isRace ? 'bg-amber-500/5 border-amber-500/30 shadow-amber-500/5 hover:bg-amber-500/10 hover:border-amber-400/50' :
                                                             hasExercise ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700/80 shadow-sm' :
                                                                 'bg-slate-900/50 border-white/[0.03] hover:bg-white/[0.05] hover:border-white/10'}
                                         `}>
@@ -438,8 +601,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 <div className="flex flex-col gap-2 mb-2 pb-2 border-b border-white/5 text-xs">
                                                                     {date.exercises.map((e, idx) => (
                                                                         <div key={idx} className="flex justify-between items-start gap-2">
-                                                                            <span className={`capitalize truncate ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-slate-200'}`} title={e.title || e.type}>
-                                                                                {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                            <span className={`capitalize truncate ${isCompetition(e) ? 'text-amber-400 font-bold' : 'text-slate-200'}`} title={e.title || e.type}>
+                                                                                {isCompetition(e) ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
                                                                             </span>
                                                                             <span className="text-white font-mono font-bold shrink-0 text-[10px] mt-0.5">
                                                                                 {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
@@ -497,7 +660,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                         }
 
                                                         if (ex.subType === 'race') {
-                                                            colorClass = 'border-amber-400 text-amber-100 bg-amber-500/20 hover:bg-amber-500/30';
+                                                            colorClass = 'border-amber-400/40 text-amber-100 bg-amber-500/20 hover:bg-amber-500/30';
                                                         }
 
                                                         const displayName = ex.title || typeName;
@@ -578,7 +741,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                     {ex.title || typeName}
                                                                                 </span>
                                                                                 <span className="text-[10px] text-slate-400 font-bold truncate">
-                                                                                    {ex.subType === 'race' ? 'Tävling' : typeName}
+                                                        {ex.subType === 'race' ? 'Tävling' : typeName}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -586,7 +749,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-left px-1">
                                                                             <div className="flex flex-col">
                                                                                  <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Tid</span>
-                                                                                 <span className="font-mono text-slate-200 font-bold">{Math.round(ex.durationMinutes)} min</span>
+                                                                                 <span className="font-mono text-slate-200 font-bold">
+                                                                                    {Math.round(ex.durationMinutes)} min
+                                                                                    {ex.elapsedTimeSeconds && Math.abs(ex.elapsedTimeSeconds - (ex.durationMinutes * 60)) > 0.1 && (
+                                                                                        <span className="text-[9px] text-slate-500 ml-1"> (Tot: {Math.round(ex.elapsedTimeSeconds / 60)}m)</span>
+                                                                                    )}
+                                                                                 </span>
                                                                              </div>
                                                                              {ex.startTime && (
                                                                                  <div className="flex flex-col">
@@ -612,6 +780,18 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                             const finalMins = secs === 60 ? mins + 1 : mins;
                                                                                             return `${finalMins}:${finalSecs.toString().padStart(2, '0')}`;
                                                                                         })()}
+                                                                                        {ex.elapsedTimeSeconds && Math.abs(ex.elapsedTimeSeconds - (ex.durationMinutes * 60)) > 0.1 && (
+                                                                                            <span className="text-[8px] text-slate-500 ml-1">
+                                                                                               (T: {(() => {
+                                                                                                   const paceDecimal = (ex.elapsedTimeSeconds / 60) / ex.distance!;
+                                                                                                   const mins = Math.floor(paceDecimal);
+                                                                                                   const secs = Math.round((paceDecimal - mins) * 60);
+                                                                                                   const finalSecs = secs === 60 ? 0 : secs;
+                                                                                                   const finalMins = secs === 60 ? mins + 1 : mins;
+                                                                                                   return `${finalMins}:${finalSecs.toString().padStart(2, '0')}`;
+                                                                                               })()})
+                                                                                            </span>
+                                                                                        )}
                                                                                         <span className="text-[8px] ml-0.5 opacity-70">min/km</span>
                                                                                     </span>
                                                                                 </div>
@@ -644,7 +824,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                                     <span className="font-mono text-sky-400 font-bold">{ex.averageWatts} W</span>
                                                                                 </div>
                                                                             )}
-                                                                            {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
+                                                                            {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && !ex.excludeHeartRate && (
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[9px] text-amber-500/80 uppercase font-black tracking-widest">Puls</span>
                                                                                     <span className="font-mono text-amber-400 font-bold">{Math.round(ex.heartRateAvg)} bpm</span>
@@ -724,6 +904,28 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                     return Math.floor(mins / 60) > 0 ? `${Math.floor(mins / 60)}h${Math.round(mins % 60)}m` : `${Math.round(mins)}m`;
                                                                 })()}
                                                             </span>
+                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
+                                                            <div className="flex flex-col items-start opacity-90">
+                                                                <span className="text-[9px] text-sky-400 font-black">
+                                                                    {(() => {
+                                                                        const mins = runExercises.reduce((acc, e) => acc + e.durationMinutes, 0);
+                                                                        const paceDecimal = mins / weekRunDist;
+                                                                        const m = Math.floor(paceDecimal);
+                                                                        const s = Math.round((paceDecimal - m) * 60);
+                                                                        const finalS = s === 60 ? 0 : s;
+                                                                        const finalM = s === 60 ? m + 1 : m;
+                                                                        return `${finalM}:${finalS.toString().padStart(2, '0')}`;
+                                                                    })()}
+                                                                </span>
+                                                                {(() => {
+                                                                    const hrExs = runExercises.filter(e => e.heartRateAvg && e.heartRateAvg > 0 && !e.excludeHeartRate);
+                                                                    if (hrExs.length > 0) {
+                                                                        const avgHr = Math.round(hrExs.reduce((sum, e) => sum + e.heartRateAvg!, 0) / hrExs.length);
+                                                                        return <span className="text-[8.5px] text-red-400 font-bold">{avgHr}<span className="text-[7px] opacity-70 ml-0.5">bpm</span></span>;
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
                                                         </div>
 
                                                         {/* Rich Tooltip */}
@@ -1029,79 +1231,195 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                     {/* Kolumn 1: Pass & Frekvens */}
-                    <div className="bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-white/5 shadow-inner flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-4">
+                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative overflow-hidden">
+                        <div className="absolute -right-8 -top-8 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl group-hover:bg-sky-500/10 transition-colors duration-500 pointer-events-none"></div>
+                        <div className="relative z-10 flex justify-between items-start mb-2">
                             <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-tight">Pass & Frekvens</p>
-                            <span className="text-[10px] font-bold text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">{stats.freqPercent}% aktiva dagar</span>
+                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full ring-1 ring-emerald-500/20">{stats.freqPercent}% aktiva | {stats.inactiveDays || 0} vilodgr</span>
                         </div>
-                        <div className="flex items-end justify-between mb-4">
-                            <div className="flex items-baseline gap-1">
-                                <p className="text-4xl font-black text-white leading-none">{stats.count}</p>
-                                <span className="text-lg font-bold text-slate-500 mr-2">pass</span>
-                                {stats.warmupCount > 0 && (
-                                    <div className="group/wu relative">
-                                        <span className="text-sm font-black text-rose-400 bg-rose-400/10 px-1.5 py-0.5 rounded cursor-help">+{stats.warmupCount}</span>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/wu:opacity-100 transition-opacity pointer-events-none z-50">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Identifierat som upp/nerjogg</p>
-                                            <div className="space-y-1">
-                                                {stats.warmups.map((w : any, i : number) => (
-                                                    <div key={i} className="flex justify-between items-center text-[10px]">
-                                                        <span className="text-slate-300 truncate max-w-[100px]">{w.title || w.type}</span>
-                                                        <span className="text-slate-500 font-mono">{w.distance?.toFixed(1)}km</span>
+                        <div className="relative z-10 flex items-center justify-between gap-4 mb-3">
+                            <div className="flex-1 flex flex-col border-r border-white/5 pr-4">
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Pass</p>
+                                <div className="flex items-end gap-1.5">
+                                    <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">{stats.count}</p>
+                                    <div className="flex flex-col items-start pb-0.5">
+                                        {stats.warmupCount > 0 && (
+                                            <div className="group/wu relative mb-0.5">
+                                                <span className="text-[10px] leading-none font-black text-rose-400 bg-rose-400/10 px-1 py-0.5 rounded cursor-help transition-colors hover:bg-rose-400/20">+{stats.warmupCount}</span>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900/95 backdrop-blur-md border border-rose-500/20 rounded-xl p-3 shadow-2xl opacity-0 group-hover/wu:opacity-100 transition-all duration-300 pointer-events-none z-50 transform group-hover/wu:-translate-y-1">
+                                                    <p className="text-[10px] font-black text-rose-400 uppercase mb-2 flex items-center gap-1.5"><Flame className="w-3 h-3" /> Upp/nerjogg</p>
+                                                    <div className="space-y-1.5">
+                                                        {stats.warmups.map((w : any, i : number) => (
+                                                            <div key={i} className="flex justify-between items-center text-[10px]">
+                                                                <span className="text-slate-300 truncate max-w-[100px] font-medium">{w.title || w.type}</span>
+                                                                <span className="text-slate-500 font-mono bg-slate-950 px-1 rounded">{w.distance?.toFixed(1)}k</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
+                                                    <p className="mt-2 pt-2 border-t border-white/5 text-[9px] text-slate-400 italic">Undantagna från pass-räkningen.</p>
+                                                </div>
                                             </div>
-                                            <p className="mt-2 pt-1 border-t border-white/5 text-[9px] text-slate-600 italic">Undantagits från antal pass men räknas i totala stats.</p>
+                                        )}
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter leading-none">totalt</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex-1 flex flex-col">
+                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Tid</p>
+                                <div className="flex items-end gap-0.5">
+                                    <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">
+                                        {Math.floor(stats.duration / 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 mx-0.5">h</span>
+                                        {Math.round(stats.duration % 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 ml-0.5">m</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="relative z-10 grid grid-cols-4 gap-1.5 mt-2 pt-2 border-t border-white/5">
+                            <div className="bg-sky-900/10 rounded-lg py-0.5 px-1.5 text-center border border-sky-500/10">
+                                <p className="text-[8px] text-sky-500/70 uppercase font-black tracking-widest mb-0.5">Tävling</p>
+                                <p className="text-xs font-black text-sky-400">{stats.raceCount}</p>
+                            </div>
+                            <div className="group/qual relative bg-amber-900/10 rounded-lg py-0.5 px-1.5 text-center border border-amber-500/10 cursor-help transition-colors hover:bg-amber-900/20">
+                                <p className="text-[8px] text-amber-500/70 uppercase font-black tracking-widest mb-0.5">Kvalitet</p>
+                                <p className="text-xs font-black text-amber-400">{stats.qualityCount}</p>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900/95 backdrop-blur-md border border-amber-500/20 rounded-xl p-3 shadow-2xl opacity-0 group-hover/qual:opacity-100 transition-all duration-300 pointer-events-none z-50 transform group-hover/qual:-translate-y-1">
+                                    <p className="text-[10px] font-black text-amber-400 uppercase mb-2 flex items-center gap-1.5"><Activity className="w-3 h-3" /> Kvalitetspass</p>
+                                    <p className="text-[10px] text-slate-300 leading-relaxed">
+                                        Pass markerade som <span className="text-white font-bold">Intervall</span>, <span className="text-white font-bold">Tempo</span>, <span className="text-white font-bold">Tävling</span> eller med dessa ord i titeln.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="group/lp relative bg-orange-900/10 rounded-lg py-0.5 px-1.5 text-center border border-orange-500/10 cursor-help transition-colors hover:bg-orange-900/20">
+                                <p className="text-[8px] text-orange-500/70 uppercase font-black tracking-widest mb-0.5">Långpass</p>
+                                <p className="text-xs font-black text-orange-400">{stats.longRunCount}</p>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900/95 backdrop-blur-md border border-orange-500/20 rounded-xl p-3 shadow-2xl opacity-0 group-hover/lp:opacity-100 transition-all duration-300 pointer-events-none z-50 transform group-hover/lp:-translate-y-1 text-left">
+                                    <p className="text-[10px] font-black text-orange-400 uppercase mb-2 flex items-center gap-1.5"><Route className="w-3 h-3" /> Krav för långpass</p>
+                                    <div className="space-y-1.5 text-[10px] text-slate-300">
+                                        <div className="flex justify-between border-b border-white/5 pb-1">
+                                            <span>Löpning (dist):</span>
+                                            <span className="font-bold text-white">≥ {longRunThreshold} km</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-white/5 pb-1">
+                                            <span>Löpning (tid):</span>
+                                            <span className="font-bold text-white">≥ 120 min</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Annan sport:</span>
+                                            <span className="font-bold text-white">≥ 150 min</span>
                                         </div>
                                     </div>
-                                )}
+                                    <p className="mt-2 pt-2 border-t border-white/5 text-[9px] text-slate-400 italic">Pass på 15km räknas nu som "Längre distans" och exkluderas.</p>
+                                </div>
                             </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-white/5">
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / Vecka</p>
-                                <p className="text-base font-black text-slate-300">{stats.perWeek} <span className="text-[10px] font-bold text-slate-500">pass</span></p>
+                            <div className="bg-rose-900/10 rounded-lg py-0.5 px-1.5 text-center border border-rose-500/10">
+                                <p className="text-[8px] text-rose-500/70 uppercase font-black tracking-widest mb-0.5">Sjukdgr</p>
+                                <p className="text-xs font-black text-rose-400">
+                                    {stats.sickDays}
+                                    {stats.sickFeelingDays > 0 && <span className="text-[9px] font-bold text-amber-500/80 ml-0.5">+{stats.sickFeelingDays}</span>}
+                                </p>
                             </div>
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Per aktiv dag</p>
-                                <p className="text-base font-black text-slate-300">{stats.sessionsPerActiveDay} <span className="text-[10px] font-bold text-slate-500">pass</span></p>
+
+                            <div className="bg-slate-900/30 rounded-lg py-0.5 px-1.5 text-center border border-white/[0.02]">
+                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Pass/V</p>
+                                <p className="text-xs font-black text-white">{stats.perWeek}</p>
                             </div>
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Inaktiva dagar</p>
-                                <p className="text-base font-black text-slate-300">{stats.inactiveDays || 0} <span className="text-[10px] font-bold text-slate-500">dagar</span></p>
+                            <div className="bg-slate-900/30 rounded-lg py-0.5 px-1.5 text-center border border-white/[0.02]">
+                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/V</p>
+                                <p className="text-xs font-black text-white">
+                                    {Math.floor(stats.timePerWeek / 60)}<span className="text-[9px] font-bold text-slate-500 mx-0.5">h</span>{Math.round(stats.timePerWeek % 60)}<span className="text-[9px] font-bold text-slate-500 ml-0.5">m</span>
+                                </p>
+                            </div>
+                            <div className="bg-slate-900/30 rounded-lg py-0.5 px-1.5 text-center border border-white/[0.02]">
+                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/D</p>
+                                <p className="text-xs font-black text-white">{stats.timePerDay}<span className="text-[9px] font-bold text-slate-500 ml-0.5">m</span></p>
+                            </div>
+                            <div className="bg-slate-900/30 rounded-lg py-0.5 px-1.5 text-center border border-white/[0.02]">
+                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/P</p>
+                                <p className="text-xs font-black text-white">{stats.count > 0 ? Math.round(stats.duration / stats.count) : 0}<span className="text-[9px] font-bold text-slate-500 ml-0.5">m</span></p>
                             </div>
                         </div>
                     </div>
 
                     {/* Kolumn 2: Tid & Duration */}
-                    <div className="bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-white/5 shadow-inner flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-4">
-                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-tight">Tid & Duration</p>
+                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative overflow-hidden">
+                        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
+                        <div className="relative z-10 flex justify-between items-start mb-2">
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-tight">Analys & Höjdpunkter</p>
+                            <div className="flex items-center gap-1.5 bg-slate-950/50 px-2 py-0.5 rounded-full border border-white/5">
+                                {Object.entries(stats.countDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
+                                    <span className="text-[9px] font-black text-emerald-400 flex items-center gap-1"><Footprints className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0)}</span>}
+                                {Object.entries(stats.countDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
+                                    <span className="text-[9px] font-black text-sky-400 flex items-center gap-1"><Bike className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0)}</span>}
+                                {Object.entries(stats.countDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
+                                    <span className="text-[9px] font-black text-indigo-400 flex items-center gap-1"><Dumbbell className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0)}</span>}
+                            </div>
                         </div>
-                        <div className="flex items-end justify-between mb-4">
-                            <p className="text-4xl font-black text-white leading-none">
-                                {Math.floor(stats.duration / 60)}<span className="text-xl font-bold text-slate-500 mx-1">h</span>
-                                {Math.round(stats.duration % 60)}<span className="text-xl font-bold text-slate-500 ml-1">m</span>
-                            </p>
+                        <div className="relative z-10 flex flex-col gap-1.5 mt-1 mb-auto">
+                                <div className="flex items-center justify-between bg-slate-950/40 hover:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/[0.03] transition-colors group/item">
+                                    <span className="text-[9px] uppercase font-bold text-slate-400 flex items-center gap-1.5 group-hover/item:text-slate-300 transition-colors">
+                                        <Flame className="w-3 h-3 text-orange-500" /> Längsta svit
+                                    </span>
+                                    <span className="text-xs font-black text-white">{stats.longestStreak} <span className="text-[9px] text-slate-500 font-bold">dgr</span> {stats.longestStreakPasses > 0 && <span className="text-[9px] font-black text-orange-400 bg-orange-500/10 px-1.5 rounded ml-1">({stats.longestStreakPasses}p)</span>}</span>
+                                </div>
+                                <div className="flex items-center justify-between bg-slate-950/40 hover:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/[0.03] transition-colors group/item">
+                                    <span className="text-[9px] uppercase font-bold text-slate-400 flex items-center gap-1.5 group-hover/item:text-slate-300 transition-colors">
+                                        <Activity className="w-3 h-3 text-sky-400" /> Dubbel / Trippel
+                                    </span>
+                                    <span className="text-xs font-black text-white">
+                                        {stats.doubleDays}
+                                        {stats.tripleDays > 0 && <span className="text-sky-400/80 mx-1">/ {stats.tripleDays}</span>}
+                                        <span className="text-[9px] text-slate-500 font-bold ml-1">dgr</span>
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between bg-slate-950/40 hover:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/[0.03] transition-colors group/item">
+                                    <span className="text-[9px] uppercase font-bold text-slate-400 group-hover/item:text-slate-300 transition-colors">Längsta pass</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 mr-1.5 border-r border-white/10 pr-2">
+                                            {stats.longestSession.distance > 0 && <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">{Math.floor(stats.longestSession.duration/stats.longestSession.distance)}:{Math.round((stats.longestSession.duration/stats.longestSession.distance % 1)*60).toString().padStart(2,'0')}/k</span>}
+                                            {stats.longestSession.hr > 0 && <span className="text-[8px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1 py-0.5 rounded">{Math.round(stats.longestSession.hr)}bpm</span>}
+                                        </div>
+                                        {stats.longestSession.duration > 0 && (
+                                            <span className="text-[9px] text-slate-500 uppercase font-black" title={stats.longestSession.title}>
+                                                {new Date(stats.longestSession.date).getDate()} {MONTHS[new Date(stats.longestSession.date).getMonth()].substring(0,3)}
+                                            </span>
+                                        )}
+                                        <span className="text-xs font-black text-white ml-0.5">{Math.floor(stats.longestSession.duration/60) > 0 ? `${Math.floor(stats.longestSession.duration/60)}h ` : ''}{Math.round(stats.longestSession.duration%60)}m</span>
+                                    </div>
+                                </div>
+                                {!(stats.biggestDay.date === stats.longestSession.date && Math.round(stats.biggestDay.duration) === Math.round(stats.longestSession.duration)) && (
+                                    <div className="flex items-center justify-between bg-slate-950/40 hover:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/[0.03] transition-colors group/item">
+                                        <span className="text-[9px] uppercase font-bold text-slate-400 group-hover/item:text-slate-300 transition-colors">Största dag</span>
+                                        <div className="flex items-center gap-2">
+                                            {stats.biggestDay.duration > 0 && (
+                                                <div className="flex items-center gap-2 mr-1.5 border-r border-white/10 pr-2">
+                                                    {stats.biggestDay.distance > 0 && <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">{stats.biggestDay.distance.toFixed(1)}k</span>}
+                                                    {stats.biggestDay.hr > 0 && <span className="text-[8px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1 py-0.5 rounded">{Math.round(stats.biggestDay.hr)}bpm</span>}
+                                                </div>
+                                            )}
+                                            {stats.biggestDay.duration > 0 && (
+                                                <span className="text-[9px] text-slate-500 uppercase font-black" title="Månadens mest volymrika dag">
+                                                    {new Date(stats.biggestDay.date).getDate()} {MONTHS[new Date(stats.biggestDay.date).getMonth()].substring(0,3)}
+                                                </span>
+                                            )}
+                                            <span className="text-xs font-black text-white ml-0.5">{Math.floor(stats.biggestDay.duration/60) > 0 ? `${Math.floor(stats.biggestDay.duration/60)}h ` : ''}{Math.round(stats.biggestDay.duration%60)}m</span>
+                                        </div>
+                                    </div>
+                                )}
                         </div>
-                        <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/5">
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / vecka</p>
-                                <p className="text-base font-black text-sky-400">
-                                    {Math.floor(stats.timePerWeek / 60)}h {Math.round(stats.timePerWeek % 60)}m
-                                </p>
+
+                        <div className="relative z-10 grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-white/5">
+                            <div className="bg-emerald-900/10 rounded-lg py-0.5 px-1.5 border border-emerald-500/10 flex flex-col items-center">
+                                <p className="text-[8px] text-emerald-500/70 uppercase font-black tracking-widest mb-0.5 flex items-center gap-1"><Footprints className="w-2.5 h-2.5" /> Snitt Fart</p>
+                                <p className="text-xs font-black text-emerald-400">{stats.avgRunPace > 0 ? `${Math.floor(stats.avgRunPace)}:${Math.round((stats.avgRunPace % 1)*60).toString().padStart(2,'0')}` : '-'} <span className="text-[9px] font-bold text-emerald-500/50">/k</span></p>
                             </div>
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt / dag</p>
-                                <p className="text-base font-black text-slate-400">{stats.timePerDay} <span className="text-[10px] font-bold text-slate-500/70">min</span></p>
+                            <div className="bg-sky-900/10 rounded-lg py-0.5 px-1.5 border border-sky-500/10 flex flex-col items-center">
+                                <p className="text-[8px] text-sky-500/70 uppercase font-black tracking-widest mb-0.5 flex items-center gap-1"><Route className="w-2.5 h-2.5" /> Snitt Dist</p>
+                                <p className="text-xs font-black text-sky-400">{stats.avgDist > 0 ? stats.avgDist.toFixed(1) : '-'} <span className="text-[9px] font-bold text-sky-500/50">km</span></p>
                             </div>
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snitt/pass</p>
-                                <p className="text-base font-black text-sky-400">{stats.count > 0 ? Math.round(stats.duration / stats.count) : 0} <span className="text-[10px] font-bold text-sky-500/70">min</span></p>
-                            </div>
-                            <div>
-                                <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Snittpuls</p>
-                                <p className="text-base font-black text-sky-400">{stats.avgHr > 0 ? `${stats.avgHr} ` : '-'}{stats.avgHr > 0 && <span className="text-[10px] font-bold text-sky-500/70">bpm</span>}</p>
+                            <div className="bg-rose-900/10 rounded-lg py-0.5 px-1.5 border border-rose-500/10 flex flex-col items-center">
+                                <p className="text-[8px] text-rose-500/70 uppercase font-black tracking-widest mb-0.5 flex items-center gap-1"><Heart className="w-2.5 h-2.5" /> Snitt Puls</p>
+                                <p className="text-xs font-black text-rose-400">{stats.avgHr > 0 ? stats.avgHr : '-'} <span className="text-[9px] font-bold text-rose-500/50">bpm</span></p>
                             </div>
                         </div>
                     </div>

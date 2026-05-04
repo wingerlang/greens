@@ -275,6 +275,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                                 originalMaxHeartRate: ua.performance?.originalMaxHeartRate || ua.performance?.maxHeartRate,
                                 avgHeartRate: (updates as any).heartRateAvg !== undefined ? (updates as any).heartRateAvg : ua.performance?.avgHeartRate,
                                 maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate,
+                                isTrack: (updates as any).isTrack !== undefined ? (updates as any).isTrack : ua.performance?.isTrack,
                                 splits: (updates as any).splits || ua.performance?.splits,
                                 laps: (updates as any).laps || ua.performance?.laps
                             },
@@ -310,7 +311,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         calculationMode: (updates as any).calculationMode,
                         originalCalories: updates.originalCalories,
                         heartRateAvg: (updates as any).heartRateAvg,
-                        heartRateMax: (updates as any).heartRateMax
+                        heartRateMax: (updates as any).heartRateMax,
+                        isTrack: (updates as any).isTrack
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
                 return;
@@ -352,7 +354,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         originalAvgHeartRate: ua.performance?.originalAvgHeartRate || ua.performance?.avgHeartRate,
                         originalMaxHeartRate: ua.performance?.originalMaxHeartRate || ua.performance?.maxHeartRate,
                         avgHeartRate: (updates as any).heartRateAvg !== undefined ? (updates as any).heartRateAvg : ua.performance?.avgHeartRate,
-                        maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate
+                        maxHeartRate: (updates as any).heartRateMax !== undefined ? (updates as any).heartRateMax : ua.performance?.maxHeartRate,
+                        isTrack: (updates as any).isTrack !== undefined ? (updates as any).isTrack : ua.performance?.isTrack
                     },
                     raceDetails: updates.raceDetails || ua.raceDetails
                 } as UniversalActivity;
@@ -390,7 +393,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         originalMaxHeartRate: (updated as any).performance?.originalMaxHeartRate || (updated as any).performance?.maxHeartRate || updated.heartRateMax,
                         averageWatts: updated.averageWatts,
                         avgHeartRate: (updated as any).heartRateAvg,
-                        maxHeartRate: (updated as any).heartRateMax
+                        maxHeartRate: (updated as any).heartRateMax,
+                        isTrack: (updated as any).isTrack
                     }
                 })
             }).catch(e => console.error("Failed to persist manual activity update:", e));

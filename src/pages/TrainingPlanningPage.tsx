@@ -13,6 +13,7 @@ import {
 import { ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Calendar, Plus, Dumbbell, Activity, Zap, X, Check, Target, TrendingUp, Clock, Trophy, AlertTriangle, RefreshCcw, MinusCircle, Heart, Copy, Trash2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration, formatPace } from '../utils/dateUtils.ts';
+import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 import { getPlannedRaceTime, calcPace } from '../components/training/races/utils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
 import { notificationService } from '../services/notificationService.ts';
@@ -775,8 +776,7 @@ export function TrainingPlanningPage() {
                                     setDraggedOverDate(null);
                                     const activityId = e.dataTransfer.getData('activityId');
                                     if (activityId) {
-                                        updatePlannedActivity(activityId, { date: day.date, autoMatchDisabled: true });
-                                        notificationService.notify('success', `Passet flyttat till ${day.date}`);
+                                        handleMoveToDate(activityId, day.date);
                                     }
                                 }}
                             >
@@ -798,7 +798,7 @@ export function TrainingPlanningPage() {
                                                 {showSeparator && <div className="w-full flex items-center justify-center py-1 opacity-60"><div className="w-full border-t-2 border-dashed border-slate-300 dark:border-slate-700"></div></div>}
                                                 <div 
                                                     key={act.id}
-                                                    draggable={!isCompleted}
+                                                    draggable={true}
                                                     onDragStart={(e) => { e.dataTransfer.setData('activityId', act.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                     onClick={() => swappingActivityId ? handleSwapActivities(act.id) : handleOpenModal(day.date, act)}
                                                     className={`relative p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col ${isCompleted ? 'gap-0.5' : 'gap-2'} 
@@ -970,6 +970,8 @@ export function TrainingPlanningPage() {
                                         return (
                                             <div 
                                                 key={actual.id}
+                                                draggable={true}
+                                                onDragStart={(e) => { e.dataTransfer.setData('activityId', actual.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                 onClick={() => updateUrlParams({ activityId: actual.id })}
                                                 className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
                                                     ${actual.type === 'strength' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'}
@@ -1006,7 +1008,24 @@ export function TrainingPlanningPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2"><h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}</h4></div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}</h4>
+                                                    {(() => {
+                                                        const score = calculatePerformanceScore(actual, unifiedActivities);
+                                                        if (score <= 0) return null;
+                                                        return (
+                                                            <span
+                                                                className={`min-w-[18px] px-1 h-4 rounded-full flex items-center justify-center text-[8px] font-black shadow-sm ${score >= 600 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                                                    score >= 400 ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                                                                        'bg-slate-500/20 text-slate-400 border border-white/5'
+                                                                    }`}
+                                                                title={`Greens Index: ${score}`}
+                                                            >
+                                                                {score}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
                                                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                                                     {(actual.distance || 0) > 0 && <span className="text-xs text-slate-500 font-medium">🏃 {(actual.distance || 0).toFixed(1)} km</span>}
                                                     {(actual.durationMinutes || 0) > 0 && <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes || 0)}</span>}

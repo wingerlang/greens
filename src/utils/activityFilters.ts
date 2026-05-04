@@ -309,6 +309,7 @@ export function applySmartFilters<T extends ExerciseEntry>(activities: T[], filt
                         ${a.category || ''} 
                         ${a.source || ''} 
                         ${a.subType || ''}
+                        ${(a.isTrack || a.performance?.isTrack) ? 'bana track' : ''}
                     `.toLowerCase();
                     return combinedText.includes(searchStr);
 

@@ -4,6 +4,7 @@ import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { WeeklyDistanceChart, WeeklyDistanceData } from '../../components/cardio/WeeklyDistanceChart.tsx';
 import { ActivityBreakdown } from '../../components/cardio/ActivityBreakdown.tsx';
 import { ConditioningStreaks } from '../../components/cardio/ConditioningStreaks.tsx';
+import { formatPace } from '../../utils/dateUtils.ts';
 
 interface KonditionViewProps {
     filterStartDate?: string | null;
@@ -99,7 +100,7 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
     const runDuration = runningEntries.reduce((s, e) => s + (e.durationMinutes || 0), 0);
     const avgRunPace = runDistance > 0 ? runDuration / runDistance : 0;
 
-    const hrRunningEntries = runningEntries.filter(e => e.heartRateAvg && e.heartRateAvg > 0);
+    const hrRunningEntries = runningEntries.filter(e => e.heartRateAvg && e.heartRateAvg > 0 && !e.excludeHeartRate);
     const avgHeartRate = hrRunningEntries.length > 0 
         ? Math.round(hrRunningEntries.reduce((s, e) => s + e.heartRateAvg!, 0) / hrRunningEntries.length) 
         : 0;
@@ -130,7 +131,7 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
                 </div>
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
                     <p className="text-3xl font-black text-amber-500">
-                        {avgRunPace > 0 ? `${Math.floor(avgRunPace)}:${String(Math.round((avgRunPace % 1) * 60)).padStart(2, '0')}` : '-'}
+                        {avgRunPace > 0 ? formatPace(avgRunPace * 60).replace('/km', '') : '-'}
                     </p>
                     <p className="text-xs text-slate-500 uppercase mt-1">Snittempo</p>
                 </div>
@@ -160,7 +161,7 @@ export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries,
                             <div>
                                 <p className="text-xs text-sky-400 uppercase font-bold">Snitt tempo</p>
                                 <p className="text-3xl font-black text-white">
-                                    {Math.floor(avgRunPace)}:{String(Math.round((avgRunPace % 1) * 60)).padStart(2, '0')}
+                                    {formatPace(avgRunPace * 60).replace('/km', '')}
                                     <span className="text-sm text-slate-400 ml-1">min/km</span>
                                 </p>
                             </div>

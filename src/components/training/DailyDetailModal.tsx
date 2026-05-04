@@ -70,20 +70,39 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
     const vitals = getVitalsForDate(date);
     const [localNote, setLocalNote] = useState(vitals.notes || '');
     const [localIllness, setLocalIllness] = useState<'none' | 'mild' | 'moderate' | 'severe'>(vitals.illnessStatus || 'none');
+    const [localIllnessDuration, setLocalIllnessDuration] = useState(1);
     const [isEditingNote, setIsEditingNote] = useState(false);
 
     // Sync note when date changes
     useEffect(() => {
         setLocalNote(vitals.notes || '');
         setLocalIllness(vitals.illnessStatus || 'none');
+        setLocalIllnessDuration(1);
         setIsEditingNote(false);
     }, [date, vitals.notes, vitals.illnessStatus]);
 
     const handleSaveNote = () => {
-        updateVitals(date, { 
-            notes: localNote, 
-            illnessStatus: localIllness === 'none' ? undefined : localIllness 
-        });
+        const startDate = new Date(date);
+        for (let i = 0; i < localIllnessDuration; i++) {
+            const currentDate = new Date(startDate);
+            currentDate.setDate(startDate.getDate() + i);
+            const dateStr = currentDate.toISOString().split('T')[0];
+            
+            // If i > 0, we might not want to overwrite existing notes for future days,
+            // so we only update the illness status for future days unless they have no vitals yet.
+            if (i === 0) {
+                updateVitals(dateStr, { 
+                    notes: localNote, 
+                    illnessStatus: localIllness === 'none' ? undefined : localIllness 
+                });
+            } else {
+                const existing = getVitalsForDate(dateStr);
+                updateVitals(dateStr, {
+                    ...existing,
+                    illnessStatus: localIllness === 'none' ? undefined : localIllness
+                });
+            }
+        }
         setIsEditingNote(false);
     };
 
@@ -324,6 +343,22 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                             <span className="text-[10px] opacity-70">Sängliggande, feber eller infektion.</span>
                                         </button>
                                     </div>
+                                    
+                                    {localIllness !== 'none' && (
+                                        <div className="flex items-center gap-3 bg-slate-950/30 p-3 rounded-xl border border-white/5">
+                                            <span className="text-sm font-bold text-slate-300">Period (antal dagar):</span>
+                                            <input 
+                                                type="number" 
+                                                min="1" 
+                                                max="30"
+                                                value={localIllnessDuration} 
+                                                onChange={(e) => setLocalIllnessDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                                                className="bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 w-20 text-white font-mono outline-none focus:border-sky-500/50"
+                                            />
+                                            <span className="text-xs text-slate-500">Appliceras från vald dag och framåt.</span>
+                                        </div>
+                                    )}
+
                                     <textarea
                                         autoFocus
                                         value={localNote}
