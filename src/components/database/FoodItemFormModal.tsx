@@ -78,10 +78,11 @@ interface FoodItemFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     editingItem: FoodItem | null;
+    initialCategory?: FoodCategory;
 }
 
-export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemFormModalProps) {
-    const { foodItems, foodAliases, addFoodItem, updateFoodItem, updateFoodAlias } = useData();
+export function FoodItemFormModal({ isOpen, onClose, editingItem, initialCategory }: FoodItemFormModalProps) {
+    const { foodItems, foodAliases, addFoodItem, updateFoodItem, updateFoodAlias, addPurchaseLog } = useData();
 
     // Form State
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
@@ -145,7 +146,8 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                     ...editingItem.extendedDetails,
                     caffeine: editingItem.extendedDetails?.caffeine || 0,
                     alcohol: editingItem.extendedDetails?.alcohol || 0
-                }
+                },
+                supplementDetails: editingItem.supplementDetails || undefined
             });
             const portion = editingItem.defaultPortionGrams || 100;
             setPortionValues({
@@ -163,7 +165,10 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
             setRegisterPurchase(false);
             setParseError(null);
         } else {
-            setFormData(EMPTY_FORM);
+            setFormData({
+                ...EMPTY_FORM,
+                category: initialCategory || 'other'
+            });
             setPurchasePrice('');
             setPurchaseDate(getISODate());
             setRegisterPurchase(false);
@@ -747,6 +752,95 @@ export function FoodItemFormModal({ isOpen, onClose, editingItem }: FoodItemForm
                                     </div>
                                 )}
                             </div>
+
+                            {/* Supplement Details */}
+                            {formData.category === 'supplements' && (
+                                <div className="bg-purple-500/5 rounded-2xl p-5 border border-purple-500/10 space-y-4">
+                                    <h3 className="text-xs font-bold text-purple-400 flex items-center gap-2">
+                                        <span>💊</span> Kosttillskott
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Syfte</label>
+                                            <input
+                                                type="text"
+                                                value={formData.supplementDetails?.purpose || ''}
+                                                onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, purpose: e.target.value } })}
+                                                placeholder="t.ex. Återhämtning, Prestation"
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Effekt</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.supplementDetails?.effect || ''}
+                                                    onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, effect: e.target.value } })}
+                                                    placeholder="t.ex. Ökar explosivitet"
+                                                    className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">När ska det tas?</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.supplementDetails?.timing || ''}
+                                                    onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, timing: e.target.value } })}
+                                                    placeholder="t.ex. Innan träning"
+                                                    className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Form</label>
+                                                <select
+                                                    value={formData.supplementDetails?.form || 'powder'}
+                                                    onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, form: e.target.value as any } })}
+                                                    className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm"
+                                                >
+                                                    <option value="powder">Pulver</option>
+                                                    <option value="pill">Piller</option>
+                                                    <option value="capsule">Kapsel</option>
+                                                    <option value="liquid">Vätska</option>
+                                                    <option value="gummy">Gummy</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Rekommenderad dos</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.supplementDetails?.recommendedDose || ''}
+                                                    onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, recommendedDose: e.target.value } })}
+                                                    placeholder="t.ex. 2 kapslar"
+                                                    className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Aktiva ämnen</label>
+                                            <input
+                                                type="text"
+                                                value={formData.supplementDetails?.activeIngredients || ''}
+                                                onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, activeIngredients: e.target.value } })}
+                                                placeholder="t.ex. 5g Kreatin Monohydrat"
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Varning / Kontraindikationer</label>
+                                            <input
+                                                type="text"
+                                                value={formData.supplementDetails?.contraindications || ''}
+                                                onChange={e => setFormData({ ...formData, supplementDetails: { ...formData.supplementDetails, contraindications: e.target.value } })}
+                                                placeholder="t.ex. Ta inte tillsammans med kaffe"
+                                                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm text-amber-400"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Environmental & Price */}
                             <div className="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/50 space-y-4">

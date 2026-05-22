@@ -92,7 +92,7 @@ export function RaceList(props: RaceListProps) {
                 </div>
 
                 {upcomingRaces.length > 0 ? (
-                    <div className={upcomingViewMode === 'cozy' ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8" : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"}>
+                    <div className={upcomingViewMode === 'cozy' ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8" : upcomingViewMode === 'list' ? "flex flex-col border border-white/5 rounded-xl overflow-hidden bg-slate-900/50" : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"}>
                         {upcomingRaces.map(r => (
                             upcomingViewMode === 'cozy' ? (
                                 <UpcomingRaceCard key={r.id} race={r} historyRaces={races} allActivities={allHistoryActivities} onUpdate={handleSaveRace} onDelete={handleDeleteRace} onEdit={(r) => { setEditingRace(r); setIsAddModalOpen(true); }} />

@@ -56,7 +56,10 @@ export const LockedRecipeModule: React.FC<LockedRecipeModuleProps> = ({
         : Number(draftRecipeServings.toFixed(2));
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = parseFloat(e.target.value) || 0;
+        let val = e.target.value === '' ? 1 : parseFloat(e.target.value);
+        if (isNaN(val)) val = 1;
+        if (val <= 0) val = 1;
+        
         if (inputUnit === 'g' && weightPerServing > 0) {
             setDraftRecipeServings(val / weightPerServing);
         } else {
@@ -115,17 +118,8 @@ export const LockedRecipeModule: React.FC<LockedRecipeModuleProps> = ({
                     <div className="flex items-baseline gap-1">
                         <input
                             type="number"
-                            value={displayValue || ''}
-                            onChange={(e) => {
-                                const num = parseFloat(e.target.value) || 0;
-                                if (inputUnit === 'g') {
-                                    if (weightPerServing > 0) {
-                                        setDraftRecipeServings(num / weightPerServing);
-                                    }
-                                } else {
-                                    setDraftRecipeServings(num);
-                                }
-                            }}
+                            value={displayValue || (displayValue === 0 ? '0' : '')}
+                            onChange={handleValueChange}
                             className="w-full text-2xl font-black bg-transparent border-b-2 border-indigo-500/30 focus:border-indigo-400 outline-none text-white transition-colors"
                         />
                         <span className="text-sm font-bold text-slate-400">

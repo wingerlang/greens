@@ -1,5 +1,4 @@
-/// <reference lib="deno.ns" />
-import { expect } from "https://deno.land/std@0.208.0/expect/mod.ts";
+import { assertEquals, assert } from "@std/assert";
 import { calculateRecipeEstimate } from "../src/utils/ingredientParser.ts";
 import { SAMPLE_FOOD_ITEMS } from "../src/data/sampleData.ts";
 
@@ -8,8 +7,8 @@ Deno.test("Synergy: Iron + Vitamin C", () => {
     const result = calculateRecipeEstimate(ingredients, SAMPLE_FOOD_ITEMS);
 
     const ironC = result.synergies.find(s => s.id === 'iron-vitc');
-    expect(ironC).toBeDefined();
-    expect(ironC?.name).toBe("Järnupptag-Boost");
+    assert(ironC !== undefined);
+    assertEquals(ironC?.name, "Järnupptag-Boost");
 });
 
 Deno.test("Synergy: Fat + Vitamin A", () => {
@@ -17,8 +16,8 @@ Deno.test("Synergy: Fat + Vitamin A", () => {
     const result = calculateRecipeEstimate(ingredients, SAMPLE_FOOD_ITEMS);
 
     const fatA = result.synergies.find(s => s.id === 'fat-vita');
-    expect(fatA).toBeDefined();
-    expect(fatA?.name).toBe("Närings-Unlock");
+    assert(fatA !== undefined);
+    assertEquals(fatA?.name, "Närings-Unlock");
 });
 
 Deno.test("Synergy: Turmeric + Black Pepper", () => {
@@ -26,7 +25,7 @@ Deno.test("Synergy: Turmeric + Black Pepper", () => {
     const result = calculateRecipeEstimate(ingredients, SAMPLE_FOOD_ITEMS);
 
     const bioBoost = result.synergies.find(s => s.id === 'turmeric-pepper');
-    expect(bioBoost).toBeDefined();
+    assert(bioBoost !== undefined);
 });
 
 Deno.test("Synergy: Allium + Minerals", () => {
@@ -34,5 +33,6 @@ Deno.test("Synergy: Allium + Minerals", () => {
     const result = calculateRecipeEstimate(ingredients, SAMPLE_FOOD_ITEMS);
 
     const bridge = result.synergies.find(s => s.id === 'allium-minerals');
-    expect(bridge).toBeDefined();
+    assert(bridge !== undefined);
 });
+

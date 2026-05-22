@@ -1,5 +1,6 @@
 import { UserSettings, ExerciseEntry, UniversalActivity, BestEffort } from '../models/types.ts';
 import { snapToTrack } from './trackUtils.ts';
+import { isTempoInterval } from './activityUtils.ts';
 
 export interface AdaptiveGoals {
     calories: number;
@@ -8,6 +9,31 @@ export interface AdaptiveGoals {
     fat: number;
     isAdapted: boolean;
     extraCalories: number;
+}
+
+/**
+ * Calculates a fair competition percentile rank (0% is 1st, 100% is last).
+ * Uses (p-1)/(t-1) formula to ensure 1st of any group size is 0%.
+ */
+export function calculateCompetitionPercentile(placement: number, totalParticipants: number): number {
+    if (!totalParticipants || totalParticipants <= 1) return 0;
+    if (!placement) return 100;
+    
+    // Ensure placement doesn't exceed participants
+    const p = Math.min(placement, totalParticipants);
+    return ((p - 1) / (totalParticipants - 1)) * 100;
+}
+
+/**
+ * Maps a percentile to a performance tier.
+ * Top 10% = Tier 1 (Gold)
+ * Top 33% = Tier 2 (Silver)
+ * Others = Bronze/Base
+ */
+export function getPerformanceTier(percentile: number): 'top10' | 'top33' | 'other' {
+    if (percentile <= 10) return 'top10';
+    if (percentile <= 33.3) return 'top33';
+    return 'other';
 }
 
 /**
@@ -281,7 +307,7 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             });
         }
 
-        const isInterval = (activity.subType === 'interval' || (activity.title || '').toLowerCase().includes('intervall'));
+        const isInterval = isTempoInterval(activity);
 
         if (historyBefore.length > 0 && !isCurrentExcluded && !isInterval) {
             const runningHistory = historyBefore.filter(h => {
@@ -417,7 +443,7 @@ export const PERFORMANCE_TARGETS = [
  * Combines Strava's native best efforts (if available) with 
  * a sliding-window analysis of splits/laps with linear interpolation.
  */
-export function getBestEffortsForActivity(activity: UniversalActivity): BestEffort[] {
+export function getBestEffortsForActivity(activity: UniversalActivity, allowedSources?: ('strava' | 'laps' | 'splits')[]): BestEffort[] {
     const perf = activity.performance;
     if (!perf || (perf.activityType !== 'running' && !['run', 'trail'].some(t => (activity.plan?.activityType || '').toLowerCase().includes(t)))) {
         return [];
@@ -428,7 +454,7 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
     const results: Record<string, BestEffort> = {};
 
     // 1. Start with Strava's best efforts if available
-    if (perf.bestEfforts && perf.bestEfforts.length > 0) {
+    if ((!allowedSources || allowedSources.includes('strava')) && perf.bestEfforts && perf.bestEfforts.length > 0) {
         perf.bestEfforts.forEach(be => {
             results[be.name] = { ...be, source: 'strava' };
         });
@@ -438,7 +464,7 @@ export function getBestEffortsForActivity(activity: UniversalActivity): BestEffo
     const segmentSets = [
         { data: perf.splits || [], type: 'splits' as const },
         { data: perf.laps || [], type: 'laps' as const }
-    ].filter(s => s.data.length > 0);
+    ].filter(s => s.data.length > 0 && (!allowedSources || allowedSources.includes(s.type)));
     
     for (const { data: segments, type: segmentType } of segmentSets) {
         for (const target of PERFORMANCE_TARGETS) {

@@ -22,7 +22,7 @@ export class TokenBucketRateLimitMiddleware implements Middleware {
             return next();
         }
 
-        if (!GLOBAL_CONFIG.features.rateLimit) {
+        if (!this.config.features.rateLimit) {
             return next();
         }
 

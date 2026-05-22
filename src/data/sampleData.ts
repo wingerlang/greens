@@ -87,7 +87,6 @@ import { GENERATED_FOOD_ITEMS } from './generatedFoodData.ts';
 // ============================================
 
 export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
-    ...GENERATED_FOOD_ITEMS,
     // --- LEGUMES (Baljväxter) ---
     {
         id: 'food-linser',
@@ -1198,6 +1197,7 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         createdAt: now,
         updatedAt: now,
     },
+    ...GENERATED_FOOD_ITEMS,
 ];
 
 // ============================================

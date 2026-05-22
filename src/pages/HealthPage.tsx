@@ -13,6 +13,7 @@ import { MatView } from './Health/MatView.tsx';
 import { TrainingView } from './Health/TrainingView.tsx';
 import { RecoveryPage } from './Health/RecoveryPage.tsx';
 import { BodyView } from './Health/BodyView.tsx';
+import { ProtocolView } from './Health/ProtocolView.tsx';
 import './HealthPage.css';
 
 type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all' | '2024' | '2025';
@@ -23,7 +24,7 @@ export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();
     const navigate = useNavigate();
     const { token } = useAuth();
-    const { dailyVitals, weightEntries, mealEntries, exerciseEntries: manualExerciseEntries, calculateDailyNutrition, trainingPeriods } = useData();
+    const { dailyVitals, weightEntries, mealEntries, exerciseEntries: manualExerciseEntries, calculateDailyNutrition, trainingPeriods, plannedActivities } = useData();
     const { settings } = useSettings();
 
     // Fetch Universal Activities (Strava/Garmin)
@@ -98,6 +99,7 @@ export function HealthPage() {
         if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition', 'hyrox'].includes(m)) return 'training';
         if (['weight', 'vikt', 'sleep', 'sömn', 'measurements', 'matt', 'mått'].includes(m)) return 'body';
         if (m === 'recovery' || m === 'rehab') return 'recovery';
+        if (m === 'protocol' || m === 'protokoll') return 'protocol';
         return 'overview';
     }, [metric]);
 
@@ -207,6 +209,7 @@ export function HealthPage() {
             if (tab === 'food') path = 'mat';
             if (tab === 'training') path = 'träning';
             if (tab === 'recovery') path = 'rehab';
+            if (tab === 'protocol') path = 'protokoll';
         } else {
             if (tab === 'body') path = 'measurements';
         }
@@ -261,6 +264,7 @@ export function HealthPage() {
                     <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'training' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
                     <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'recovery' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
                     <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'body' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'protocol' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('protocol')}>💊 Protokoll</button>
                 </div>
             </header>
 
@@ -282,6 +286,7 @@ export function HealthPage() {
                         exerciseEntries={filteredExerciseEntries}
                         days={days}
                         universalActivities={fetchedUniversalActivities}
+                        plannedActivities={plannedActivities}
                         initialTab={subTab as any}
                     />
                 )}
@@ -295,6 +300,9 @@ export function HealthPage() {
                 )}
                 {activeView === 'recovery' && (
                     <RecoveryPage />
+                )}
+                {activeView === 'protocol' && (
+                    <ProtocolView />
                 )}
             </main>
         </div>

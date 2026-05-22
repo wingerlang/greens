@@ -5,6 +5,8 @@ import { usePrepAggregation, PrepEvent } from '../../training/hooks/usePrepAggre
 import { formatPace, formatSwedishDate } from '../../../utils/dateUtils.ts';
 import { ExerciseEntry } from '../../../models/types.ts';
 import { SessionGroup } from './SessionGroup.tsx';
+import { useData } from '../../../context/DataContext.tsx';
+import { Beef, Cookie, Utensils } from 'lucide-react';
 
 export const PrepTabContent = React.memo(({
     activity,
@@ -30,6 +32,43 @@ export const PrepTabContent = React.memo(({
     };
 
     const analysis = usePrepAggregation(event, allActivities, timeframeWeeks);
+    const { calculateDailyNutrition, calculateDailyPlannedNutritionV2, getLatestWeight } = useData();
+
+    const nutritionPrep = React.useMemo(() => {
+        const dates = [];
+        const raceDateObj = new Date(activity.date);
+        for (let i = -3; i <= 3; i++) {
+            const d = new Date(raceDateObj);
+            d.setDate(d.getDate() + i);
+            dates.push(d.toISOString().split('T')[0]);
+        }
+
+        const weight = getLatestWeight() || 75;
+
+        return dates.map(date => {
+            const logged = calculateDailyNutrition(date);
+            const planned = calculateDailyPlannedNutritionV2(date);
+            const totalCarbs = logged.carbs + planned.carbs;
+            const totalProtein = logged.protein + planned.protein;
+            const diffDays = Math.round((new Date(date).getTime() - raceDateObj.getTime()) / (86400000));
+            
+            let label = "";
+            if (diffDays === 0) label = "Loppet";
+            else if (diffDays < 0) label = `${Math.abs(diffDays)}d innan`;
+            else label = `${diffDays}d efter`;
+
+            return {
+                date,
+                label,
+                diffDays,
+                carbs: totalCarbs,
+                carbsPerKg: totalCarbs / weight,
+                protein: totalProtein,
+                proteinPerKg: totalProtein / weight,
+                hasData: totalCarbs > 0 || totalProtein > 0
+            };
+        });
+    }, [activity.date, calculateDailyNutrition, calculateDailyPlannedNutritionV2, getLatestWeight]);
 
     const DiffBadge = ({ v1, v2, higherIsBetter = true, type = 'number' }: { v1: number, v2: number, higherIsBetter?: boolean, type?: 'number' | 'pace' | 'percent' | 'time' }) => {
         // Since we don't have a direct comparison event here yet, we can use it for generic positive/negative color coding if needed
@@ -117,6 +156,16 @@ export const PrepTabContent = React.memo(({
                                         <span className="text-3xl font-black text-white font-mono tabular-nums tracking-tighter">{formatPace(analysis.avgPaceSecPerKm).replace('/km', '')}</span>
                                         <span className="text-[10px] text-slate-500 font-bold tracking-widest ml-1 uppercase">/km</span>
                                     </div>
+
+                                    {analysis.avgStifa > 0 && (
+                                        <div className="flex items-center gap-1.5 ml-2 border-l border-white/10 pl-4">
+                                            <Mountain size={14} className="text-amber-500" />
+                                            <div className="flex items-baseline gap-0.5">
+                                                <span className="text-2xl font-black text-amber-400 font-mono tracking-tighter">{analysis.avgStifa.toFixed(2)}</span>
+                                                <span className="text-[10px] text-amber-500/40 font-bold ml-1 uppercase">Stifa</span>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {analysis.avgHR && analysis.avgHR > 0 ? (
                                         <div className="flex items-center gap-1.5 ml-2 border-l border-white/10 pl-4">
@@ -398,6 +447,82 @@ export const PrepTabContent = React.memo(({
                             </details>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Nutrition Prep & Carbloader Section */}
+            <div className="bg-slate-800/40 border border-white/5 rounded-lg p-2.5">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col">
+                        <h4 className="text-[10px] font-black text-sky-400 uppercase tracking-widest flex items-center gap-2">
+                            <Cookie size={12} className="text-amber-500" /> Nutrition & Carbloader
+                        </h4>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">Strategi för energiuppladdning och återhämtning</p>
+                    </div>
+                    <div className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        <span className="text-[9px] font-black text-amber-500">Mål: 8-12g kolhydrater / kg</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                    {nutritionPrep.map((day, idx) => (
+                        <div 
+                            key={day.date} 
+                            className={`relative flex flex-col p-2 rounded-lg border transition-all ${
+                                day.diffDays === 0 
+                                    ? 'bg-amber-500/10 border-amber-500/40 shadow-lg shadow-amber-500/5' 
+                                    : day.hasData 
+                                        ? 'bg-slate-800/60 border-white/10' 
+                                        : 'bg-slate-900/40 border-white/5 opacity-40'
+                            }`}
+                        >
+                            <div className="text-[8px] font-black uppercase text-slate-500 mb-1 flex justify-between">
+                                <span>{day.label}</span>
+                                {day.diffDays === 0 && <span className="text-amber-500">★</span>}
+                            </div>
+                            
+                            <div className="space-y-1.5">
+                                {/* Carbs Section */}
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-1">
+                                        <Cookie size={10} className={day.carbs > 0 ? "text-amber-500" : "text-slate-600"} />
+                                        <span className={`text-[11px] font-black ${day.carbs > 0 ? 'text-white' : 'text-slate-600'}`}>
+                                            {day.carbs > 0 ? Math.round(day.carbs) : '-'} <span className="text-[8px] font-normal opacity-50">g</span>
+                                        </span>
+                                    </div>
+                                    {day.carbs > 0 && (
+                                        <div className={`text-[9px] font-bold mt-0.5 ${
+                                            day.carbsPerKg >= 8 ? 'text-emerald-400' : day.carbsPerKg >= 5 ? 'text-amber-400' : 'text-slate-400'
+                                        }`}>
+                                            {day.carbsPerKg.toFixed(1)} <span className="text-[7px] opacity-60">g/kg</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Protein Section (mostly for race day and after) */}
+                                {(day.diffDays >= 0 || day.protein > 0) && (
+                                    <div className="flex flex-col pt-1 border-t border-white/5">
+                                        <div className="flex items-center gap-1">
+                                            <Beef size={10} className={day.protein > 0 ? "text-sky-400" : "text-slate-600"} />
+                                            <span className={`text-[10px] font-bold ${day.protein > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+                                                {day.protein > 0 ? Math.round(day.protein) : '-'} <span className="text-[8px] font-normal opacity-50">g</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Visual indicator for carb loading progress */}
+                            {day.carbs > 0 && day.diffDays < 0 && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/5 overflow-hidden rounded-b-lg">
+                                    <div 
+                                        className={`h-full transition-all duration-500 ${day.carbsPerKg >= 8 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                        style={{ width: `${Math.min(100, (day.carbsPerKg / 10) * 100)}%` }}
+                                    ></div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </div>
 

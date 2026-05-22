@@ -8,8 +8,11 @@ import { MealEntrySchema, WeightEntrySchema } from "../utils/schemas.ts";
 import { sanitizeObject } from "../utils/sanitize.ts";
 import { weightRepo } from "../repositories/weightRepository.ts";
 import { foodRepo } from "../repositories/foodRepository.ts";
+import { foodService } from "../services/foodService.ts";
 import { FoodItem } from "../../models/types.ts";
 import { measurementRepo } from "../repositories/measurementRepository.ts";
+import { vitalsRepo } from "../repositories/vitalsRepository.ts";
+
 
 export async function handleDataRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
@@ -185,77 +188,70 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
     // Food Database Search
     if (url.pathname === "/api/foods" && method === "GET") {
         const query = url.searchParams.get("q") || "";
-        const results = await foodRepo.searchFoods(query);
+        const results = await foodService.searchFoods(query);
         return new Response(JSON.stringify(results), { headers });
     }
 
     // Food Database Create
     if (url.pathname === "/api/foods" && method === "POST") {
         const item = await req.json() as FoodItem;
-
-        // Handle Image Moving (Temp -> Permanent)
-        if (item.imageUrl && item.imageUrl.startsWith("uploads/temp/")) {
-            const oldPath = item.imageUrl;
-            const newPath = oldPath.replace("uploads/temp/", "uploads/food-images/");
-            try {
-                await (globalThis as any).Deno.rename(oldPath, newPath);
-                item.imageUrl = newPath;
-            } catch (e) {
-                console.error("Failed to move image:", e);
-                // Fallback: keep temp URL or handle error? Keeping temp URL for now to avoid data loss
-            }
-        }
-
-        await foodRepo.saveFood(item);
-        return new Response(JSON.stringify({ success: true, item }), { headers });
+        const created = await foodService.createFood(item);
+        return new Response(JSON.stringify({ success: true, item: created }), { headers });
     }
 
     // Food Database Update
     if (url.pathname.startsWith("/api/foods/") && method === "PUT") {
         const id = url.pathname.split("/").pop()!;
         const updates = await req.json() as Partial<FoodItem>;
-
-        const existing = await foodRepo.getFood(id);
-        if (!existing) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
-
-        const updatedItem = { ...existing, ...updates };
-
-        // Handle Image Moving
-        if (updatedItem.imageUrl && updatedItem.imageUrl.startsWith("uploads/temp/")) {
-            const oldPath = updatedItem.imageUrl;
-            const newPath = oldPath.replace("uploads/temp/", "uploads/food-images/");
-            try {
-                await (globalThis as any).Deno.rename(oldPath, newPath);
-                updatedItem.imageUrl = newPath;
-
-                // Delete old image if it existed and was different
-                if (existing.imageUrl && existing.imageUrl !== updatedItem.imageUrl && existing.imageUrl.startsWith("uploads/")) {
-                    try { await (globalThis as any).Deno.remove(existing.imageUrl); } catch { }
-                }
-
-            } catch (e) {
-                console.error("Failed to move image:", e);
-            }
-        }
-
-        await foodRepo.saveFood(updatedItem);
-        return new Response(JSON.stringify({ success: true, item: updatedItem }), { headers });
+        const updated = await foodService.updateFood(id, updates);
+        if (!updated) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
+        return new Response(JSON.stringify({ success: true, item: updated }), { headers });
     }
 
     // Food Database Delete
     if (url.pathname.startsWith("/api/foods/") && method === "DELETE") {
         const id = url.pathname.split("/").pop()!;
-        const existing = await foodRepo.getFood(id);
-
-        if (existing) {
-            // Soft Delete (Quarantine): We do NOT delete the image yet.
-            // Image cleanup should happen when the item is hard deleted (e.g. via cron after 3 months).
-            await foodRepo.deleteFood(id);
-        }
-
+        const deleted = await foodService.deleteFood(id);
+        if (!deleted) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
+
+    // Vitals
+    if (url.pathname === "/api/vitals" && method === "POST") {
+        try {
+            const { date, vitals } = await req.json();
+            if (!date || !vitals) {
+                return new Response(JSON.stringify({ error: "Date and vitals object required" }), { status: 400, headers });
+            }
+            await vitalsRepo.saveVitals(userId, date, vitals);
+            return new Response(JSON.stringify({ success: true }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
+        }
+    }
+
+    // Purchases
+    if (url.pathname === "/api/purchases" && method === "POST") {
+        try {
+            const purchaseLog = await req.json();
+            if (!purchaseLog || !purchaseLog.id) {
+                return new Response(JSON.stringify({ error: "Invalid purchase log" }), { status: 400, headers });
+            }
+            
+            // Append to user blob
+            const userData = await getUserData(userId);
+            if (userData) {
+                if (!userData.purchaseLogs) userData.purchaseLogs = [];
+                userData.purchaseLogs.push(purchaseLog);
+                await saveUserData(userId, userData);
+            }
+            
+            return new Response(JSON.stringify({ success: true }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
+        }
+    }
 
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ExerciseEntry, UniversalActivity, PlannedActivity, User } from '../../../../models/types.ts';
 import { isCompetition } from '../../../../utils/activityUtils.ts';
+import { calculateCompetitionPercentile, getPerformanceTier } from '../../../../utils/performanceEngine.ts';
 import { normalizeRaceTitle } from '../utils.ts';
 import { 
     RaceSeries, 
@@ -238,13 +239,18 @@ export function useRaceDashboard({
         const silverCount = racesWithPlacement.filter(r => r.raceDetails?.placement === 2).length;
         const bronzeCount = racesWithPlacement.filter(r => r.raceDetails?.placement === 3).length;
         const podiumCount = racesWithPlacement.filter(r => r.raceDetails?.placement! <= 3).length;
-        const percentiles = racesWithPlacement.filter(r => r.raceDetails?.totalParticipants).map(r => (r.raceDetails!.placement! / r.raceDetails!.totalParticipants!) * 100);
+        const percentiles = racesWithPlacement
+            .filter(r => r.raceDetails?.totalParticipants && r.raceDetails.totalParticipants > 0)
+            .map(r => calculateCompetitionPercentile(r.raceDetails!.placement!, r.raceDetails!.totalParticipants!));
         
+        const tiers = percentiles.map(p => getPerformanceTier(p));
+
         return {
             totalDistance, count: races.length, 
             chartData: Object.entries(grouped).map(([date, d]) => ({ date, ...d })).sort((a,b) => a.date.localeCompare(b.date)),
             goldCount, silverCount, bronzeCount, podiumCount,
-            top10Count: percentiles.filter(p => p <= 10).length,
+            top10Count: tiers.filter(t => t === 'top10').length,
+            top33Count: tiers.filter(t => t === 'top10' || t === 'top33').length,
             avgPercent: percentiles.length ? percentiles.reduce((a,b)=>a+b,0)/percentiles.length : 0
         };
     }, [races, upcomingRaces]);

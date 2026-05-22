@@ -41,9 +41,9 @@ Deno.test("calculateCooperVO2 - 3000m", () => {
 });
 
 Deno.test("estimateCardioCalories - Running", () => {
-    // 70kg, 10km/h, 1 hour -> 70 * 10 = 700 kcal
+    // 70kg, 10km/h, 1 hour -> 70 * 10 * 0.92 = 644 kcal
     const cal = estimateCardioCalories('running', 3600, { weightKg: 70, speedKph: 10 });
-    assertEquals(cal, 700);
+    assertEquals(cal, 644);
 });
 
 Deno.test("estimateCardioCalories - Cycling", () => {

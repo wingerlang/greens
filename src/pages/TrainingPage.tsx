@@ -30,7 +30,8 @@ export function TrainingPage() {
         deleteExercise,
         calculateBMR,
         universalActivities = [],
-        unifiedActivities = []
+        unifiedActivities = [],
+        plannedActivities = []
     } = useData();
 
     const navigate = useNavigate();
@@ -311,6 +312,7 @@ export function TrainingPage() {
                         {/* Dashboard Overview */}
                         <TrainingOverview
                             exercises={filteredExerciseEntries}
+                            plannedActivities={plannedActivities}
                             year={tab && /^\d{4}$/.test(tab) ? parseInt(tab, 10) : (filterStartDate ? new Date(filterStartDate).getFullYear() : new Date().getFullYear())}
                             isFiltered={true}
                             onExerciseClick={handleEditExercise}
@@ -467,6 +469,7 @@ export function TrainingPage() {
                         <CardioVolumeDashboard
                             exercises={filteredExerciseEntries}
                             universalActivities={universalActivities}
+                            plannedActivities={plannedActivities}
                         />
                     </div>
                 )

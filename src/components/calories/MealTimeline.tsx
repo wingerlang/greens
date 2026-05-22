@@ -130,6 +130,18 @@ export function MealTimeline({
                             </span>
                         )}
 
+                        {entry.trainingNutrition && (
+                            <div className="flex items-center gap-1 mb-1">
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${
+                                    entry.trainingNutrition.timing === 'before' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/20' :
+                                    entry.trainingNutrition.timing === 'during' ? 'bg-fuchsia-500/20 text-fuchsia-500 border border-fuchsia-500/20' :
+                                    'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
+                                }`}>
+                                    {entry.trainingNutrition.timing === 'before' ? 'Före pass' : entry.trainingNutrition.timing === 'during' ? 'Under pass' : 'Efter pass'}
+                                </span>
+                            </div>
+                        )}
+
                         <div className={`text-sm flex flex-wrap gap-x-1 ${entry.title ? 'text-slate-400 font-medium' : 'text-slate-200 font-bold'} truncate`}>
                             {entry.items.map((item, idx) => {
                                 const name = getItemName(item);
@@ -168,13 +180,15 @@ export function MealTimeline({
                 <div className="flex items-center gap-3 shrink-0" style={{ flex: '0 0 35%', justifyContent: 'flex-end' }}>
 
                     {/* Pieces Stepper for Snabbvals - Show if snabbvalId exists or pieces > 0 */}
-                    {(entry.snabbvalId || (entry.pieces && entry.pieces > 0)) && (
+                    {(entry.snabbvalId || (entry.pieces && entry.pieces > 0)) ? (
                         <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
                             <button
                                 className="w-5 h-5 flex items-center justify-center rounded-sm bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 transition-colors"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    updateMealEntry(entry.id, { pieces: Math.max(1, (entry.pieces || 1) - 1) });
+                                    const current = entry.pieces || 1;
+                                    const step = current % 1 !== 0 ? 0.5 : 1;
+                                    updateMealEntry(entry.id, { pieces: Math.max(0.1, current - step) });
                                 }}
                             >−</button>
                             <span className="text-[10px] font-black text-emerald-400 whitespace-nowrap">
@@ -184,11 +198,13 @@ export function MealTimeline({
                                 className="w-5 h-5 flex items-center justify-center rounded-sm bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 transition-colors"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    updateMealEntry(entry.id, { pieces: (entry.pieces || 1) + 1 });
+                                    const current = entry.pieces || 1;
+                                    const step = current % 1 !== 0 ? 0.5 : 1;
+                                    updateMealEntry(entry.id, { pieces: current + step });
                                 }}
                             >+</button>
                         </div>
-                    )}
+                    ) : null}
 
                     <div className="flex items-center gap-2 scale-90 origin-right">
                         {entry.items.map((item, idx) => (

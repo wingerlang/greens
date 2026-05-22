@@ -3,7 +3,7 @@ const entries = kv.list({ prefix: ["analytics_page_view"] }, { limit: 100, rever
 const paths = new Map<string, number>();
 
 for await (const entry of entries) {
-    const path = entry.value.path;
+    const path = (entry.value as any).path;
     paths.set(path, (paths.get(path) || 0) + 1);
 }
 

@@ -56,7 +56,7 @@ export function TrainingTabs({ currentTab: propTab }: TrainingTabsProps) {
                 <button
                     key={tab.id}
                     onClick={() => navigate(tab.path)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${getColorClasses(tab.color, currentTab === tab.id)}`}
+                    className={`px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${getColorClasses(tab.color, currentTab === tab.id)}`}
                 >
                     {tab.label}
                 </button>

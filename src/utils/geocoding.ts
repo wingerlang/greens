@@ -153,32 +153,55 @@ export function normalizeLocation(location: string): string {
 /**
  * Geocodes a location string, using local cache first, then falling back to an external provider if needed.
  */
+const EXTERNAL_CACHE: Record<string, [number, number]> = JSON.parse(localStorage.getItem('greens_geocode_cache') || '{}');
+let lastGeocodeTime = 0;
+
 export async function geocodeLocation(location: string): Promise<[number, number] | null> {
     const normalized = normalizeLocation(location);
     
-    // 1. Check direct cache
+    // 1. Check hardcoded cache
     if (CITY_COORDINATES[normalized]) {
         return CITY_COORDINATES[normalized];
     }
     
-    // 2. Check partial matches in cache (if location is "Sthlm Marathon", it should match "stockholm")
+    // 2. Check partial matches in hardcoded cache
     for (const [city, coords] of Object.entries(CITY_COORDINATES)) {
         if (normalized.includes(city) || city.includes(normalized)) {
             return coords;
         }
     }
+
+    // 3. Check persistent localStorage cache
+    if (EXTERNAL_CACHE[normalized]) {
+        return EXTERNAL_CACHE[normalized];
+    }
     
-    // 3. Fallback to OpenStreetMap Nominatim
+    // 4. Fallback to OpenStreetMap Nominatim with rate limiting (1 request per second)
+    const now = Date.now();
+    const waitTime = Math.max(0, 1100 - (now - lastGeocodeTime)); // 1.1s to be safe
+    if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
     try {
+        lastGeocodeTime = Date.now();
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`, {
             headers: {
-                'Accept-Language': 'sv,en'
+                'Accept-Language': 'sv,en',
+                'User-Agent': 'GreensApp/1.0' // Good practice for Nominatim
             }
         });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
         const data = await response.json();
         
         if (data && data.length > 0) {
-            return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+            const coords: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+            // Save to cache
+            EXTERNAL_CACHE[normalized] = coords;
+            localStorage.setItem('greens_geocode_cache', JSON.stringify(EXTERNAL_CACHE));
+            return coords;
         }
     } catch (e) {
         console.error(`Geocoding failed for ${location}:`, e);

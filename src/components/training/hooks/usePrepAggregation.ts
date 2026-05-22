@@ -374,6 +374,7 @@ export function usePrepAggregation(event: PrepEvent, allActivities: ExerciseEntr
             longerDistList: longerDistList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             easyRunsList: easyRunsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             avgWeeklyVol, lastWeekVol, prevWeeksVolAvg, avgPaceSecPerKm,
+            avgStifa: totalRunVolumeKm > 0 ? totalElevationGain / totalRunVolumeKm : 0,
             avgHR: totalHRCount > 0 ? Math.round(totalHRSum / totalHRCount) : null,
             avgRunHR: totalRunHRCount > 0 ? Math.round(totalRunHRSum / totalRunHRCount) : null,
             strengthCount,

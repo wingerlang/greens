@@ -11,8 +11,10 @@ import type {
     Recipe,
     GoalTarget,
     WeightEntry,
-    BodyMeasurementEntry
-} from '../models/types';
+    BodyMeasurementEntry,
+    MealItem,
+    RecipeIngredient
+} from '../models/types.ts';
 
 // ============================================
 // Types
@@ -47,6 +49,16 @@ export interface StreakInfo {
 // ============================================
 
 /**
+ * Formats a Date object to local YYYY-MM-DD string without UTC timezone shift.
+ */
+export function toLocalISOString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
  * Get the start and end dates for a goal's current period.
  */
 export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = new Date()): { start: string; end: string } {
@@ -54,7 +66,7 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
 
     switch (goal.period) {
         case 'daily': {
-            const dateStr = today.toISOString().split('T')[0];
+            const dateStr = toLocalISOString(today);
             return { start: dateStr, end: dateStr };
         }
         case 'weekly': {
@@ -63,7 +75,7 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
             if (goal.type === 'weight') {
                 return {
                     start: goal.startDate,
-                    end: goal.endDate || today.toISOString().split('T')[0]
+                    end: goal.endDate || toLocalISOString(today)
                 };
             }
 
@@ -75,29 +87,29 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekEnd.getDate() + 6);
             return {
-                start: weekStart.toISOString().split('T')[0],
-                end: weekEnd.toISOString().split('T')[0]
+                start: toLocalISOString(weekStart),
+                end: toLocalISOString(weekEnd)
             };
         }
         case 'monthly': {
             const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
             const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
             return {
-                start: monthStart.toISOString().split('T')[0],
-                end: monthEnd.toISOString().split('T')[0]
+                start: toLocalISOString(monthStart),
+                end: toLocalISOString(monthEnd)
             };
         }
         case 'once': {
             // For "once" goals, period is from goal start to now (or end date)
             return {
                 start: goal.startDate,
-                end: goal.endDate || today.toISOString().split('T')[0]
+                end: goal.endDate || toLocalISOString(today)
             };
         }
         default:
             return {
-                start: today.toISOString().split('T')[0],
-                end: today.toISOString().split('T')[0]
+                start: toLocalISOString(today),
+                end: toLocalISOString(today)
             };
     }
 }
@@ -135,7 +147,7 @@ export function calculateFrequencyProgress(
     // If multiple targets, calculate total across all
     if (goal.targets && goal.targets.length > 1) {
         let totalCurrent = 0;
-        goal.targets.forEach(target => {
+        goal.targets.forEach((target: GoalTarget) => {
             const matchingEntries = exerciseEntries.filter(e => {
                 const activityDate = e.date.split('T')[0];
                 if (activityDate < start || activityDate > end) return false;
@@ -293,13 +305,13 @@ export function calculateStreak(
     }
 
     const lastActiveDate = activeDates[0];
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalISOString(new Date());
 
     if (period === 'daily') {
         // Check if streak is still active (today or yesterday)
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = toLocalISOString(yesterday);
         const isActive = lastActiveDate === today || lastActiveDate === yesterdayStr;
 
         let currentStreak = 0;
@@ -397,7 +409,7 @@ export function calculateNutritionProgress(
             return entryDate >= start && entryDate <= end;
         })
         .forEach(entry => {
-            (entry.items || []).forEach(item => {
+            (entry.items || []).forEach((item: MealItem) => {
                 if (item.type === 'foodItem') {
                     const food = foodItems.find(f => f.id === item.referenceId);
                     if (food) {
@@ -414,7 +426,7 @@ export function calculateNutritionProgress(
                     if (recipe) {
                         // Calculate recipe totals
                         let recipeTotal = 0;
-                        (recipe.ingredients || []).forEach(ing => {
+                        (recipe.ingredients || []).forEach((ing: RecipeIngredient) => {
                             const f = foodItems.find(fi => fi.id === ing.foodItemId);
                             if (f) {
                                 const mult = ing.quantity / 100;
@@ -464,7 +476,7 @@ export function getEstimatedCompletionDate(
     const estimatedDate = new Date();
     estimatedDate.setDate(estimatedDate.getDate() + Math.ceil(daysNeeded));
 
-    return estimatedDate.toISOString().split('T')[0];
+    return toLocalISOString(estimatedDate);
 }
 
 /**
@@ -536,7 +548,7 @@ export function assessGoalDifficulty(
     const today = new Date();
     const ninetyDaysAgo = new Date(today);
     ninetyDaysAgo.setDate(today.getDate() - 90);
-    const cutoffDate = ninetyDaysAgo.toISOString().split('T')[0];
+    const cutoffDate = toLocalISOString(ninetyDaysAgo);
 
     const recentEntries = exerciseEntries.filter(e => e.date >= cutoffDate);
 
@@ -692,7 +704,7 @@ export function estimateCompletionDate(
     current: number,
     target: number
 ): string | undefined {
-    if (current >= target) return new Date().toISOString().split('T')[0];
+    if (current >= target) return toLocalISOString(new Date());
     if (current === 0) return undefined;
 
     const { start } = getGoalPeriodDates(goal);
@@ -709,7 +721,7 @@ export function estimateCompletionDate(
     const estimatedDate = new Date();
     estimatedDate.setDate(estimatedDate.getDate() + Math.ceil(daysNeeded));
 
-    return estimatedDate.toISOString().split('T')[0];
+    return toLocalISOString(estimatedDate);
 }
 
 /**
@@ -770,13 +782,13 @@ export function calculateGoalProgress(
 
     let linkedActivityId: string | undefined;
 
-    let latestWeightVal: number | undefined;
+    let latestWeightVal = 0;
     let latestMVal: number | undefined;
 
     switch (goal.type) {
         case 'frequency':
             current = calculateFrequencyProgress(goal, exerciseEntries);
-            targetValue = goal.targets.reduce((sum, t) => sum + (t.count || 0), 0);
+            targetValue = goal.targets.reduce((sum: number, t: GoalTarget) => sum + (t.count || 0), 0);
             break;
         case 'distance':
             current = calculateDistanceProgress(goal, exerciseEntries);
@@ -948,7 +960,7 @@ export function calculateGoalProgress(
                         // but here we have to sum. Let's do a simple sum of calories if target is calories.
                         const nutritionType = target?.nutritionType || 'calories';
                         entries.forEach(entry => {
-                            (entry.items || []).forEach(item => {
+                            (entry.items || []).forEach((item: MealItem) => {
                                 const food = foodItems.find(f => f.id === item.referenceId);
                                 if (food) {
                                     const mult = item.servings / 100;

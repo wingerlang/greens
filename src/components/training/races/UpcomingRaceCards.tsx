@@ -491,6 +491,7 @@ export function UpcomingRaceCardList({
     }, [race.date]);
 
     const isTrail = isTrailRace(race.title);
+    const isUltra = isUltraRace(race.title, race.estimatedDistance);
     const distStyle = getDistanceStyle(race.estimatedDistance);
     const plannedTime = getPlannedRaceTime(race);
     const plannedPace = calcPace(race.estimatedDistance, plannedTime);
@@ -498,41 +499,42 @@ export function UpcomingRaceCardList({
     return (
         <div 
             onClick={() => onEdit(race)}
-            className="col-span-full bg-slate-900/50 border border-white/5 rounded-2xl p-4 md:p-6 hover:bg-slate-800 transition-all cursor-pointer group flex items-center justify-between gap-6"
+            className="flex items-center justify-between gap-4 py-2 px-4 hover:bg-white/5 border-b border-white/5 last:border-b-0 cursor-pointer group transition-colors"
         >
-            <div className="flex items-center gap-6 min-w-0 flex-1">
-                <div className="hidden md:flex flex-col items-center justify-center bg-slate-950 rounded-xl p-3 border border-white/5 min-w-[80px]">
-                    <div className="text-2xl font-black text-white">{new Date(race.date).getDate()}</div>
-                    <div className="text-[10px] font-black uppercase text-amber-500">{new Intl.DateTimeFormat('sv-SE', { month: 'short' }).format(new Date(race.date))}</div>
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+                <div className="text-[11px] font-mono font-bold text-slate-500 w-12 shrink-0">
+                    {formatRaceDateCompact(race.date)}
                 </div>
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                        <h4 className="text-xl font-black text-white group-hover:text-amber-500 transition-colors truncate">{race.title}</h4>
-                        {isTrail && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1"><Trees size={12} /> Trail</span>}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
-                        <span className="flex items-center gap-1.5"><Calendar size={14} className="text-slate-600" /> {race.date}</span>
-                        {race.raceDetails?.logistics?.location && (
-                            <span className="flex items-center gap-1.5"><MapPin size={14} className="text-slate-600" /> {race.raceDetails.logistics.location}</span>
-                        )}
-                        <span className="flex items-center gap-1.5 text-amber-500/80"><Clock size={14} /> {daysLeft} dagar kvar</span>
-                    </div>
+                <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white truncate group-hover:text-amber-500 transition-colors">{race.title}</h4>
+                    {isUltra ? (
+                        <span className="text-[8px] font-black uppercase text-fuchsia-400 bg-fuchsia-500/10 px-1.5 py-0.5 rounded border border-fuchsia-500/20">Ultra</span>
+                    ) : isTrail ? (
+                        <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Trail</span>
+                    ) : null}
                 </div>
             </div>
-            <div className="flex items-center gap-6 shrink-0">
-                {plannedTime && (
-                    <div className="hidden sm:flex flex-col items-end">
-                        <div className="text-[10px] font-black text-slate-500 uppercase">Mål & Tempo</div>
-                        <div className="text-xl font-black text-white font-mono leading-none">{formatActivityDuration(plannedTime)}</div>
-                        {plannedPace !== '-' && <div className="text-[11px] font-black text-amber-500 font-mono mt-1">{plannedPace}</div>}
-                    </div>
+            
+            <div className="flex items-center gap-4 shrink-0 text-xs">
+                {race.raceDetails?.logistics?.location && (
+                    <span className="hidden sm:inline-block text-[10px] text-slate-500 truncate max-w-[100px]"><MapPin size={10} className="inline mr-1 opacity-50" />{race.raceDetails.logistics.location}</span>
                 )}
-                <div className={`p-3 rounded-xl border text-center min-w-[90px] ${distStyle}`}>
-                    <div className="text-[10px] font-black uppercase opacity-60">Distans</div>
-                    <div className="text-lg font-black">{race.estimatedDistance}km</div>
+                <div className="w-12 text-right font-mono text-[10px] font-bold text-slate-400">
+                    {daysLeft}d
                 </div>
-                <button className="p-3 bg-slate-950 rounded-xl border border-white/5 text-slate-500 group-hover:text-amber-500 transition-colors">
-                    <Pencil size={18} />
+                {plannedTime ? (
+                    <div className="hidden md:flex flex-col w-16 text-right font-mono">
+                        <span className="text-white text-[11px] font-bold leading-none">{formatActivityDuration(plannedTime)}</span>
+                        {plannedPace !== '-' && <span className="text-amber-500/80 text-[9px]">{plannedPace}</span>}
+                    </div>
+                ) : (
+                    <div className="hidden md:block w-16 text-right text-[10px] text-slate-600 font-mono">-</div>
+                )}
+                <div className={`px-1.5 py-0.5 rounded text-[10px] font-bold border w-12 text-center ${distStyle}`}>
+                    {race.estimatedDistance}k
+                </div>
+                <button className="text-slate-600 group-hover:text-amber-500 transition-colors ml-1">
+                    <Pencil size={14} />
                 </button>
             </div>
         </div>

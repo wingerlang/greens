@@ -59,6 +59,8 @@ export interface StorageService {
     // Tours
     saveTour(tour: Tour): Promise<void>;
     deleteTour(id: string): Promise<void>;
+    // Vitals Granular
+    saveVitals(date: string, vitals: any): Promise<void>;
     // Purchase Logs
     savePurchaseLog(log: PurchaseLog): Promise<void>;
     // Clear specific data from local cache
@@ -342,23 +344,38 @@ export class LocalStorageService implements StorageService {
     }
 
     async getWeeklyPlan(weekStartDate: string): Promise<WeeklyPlan | undefined> {
-        const data = await this.load();
-        return data.weeklyPlans?.find(p => p.weekStartDate === weekStartDate);
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                return data.weeklyPlans?.find((p: any) => p.weekStartDate === weekStartDate);
+            }
+        } catch (e) {
+            console.error('[Storage] Local read failed:', e);
+        }
+        return undefined;
     }
 
     async saveWeeklyPlan(plan: WeeklyPlan): Promise<void> {
         // 1. Update Local Storage (Optimistic)
-        const data = await this.load();
-        const plans = data.weeklyPlans || [];
-        const existingIndex = plans.findIndex(p => p.weekStartDate === plan.weekStartDate);
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                const plans = data.weeklyPlans || [];
+                const existingIndex = plans.findIndex((p: any) => p.weekStartDate === plan.weekStartDate);
 
-        if (existingIndex >= 0) {
-            plans[existingIndex] = plan;
-        } else {
-            plans.push(plan);
+                if (existingIndex >= 0) {
+                    plans[existingIndex] = plan;
+                } else {
+                    plans.push(plan);
+                }
+                data.weeklyPlans = plans;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
         }
-        data.weeklyPlans = plans;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // 2. Sync to Granular API
         if (ENABLE_CLOUD_SYNC) {
@@ -387,12 +404,20 @@ export class LocalStorageService implements StorageService {
         // The interface defines deleteWeeklyPlan(id), but our repo deletes by weekStartDate.
         // We will need to lookup the plan first.
 
-        const data = await this.load();
-        const planToDelete = data.weeklyPlans?.find(p => p.id === id);
+        let planToDelete: WeeklyPlan | undefined;
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                planToDelete = data.weeklyPlans?.find((p: any) => p.id === id);
 
-        // Update Local
-        data.weeklyPlans = data.weeklyPlans?.filter(p => p.id !== id) || [];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                // Update Local
+                data.weeklyPlans = data.weeklyPlans?.filter((p: any) => p.id !== id) || [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
+        }
 
         // Sync to API
         if (ENABLE_CLOUD_SYNC && planToDelete) {
@@ -938,16 +963,23 @@ export class LocalStorageService implements StorageService {
     }
 
     async saveBodyMeasurement(entry: any): Promise<void> {
-        const data = await this.load();
-        if (!data.bodyMeasurements) data.bodyMeasurements = [];
-        const idx = data.bodyMeasurements.findIndex((m: any) => m.id === entry.id);
-        if (idx >= 0) {
-            data.bodyMeasurements[idx] = entry;
-        } else {
-            data.bodyMeasurements.push(entry);
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (!data.bodyMeasurements) data.bodyMeasurements = [];
+                const idx = data.bodyMeasurements.findIndex((m: any) => m.id === entry.id);
+                if (idx >= 0) {
+                    data.bodyMeasurements[idx] = entry;
+                } else {
+                    data.bodyMeasurements.push(entry);
+                }
+                // Save local immediately for optimistic UI
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
         }
-        // Save local immediately for optimistic UI
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
         // API sync (Strict)
         const token = getToken();
@@ -975,10 +1007,17 @@ export class LocalStorageService implements StorageService {
     }
 
     async deleteBodyMeasurement(id: string): Promise<void> {
-        const data = await this.load();
-        data.bodyMeasurements = data.bodyMeasurements?.filter((m: any) => m.id !== id) || [];
-        // Save local immediately
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                data.bodyMeasurements = data.bodyMeasurements?.filter((m: any) => m.id !== id) || [];
+                // Save local immediately
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
+        }
 
         // API sync (Strict)
         const token = getToken();
@@ -1066,12 +1105,19 @@ export class LocalStorageService implements StorageService {
 
     async saveQuickMeal(meal: QuickMeal): Promise<void> {
         // Local Optimistic
-        const data = await this.load();
-        if (!data.quickMeals) data.quickMeals = [];
-        const idx = data.quickMeals.findIndex(m => m.id === meal.id);
-        if (idx >= 0) data.quickMeals[idx] = meal;
-        else data.quickMeals.push(meal);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (!data.quickMeals) data.quickMeals = [];
+                const idx = data.quickMeals.findIndex((m: any) => m.id === meal.id);
+                if (idx >= 0) data.quickMeals[idx] = meal;
+                else data.quickMeals.push(meal);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
+        }
 
         // API
         if (ENABLE_CLOUD_SYNC) {
@@ -1092,9 +1138,16 @@ export class LocalStorageService implements StorageService {
 
     async deleteQuickMeal(id: string): Promise<void> {
         // Local
-        const data = await this.load();
-        data.quickMeals = data.quickMeals?.filter(m => m.id !== id) || [];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                data.quickMeals = data.quickMeals?.filter((m: any) => m.id !== id) || [];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
+        }
 
         // API
         if (ENABLE_CLOUD_SYNC) {
@@ -1153,6 +1206,35 @@ export class LocalStorageService implements StorageService {
             }
         }
     }
+
+    async saveVitals(date: string, vitals: any): Promise<void> {
+        // 1. Update Local
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (!data.dailyVitals) data.dailyVitals = {};
+                data.dailyVitals[date] = vitals;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('[Storage] Local update failed:', e);
+        }
+
+        // 2. Sync to API
+        if (ENABLE_CLOUD_SYNC) {
+            try {
+                await authFetch('/api/vitals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date, vitals })
+                });
+            } catch (e) {
+                console.error('[Storage] Vitals sync failed:', e);
+            }
+        }
+    }
+    
     compactLocal(data: AppData, days: number = 365): AppData {
         try {
             const limit = new Date();

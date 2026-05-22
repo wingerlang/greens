@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { isWarmupOrCooldown, isCompetition, isLongRun, isUltra, isQualitySession } from '../../utils/activityUtils.ts';
+import { isWarmupOrCooldown, isCompetition, isLongRun, isUltra, isQualitySession, isRecovery } from '../../utils/activityUtils.ts';
 import { EXERCISE_TYPES } from './ExerciseModal.tsx';
 import { TrainingCalendar } from './TrainingCalendar.tsx';
 import { MonthlyTrainingTable } from './MonthlyTrainingTable.tsx';
@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, Filter, Ruler, Trophy } from 'lucide-react';
 
 interface TrainingOverviewProps {
     exercises: ExerciseEntry[];
+    plannedActivities?: any[];
     year: number;
     periodLabel?: string;
     isFiltered?: boolean;
@@ -17,7 +18,7 @@ interface TrainingOverviewProps {
     hideStats?: boolean;
 }
 
-export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
+export function TrainingOverview({ exercises, plannedActivities, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
     const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
     const [distRange, setDistRange] = useState<[number, number]>([0, 999]);
     const [showYearlyStats, setShowYearlyStats] = useState(false);
@@ -64,6 +65,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 if (filter === 'long') return isLongRun(e);
                 if (filter === 'ultra') return isUltra(e);
                 if (filter === 'tempo') return isQualitySession(e);
+                if (filter === 'recovery') return isRecovery(e);
                 return false;
             });
         };
@@ -94,15 +96,29 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             const perf = (e as any)._mergeData?.universalActivity?.performance || e;
             return sum + (perf.elapsedTimeSeconds ? perf.elapsedTimeSeconds / 60 : e.durationMinutes);
         }, 0);
-        const countSessions = (exs: ExerciseEntry[]) => {
+        const countSessions = (exs: ExerciseEntry[], plannedExs: any[] = []) => {
             const sessions = exs.filter(e => !isWarmupOrCooldown(e));
             const warmups = exs.filter(e => isWarmupOrCooldown(e));
             return {
                 total: sessions.length,
                 warmups: warmups.length,
+                planned: plannedExs.length,
                 warmupList: warmups
             };
         };
+
+        const yearPlanned = (plannedActivities || []).filter(a => {
+            const d = new Date(a.date);
+            return a.category === 'RACE' && (a.status === 'PLANNED' || a.status === 'DRAFT') && d.getFullYear() === currentYear;
+        });
+
+        const monthPlanned = yearPlanned.filter(a => new Date(a.date).getMonth() === currentMonth);
+        const lastMonthPlanned = (plannedActivities || []).filter(a => {
+            const d = new Date(a.date);
+            return a.category === 'RACE' && (a.status === 'PLANNED' || a.status === 'DRAFT') && d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+        });
+
+        const sumPlannedDuration = (exs: any[]) => exs.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
 
         const longestRun = yearExercises.filter(e => ((e.type as string) === 'running' || (e.type as string) === 'löpning' || (e.type as string).includes('cycl')) && !e.excludeFromStats).reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
 
@@ -133,28 +149,32 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             year: {
                 distance: sumDistance(yearExercises),
                 time: sumDuration(yearExercises),
+                plannedTime: sumPlannedDuration(yearPlanned),
                 totalTime: sumTotalDuration(yearExercises),
-                count: countSessions(yearExercises),
+                count: countSessions(yearExercises, yearPlanned),
                 calories: yearExercises.reduce((sum, e) => sum + e.caloriesBurned, 0)
             },
             month: {
                 distance: sumDistance(monthExercises),
                 time: sumDuration(monthExercises),
-                totalTime: sumTotalDuration(monthExercises),
-                count: countSessions(monthExercises),
+                plannedTime: sumPlannedDuration(monthPlanned),
+                count: countSessions(monthExercises, monthPlanned).total,
                 weeklyAvg: {
                     distance: weeksInCurrentMonth > 0 ? sumDistance(monthExercises) / weeksInCurrentMonth : 0,
                     time: weeksInCurrentMonth > 0 ? sumDuration(monthExercises) / weeksInCurrentMonth : 0,
+                    plannedTime: weeksInCurrentMonth > 0 ? sumPlannedDuration(monthPlanned) / weeksInCurrentMonth : 0,
                     count: {
-                        total: weeksInCurrentMonth > 0 ? countSessions(monthExercises).total / weeksInCurrentMonth : 0,
-                        warmups: weeksInCurrentMonth > 0 ? countSessions(monthExercises).warmups / weeksInCurrentMonth : 0
+                        total: weeksInCurrentMonth > 0 ? countSessions(monthExercises, monthPlanned).total / weeksInCurrentMonth : 0,
+                        warmups: weeksInCurrentMonth > 0 ? countSessions(monthExercises, monthPlanned).warmups / weeksInCurrentMonth : 0,
+                        planned: weeksInCurrentMonth > 0 ? monthPlanned.length / weeksInCurrentMonth : 0
                     }
                 }
             },
             lastMonth: {
                 distance: sumDistance(lastMonthExercises),
                 time: sumDuration(lastMonthExercises),
-                count: countSessions(lastMonthExercises)
+                plannedTime: sumPlannedDuration(lastMonthPlanned),
+                count: countSessions(lastMonthExercises, lastMonthPlanned)
             },
             byType: Object.entries(yearExercises.filter(e => !isWarmupOrCooldown(e)).reduce((acc, e) => {
                 acc[e.type] = (acc[e.type] || 0) + 1;
@@ -167,17 +187,17 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 heavyLiftVolume,
                 maxStrengthSession,
                 maxEnergySession,
-                maxWattSession // New
+                maxWattSession 
             }
         };
-    }, [exercises, activeFilters, distRange, isFiltered]); // Depend on activeFilters and distRange
+    }, [exercises, plannedActivities, activeFilters, distRange, isFiltered]); 
 
     return (
         <>
-            {/* Calendar View (Primary) */}
-            <div className="mb-6 mt-2">
+            <div className="mb-4 mt-2">
                 <TrainingCalendar 
                     exercises={exercises}
+                    plannedActivities={plannedActivities}
                     year={year}
                     monthIndex={initialCalendarMonth ?? new Date().getMonth()}
                     initialDay={initialCalendarDay}
@@ -185,9 +205,10 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 />
             </div>
 
-            <div className="mb-8">
+            <div className="mb-4">
                 <MonthlyTrainingTable 
                     exercises={exercises}
+                    plannedActivities={plannedActivities}
                     year={year}
                     onExerciseClick={onExerciseClick}
                     initialCalendarMonth={initialCalendarMonth}
@@ -214,25 +235,25 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => toggleFilter('all')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('all') ? 'bg-slate-700 text-white border-slate-600 shadow-lg' : 'text-slate-500 border-white/5 hover:bg-slate-800'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('all') ? 'bg-slate-700 text-white border-slate-600 shadow-lg' : 'text-slate-500 border-white/5 hover:bg-slate-800'}`}
                             >
                                 Alla
                             </button>
                             <button
                                 onClick={() => toggleFilter('run')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('run') ? 'bg-emerald-500 text-slate-900 border-emerald-400 font-black' : 'text-emerald-500/60 border-emerald-500/10 hover:bg-emerald-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('run') ? 'bg-emerald-500 text-slate-900 border-emerald-400 font-black' : 'text-emerald-500/60 border-emerald-500/10 hover:bg-emerald-500/5'}`}
                             >
                                 🏃 Löpning
                             </button>
                             <button
                                 onClick={() => toggleFilter('bike')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('bike') ? 'bg-sky-500 text-slate-900 border-sky-400 font-black' : 'text-sky-500/60 border-sky-500/10 hover:bg-sky-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('bike') ? 'bg-sky-500 text-slate-900 border-sky-400 font-black' : 'text-sky-500/60 border-sky-500/10 hover:bg-sky-500/5'}`}
                             >
                                 🚴 Cykling
                             </button>
                             <button
                                 onClick={() => toggleFilter('strength')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('strength') ? 'bg-indigo-500 text-slate-900 border-indigo-400 font-black' : 'text-indigo-500/60 border-indigo-500/10 hover:bg-indigo-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('strength') ? 'bg-indigo-500 text-slate-900 border-indigo-400 font-black' : 'text-indigo-500/60 border-indigo-500/10 hover:bg-indigo-500/5'}`}
                             >
                                 🏋️ Styrka
                             </button>
@@ -241,31 +262,36 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
                             <button
                                 onClick={() => toggleFilter('race')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 ${activeFilters.includes('race') ? 'bg-amber-500 text-slate-900 border-amber-400 font-black' : 'text-amber-500/60 border-amber-500/10 hover:bg-amber-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 ${activeFilters.includes('race') ? 'bg-amber-500 text-slate-900 border-amber-400 font-black' : 'text-amber-500/60 border-amber-500/10 hover:bg-amber-500/5'}`}
                             >
                                 <Trophy size={12} /> Tävling
                             </button>
                             <button
                                 onClick={() => toggleFilter('long')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('long') ? 'bg-orange-500 text-slate-900 border-orange-400 font-black' : 'text-orange-500/60 border-orange-500/10 hover:bg-orange-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('long') ? 'bg-orange-500 text-slate-900 border-orange-400 font-black' : 'text-orange-500/60 border-orange-500/10 hover:bg-orange-500/5'}`}
                             >
-                                🏔️ Långpass
+                                Långpass
                             </button>
                             <button
                                 onClick={() => toggleFilter('ultra')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('ultra') ? 'bg-pink-500 text-slate-900 border-pink-400 font-black' : 'text-pink-500/60 border-pink-500/10 hover:bg-pink-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('ultra') ? 'bg-pink-500 text-slate-900 border-pink-400 font-black' : 'text-pink-500/60 border-pink-500/10 hover:bg-pink-500/5'}`}
                             >
-                                🦅 Ultra
+                                Ultra
                             </button>
                             <button
                                 onClick={() => toggleFilter('tempo')}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('tempo') ? 'bg-rose-500 text-slate-900 border-rose-400 font-black' : 'text-rose-500/60 border-rose-500/10 hover:bg-rose-500/5'}`}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('tempo') ? 'bg-rose-500 text-slate-900 border-rose-400 font-black' : 'text-rose-500/60 border-rose-500/10 hover:bg-rose-500/5'}`}
                             >
                                 ⚡ Intervall
                             </button>
+                            <button
+                                onClick={() => toggleFilter('recovery')}
+                                className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider border transition-all ${activeFilters.includes('recovery') ? 'bg-cyan-500 text-slate-900 border-cyan-400 font-black' : 'text-cyan-500/60 border-cyan-500/10 hover:bg-cyan-500/5'}`}
+                            >
+                                🧘 Återhämtning
+                            </button>
                         </div>
 
-                        {/* Distance Filter */}
                         <div className="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-4">
                             <div className="flex items-center gap-2 text-slate-400">
                                 <Ruler size={16} />
@@ -310,7 +336,6 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {/* Year Stats */}
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all">
                     <div className="absolute top-0 right-0 p-4 opacity-[0.03] text-[100px] leading-none select-none group-hover:opacity-[0.06] transition-opacity">📅</div>
                     <div className="flex items-center gap-2 mb-4">
@@ -331,17 +356,15 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                             <div className="text-[10px] text-slate-400 font-bold uppercase">Lyft volym</div>
                         </div>
                         <div>
-                            <div className="text-3xl font-black text-emerald-400">
-                                {Math.floor(stats.year.time / 60).toString().padStart(2, '0')}:{Math.round(stats.year.time % 60).toString().padStart(2, '0')}
-                                <span className="text-sm font-bold text-emerald-500/50 ml-1">h</span>
+                            <div className="text-3xl font-black text-white">
+                                {(() => {
+                                    const actual = stats.year.time;
+                                    const format = (mins: number) => `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m`;
+                                    return actual > 0 ? format(actual) : (stats.year.plannedTime > 0 ? `(${format(stats.year.plannedTime)})` : '0h 0m');
+                                })()}
                             </div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center justify-between">
                                 <span>Tid totalt</span>
-                                {Math.abs(stats.year.totalTime - stats.year.time) > 1 && (
-                                    <span className="text-[9px] text-slate-500 normal-case font-medium">
-                                        (Tot: {Math.floor(stats.year.totalTime / 60)}h{Math.round(stats.year.totalTime % 60)}m)
-                                    </span>
-                                )}
                             </div>
                         </div>
                         <div>
@@ -362,6 +385,15 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                                                 ))}
                                                 {stats.year.count.warmupList.length > 10 && <p className="text-[8px] text-slate-600 text-center">...och {stats.year.count.warmupList.length - 10} till</p>}
                                             </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {stats.year.count.planned > 0 && (
+                                    <div className="group/planned relative">
+                                        <span className="text-sm font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded cursor-help ml-1">+{stats.year.count.planned}</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/planned:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <p className="text-[10px] font-black text-amber-500 uppercase mb-2">Planerade Tävlingar</p>
+                                            <p className="text-[9px] text-slate-400">Dessa räknas separat från genomförda pass.</p>
                                         </div>
                                     </div>
                                 )}
@@ -390,7 +422,15 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                         </div>
                         <div>
                             <div className="text-2xl font-black text-white">
-                                {Math.floor(stats.month.time / 60).toString().padStart(2, '0')}:{Math.round(stats.month.time % 60).toString().padStart(2, '0')}
+                                {(() => {
+                                    const actual = stats.month.time;
+                                    const format = (mins: number) => {
+                                        const h = Math.floor(mins / 60).toString().padStart(2, '0');
+                                        const m = Math.round(mins % 60).toString().padStart(2, '0');
+                                        return `${h}:${m}`;
+                                    };
+                                    return actual > 0 ? format(actual) : (stats.month.plannedTime > 0 ? `(${format(stats.month.plannedTime)})` : '00:00');
+                                })()}
                                 <span className="text-xs text-slate-500 ml-1">h</span>
                             </div>
                             <div className="flex items-center gap-1 mt-1">
@@ -418,6 +458,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                                 <div className="text-lg font-bold text-sky-400">
                                     {(stats.month.weeklyAvg.count?.total || 0).toFixed(1).replace('.', ',')}
                                     {(stats.month.weeklyAvg.count?.warmups || 0) > 0 && <span className="text-xs text-rose-400/60 ml-0.5">+{(stats.month.weeklyAvg.count?.warmups || 0).toFixed(1)}</span>}
+                                    {(stats.month.weeklyAvg.count?.planned || 0) > 0 && <span className="text-xs text-amber-400/60 ml-0.5">+{(stats.month.weeklyAvg.count?.planned || 0).toFixed(1)}</span>}
                                     <span className="ml-1">p</span>
                                 </div>
                             </div>

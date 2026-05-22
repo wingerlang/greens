@@ -20,6 +20,7 @@ import { notificationService } from '../services/notificationService.ts';
 import { ActivityModal } from '../components/planning/ActivityModal.tsx';
 import { WeeklyStatsAnalysis } from '../components/planning/WeeklyStatsAnalysis.tsx';
 import { TrainingTabs } from '../components/training/TrainingTabs.tsx';
+import { isWarmupOrCooldown, isCompetition as isComp, isRecovery } from '../utils/activityUtils.ts';
 
 const SHORT_WEEKDAYS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
@@ -36,12 +37,16 @@ export function TrainingPlanningPage() {
         deleteStrengthSession,
         updateExercise,
         universalActivities = [],
-        unifiedActivities = [],
+        unifiedActivities: rawUnifiedActivities = [],
         currentUser,
         reorderActivity,
         reconciliation,
         isLoading
     } = useData();
+
+    const unifiedActivities = React.useMemo(() => {
+        return rawUnifiedActivities.filter((a: any) => !a.extractedFromId);
+    }, [rawUnifiedActivities]);
 
     const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -182,6 +187,7 @@ export function TrainingPlanningPage() {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Modal closing
             if (e.key === 'Escape' && isModalOpen) {
+                delete (window as any)._pendingRacesActivities;
                 setIsModalOpen(false);
                 setEditingActivity(null);
                 return;
@@ -245,7 +251,10 @@ export function TrainingPlanningPage() {
 
         // Running stats
         const runningActivities = weekCompleted.filter((a: any) => a.type === 'running');
-        const runningSessions = runningActivities.length;
+        const mainRuns = runningActivities.filter((a: any) => !isWarmupOrCooldown(a));
+        const warmupCooldowns = runningActivities.filter((a: any) => isWarmupOrCooldown(a));
+        const runningSessions = mainRuns.length;
+        const warmupSessions = warmupCooldowns.length;
         const runningKm = runningActivities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0);
         const runningTime = runningActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
 
@@ -334,6 +343,7 @@ export function TrainingPlanningPage() {
         return {
             running: {
                 sessions: runningSessions,
+                warmupSessions: warmupSessions,
                 km: runningKm,
                 time: runningTime,
                 avgHr,
@@ -514,13 +524,18 @@ export function TrainingPlanningPage() {
     };
 
     const handleSaveActivity = (activity: PlannedActivity) => {
+        const pending = (window as any)._pendingRacesActivities || [];
         if (editingActivity) {
             updatePlannedActivity(editingActivity.id, activity);
+            if (pending.length > 0) {
+                savePlannedActivities(pending);
+            }
             notificationService.notify('success', 'Aktiviteten uppdaterad!');
         } else {
-            savePlannedActivities([activity]);
+            savePlannedActivities([activity, ...pending]);
             notificationService.notify('success', 'Ny aktivitet sparad!');
         }
+        delete (window as any)._pendingRacesActivities;
         setIsModalOpen(false);
         setEditingActivity(null);
     };
@@ -553,10 +568,10 @@ export function TrainingPlanningPage() {
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 font-sans text-slate-900 dark:text-white pb-8">
             <TrainingTabs currentTab="planera" />
-            <div className="p-4 md:p-8 pt-4">
+            <div className="p-1 md:p-1.5 lg:p-2 pt-2 lg:pt-4">
 
 
-                <div className="max-w-[1400px] mx-auto flex items-center justify-between mb-8">
+                <div className="max-w-full mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
                         <ChevronLeft />
@@ -581,7 +596,7 @@ export function TrainingPlanningPage() {
                 </div>
             </div>
 
-            <div className="max-w-[1400px] mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="max-w-full mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 lg:gap-3 gap-2">
                 {/* 0. Föregående Vecka (Historical) */}
                 <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm opacity-80">
                     <div className="flex items-center gap-2 mb-3">
@@ -598,7 +613,12 @@ export function TrainingPlanningPage() {
                                 </span>
                             </div>
                             <div className="text-[10px] font-bold text-slate-500 uppercase flex flex-col gap-0.5 mt-1">
-                                <div className="flex items-center gap-1"><Clock size={10} /> {lastWeeklyStats.running.sessions} pass</div>
+                                <div className="flex items-center gap-1">
+                                    <Clock size={10} /> 
+                                    {lastWeeklyStats.running.sessions}
+                                    {lastWeeklyStats.running.warmupSessions > 0 && `+${lastWeeklyStats.running.warmupSessions}`}
+                                    {' pass'}
+                                </div>
                                 {lastWeeklyStats.running.avgPace > 0 && <div className="flex items-center gap-1"><Zap size={10} className="text-amber-500" /> {formatPace(lastWeeklyStats.running.avgPace * 60)}</div>}
                                 {lastWeeklyStats.running.avgHr > 0 && <div className="flex items-center gap-1"><Heart size={10} className="text-rose-500" /> {Math.round(lastWeeklyStats.running.avgHr)} bpm</div>}
                             </div>
@@ -638,7 +658,7 @@ export function TrainingPlanningPage() {
                 </div>
 
                 {/* 1. Denna Vecka (Actuals vs Planned) */}
-                <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 lg:p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                         <TrendingUp size={16} className="text-emerald-500" />
                         <span className="text-sm font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
@@ -653,7 +673,11 @@ export function TrainingPlanningPage() {
                                 </span>
                             </div>
                             <div className="text-sm font-medium text-slate-500 flex items-center gap-2 flex-wrap">
-                                <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
+                                <span>
+                                    {weeklyStats.running.sessions}
+                                    {weeklyStats.running.warmupSessions > 0 && `+${weeklyStats.running.warmupSessions}`}
+                                    {` (${weeklyStats.forecast.runningSessions}) pass`}
+                                </span>
                                 <span className="text-slate-300">•</span>
                                 <span className="text-emerald-600 dark:text-emerald-400 font-bold">Snitt: {monthWeeklyAvg.toFixed(1)} km/v</span>
                             </div>
@@ -705,7 +729,7 @@ export function TrainingPlanningPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
+            <div className="max-w-full mx-auto grid grid-cols-1 md:grid-cols-7 gap-1 lg:gap-1.5">
                 {weekDates.map((day) => {
                     const dayPlanned = plannedActivities.filter(a => a.date.split('T')[0] === day.date);
                     const dayActualRaw = unifiedActivities.filter(a => a.date.split('T')[0] === day.date);
@@ -731,25 +755,28 @@ export function TrainingPlanningPage() {
 
                     const dayKm = dayActualRaw.reduce((sum, a) => sum + (a.distance || 0), 0);
                     const dayTime = dayActualRaw.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
-                    const isToday = day.date === getISODate();
-                    const isPast = day.date < getISODate();
-                    const warning = weeklyWarnings.find(w => w.date.split('T')[0] === day.date);
+                    const hasRace = dayPlanned.some(p => isComp(p)) || dayActualRaw.some(a => isComp(a));
+                    
+                    const today = getISODate(new Date());
+                    const isToday = day.date === today;
+                    const isPast = day.date < today;
+                    const dayConflict = weeklyWarnings?.find(w => w.date === day.date);
 
                     return (
-                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${warning ? 'border-amber-400 ring-1 ring-amber-400/50' : (isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800'))} relative group shadow-sm transition-all`}>
+                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${dayConflict ? 'border-amber-400 ring-1 ring-amber-400/50' : (isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800'))} relative group shadow-sm transition-all`}>
                             <div className="absolute bottom-4 right-4 text-7xl font-black text-slate-100 dark:text-slate-800/20 select-none z-0 pointer-events-none">{day.date.split('-')[2]}</div>
-                            <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${warning ? 'bg-amber-500/10 dark:bg-amber-900/20' : (isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50'))} rounded-t-2xl z-10 relative`}>
+                            <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${dayConflict ? 'bg-amber-500/10 dark:bg-amber-900/20' : (isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50'))} rounded-t-2xl z-10 relative`}>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
                                     <div className="flex items-center gap-2">
-                                        {warning && (
+                                        {dayConflict && (
                                             <div className="relative group/tooltip">
                                                 <Link to="/tools/interference" className="pointer-events-auto">
                                                     <AlertTriangle size={14} className="text-amber-500 animate-pulse hover:scale-110 transition-transform" />
                                                 </Link>
                                                 <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[100] border border-white/10">
-                                                    <div className="font-black text-amber-400 uppercase mb-1">{warning.message}</div>
-                                                    <div className="opacity-80 leading-tight">{warning.suggestion}</div>
+                                                    <div className="font-black text-amber-400 uppercase mb-1">{dayConflict.message}</div>
+                                                    <div className="opacity-80 leading-tight">{dayConflict.suggestion}</div>
                                                 </div>
                                             </div>
                                         )}
@@ -788,7 +815,17 @@ export function TrainingPlanningPage() {
 
                                     if (event.type === 'planned') {
                                         const act = event.data;
-                                        const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
+                                        const isRace = isComp(act);
+                                        const isWarmup = isWarmupOrCooldown(act);
+                                        const title = (act.title || '').toLowerCase();
+                                        const isTrail = ['trail', 'terräng', 'obanat', 'stig'].some(kw => title.includes(kw));
+                                        
+                                        // Visual grouping: Find position relative to race on same day
+                                        const raceIndex = allEvents.findIndex(e => isComp(e.data));
+                                        const isPreRace = isWarmup && raceIndex !== -1 && index === raceIndex - 1;
+                                        const isPostRace = isWarmup && raceIndex !== -1 && index === raceIndex + 1;
+                                        const isConnected = isPreRace || isPostRace;
+                                        
                                         const isCompleted = act.status === 'COMPLETED';
                                         const isSkipped = act.status === 'SKIPPED';
                                         const isChanged = act.status === 'CHANGED';
@@ -801,8 +838,8 @@ export function TrainingPlanningPage() {
                                                     draggable={true}
                                                     onDragStart={(e) => { e.dataTransfer.setData('activityId', act.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                     onClick={() => swappingActivityId ? handleSwapActivities(act.id) : handleOpenModal(day.date, act)}
-                                                    className={`relative p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col ${isCompleted ? 'gap-0.5' : 'gap-2'} 
-                                                        ${isRace ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 ring-1 ring-amber-400/20' : 
+                                                    className={`relative p-2 border rounded-xl hover:shadow-md transition-all cursor-pointer group flex flex-col ${isCompleted ? 'gap-0.5' : 'gap-1.5'} 
+                                                        ${isRace ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-900/40 ring-1 ring-amber-400/20 z-10 scale-[1.02] shadow-sm' : 
                                                           (act.type === 'REST' || act.category === 'REST' ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-100 dark:border-slate-800' :
                                                           (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' :
                                                           (act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30' :
@@ -810,16 +847,54 @@ export function TrainingPlanningPage() {
                                                         ${isCompleted ? 'opacity-60 grayscale-[0.3]' : ''} 
                                                         ${isSkipped ? 'opacity-40' : ''}
                                                         ${swappingActivityId === act.id ? 'ring-2 ring-blue-500' : ''}
+                                                        ${isPreRace ? 'mb-[-8px] rounded-b-none border-b-0 border-l-2 border-l-amber-400/50 z-0' : ''}
+                                                        ${isPostRace ? 'mt-[-8px] rounded-t-none border-t-0 border-l-2 border-l-amber-400/50 z-0' : ''}
                                                     `}
                                                 >
                                                     <div className="relative">
                                                         <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-full ${isRace ? 'text-amber-600 dark:text-amber-400' : (act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' : (act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' : (act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? 'text-cyan-600 dark:text-cyan-400' : 'text-emerald-600 dark:text-emerald-400'))))}`}>
                                                             <span className="shrink-0">{isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}</span>
-                                                            <span className="leading-tight">
-                                                                {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' : 
-                                                                 act.type === 'REST' || act.category === 'REST' ? '💤 Vila' : 
-                                                                 act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType ? (act.subType === 'cycling' ? '🚴 ' : (act.title?.toLowerCase().includes('innebandy') ? '🏒 ' : '⚡ ')) + act.title : 
-                                                                 ((act.type === 'RUN' ? '🏃 ' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪 ' : '📅 '))) + act.title}
+                                                            <span className="leading-tight flex items-center gap-1">
+                                                                {(() => {
+                                                                    if (isCompleted) return 'GENOMFÖRT';
+                                                                    if (isRace) return 'TÄVLING';
+                                                                    if (isSkipped) return 'ÖVERHOPPAT';
+                                                                    if (isChanged) return 'BYTT PASS';
+                                                                    
+                                                                    if (act.type === 'REST' || act.category === 'REST') {
+                                                                        return <><Moon size={10} className="text-slate-500" /> Vila</>;
+                                                                    }
+                                                                    
+                                                                    const isCardio = act.type === 'CARDIO' || act.type === 'BIKE' || act.category === 'CARDIO' || act.subType;
+                                                                    if (isCardio) {
+                                                                        const isBike = act.subType === 'cycling' || act.type === 'BIKE';
+                                                                        const isFloorball = act.title?.toLowerCase().includes('innebandy');
+                                                                        const isCross = act.title?.toLowerCase().includes('cross');
+                                                                        return (
+                                                                            <span className="flex items-center gap-1">
+                                                                                {isBike ? <Bike size={10} /> : (isFloorball ? <Activity size={10} /> : (isCross ? <Activity size={10} /> : <Zap size={10} />))}
+                                                                                {act.title}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    if (act.type === 'RUN') {
+                                                                        return (
+                                                                            <span className="flex items-center gap-1">
+                                                                                {isTrail ? <Mountain size={10} /> : <Zap size={10} />}
+                                                                                {act.title}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    const isStrength = act.type === 'STRENGTH' || act.category === 'STRENGTH';
+                                                                    return (
+                                                                        <span className="flex items-center gap-1">
+                                                                            {isStrength ? <Dumbbell size={10} /> : <Calendar size={10} />}
+                                                                            {act.title}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </span>
                                                         </span>
                                                         <div className="absolute -top-1 -right-1 flex items-center gap-1 p-1 bg-white/90 dark:bg-slate-800/90 rounded-md shadow-sm opacity-0 group-hover/card:opacity-100 transition-opacity z-20 border border-slate-100 dark:border-slate-700">
@@ -842,7 +917,7 @@ export function TrainingPlanningPage() {
                                                     )}
 
                                                     {ctrlHeld && (
-                                                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center gap-3 z-40 transition-all rounded-lg animate-in fade-in zoom-in duration-200">
+                                                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] hidden group-hover:flex items-center justify-center gap-3 z-40 transition-all rounded-lg animate-in fade-in zoom-in duration-200">
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleDuplicate(act); }}
                                                                 className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:scale-110 transition-transform flex items-center justify-center group/btn"
@@ -912,14 +987,34 @@ export function TrainingPlanningPage() {
                                                     
                                                     {/* Manual Match UI */}
                                                     {!isCompleted && !isSkipped && (() => {
-                                                        const unmatchedOnDay = allEvents.filter(e => e.type === 'actual');
+                                                        const planType = (act.type || act.category || '').toUpperCase();
+                                                        const isRunPlan = ['RUN', 'RACE', 'COMPETITION', 'INTERVALS', 'TEMPO', 'LONG_RUN', 'EASY', 'HILL_REPEATS'].includes(planType) || act.isRace;
+                                                        
+                                                        const unmatchedOnDay = allEvents.filter(e => {
+                                                            if (e.type !== 'actual') return false;
+                                                            const actual = e.data;
+                                                            const actualType = (actual.type || actual.performance?.activityType || '').toLowerCase();
+                                                            
+                                                            // Filter out obvious mismatches
+                                                            if (isRunPlan) {
+                                                                // If it's a run plan, only suggest running or walking
+                                                                if (actualType !== 'running' && actualType !== 'walking') return false;
+                                                            }
+                                                            
+                                                            if (planType === 'STRENGTH' && actualType !== 'strength') return false;
+                                                            if (planType === 'YOGA' && actualType !== 'yoga') return false;
+                                                            if ((planType === 'BIKE' || planType === 'CYCLING') && actualType !== 'cycling') return false;
+
+                                                            return true;
+                                                        });
+                                                        
                                                         const bestCandidateId = act.reconciliation?.bestCandidateId;
                                                         
                                                         if (unmatchedOnDay.length > 0) {
                                                             return (
                                                                 <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/50">
                                                                     <div className="text-[8px] font-black uppercase text-indigo-400/60 tracking-wider mb-1.5 flex items-center gap-1.5">
-                                                                        <Target size={8} /> Pass genomfört? Matcha:
+                                                                        <Target size={8} /> Pass genomfört? Matcha för att dölja:
                                                                     </div>
                                                                     <div className="flex flex-col gap-1">
                                                                         {unmatchedOnDay.map(ev => {
@@ -967,18 +1062,50 @@ export function TrainingPlanningPage() {
                                         );
                                     } else {
                                         const actual = event.data;
+                                        const isBike = actual.type?.toLowerCase() === 'cycling' || actual.type?.toLowerCase() === 'ride' || actual.type?.toLowerCase() === 'virtualride' || actual.type?.toLowerCase() === 'bike';
+                                        const isStrength = actual.type?.toLowerCase() === 'strength';
+                                        const isSwimming = actual.type?.toLowerCase() === 'swimming' || actual.type?.toLowerCase() === 'swim';
+                                        const isCardio = actual.type?.toLowerCase() === 'cardio' || actual.type?.toLowerCase() === 'walking';
+                                        const title = (actual.title || '').toLowerCase();
+                                        const isTrail = ['trail', 'terräng', 'obanat', 'stig'].some(kw => title.includes(kw));
+                                        
+                                        let bgClass = 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30';
+                                        let textClass = 'text-emerald-600 dark:text-emerald-400';
+                                        let icon = '🏃';
+                                        
+                                        if (isStrength) {
+                                            bgClass = 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30';
+                                            textClass = 'text-purple-600 dark:text-purple-400';
+                                            icon = '💪';
+                                        } else if (isBike) {
+                                            bgClass = 'bg-cyan-50 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-900/30';
+                                            textClass = 'text-cyan-600 dark:text-cyan-400';
+                                            icon = '🚴';
+                                        } else if (isSwimming) {
+                                            bgClass = 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30';
+                                            textClass = 'text-blue-600 dark:text-blue-400';
+                                            icon = '🏊';
+                                        } else if (isCardio) {
+                                            bgClass = 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30';
+                                            textClass = 'text-indigo-600 dark:text-indigo-400';
+                                            icon = '⚡';
+                                        }
+
+                                        if (isTrail && actual.type === 'running') {
+                                            icon = '🏔️';
+                                            bgClass = 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-400 dark:border-emerald-800/50 ring-1 ring-emerald-500/10';
+                                        }
+
                                         return (
                                             <div 
                                                 key={actual.id}
                                                 draggable={true}
                                                 onDragStart={(e) => { e.dataTransfer.setData('activityId', actual.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                 onClick={() => updateUrlParams({ activityId: actual.id })}
-                                                className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
-                                                    ${actual.type === 'strength' ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30' : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'}
-                                                `}
+                                                className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group ${bgClass}`}
                                             >
                                                 <div className="flex justify-between items-start mb-1">
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${textClass}`}>
                                                         {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}{actual.source === 'strava' && <span className="text-[#FC4C02]">🔥</span>}
                                                     </span>
                                                     <div className="flex items-center gap-1">
@@ -1009,7 +1136,11 @@ export function TrainingPlanningPage() {
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}</h4>
+                                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
+                                                        {(actual.title?.toLowerCase().includes('allmän cardio') || actual.title?.toLowerCase().includes('generell cardio')) && actual.type === 'cardio'
+                                                            ? 'Crosstrainer / Cardio' 
+                                                            : (actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass'))}
+                                                    </h4>
                                                     {(() => {
                                                         const score = calculatePerformanceScore(actual, unifiedActivities);
                                                         if (score <= 0) return null;
@@ -1027,7 +1158,7 @@ export function TrainingPlanningPage() {
                                                     })()}
                                                 </div>
                                                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                                    {(actual.distance || 0) > 0 && <span className="text-xs text-slate-500 font-medium">🏃 {(actual.distance || 0).toFixed(1)} km</span>}
+                                                    {(actual.distance || 0) > 0 && <span className="text-xs text-slate-500 font-medium">{icon} {(actual.distance || 0).toFixed(1)} km</span>}
                                                     {(actual.durationMinutes || 0) > 0 && <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes || 0)}</span>}
                                                     {(actual.tonnage || 0) > 0 && <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>}
                                                 </div>
@@ -1058,7 +1189,10 @@ export function TrainingPlanningPage() {
 
             <ActivityModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    delete (window as any)._pendingRacesActivities;
+                    setIsModalOpen(false);
+                }}
                 selectedDate={selectedDate}
                 editingActivity={editingActivity}
                 onSave={handleSaveActivity}
@@ -1070,7 +1204,7 @@ export function TrainingPlanningPage() {
             <WeeklyStatsAnalysis weekStart={currentWeekStart} weeklyStats={weeklyStats} />
 
             {goalProgress.length > 0 && (
-                <div className="max-w-[1400px] mx-auto mt-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm relative overflow-hidden">
+                <div className="max-w-full mx-auto mt-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm relative overflow-hidden">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <Target size={18} className="text-indigo-500" />
@@ -1140,7 +1274,7 @@ export function TrainingPlanningPage() {
                 </div>
             )}
 
-            <div className="max-w-[1400px] mx-auto mb-12">
+            <div className="max-w-full mx-auto mb-12">
                 <TrainingPeriodBanner />
             </div>
             </div>

@@ -14,7 +14,7 @@ import {
     Brain, Target, Rss, Swords, Trophy, PieChart, Search,
     Zap, Briefcase, Timer, Gauge, ShieldAlert, Settings, User, Users,
     MessageSquare, RefreshCw, LogOut, Menu, Wrench, Box, Package,
-    ChevronLeft, Bike, Stethoscope
+    ChevronLeft, Bike, Stethoscope, ScrollText
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -59,6 +59,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/exercises', label: 'Övningar', icon: Activity, section: 'training', description: 'Övningsbibliotek', color: 'text-cyan-500' },
     { path: '/coach', label: 'Coach', icon: Brain, section: 'training', description: 'Smart Coach', color: 'text-indigo-400' },
     { path: '/goals', label: 'Mål', icon: Target, section: 'training', description: 'Sätt & nå mål', color: 'text-rose-500' },
+    { path: '/metodik', label: 'Metodik', icon: ScrollText, section: 'training', description: 'Träningsfilosofi', color: 'text-indigo-400' },
 
     // Community
     { path: '/feed', label: 'Feed', icon: Rss, section: 'community', description: 'Life Stream', color: 'text-orange-500' },

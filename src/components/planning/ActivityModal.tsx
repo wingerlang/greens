@@ -492,7 +492,7 @@ export function ActivityModal({
             }
 
             // Determine Title
-            let title = 'Löpning';
+            let title = 'Pass';
             if (formType === 'RUN') {
                 if (isRace) title = 'TÄVLING 🏆';
                 else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
@@ -501,11 +501,9 @@ export function ActivityModal({
                 else title = 'Löpning';
             } else if (formType === 'STRENGTH') {
                 title = 'Styrka';
-                // Determine if it matches a preset
                 const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
                 const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
                 const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
-
                 if (isPush) title = 'Styrka: Push';
                 else if (isPull) title = 'Styrka: Pull';
                 else if (isLegs) title = 'Styrka: Ben';
@@ -513,6 +511,12 @@ export function ActivityModal({
                 title = 'Hyrox';
             } else if (formType === 'REST') {
                 title = 'Vilodag';
+            } else if (formType === 'CARDIO') {
+                if (formSubType === 'cross-trainer') title = 'Cross trainer';
+                else if (formSubType === 'rowing') title = 'Rodd';
+                else if (formSubType === 'stair-master') title = 'Trappmaskin';
+                else if (formSubType === 'skierg') title = 'Skierg';
+                else title = 'Allmän Cardio';
             } else if (formType === 'BIKE') {
                 const totalMins = (hours * 60) + minutes;
                 title = `Cykel ${totalMins} min`;
@@ -546,6 +550,7 @@ export function ActivityModal({
                 targetSpeedKmh: formType === 'BIKE' && formTargetSpeedKmh ? parseFloat(formTargetSpeedKmh.replace(',', '.')) : undefined,
                 targetWattsRange: formType === 'BIKE' ? formTargetWattsRange : undefined,
                 isRace: isRace,
+                order: isRace ? 0 : undefined,
                 raceDetails: isRace ? {
                     ...editingActivity?.raceDetails,
                     goals: {

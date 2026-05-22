@@ -7,8 +7,10 @@ interface LockedQuickMealModuleProps {
     lockedQuickMeal: any;
     draftQuickMealMealType: MealType | null;
     draftQuickMealDate: string | null;
+    draftQuickMealPieces: number;
     setDraftQuickMealMealType: (type: MealType | null) => void;
     setDraftQuickMealDate: (date: string | null) => void;
+    setDraftQuickMealPieces: (pieces: number) => void;
     setLockedQuickMeal: (meal: any | null) => void;
     handleSaveComboAsQuickMeal: (meal: any) => void;
     handleLockedQuickMealAction: () => void;
@@ -18,8 +20,10 @@ export const LockedQuickMealModule: React.FC<LockedQuickMealModuleProps> = ({
     lockedQuickMeal,
     draftQuickMealMealType,
     draftQuickMealDate,
+    draftQuickMealPieces,
     setDraftQuickMealMealType,
     setDraftQuickMealDate,
+    setDraftQuickMealPieces,
     setLockedQuickMeal,
     handleSaveComboAsQuickMeal,
     handleLockedQuickMealAction
@@ -47,11 +51,36 @@ export const LockedQuickMealModule: React.FC<LockedQuickMealModuleProps> = ({
                         <h3 className="text-xl font-bold text-white">{lockedQuickMeal.name}</h3>
                     </div>
                     <div className="text-xs text-slate-400 mt-1 truncate max-w-[200px] sm:max-w-xs">{lockedQuickMeal.summary}</div>
+                    {lockedQuickMeal.usageStats && (
+                        <div className="text-[10px] font-bold text-emerald-400 mt-1 uppercase tracking-wider">
+                            🔄 Loggad {lockedQuickMeal.usageStats.count} ggr
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Editable Fields Row */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+                {/* Antal */}
+                <div className="bg-slate-800/50 rounded-xl p-3">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Antal</label>
+                    <div className="flex items-center">
+                        <input
+                            type="number"
+                            min="0.1"
+                            step="0.1"
+                            value={draftQuickMealPieces || (draftQuickMealPieces === 0 ? '0' : '')}
+                            onChange={(e) => {
+                                let val = e.target.value === '' ? 1 : parseFloat(e.target.value);
+                                if (isNaN(val) || val <= 0) val = 1;
+                                setDraftQuickMealPieces(val);
+                            }}
+                            className="w-full text-lg font-bold bg-transparent text-white outline-none"
+                        />
+                        <span className="text-sm font-bold text-slate-500 ml-1">st</span>
+                    </div>
+                </div>
+
                 {/* Meal Type */}
                 <div className="bg-slate-800/50 rounded-xl p-3">
                     <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Måltid</label>
@@ -95,10 +124,10 @@ export const LockedQuickMealModule: React.FC<LockedQuickMealModuleProps> = ({
             {lockedQuickMeal.totals && (
                 <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
                     <NutritionLabel
-                        calories={lockedQuickMeal.totals.calories}
-                        protein={lockedQuickMeal.totals.protein}
-                        carbs={lockedQuickMeal.totals.carbs || 0}
-                        fat={lockedQuickMeal.totals.fat || 0}
+                        calories={(lockedQuickMeal.totals.calories || 0) * (draftQuickMealPieces || 1)}
+                        protein={(lockedQuickMeal.totals.protein || 0) * (draftQuickMealPieces || 1)}
+                        carbs={(lockedQuickMeal.totals.carbs || 0) * (draftQuickMealPieces || 1)}
+                        fat={(lockedQuickMeal.totals.fat || 0) * (draftQuickMealPieces || 1)}
                         variant="compact"
                         size="md"
                     />

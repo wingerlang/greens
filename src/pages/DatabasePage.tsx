@@ -238,8 +238,9 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
 
         if (searchParams.get('action') === 'new' && !hasAutoOpened.current) {
             hasAutoOpened.current = true;
+            const category = searchParams.get('category') as FoodCategory;
             setTimeout(() => {
-                handleOpenForm();
+                handleOpenForm(undefined, category);
             }, 100);
         }
     }, [searchParams, filteredItems.length, foodItems]);
@@ -477,11 +478,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     }, [activeTab, foodItems, quickMeals, mealEntries]);
 
 
-    const handleOpenForm = (item?: FoodItem) => {
+    const handleOpenForm = (item?: FoodItem, category?: FoodCategory) => {
         if (item) {
             setEditingItem(item);
         } else {
             setEditingItem(null);
+        }
+        if (category && !item) {
+            setSelectedCategory(category);
         }
         setIsFormOpen(true);
     };
@@ -1383,6 +1387,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 isOpen={isFormOpen}
                 onClose={handleCloseForm}
                 editingItem={editingItem}
+                initialCategory={(searchParams.get('category') as FoodCategory) || undefined}
             />
 
             {

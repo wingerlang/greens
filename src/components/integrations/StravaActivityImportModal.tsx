@@ -470,13 +470,13 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                                                             <span className="font-bold text-emerald-400">{formatLocalDuration(a.moving_time / 60)}</span>
                                                             <span className="text-slate-500 text-[10px]">({formatLocalDuration(a.elapsed_time / 60)})</span>
                                                         </span>
-                                                        {a.average_speed && (
+                                                        {(a.average_speed !== undefined && a.average_speed > 0) && (
                                                             <span className="flex items-center gap-1.5 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/10">
                                                                 <span className="text-sky-500 text-[10px]">⚡</span>
                                                                 <span className="font-bold text-sky-400 font-mono tracking-tighter">{formatLocalPace(a.average_speed, a.type)}</span>
                                                             </span>
                                                         )}
-                                                        {a.average_heartrate && (
+                                                        {(a.average_heartrate !== undefined && a.average_heartrate > 0) && (
                                                             <span className="flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/10">
                                                                 <span className="text-rose-500 text-[10px]">❤️</span>
                                                                 <span className="font-bold text-rose-400 font-mono tracking-tighter">{Math.round(a.average_heartrate)}</span>
@@ -521,13 +521,13 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange, autoS
                                                             <span className="font-bold text-amber-400">{formatLocalDuration(s.moving_time / 60)}</span>
                                                             <span className="text-slate-500 text-[10px]">({formatLocalDuration(s.elapsed_time / 60)})</span>
                                                         </span>
-                                                        {s.average_speed && (
+                                                        {(s.average_speed !== undefined && s.average_speed > 0) && (
                                                             <span className="flex items-center gap-1.5 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/10">
                                                                 <span className="text-sky-500 text-[10px]">⚡</span>
                                                                 <span className="font-bold text-sky-400 font-mono tracking-tighter">{formatLocalPace(s.average_speed, s.type)}</span>
                                                             </span>
                                                         )}
-                                                        {s.average_heartrate && (
+                                                        {(s.average_heartrate !== undefined && s.average_heartrate > 0) && (
                                                             <span className="text-rose-500/10 flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/10">
                                                                 <span className="text-rose-500 text-[10px]">❤️</span>
                                                                 <span className="font-bold text-rose-400 font-mono tracking-tighter">{Math.round(s.average_heartrate)}</span>

@@ -149,7 +149,21 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
              }
         }
 
-        // --- Coverage Endpoint ---
+        // --- Coverage Endpoints ---
+        if (url.pathname === "/api/developer/coverage/history" && req.method === "GET") {
+            try {
+                const HISTORY_PATH = "coverage/coverage_history.json";
+                let history = [];
+                try {
+                    const text = await Deno.readTextFile(HISTORY_PATH);
+                    history = JSON.parse(text);
+                } catch {}
+                return new Response(JSON.stringify({ history }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+            }
+        }
+
         if (url.pathname === "/api/developer/coverage" && req.method === "POST") {
             try {
                 // 1. Clean previous
@@ -190,7 +204,7 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
                 // 5. Parse Output
                 const lines = outputStr.split('\n');
                 const files = [];
-                let total = { branch: "0.0", line: "0.0" };
+                let total = { branch: "0.0", function: "0.0", line: "0.0" };
 
                 for (const line of lines) {
                     // Remove ANSI codes
@@ -198,20 +212,43 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
                     if (!cleanLine.trim().startsWith('|')) continue;
 
                     const parts = cleanLine.split('|').map(s => s.trim()).filter(s => s !== '');
-                    if (parts.length < 3) continue;
+                    if (parts.length < 4) continue;
                     if (parts[0] === 'File' || parts[0].startsWith('---')) continue;
 
                     const row = {
                         file: parts[0],
                         branch: parts[1],
-                        line: parts[2]
+                        function: parts[2],
+                        line: parts[3]
                     };
 
                     if (row.file === 'All files') {
-                        total = { branch: row.branch, line: row.line };
+                        total = { branch: row.branch, function: row.function, line: row.line };
                     } else {
                         files.push(row);
                     }
+                }
+
+                // 6. Save to History
+                try {
+                    const newEntry = {
+                        date: new Date().toISOString(),
+                        branch: parseFloat(total.branch) || 0.0,
+                        function: parseFloat(total.function) || 0.0,
+                        line: parseFloat(total.line) || 0.0
+                    };
+                    const HISTORY_PATH = "coverage/coverage_history.json";
+                    await Deno.mkdir("coverage", { recursive: true });
+                    let history = [];
+                    try {
+                        const text = await Deno.readTextFile(HISTORY_PATH);
+                        history = JSON.parse(text);
+                    } catch {}
+                    history.push(newEntry);
+                    if (history.length > 30) history.shift();
+                    await Deno.writeTextFile(HISTORY_PATH, JSON.stringify(history, null, 2));
+                } catch (err) {
+                    console.error("Failed to save coverage history inside API handler:", err);
                 }
 
                 return new Response(JSON.stringify({ total, files, raw: outputStr }), { headers });

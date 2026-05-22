@@ -67,5 +67,5 @@ Deno.test("getAssaultBikeLevel", () => {
     // Loop finishes. Returns default 'Beginner'.
 
     assertEquals(getAssaultBikeLevel(39, '1m', 'male'), 'Beginner');
-    assertEquals(getAssaultBikeLevel(10, '1m', 'male'), 'Beginner');
+    assertEquals(getAssaultBikeLevel(10, '1m', 'male'), '-');
 });

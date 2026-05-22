@@ -5,6 +5,40 @@ import { UniversalActivity } from '../models/types.ts';
  */
 
 /**
+ * Checks if an activity is a run.
+ */
+export function isRun(activity: any): boolean {
+    if (!activity) return false;
+    const type = (activity.type || activity.performance?.activityType || '').toLowerCase();
+    
+    // Safety check to prevent cardio machines or rides from being flagged as a run
+    const lowerType = type.toLowerCase();
+    if (
+        lowerType.includes('ride') || 
+        lowerType.includes('cycl') || 
+        lowerType.includes('cyk') ||
+        lowerType.includes('cross') ||
+        lowerType.includes('elliptical') ||
+        lowerType.includes('stair') ||
+        lowerType.includes('row') ||
+        lowerType.includes('cardio')
+    ) {
+        return false;
+    }
+    
+    return ['running', 'run', 'löp', 'jog', 'trail'].some(t => lowerType.includes(t));
+}
+
+/**
+ * Checks if an activity is strength training.
+ */
+export function isStrength(activity: any): boolean {
+    if (!activity) return false;
+    const type = (activity.type || activity.performance?.activityType || '').toLowerCase();
+    return ['strength', 'styrka'].some(t => type.includes(t));
+}
+
+/**
  * Checks if an activity is a competition.
  */
 export function isCompetition(activity: UniversalActivity | any): boolean {
@@ -15,8 +49,8 @@ export function isCompetition(activity: UniversalActivity | any): boolean {
     const notes = (activity.performance?.notes || activity.notes || '').toLowerCase();
     
     // Explicit race flags (Planned or Actual) take absolute priority
-    const isRacePlanned = !!activity.plan?.isRace || activity.plan?.category === 'RACE';
-    const isRaceActual = activity.subType === 'race' || activity.isRace === true || activity.performance?.subType === 'race' || activity.isCompetition === true || activity.performance?.activityType === 'race';
+    const isRacePlanned = !!activity.plan?.isRace || activity.plan?.category === 'RACE' || activity.isRace === true || activity.category === 'RACE';
+    const isRaceActual = activity.subType === 'race' || activity.performance?.subType === 'race' || activity.isCompetition === true || activity.performance?.activityType === 'race';
     
     if (isRacePlanned || isRaceActual) return true;
 
@@ -47,21 +81,59 @@ export function isCompetition(activity: UniversalActivity | any): boolean {
  * Checks if an activity is a warmup or cooldown.
  */
 export function isWarmupOrCooldown(activity: any): boolean {
-    const title = (activity.plan?.title || activity.name || activity.title || '').toLowerCase();
+    const title = (activity.plan?.title || activity.name || activity.title || activity.notes || activity.performance?.notes || '').toLowerCase();
     const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
+    const category = (activity.category || activity.plan?.category || '').toLowerCase();
     
     return subType === 'warmup' || 
            subType === 'cooldown' || 
-           title.startsWith('uppjogg') ||
-           title.includes(' uppjogg') ||
-           title.startsWith('nerjogg') ||
-           title.includes(' nerjogg') ||
+           category === 'warmup' ||
+           category === 'cooldown' ||
+           title.includes('uppjogg') ||
+           title.includes('nerjogg') ||
+           title.includes('nedjogg') ||
            title.includes('warmup') || 
            title.includes('cooldown') ||
            title.includes('nervärmning') ||
            title.includes('nedvarvning') ||
            title.includes('nedvärmning') ||
            title.includes('uppvärmning');
+}
+
+/**
+ * Checks if an activity is a tempo or interval session.
+ */
+export function isTempoInterval(activity: any): boolean {
+    if (!activity) return false;
+    const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
+    const title = (activity.title || activity.plan?.title || activity.name || '').toLowerCase();
+    const notes = (activity.notes || activity.performance?.notes || '').toLowerCase();
+    
+    return subType === 'interval' || 
+           subType === 'tempo' || 
+           title.includes('intervall') || 
+           title.includes('tempo') ||
+           notes.includes('intervall') ||
+           notes.includes('tempo') ||
+           /\d+\s*x\s*\d+/.test(title) ||
+           /\d+\s*x\s*\d+/.test(notes);
+}
+
+/**
+ * Checks if an activity is a recovery session.
+ */
+export function isRecovery(activity: any): boolean {
+    if (!activity) return false;
+    const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
+    const category = (activity.category || activity.plan?.category || '').toLowerCase();
+    const title = (activity.title || activity.plan?.title || activity.name || '').toLowerCase();
+    const notes = (activity.notes || activity.performance?.notes || '').toLowerCase();
+    
+    return subType === 'recovery' || 
+           category === 'recovery' || 
+           title.includes('återhämtning') ||
+           title.includes('recovery') ||
+           notes.includes('återhämtning');
 }
 
 /**

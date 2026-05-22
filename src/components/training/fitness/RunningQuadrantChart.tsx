@@ -12,7 +12,7 @@ import {
     Cell
 } from 'recharts';
 import { ExerciseEntry } from '../../../models/types.ts';
-import { LayoutGrid, Info, Activity, Zap, Footprints, Timer, Trophy, TrendingUp, Medal } from 'lucide-react';
+import { LayoutGrid, Info, Activity, Zap, Footprints, Timer, Trophy, TrendingUp, Medal, Mountain, RefreshCcw } from 'lucide-react';
 import { useData } from '../../../context/DataContext.tsx';
 import { isQualitySession } from '../../../utils/activityUtils.ts';
 
@@ -101,6 +101,7 @@ const clusterData = (points: any[], xAxisKey: string, yAxisKey: string, resoluti
             hr: c.sumHr / c.clusterCount,
             elevationGain: c.sumElevation / c.clusterCount,
             distance: c.sumDist / c.clusterCount,
+            stifa: c.sumDist > 0 ? c.sumElevation / c.sumDist : 0,
             duration: c.sumDur / c.clusterCount,
             title: `${c.clusterCount} pass`,
             isCluster: true,
@@ -154,9 +155,15 @@ function CustomTooltip({ active, payload, onOpenActivity }: any) {
                             )}
                         </p>
                     </div>
-                    <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
-                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Höjdmeter</p>
-                        <p className="text-xs text-amber-400 font-mono font-black">{data.elevationGain || 0} m</p>
+                    <div className="border-t border-white/5 pt-2 mt-1 flex justify-between items-center">
+                        <div>
+                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Höjdmeter</p>
+                            <p className="text-xs text-amber-400 font-mono font-black">{data.elevationGain || 0} m</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">STIFA</p>
+                            <p className="text-xs text-indigo-400 font-mono font-black">{data.stifa.toFixed(2)} m/km</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -165,14 +172,114 @@ function CustomTooltip({ active, payload, onOpenActivity }: any) {
     return null;
 }
 
+function AxisFilterControl({ mode, range, onChange }: { 
+    mode: string, 
+    range: [number, number], 
+    onChange: (range: [number, number]) => void 
+}) {
+    if (mode === 'date') {
+        const start = new Date(range[0]).toISOString().split('T')[0];
+        const end = new Date(range[1]).toISOString().split('T')[0];
+        return (
+            <div className="flex items-center gap-1">
+                <input 
+                    type="date" 
+                    value={start} 
+                    onChange={(e) => onChange([new Date(e.target.value).getTime(), range[1]])}
+                    className="bg-slate-800 border border-white/5 text-[9px] text-white px-2 py-1 rounded outline-none"
+                />
+                <span className="text-slate-600 text-[9px]">-</span>
+                <input 
+                    type="date" 
+                    value={end} 
+                    onChange={(e) => onChange([range[0], new Date(e.target.value).getTime()])}
+                    className="bg-slate-800 border border-white/5 text-[9px] text-white px-2 py-1 rounded outline-none"
+                />
+            </div>
+        );
+    }
+    
+    if (mode === 'pace') {
+        const formatPaceVal = (s: number) => {
+            const m = Math.floor(s / 60);
+            const sec = Math.round(s % 60);
+            return `${m}:${sec.toString().padStart(2, '0')}`;
+        };
+        const parsePaceVal = (str: string) => {
+            const parts = str.split(':').map(Number);
+            if (parts.length === 1) return parts[0] * 60;
+            return (parts[0] * 60) + (parts[1] || 0);
+        };
+        return (
+            <div className="flex items-center gap-1">
+                <div className="flex flex-col items-center">
+                    <span className="text-[7px] text-slate-600 uppercase font-bold mb-0.5">Min</span>
+                    <input 
+                        type="text" 
+                        defaultValue={formatPaceVal(range[0])} 
+                        onBlur={(e) => onChange([parsePaceVal(e.target.value), range[1]])}
+                        onKeyDown={(e) => { if(e.key === 'Enter') onChange([parsePaceVal((e.target as any).value), range[1]]) }}
+                        className="w-12 bg-slate-800 border border-white/5 text-[9px] text-white px-1 py-1 rounded outline-none font-mono text-center"
+                    />
+                </div>
+                <span className="text-slate-600 text-[9px] mt-2">-</span>
+                <div className="flex flex-col items-center">
+                    <span className="text-[7px] text-slate-600 uppercase font-bold mb-0.5">Max</span>
+                    <input 
+                        type="text" 
+                        defaultValue={formatPaceVal(range[1])} 
+                        onBlur={(e) => onChange([range[0], parsePaceVal(e.target.value)])}
+                        onKeyDown={(e) => { if(e.key === 'Enter') onChange([range[0], parsePaceVal((e.target as any).value)]) }}
+                        className="w-12 bg-slate-800 border border-white/5 text-[9px] text-white px-1 py-1 rounded outline-none font-mono text-center"
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-1">
+            <div className="flex flex-col items-center">
+                <span className="text-[7px] text-slate-600 uppercase font-bold mb-0.5">Min</span>
+                <input 
+                    type="number" 
+                    value={range[0]} 
+                    onChange={(e) => onChange([Number(e.target.value), range[1]])}
+                    className="w-10 bg-slate-800 border border-white/5 text-[9px] text-white px-1 py-1 rounded outline-none font-mono text-center"
+                />
+            </div>
+            <span className="text-slate-600 text-[9px] mt-2">-</span>
+            <div className="flex flex-col items-center">
+                <span className="text-[7px] text-slate-600 uppercase font-bold mb-0.5">Max</span>
+                <input 
+                    type="number" 
+                    value={range[1]} 
+                    onChange={(e) => onChange([range[0], Number(e.target.value)])}
+                    className="w-10 bg-slate-800 border border-white/5 text-[9px] text-white px-1 py-1 rounded outline-none font-mono text-center"
+                />
+            </div>
+            <span className="text-[8px] text-slate-500 uppercase font-black ml-0.5 mt-2">
+                {mode === 'distance' ? 'km' : mode === 'hr' ? 'bpm' : mode === 'elevation' ? 'm' : mode === 'stifa' ? 'm/k' : ''}
+            </span>
+        </div>
+    );
+}
+
 export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onHoverDate }: RunningQuadrantChartProps) {
     const { userSettings } = useData();
     const longRunThreshold = userSettings?.longRunThreshold || 20;
 
-    const [xAxisMode, setXAxisMode] = React.useState<'distance' | 'hr' | 'elevation' | 'date' | 'pace'>('distance');
-    const [yAxisMode, setYAxisMode] = React.useState<'pace' | 'hr' | 'elevation' | 'date' | 'distance'>('distance');
+    const [xAxisMode, setXAxisMode] = React.useState<'distance' | 'hr' | 'elevation' | 'date' | 'pace' | 'stifa'>('distance');
+    const [yAxisMode, setYAxisMode] = React.useState<'pace' | 'hr' | 'elevation' | 'date' | 'distance' | 'stifa'>('distance');
     const [activeFilters, setActiveFilters] = React.useState<Set<string>>(new Set(['all']));
-    const [distRange, setDistRange] = React.useState<[number, number]>([0, 1000]);
+    const [axisFilters, setAxisFilters] = React.useState<Record<string, [number, number]>>({
+        distance: [0, 100],
+        pace: [180, 600],
+        hr: [40, 200],
+        elevation: [0, 2000],
+        stifa: [0, 150],
+        date: [0, Date.now() + 86400000]
+    });
     const [intensityFilter, setIntensityFilter] = React.useState<'all' | 'high' | 'moderate' | 'low'>('all');
     const [showTrendline, setShowTrendline] = React.useState(false);
 
@@ -194,33 +301,49 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
     };
 
     const data = useMemo(() => {
-        return allRuns.map(run => ({
-            activityId: run.id,
-            date: run.date.split('T')[0],
-            distance: run.distance || 0,
-            duration: run.durationMinutes || 0,
-            elapsedTimeSeconds: run.performance?.elapsedTimeSeconds || (run.durationMinutes * 60),
-            paceSecs: (run.durationMinutes * 60) / (run.distance || 1),
-            hr: run.excludeHeartRate ? 0 : (run.heartRateAvg || 0),
-            excludeHeartRate: run.excludeHeartRate || false,
-            elevationGain: run.elevationGain || run.performance?.elevationGain || 0,
-            intensity: run.intensity,
-            title: run.title || run.notes?.substring(0, 40),
-            isRace: run.isRace === true || 
-                    run.subType === 'race' || 
-                    run.subType === 'competition' ||
-                    run.performance?.subType === 'race' || 
-                    run.performance?.subType === 'competition' ||
-                    run.category === 'RACE' ||
-                    run.performance?.activityType === 'race',
-            isLongRun: (run.distance || 0) >= longRunThreshold && (run.distance || 0) < 44,
-            isUltra: (run.distance || 0) >= 44,
-            isInterval: isQualitySession(run),
-            timestamp: new Date(run.date).getTime()
-        })).filter(d => d.distance > 0 && d.paceSecs < 600);
-    }, [allRuns]);
+        return allRuns.map(run => {
+            const distance = run.distance || 0;
+            const elevation = run.elevationGain || run.performance?.elevationGain || 0;
+            const stifa = distance > 0 ? elevation / distance : 0;
+            const title = (run.title || run.notes || '').toLowerCase();
+            const isTrail = ['trail', 'terräng', 'obanat', 'stig'].some(kw => title.includes(kw));
+
+            return {
+                activityId: run.id,
+                date: run.date.split('T')[0],
+                distance,
+                duration: run.durationMinutes || 0,
+                elapsedTimeSeconds: run.performance?.elapsedTimeSeconds || (run.durationMinutes * 60),
+                paceSecs: (run.durationMinutes * 60) / (distance || 1),
+                hr: run.excludeHeartRate ? 0 : (run.heartRateAvg || 0),
+                excludeHeartRate: run.excludeHeartRate || false,
+                elevationGain: elevation,
+                stifa,
+                isTrail,
+                intensity: run.intensity,
+                title: run.title || run.notes?.substring(0, 40),
+                isRace: run.isRace === true || 
+                        run.subType === 'race' || 
+                        run.subType === 'competition' ||
+                        run.performance?.subType === 'race' || 
+                        run.performance?.subType === 'competition' ||
+                        run.category === 'RACE' ||
+                        run.performance?.activityType === 'race',
+                isLongRun: distance >= longRunThreshold && distance < 44,
+                isUltra: distance >= 44,
+                isInterval: isQualitySession(run),
+                timestamp: new Date(run.date).getTime()
+            };
+        }).filter(d => d.distance > 0 && d.paceSecs < 600);
+    }, [allRuns, longRunThreshold]);
 
     const filteredData = useMemo(() => {
+        const xKey = xAxisMode === 'distance' ? 'distance' : xAxisMode === 'hr' ? 'hr' : xAxisMode === 'elevation' ? 'elevationGain' : xAxisMode === 'pace' ? 'paceSecs' : xAxisMode === 'stifa' ? 'stifa' : 'timestamp';
+        const yKey = yAxisMode === 'pace' ? 'paceSecs' : yAxisMode === 'hr' ? 'hr' : yAxisMode === 'elevation' ? 'elevationGain' : yAxisMode === 'distance' ? 'distance' : yAxisMode === 'stifa' ? 'stifa' : 'timestamp';
+        
+        const xRange = axisFilters[xAxisMode] || [-Infinity, Infinity];
+        const yRange = axisFilters[yAxisMode] || [-Infinity, Infinity];
+
         return data.filter(d => {
             // Category Filters (OR logic between selected categories)
             if (!activeFilters.has('all')) {
@@ -229,17 +352,23 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                 if (activeFilters.has('long') && d.isLongRun) match = true;
                 if (activeFilters.has('ultra') && d.isUltra) match = true;
                 if (activeFilters.has('interval') && d.isInterval) match = true;
+                if (activeFilters.has('trail') && d.isTrail) match = true;
                 if (!match) return false;
             }
 
-            // Distance Range Filter
-            if (d.distance < distRange[0] || d.distance > distRange[1]) return false;
+            // Dynamic Axis Filters
+            const xVal = d[xKey as keyof typeof d] as number;
+            const yVal = d[yKey as keyof typeof d] as number;
+
+            // Handle date range specifically if needed, otherwise standard number check
+            if (xVal < xRange[0] || xVal > xRange[1]) return false;
+            if (yVal < yRange[0] || yVal > yRange[1]) return false;
 
             // Intensity Filter
             if (intensityFilter !== 'all' && d.intensity !== intensityFilter) return false;
             return true;
         });
-    }, [data, activeFilters, intensityFilter, distRange]);
+    }, [data, activeFilters, intensityFilter, axisFilters, xAxisMode, yAxisMode]);
 
     const { distBuckets, totalRuns, medians, thresholds, chartData, trendData: regressionPoints } = useMemo(() => {
         let thresholdsList: number[] = [];
@@ -256,6 +385,9 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
         } else if (xAxisMode === 'pace') {
             thresholdsList = [0, 240, 270, 300, 330, 360, 420, 540];
             labelsList = ['<4:00', '4:00-4:30', '4:30-5:00', '5:00-5:30', '5:30-6:00', '6:00-7:00', '7:00-9:00', '9:00+'];
+        } else if (xAxisMode === 'stifa') {
+            thresholdsList = [0, 5, 10, 20, 40, 60, 100, 150];
+            labelsList = ['0-5', '5-10', '10-20', '20-40', '40-60', '60-100', '100-150', '150+'];
         } else if (xAxisMode === 'date') {
             const minTs = Math.min(...filteredData.map(d => d.timestamp));
             const maxTs = Math.max(...filteredData.map(d => d.timestamp));
@@ -268,7 +400,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
             const min = thresholdsList[i];
             const max = thresholdsList[i+1] || (xAxisMode === 'date' ? Infinity : Infinity);
             const runs = filteredData.filter(d => {
-                const val = xAxisMode === 'distance' ? d.distance : xAxisMode === 'hr' ? d.hr : xAxisMode === 'elevation' ? d.elevationGain : xAxisMode === 'pace' ? d.paceSecs : d.timestamp;
+                const val = xAxisMode === 'distance' ? d.distance : xAxisMode === 'hr' ? d.hr : xAxisMode === 'elevation' ? d.elevationGain : xAxisMode === 'pace' ? d.paceSecs : xAxisMode === 'stifa' ? d.stifa : d.timestamp;
                 return val >= min && val < max && (xAxisMode !== 'hr' || (d.hr > 50 && !d.excludeHeartRate));
             });
             const avgPace = runs.length > 0 ? runs.reduce((sum, r) => sum + r.paceSecs, 0) / runs.length : 0;
@@ -278,23 +410,24 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
         const validData = (xAxisMode === 'hr' || yAxisMode === 'hr') ? filteredData.filter(d => d.hr > 50 && !d.excludeHeartRate) : filteredData;
 
         const sortedX = [...validData].sort((a, b) => {
-            const valA = xAxisMode === 'distance' ? a.distance : xAxisMode === 'hr' ? a.hr : xAxisMode === 'elevation' ? a.elevationGain : xAxisMode === 'pace' ? a.paceSecs : a.timestamp;
-            const valB = xAxisMode === 'distance' ? b.distance : xAxisMode === 'hr' ? b.hr : xAxisMode === 'elevation' ? b.elevationGain : xAxisMode === 'pace' ? b.paceSecs : b.timestamp;
+            const valA = xAxisMode === 'distance' ? a.distance : xAxisMode === 'hr' ? a.hr : xAxisMode === 'elevation' ? a.elevationGain : xAxisMode === 'pace' ? a.paceSecs : xAxisMode === 'stifa' ? a.stifa : a.timestamp;
+            const valB = xAxisMode === 'distance' ? b.distance : xAxisMode === 'hr' ? b.hr : xAxisMode === 'elevation' ? b.elevationGain : xAxisMode === 'pace' ? b.paceSecs : xAxisMode === 'stifa' ? b.stifa : b.timestamp;
             return valA - valB;
         });
         
         const sortedY = [...validData].sort((a, b) => {
-            const valA = yAxisMode === 'pace' ? a.paceSecs : yAxisMode === 'hr' ? a.hr : yAxisMode === 'elevation' ? a.elevationGain : yAxisMode === 'distance' ? a.distance : a.timestamp;
-            const valB = yAxisMode === 'pace' ? b.paceSecs : yAxisMode === 'hr' ? b.hr : yAxisMode === 'elevation' ? b.elevationGain : yAxisMode === 'distance' ? b.distance : b.timestamp;
+            const valA = yAxisMode === 'pace' ? a.paceSecs : yAxisMode === 'hr' ? a.hr : yAxisMode === 'elevation' ? a.elevationGain : yAxisMode === 'distance' ? a.distance : yAxisMode === 'stifa' ? a.stifa : a.timestamp;
+            const valB = yAxisMode === 'pace' ? b.paceSecs : yAxisMode === 'hr' ? b.hr : yAxisMode === 'elevation' ? b.elevationGain : yAxisMode === 'distance' ? b.distance : yAxisMode === 'stifa' ? b.stifa : b.timestamp;
             return valA - valB;
         });
         
-        const getMedian = (arr: any[], mode: 'distance'|'hr'|'elevation'|'pace'|'date') => {
+        const getMedian = (arr: any[], mode: 'distance'|'hr'|'elevation'|'pace'|'date'|'stifa') => {
             if (arr.length === 0) return 0;
             const mid = arr[Math.floor(arr.length / 2)];
             if (mode === 'distance') return mid.distance;
             if (mode === 'hr') return mid.hr;
             if (mode === 'elevation') return mid.elevationGain;
+            if (mode === 'stifa') return mid.stifa;
             if (mode === 'date') return mid.timestamp;
             return mid.paceSecs;
         };
@@ -304,8 +437,8 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
             y: getMedian(sortedY, yAxisMode)
         };
 
-        const xKey = xAxisMode === 'distance' ? 'distance' : xAxisMode === 'hr' ? 'hr' : xAxisMode === 'elevation' ? 'elevationGain' : xAxisMode === 'pace' ? 'paceSecs' : 'timestamp';
-        const yKey = yAxisMode === 'pace' ? 'paceSecs' : yAxisMode === 'hr' ? 'hr' : yAxisMode === 'elevation' ? 'elevationGain' : yAxisMode === 'distance' ? 'distance' : 'timestamp';
+        const xKey = xAxisMode === 'distance' ? 'distance' : xAxisMode === 'hr' ? 'hr' : xAxisMode === 'elevation' ? 'elevationGain' : xAxisMode === 'pace' ? 'paceSecs' : xAxisMode === 'stifa' ? 'stifa' : 'timestamp';
+        const yKey = yAxisMode === 'pace' ? 'paceSecs' : yAxisMode === 'hr' ? 'hr' : yAxisMode === 'elevation' ? 'elevationGain' : yAxisMode === 'distance' ? 'distance' : yAxisMode === 'stifa' ? 'stifa' : 'timestamp';
         
         const clustered = clusterData(validData, xKey, yKey, 75);
 
@@ -370,6 +503,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                                 { id: 'pace', label: 'Tempo' },
                                 { id: 'hr', label: 'Puls' },
                                 { id: 'elevation', label: 'Höjd' },
+                                { id: 'stifa', label: 'STIFA' },
                                 { id: 'date', label: 'Datum' }
                             ].map(d => (
                                 <button 
@@ -390,6 +524,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                                 { id: 'distance', label: 'Distans' },
                                 { id: 'hr', label: 'Puls' },
                                 { id: 'elevation', label: 'Höjd' },
+                                { id: 'stifa', label: 'STIFA' },
                                 { id: 'date', label: 'Datum' }
                             ].map(d => (
                                 <button 
@@ -412,6 +547,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                         { id: 'all', label: 'Alla', icon: Activity },
                         { id: 'race', label: 'Tävling', icon: Trophy, color: 'text-amber-400' },
                         { id: 'interval', label: 'Intervaller', icon: Zap, color: 'text-rose-400' },
+                        { id: 'trail', label: 'Trail', icon: Mountain, color: 'text-emerald-400' },
                         { id: 'long', label: 'Långpass', icon: Footprints, color: 'text-sky-400' },
                         { id: 'ultra', label: 'Ultra', icon: Medal, color: 'text-indigo-400' }
                     ].map(f => (
@@ -426,24 +562,22 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                     ))}
                 </div>
 
-                <div className="flex items-center gap-2 border-r border-white/5 pr-4 mr-2">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2">Distans:</span>
-                    <div className="flex bg-slate-800 border border-white/5 p-0.5 rounded-lg">
-                        {[
-                            { label: 'Alla', range: [0, 1000] },
-                            { label: '5-10k', range: [5, 10] },
-                            { label: '10-21k', range: [10, 21.1] },
-                            { label: '21-42k', range: [21.1, 42.2] },
-                            { label: 'Ultra', range: [42.2, 1000] }
-                        ].map((p, i) => (
-                            <button 
-                                key={i}
-                                onClick={() => setDistRange(p.range as [number, number])}
-                                className={`px-2.5 py-1 text-[9px] font-black uppercase rounded transition-all ${distRange[0] === p.range[0] && distRange[1] === p.range[1] ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'}`}
-                            >
-                                {p.label}
-                            </button>
-                        ))}
+                <div className="flex flex-col gap-2 border-r border-white/5 pr-4 mr-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12">Filter X:</span>
+                        <AxisFilterControl 
+                            mode={xAxisMode} 
+                            range={axisFilters[xAxisMode]} 
+                            onChange={(r) => setAxisFilters(prev => ({ ...prev, [xAxisMode]: r }))} 
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12">Filter Y:</span>
+                        <AxisFilterControl 
+                            mode={yAxisMode} 
+                            range={axisFilters[yAxisMode]} 
+                            onChange={(r) => setAxisFilters(prev => ({ ...prev, [yAxisMode]: r }))} 
+                        />
                     </div>
                 </div>
 
@@ -474,6 +608,22 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                     <TrendingUp size={14} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Trendlinje</span>
                 </button>
+
+                <button 
+                    onClick={() => setAxisFilters({
+                        distance: [0, 100],
+                        pace: [180, 600],
+                        hr: [40, 200],
+                        elevation: [0, 2000],
+                        stifa: [0, 150],
+                        date: [0, Date.now() + 86400000]
+                    })}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/5 text-slate-600 hover:text-white transition-all ml-auto"
+                    title="Nollställ alla axelfilter"
+                >
+                    <RefreshCcw size={14} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Nollställ</span>
+                </button>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
@@ -502,42 +652,42 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                         
                         <XAxis 
                             type="number" 
-                            dataKey={xAxisMode === 'distance' ? 'distance' : xAxisMode === 'hr' ? 'hr' : xAxisMode === 'elevation' ? 'elevationGain' : xAxisMode === 'pace' ? 'paceSecs' : 'timestamp'}
-                            name={xAxisMode === 'distance' ? 'Distans' : xAxisMode === 'hr' ? 'Puls' : xAxisMode === 'elevation' ? 'Höjdmeter' : xAxisMode === 'pace' ? 'Tempo' : 'Datum'}
-                            unit={xAxisMode === 'distance' ? ' km' : xAxisMode === 'hr' ? ' bpm' : xAxisMode === 'elevation' ? ' m' : xAxisMode === 'pace' ? '' : ''}
+                            dataKey={xAxisMode === 'distance' ? 'distance' : xAxisMode === 'hr' ? 'hr' : xAxisMode === 'elevation' ? 'elevationGain' : xAxisMode === 'pace' ? 'paceSecs' : xAxisMode === 'stifa' ? 'stifa' : 'timestamp'}
+                            name={xAxisMode === 'distance' ? 'Distans' : xAxisMode === 'hr' ? 'Puls' : xAxisMode === 'elevation' ? 'Höjdmeter' : xAxisMode === 'pace' ? 'Tempo' : xAxisMode === 'stifa' ? 'STIFA' : 'Datum'}
+                            unit={xAxisMode === 'distance' ? ' km' : xAxisMode === 'hr' ? ' bpm' : xAxisMode === 'elevation' ? ' m' : xAxisMode === 'stifa' ? ' m/k' : xAxisMode === 'pace' ? '' : ''}
                             stroke="#ffffff30"
                             tick={{ fill: '#ffffff50', fontSize: 10, fontWeight: 'bold' }}
                             reversed={xAxisMode === 'pace'}
                             tickFormatter={xAxisMode === 'date' ? (val) => new Date(val).toLocaleDateString('sv-SE', { day: '2-digit', month: 'short' }) : xAxisMode === 'pace' ? formatPace : undefined}
                             label={{ 
-                                value: xAxisMode === 'distance' ? 'Distans (km)' : xAxisMode === 'hr' ? 'Puls (bpm)' : xAxisMode === 'elevation' ? 'Höjdmeter (m)' : xAxisMode === 'pace' ? 'Tempo (min/km)' : 'Datum', 
+                                value: xAxisMode === 'distance' ? 'Distans (km)' : xAxisMode === 'hr' ? 'Puls (bpm)' : xAxisMode === 'elevation' ? 'Höjdmeter (m)' : xAxisMode === 'pace' ? 'Tempo (min/km)' : xAxisMode === 'stifa' ? 'STIFA (m/k)' : 'Datum', 
                                 position: 'bottom', 
                                 fill: '#ffffff30', 
                                 fontSize: 10, 
                                 fontWeight: 'black', 
                                 offset: 0 
                             }}
-                            domain={xAxisMode === 'hr' ? [100, 200] : xAxisMode === 'date' ? ['dataMin', 'dataMax'] : xAxisMode === 'pace' ? ['dataMin - 10', 'dataMax + 10'] : [0, 'dataMax + 2']}
+                            domain={xAxisMode === 'hr' ? [100, 200] : xAxisMode === 'date' ? ['dataMin', 'dataMax'] : xAxisMode === 'pace' ? ['dataMin - 10', 'dataMax + 10'] : xAxisMode === 'stifa' ? [0, 'dataMax + 5'] : [0, 'dataMax + 2']}
                         />
 
                         {/* Y-Axis */}
                         <YAxis 
                             type="number" 
-                            dataKey={yAxisMode === 'pace' ? 'paceSecs' : yAxisMode === 'hr' ? 'hr' : yAxisMode === 'elevation' ? 'elevationGain' : yAxisMode === 'distance' ? 'distance' : 'timestamp'}
-                            name={yAxisMode === 'pace' ? 'Tempo' : yAxisMode === 'hr' ? 'Puls' : yAxisMode === 'elevation' ? 'Höjdmeter' : yAxisMode === 'distance' ? 'Distans' : 'Datum'}
+                            dataKey={yAxisMode === 'pace' ? 'paceSecs' : yAxisMode === 'hr' ? 'hr' : yAxisMode === 'elevation' ? 'elevationGain' : yAxisMode === 'distance' ? 'distance' : yAxisMode === 'stifa' ? 'stifa' : 'timestamp'}
+                            name={yAxisMode === 'pace' ? 'Tempo' : yAxisMode === 'hr' ? 'Puls' : yAxisMode === 'elevation' ? 'Höjdmeter' : yAxisMode === 'distance' ? 'Distans' : yAxisMode === 'stifa' ? 'STIFA' : 'Datum'}
                             reversed={yAxisMode === 'pace'} 
                             stroke="#ffffff30"
                             tick={{ fill: '#ffffff50', fontSize: 10, fontWeight: 'bold' }}
                             tickFormatter={yAxisMode === 'pace' ? formatPace : yAxisMode === 'date' ? (val) => new Date(val).toLocaleDateString('sv-SE', { month: 'short' }) : (val) => val.toString()}
                             label={{ 
-                                value: yAxisMode === 'pace' ? 'Tempo (min/km)' : yAxisMode === 'hr' ? 'Puls (bpm)' : yAxisMode === 'elevation' ? 'Höjdmeter (m)' : yAxisMode === 'distance' ? 'Distans (km)' : 'Datum', 
+                                value: yAxisMode === 'pace' ? 'Tempo (min/km)' : yAxisMode === 'hr' ? 'Puls (bpm)' : yAxisMode === 'elevation' ? 'Höjdmeter (m)' : yAxisMode === 'distance' ? 'Distans (km)' : yAxisMode === 'stifa' ? 'STIFA (m/k)' : 'Datum', 
                                 angle: -90, 
                                 position: 'insideLeft', 
                                 fill: '#ffffff30', 
                                 fontSize: 10, 
                                 fontWeight: 'black' 
                             }}
-                            domain={yAxisMode === 'hr' ? [100, 200] : yAxisMode === 'date' ? ['dataMin', 'dataMax'] : ['dataMin - 5', 'dataMax + 5']}
+                            domain={yAxisMode === 'hr' ? [100, 200] : yAxisMode === 'date' ? ['dataMin', 'dataMax'] : yAxisMode === 'stifa' ? [0, 'dataMax + 5'] : ['dataMin - 5', 'dataMax + 5']}
                         />
 
                         <ZAxis type="number" dataKey="clusterCount" range={[40, 600]} />
@@ -566,7 +716,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                                     stroke="#ffffff15" 
                                     label={{ 
                                         position: 'insideBottomRight', 
-                                        value: xAxisMode === 'distance' ? (dist === 80.5 ? '50m' : `${dist}k`) : xAxisMode === 'hr' ? `${dist}bpm` : xAxisMode === 'elevation' ? `${dist}m` : xAxisMode === 'pace' ? formatPace(dist) : new Date(dist).toLocaleDateString('sv-SE', { month: 'short' }), 
+                                        value: xAxisMode === 'distance' ? (dist === 80.5 ? '50m' : `${dist}k`) : xAxisMode === 'hr' ? `${dist}bpm` : xAxisMode === 'elevation' ? `${dist}m` : xAxisMode === 'pace' ? formatPace(dist) : xAxisMode === 'stifa' ? `${dist}` : new Date(dist).toLocaleDateString('sv-SE', { month: 'short' }), 
                                         fill: '#ffffff20', 
                                         fontSize: 9,
                                         fontWeight: 'black',
@@ -589,8 +739,8 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                         >
                             {chartData.map((entry: any, index: number) => {
                                 // Determine color based on quadrant
-                                const valX = xAxisMode === 'distance' ? entry.distance : xAxisMode === 'hr' ? entry.hr : xAxisMode === 'elevation' ? entry.elevationGain : xAxisMode === 'pace' ? entry.paceSecs : entry.timestamp;
-                                const valY = yAxisMode === 'pace' ? entry.paceSecs : yAxisMode === 'hr' ? entry.hr : yAxisMode === 'elevation' ? entry.elevationGain : yAxisMode === 'distance' ? entry.distance : entry.timestamp;
+                                const valX = xAxisMode === 'distance' ? entry.distance : xAxisMode === 'hr' ? entry.hr : xAxisMode === 'elevation' ? entry.elevationGain : xAxisMode === 'pace' ? entry.paceSecs : xAxisMode === 'stifa' ? entry.stifa : entry.timestamp;
+                                const valY = yAxisMode === 'pace' ? entry.paceSecs : yAxisMode === 'hr' ? entry.hr : yAxisMode === 'elevation' ? entry.elevationGain : yAxisMode === 'distance' ? entry.distance : yAxisMode === 'stifa' ? entry.stifa : entry.timestamp;
                                 
                                 const isXHigh = valX > medians.x;
                                 const isYHigh = yAxisMode === 'pace' ? (valY < medians.y) : (valY > medians.y); // Pace: Lower is higher performance
@@ -609,8 +759,8 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
                                         key={`cell-${index}`} 
                                         fill={isHovered ? '#3b82f6' : color} 
                                         fillOpacity={isHovered ? 1.0 : (entry.isCluster ? 0.3 : opacity)}
-                                        stroke={isHovered ? '#fff' : (entry.isRace ? '#fbbf24' : color)}
-                                        strokeWidth={isHovered ? 3 : (entry.isRace ? 1 : entry.isCluster ? 0.5 : 1)}
+                                        stroke={isHovered ? '#fff' : (entry.isRace ? '#fbbf24' : entry.isTrail ? '#10b981' : color)}
+                                        strokeWidth={isHovered ? 3 : (entry.isRace ? 2 : entry.isTrail ? 2 : entry.isCluster ? 0.5 : 1)}
                                         className="transition-all duration-300 cursor-pointer"
                                         onClick={() => !entry.isCluster && onOpenActivity?.(entry.activityId)}
                                     />
@@ -675,7 +825,7 @@ export function RunningQuadrantChart({ allRuns, onOpenActivity, hoveredDate, onH
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Footprints size={12} /> Fördelning per {xAxisMode === 'distance' ? 'distans' : xAxisMode === 'hr' ? 'puls' : xAxisMode === 'elevation' ? 'höjd' : xAxisMode === 'pace' ? 'tempo' : 'period'}-intervall
+                        <Footprints size={12} /> Fördelning per {xAxisMode === 'distance' ? 'distans' : xAxisMode === 'hr' ? 'puls' : xAxisMode === 'elevation' ? 'höjd' : xAxisMode === 'pace' ? 'tempo' : xAxisMode === 'stifa' ? 'STIFA' : 'period'}-intervall
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
                         {distBuckets.map((b, i) => (

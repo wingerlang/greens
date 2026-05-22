@@ -181,6 +181,10 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
             response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/foods")) {
             response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/vitals")) {
+            response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/purchases")) {
+            response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/strava")) {
             response = await handleStravaRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/social")) {

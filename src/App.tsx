@@ -88,6 +88,7 @@ const DeveloperTodos = React.lazy(() => import('./pages/developer/DeveloperTodos
 const DeveloperHealth = React.lazy(() => import('./pages/developer/DeveloperHealth.tsx').then(m => ({ default: m.DeveloperHealth })));
 const DeveloperManagement = React.lazy(() => import('./pages/developer/DeveloperManagement.tsx').then(m => ({ default: m.DeveloperManagement })));
 const DeveloperCoverage = React.lazy(() => import('./pages/developer/DeveloperCoverage.tsx').then(m => ({ default: m.DeveloperCoverage })));
+const MethodologyPage = React.lazy(() => import('./pages/MethodologyPage.tsx').then(m => ({ default: m.MethodologyPage })));
 
 function PageLoader() {
     return (
@@ -137,6 +138,8 @@ export function App() {
 
                                                 {/* Root Logic */}
                                                 <Route path="/" element={<RootHandler />} />
+                                                <Route path="/metodik" element={<MethodologyPage />} />
+                                                <Route path="/methodology" element={<MethodologyPage />} />
 
                                                 {/* Protected Routes */}
                                                 <Route path="/*" element={

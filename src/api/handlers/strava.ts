@@ -142,7 +142,22 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 description: detailedActivity.description || "",
                 name: detailedActivity.name || "",
                 moving_time: detailedActivity.moving_time,
-                elapsed_time: detailedActivity.elapsed_time
+                elapsed_time: detailedActivity.elapsed_time,
+                average_heartrate: detailedActivity.average_heartrate,
+                max_heartrate: detailedActivity.max_heartrate,
+                average_watts: detailedActivity.average_watts,
+                max_watts: detailedActivity.max_watts,
+                total_elevation_gain: detailedActivity.total_elevation_gain,
+                kilojoules: detailedActivity.kilojoules,
+                calories: detailedActivity.calories,
+                best_efforts: detailedActivity.best_efforts?.map((be: any) => ({
+                    name: be.name,
+                    distance: be.distance,
+                    elapsed_time: be.elapsed_time,
+                    moving_time: be.moving_time,
+                    start_date: be.start_date,
+                    pr_rank: be.pr_rank
+                }))
             }), { headers });
 
         } catch (e) {

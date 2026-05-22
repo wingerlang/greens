@@ -10,7 +10,11 @@ import {
 import { storageService } from '../../services/storage.ts';
 import type { FeedEventType } from '../../models/feedTypes.ts';
 
-export function useUserContext() {
+interface UseUserContextProps {
+    skipAutoSave: React.MutableRefObject<boolean>;
+}
+
+export function useUserContext({ skipAutoSave }: UseUserContextProps) {
     const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUserState] = useState<User | null>(null);
     const [userSettings, setUserSettings] = useState<AppSettings>(DEFAULT_USER_SETTINGS as AppSettings);
@@ -85,9 +89,13 @@ export function useUserContext() {
                 );
             }
 
+            // Sync via Granular API
+            skipAutoSave.current = true;
+            storageService.saveVitals(date, newData[date]).catch(e => console.error("Failed to sync vitals:", e));
+
             return newData;
         });
-    }, [emitFeedEvent]);
+    }, [emitFeedEvent, skipAutoSave]);
 
     const getVitalsForDate = React.useCallback((date: string): DailyVitals => {
         return dailyVitals[date] || {
@@ -102,7 +110,7 @@ export function useUserContext() {
     const toggleIncompleteDay = React.useCallback((date: string) => {
         setDailyVitals(prev => {
             const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
-            return {
+            const next = {
                 ...prev,
                 [date]: {
                     ...currentVitals,
@@ -110,13 +118,19 @@ export function useUserContext() {
                     updatedAt: new Date().toISOString()
                 }
             };
+            
+            // Sync via Granular API
+            skipAutoSave.current = true;
+            storageService.saveVitals(date, next[date]).catch(e => console.error("Failed to sync vitals:", e));
+            
+            return next;
         });
-    }, []);
+    }, [skipAutoSave]);
 
     const toggleCompleteDay = React.useCallback((date: string) => {
         setDailyVitals(prev => {
             const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
-            return {
+            const next = {
                 ...prev,
                 [date]: {
                     ...currentVitals,
@@ -126,8 +140,14 @@ export function useUserContext() {
                     updatedAt: new Date().toISOString()
                 }
             };
+
+            // Sync via Granular API
+            skipAutoSave.current = true;
+            storageService.saveVitals(date, next[date]).catch(e => console.error("Failed to sync vitals:", e));
+
+            return next;
         });
-    }, []);
+    }, [skipAutoSave]);
 
     // Sync userSettings state with currentUser.settings
     React.useEffect(() => {

@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { expect } from "https://deno.land/std@0.208.0/expect/mod.ts";
+import { assertEquals, assert } from "@std/assert";
 import { type FoodItem } from "../src/models/types.ts";
 
 // Mocking the behavior of analyzeImports
@@ -30,8 +30,8 @@ Deno.test("Bulk Import: Detect New Items", () => {
     const imported: FoodItem[] = [{ id: '1', name: 'Broccoli', calories: 34, protein: 2.8, fat: 0.4, carbs: 7, category: 'vegetables', unit: 'kg', createdAt: '', updatedAt: '' }];
 
     const results = analyzeImports(imported, existing);
-    expect(results[0].type).toBe('new');
-    expect(results[0].selected).toBe(true);
+    assertEquals(results[0].type, 'new');
+    assertEquals(results[0].selected, true);
 });
 
 Deno.test("Bulk Import: Detect Exact Duplicates", () => {
@@ -40,8 +40,8 @@ Deno.test("Bulk Import: Detect Exact Duplicates", () => {
     const imported: FoodItem[] = [item];
 
     const results = analyzeImports(imported, existing);
-    expect(results[0].type).toBe('duplicate');
-    expect(results[0].selected).toBe(false);
+    assertEquals(results[0].type, 'duplicate');
+    assertEquals(results[0].selected, false);
 });
 
 Deno.test("Bulk Import: Detect Modified Items", () => {
@@ -49,8 +49,8 @@ Deno.test("Bulk Import: Detect Modified Items", () => {
     const imported: FoodItem[] = [{ id: '1', name: 'Broccoli', calories: 40, protein: 3.0, fat: 0.4, carbs: 8, category: 'vegetables', unit: 'kg', createdAt: '', updatedAt: '' }];
 
     const results = analyzeImports(imported, existing);
-    expect(results[0].type).toBe('modified');
-    expect(results[0].selected).toBe(true);
+    assertEquals(results[0].type, 'modified');
+    assertEquals(results[0].selected, true);
 });
 
 Deno.test("Bulk Import: Support Name + Protein Only", () => {
@@ -78,7 +78,8 @@ Deno.test("Bulk Import: Support Name + Protein Only", () => {
     };
 
     const results = analyzeWithDefaults(imported, existing);
-    expect(results[0].type).toBe('new');
-    expect(results[0].imported.calories).toBe(0);
-    expect(results[0].imported.category).toBe('other');
+    assertEquals(results[0].type, 'new');
+    assertEquals(results[0].imported.calories, 0);
+    assertEquals(results[0].imported.category, 'other');
 });
+

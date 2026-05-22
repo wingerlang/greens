@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, type MutableRefObject } from 'react';
 import { AssaultBikeMath } from '../../utils/cyclingCalculations.ts';
+import { calculateCompetitionPercentile, getPerformanceTier } from '../../utils/performanceEngine.ts';
 import {
     type ExerciseEntry,
     type StrengthWorkout,
@@ -28,6 +29,7 @@ import { storageService } from '../../services/storage.ts';
 import type { FeedEventType } from '../../models/feedTypes.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { generateTrainingPlan } from '../../services/coach/planGenerator.ts';
+import { isWarmupOrCooldown, isCompetition, isRecovery } from '../../utils/activityUtils.ts';
 import { isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 import { parsePowerCalories } from '../../utils/analytics.ts';
 
@@ -1082,9 +1084,35 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     const calculateParticipantPoints = React.useCallback((compId: string, userId: string, date: string): number => {
         const comp = competitions.find(c => c.id === compId);
         if (!comp) return 0;
-        // Logic for calculating points based on rules will be implemented in a service/util
-        return 0; // Placeholder
-    }, [competitions]);
+
+        // 1. Find the activity for this user on this date
+        const activity = universalActivities.find(a => 
+            a.performance?.source?.userId === userId && 
+            a.date.split('T')[0] === date &&
+            a.performance?.raceDetails?.placement !== undefined
+        );
+
+        if (!activity || !activity.performance?.raceDetails) return 10; // Participation points
+
+        const { placement, totalParticipants } = activity.performance.raceDetails;
+        if (!placement || !totalParticipants) return 10;
+
+        const percentile = calculateCompetitionPercentile(placement, totalParticipants);
+        const tier = getPerformanceTier(percentile);
+
+        let points = 10; // Base participation
+
+        if (tier === 'top10') points += 50;
+        else if (tier === 'top33') points += 20;
+
+        // Podium Bonuses
+        if (placement === 1) points += 200;
+        else if (placement === 2) points += 100;
+        else if (placement === 3) points += 50;
+        else if (placement <= 10) points += 25;
+
+        return points;
+    }, [competitions, universalActivities]);
 
     const addTrainingCycle = React.useCallback((data: Omit<TrainingCycle, 'id'>): TrainingCycle => {
         const newCycle: TrainingCycle = {
@@ -1497,6 +1525,25 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
                     if (!isRunMatch && !isStrengthMatch && !isBikeMatch && !isHyroxMatch) {
                         return { actual, score: 0, reason: `Inkompatibel typ: ${pType} vs ${aType}` };
+                    }
+
+                    // Strict Category Match (User Request: Don't match warmup/cooldown/race/recovery to other types)
+                    const pIsWarmup = isWarmupOrCooldown(planned);
+                    const aIsWarmup = isWarmupOrCooldown(actual);
+                    if (pIsWarmup !== aIsWarmup) {
+                        return { actual, score: 0, reason: pIsWarmup ? "Planerat upp/nedjogg matchas ej till vanligt pass" : "Vanligt pass matchas ej till loggad upp/nedjogg" };
+                    }
+
+                    const pIsComp = isCompetition(planned);
+                    const aIsComp = isCompetition(actual);
+                    if (pIsComp !== aIsComp) {
+                        return { actual, score: 0, reason: pIsComp ? "Planerad tävling matchas ej till vanligt pass" : "Vanligt pass matchas ej till loggad tävling" };
+                    }
+
+                    const pIsRecovery = isRecovery(planned);
+                    const aIsRecovery = isRecovery(actual);
+                    if (pIsRecovery !== aIsRecovery) {
+                        return { actual, score: 0, reason: pIsRecovery ? "Planerad återhämtning matchas ej till vanligt pass" : "Vanligt pass matchas ej till loggad återhämtning" };
                     }
 
                     // Calculate match score (0-100)

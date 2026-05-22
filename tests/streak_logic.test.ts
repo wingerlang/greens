@@ -92,3 +92,13 @@ Deno.test("Streak Calculation: Longest streak in past", () => {
     assertEquals(stats.currentStreak, 1);
     assertEquals(stats.longestStreak, 5);
 });
+
+Deno.test({
+    name: "Cleanup - Close KV Connection",
+    sanitizeOps: false,
+    sanitizeResources: false
+}, async () => {
+    const { closeKv } = await import("../src/api/kv.ts");
+    await closeKv();
+});
+

@@ -5,6 +5,7 @@ import { CapacityChart } from './fitness/CapacityChart.tsx';
 import { PaceEfficiencyChart } from './fitness/PaceEfficiencyChart.tsx';
 import { RunningQuadrantChart } from './fitness/RunningQuadrantChart.tsx';
 import { YearlyBestList } from './fitness/YearlyBestList.tsx';
+import { BestEffortTrendChart } from './fitness/BestEffortTrendChart.tsx';
 import { RefreshCw } from 'lucide-react';
 
 interface CurrentFitnessViewProps {
@@ -130,6 +131,13 @@ export function CurrentFitnessView({
 
             <YearlyBestList 
                 activities={universalActivities}
+                onOpenActivity={onOpenActivity}
+            />
+
+            <BestEffortTrendChart
+                activities={universalActivities}
+                filterStartDate={filterStartDate}
+                filterEndDate={filterEndDate}
                 onOpenActivity={onOpenActivity}
             />
 

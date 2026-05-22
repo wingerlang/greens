@@ -9,6 +9,7 @@ interface RaceDashboardStatsProps {
         silverCount: number;
         bronzeCount: number;
         top10Count: number;
+        top33Count: number;
         avgPercent: number;
     };
 }
@@ -39,6 +40,11 @@ export function RaceDashboardStats({ stats }: RaceDashboardStatsProps) {
                     <div className="flex flex-col border-l border-white/10 pl-6">
                         <span className="text-[10px] uppercase font-black text-emerald-500 tracking-widest">Top 10%</span>
                         <span className="text-xl font-black text-white">{stats.top10Count} <span className="text-slate-500 font-bold text-xs uppercase">Gånger</span></span>
+                    </div>
+
+                    <div className="flex flex-col border-l border-white/10 pl-6">
+                        <span className="text-[10px] uppercase font-black text-indigo-400 tracking-widest">Top 33%</span>
+                        <span className="text-xl font-black text-white">{stats.top33Count} <span className="text-slate-500 font-bold text-xs uppercase">Gånger</span></span>
                     </div>
                     
                     <div className="flex flex-col border-l border-white/10 pl-6">

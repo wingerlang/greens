@@ -5,7 +5,8 @@ import { ToolsRacePlannerPage } from './ToolsRacePlannerPage.tsx';
 import { ToolsPaceConverterPage } from './ToolsPaceConverterPage.tsx';
 import ToolsCooperPage from './ToolsCooperPage.tsx';
 import { ToolsHeartRatePage } from './ToolsHeartRatePage.tsx';
-import { Timer, Map, Gauge, Activity, HeartPulse } from 'lucide-react';
+import { ToolsGoalAnalysisPage } from './ToolsGoalAnalysisPage.tsx';
+import { Timer, Map, Gauge, Activity, HeartPulse, Target } from 'lucide-react';
 
 export function ToolsRunningPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -16,6 +17,7 @@ export function ToolsRunningPage() {
     };
 
     const tabs = [
+        { id: 'analysis', label: 'Måltid & Analys', icon: Target, component: ToolsGoalAnalysisPage },
         { id: 'predict', label: 'Race Predictor', icon: Timer, component: ToolsRacePredictorPage },
         { id: 'planner', label: 'Race Planner', icon: Map, component: ToolsRacePlannerPage },
         { id: 'pace', label: 'Pace Converter', icon: Gauge, component: ToolsPaceConverterPage },

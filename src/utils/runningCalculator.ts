@@ -399,3 +399,71 @@ export function parseSmartDistance(val: string): number {
     // Default to km for numbers like "5" or "5k" "5km"
     return num;
 }
+
+/**
+ * Wings for Life World Run Catcher Car calculation
+ * Uses the official global speed schedule.
+ */
+export function calculateWingsForLife(paceSecondsPerKm: number): { distance: number; time: number } {
+    if (paceSecondsPerKm <= 0) return { distance: 0, time: 0 };
+    
+    const runnerV = 60 / (paceSecondsPerKm / 60); // km/h
+    
+    const schedule = [
+        { startMin: 30, endMin: 60, speed: 14 },
+        { startMin: 60, endMin: 90, speed: 15 },
+        { startMin: 90, endMin: 120, speed: 16 },
+        { startMin: 120, endMin: 150, speed: 17 },
+        { startMin: 150, endMin: 180, speed: 18 },
+        { startMin: 180, endMin: 210, speed: 22 },
+        { startMin: 210, endMin: 240, speed: 26 },
+        { startMin: 240, endMin: 270, speed: 30 },
+        { startMin: 270, endMin: 9999, speed: 34 },
+    ];
+
+    let runnerPos = 0; 
+    let carPos = 0;
+    let time = 0; // minutes
+    const step = 0.05; // 3 second steps
+
+    while (time < 1200) {
+        const entry = schedule.find(s => time >= s.startMin && time < s.endMin);
+        const carV = entry ? entry.speed : (time < 30 ? 0 : 34);
+        
+        runnerPos += (runnerV / 60) * step;
+        if (time >= 30) {
+            carPos += (carV / 60) * step;
+        }
+        
+        if (time >= 30 && carPos >= runnerPos) {
+            return { distance: Math.round(runnerPos * 100) / 100, time: Math.round(time * 60) };
+        }
+        time += step;
+    }
+
+    return { distance: runnerPos, time: time * 60 };
+}
+
+/**
+ * Calculates the required pace to reach a target distance in Wings for Life
+ */
+export function calculateRequiredWingsPace(targetDistanceKm: number): number {
+    if (targetDistanceKm <= 0) return 0;
+    
+    // Binary search for pace
+    let low = 120; // 2:00 min/km
+    let high = 600; // 10:00 min/km
+    let bestPace = 300;
+
+    for (let i = 0; i < 20; i++) {
+        const mid = (low + high) / 2;
+        const res = calculateWingsForLife(mid);
+        if (res.distance >= targetDistanceKm) {
+            bestPace = mid;
+            low = mid; // Slower pace (larger value) might still reach it
+        } else {
+            high = mid; // Need faster pace
+        }
+    }
+    return bestPace;
+}

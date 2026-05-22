@@ -10,10 +10,11 @@ interface TrainingViewProps {
     exerciseEntries: ExerciseEntry[];
     days: number;
     universalActivities: UniversalActivity[];
+    plannedActivities?: any[];
     initialTab?: 'overview' | 'strength' | 'cardio' | 'races' | 'hyrox';
 }
 
-export function TrainingView({ exerciseEntries, days, universalActivities, initialTab = 'overview' }: TrainingViewProps) {
+export function TrainingView({ exerciseEntries, days, universalActivities, plannedActivities, initialTab = 'overview' }: TrainingViewProps) {
     const [subTab, setSubTab] = useState<'overview' | 'strength' | 'cardio' | 'races' | 'hyrox'>(initialTab);
 
     // Sync if initialTab changes (e.g. navigation from parent)
@@ -71,7 +72,10 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
 
             <div className="min-h-[500px]">
                 {subTab === 'overview' && (
-                    <TrainingOverview exercises={exerciseEntries} />
+                    <TrainingOverview 
+                        exercises={exerciseEntries} 
+                        plannedActivities={plannedActivities}
+                    />
                 )}
                 {subTab === 'strength' && (
                     <StyrkaView days={days} />

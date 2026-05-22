@@ -11,7 +11,7 @@ const users = Array.from({ length: TOTAL_USERS }, (_, i) => ({
 async function runUserRequest(user: any) {
     const headers = new Headers();
     // Reconstruct Cookie header
-    const cookieHeader = Array.from(user.cookies.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+    const cookieHeader = Array.from(user.cookies.entries() as Iterable<[string, string]>).map(([k, v]) => `${k}=${v}`).join('; ');
     if (cookieHeader) headers.set("Cookie", cookieHeader);
 
     try {

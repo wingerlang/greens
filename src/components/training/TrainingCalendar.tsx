@@ -1,15 +1,16 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart, Footprints, Bike, Route } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart, Footprints, Bike, Route, Trophy, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 import { useData } from '../../context/DataContext.tsx';
-import { isWarmupOrCooldown, isCompetition, isQualitySession } from '../../utils/activityUtils.ts';
+import { isWarmupOrCooldown, isCompetition, isQualitySession, isRun, isTempoInterval, isStrength, isRecovery } from '../../utils/activityUtils.ts';
 
 interface TrainingCalendarProps {
     monthIndex: number; // 0-11
     year: number;
     exercises: ExerciseEntry[];
+    plannedActivities?: any[];
     initialDay?: number;
     onExerciseClick?: (exercise: ExerciseEntry) => void;
 }
@@ -28,7 +29,7 @@ const getTooltipPositionClasses = (weekIdx: number, dayIdx: number): string => {
 
 const MONTHS = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'];
 
-export function TrainingCalendar({ monthIndex, year, exercises: allExercises, initialDay, onExerciseClick }: TrainingCalendarProps) {
+export function TrainingCalendar({ monthIndex, year, exercises: allExercises, plannedActivities, initialDay, onExerciseClick }: TrainingCalendarProps) {
     const navigate = useNavigate();
     const { reorderActivity, getVitalsForDate } = useData();
 
@@ -55,11 +56,10 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     const longRunThreshold = userSettings?.longRunThreshold || 20;
 
     const FILTER_OPTIONS = useMemo(() => [
-        { id: 'distance', label: 'Löpning', filter: (e: any) => (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp') },
+        { id: 'distance', label: 'Löpning', filter: (e: any) => isRun(e) },
         { id: 'quality', label: 'Kvalitet', filter: (e: any) => isQualitySession(e) },
         { id: 'longrun', label: 'Långpass', filter: (e: any) => {
-            const isRun = (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp');
-            if (isRun) {
+            if (isRun(e)) {
                 if (e.distance) return e.distance >= longRunThreshold;
                 return e.durationMinutes >= 120;
             }
@@ -67,7 +67,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
         } },
         { id: 'race', label: 'Tävling', filter: (e: any) => e.subType === 'race' || isCompetition(e) },
         { id: 'cycling', label: 'Cykling', filter: (e: any) => (e.type || '').toLowerCase().includes('cycl') || (e.type || '').toLowerCase().includes('cykel') },
-        { id: 'strength', label: 'Styrka', filter: (e: any) => (e.type || '').toLowerCase().includes('strength') || (e.type || '').toLowerCase().includes('styrka') }
+        { id: 'strength', label: 'Styrka', filter: (e: any) => (e.type || '').toLowerCase().includes('strength') || (e.type || '').toLowerCase().includes('styrka') },
+        { id: 'recovery', label: 'Återhämtning', filter: (e: any) => isRecovery(e) }
     ], [longRunThreshold]);
 
     const monthName = MONTHS[monthIndex];
@@ -75,8 +76,26 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     const exercises = useMemo(() => {
         let base = allExercises.filter(e => {
             const perf = (e as any)._mergeData?.universalActivity?.performance;
-            return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar);
+            return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar) && !e.extractedFromId;
         });
+
+        // Add planned races that aren't already matched/completed
+        const plannedRaces = (plannedActivities || [])
+            .filter(p => p.category === 'RACE' && (p.status === 'PLANNED' || p.status === 'DRAFT'))
+            .filter(p => !allExercises.some(e => e.id === p.id || (e as any)._mergeData?.universalActivity?.plan?.id === p.id))
+            .map(p => ({
+                id: p.id,
+                date: p.date,
+                type: (p.type || 'RUN').toLowerCase() as any,
+                title: p.title,
+                durationMinutes: p.durationMinutes || 0,
+                distance: p.estimatedDistance,
+                subType: 'race',
+                isPlanned: true,
+                source: 'planned'
+            } as any));
+
+        base = [...base, ...plannedRaces];
 
         if (activeFilter) {
             const opt = FILTER_OPTIONS.find(o => o.id === activeFilter);
@@ -84,7 +103,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
         }
 
         return base;
-    }, [allExercises, activeFilter, FILTER_OPTIONS]);
+    }, [allExercises, activeFilter, FILTER_OPTIONS, plannedActivities]);
 
     // Handle clicks outside dropdowns
     useEffect(() => {
@@ -201,14 +220,20 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
     }, [year, monthIndex, monthData, exercises]);
 
     const stats = useMemo(() => {
-        const countableExercises = monthData.filter(e => 
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        // Only count completed activities up to today
+        const completedMonthData = monthData.filter(e => !e.isPlanned && e.date <= todayStr);
+
+        const countableExercises = completedMonthData.filter(e => 
             !e.type.toLowerCase().includes('walk') && 
             !e.type.toLowerCase().includes('promenad')
         );
 
         const distance = countableExercises.reduce((sum, e) => {
-            const isRun = e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp');
-            return sum + (isRun ? (e.distance || 0) : 0);
+            const isRunActivity = isRun(e);
+            return sum + (isRunActivity ? (e.distance || 0) : 0);
         }, 0);
         const duration = countableExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
         
@@ -229,11 +254,52 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
         const weeksForFreq = daysPassedForStats / 7;
         const perWeek = count > 0 ? (count / weeksForFreq).toFixed(1) : '0';
-        const uniqueActiveDays = monthData.filter((v, i, a) => a.findIndex(t => t.date === v.date) === i).length;
+        const uniqueActiveDays = completedMonthData.filter((v, i, a) => a.findIndex(t => t.date === v.date) === i).length;
         const freqPercent = Math.round((uniqueActiveDays / daysPassedForStats) * 100);
         const timePerDay = Math.round(duration / daysPassedForStats);
         const distancePerWeek = daysPassedForStats > 0 ? (distance / daysPassedForStats) * 7 : 0;
         const sessionsPerActiveDay = uniqueActiveDays > 0 ? (count / uniqueActiveDays).toFixed(1) : '0';
+
+        const plannedCount = (plannedActivities || [])
+            .filter(a => {
+                const d = new Date(a.date);
+                return (a.status === 'PLANNED' || a.status === 'DRAFT') && 
+                       d.getMonth() === monthIndex && 
+                       d.getFullYear() === year &&
+                       a.category !== 'RACE';
+            }).length;
+
+        const plannedRaceCount = (plannedActivities || [])
+            .filter(a => {
+                const d = new Date(a.date);
+                return (a.status === 'PLANNED' || a.status === 'DRAFT') && 
+                       d.getMonth() === monthIndex && 
+                       d.getFullYear() === year &&
+                       a.category === 'RACE';
+            }).length;
+
+        const plannedActivitiesInRange = (plannedActivities || [])
+            .filter(a => {
+                const d = new Date(a.date);
+                return (a.status === 'PLANNED' || a.status === 'DRAFT') && 
+                       d.getMonth() === monthIndex && 
+                       d.getFullYear() === year;
+            });
+
+        const plannedRaceDuration = plannedActivitiesInRange
+            .filter(a => a.category === 'RACE')
+            .reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+            
+        const plannedTrainingDuration = plannedActivitiesInRange
+            .filter(a => a.category !== 'RACE')
+            .reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+
+        const futureCompletedDuration = monthData
+            .filter(e => !e.isPlanned && e.date > todayStr)
+            .reduce((sum, e) => sum + e.durationMinutes, 0);
+
+        const totalExtraDuration = plannedRaceDuration + plannedTrainingDuration + futureCompletedDuration;
+        const totalProjectedDuration = duration + totalExtraDuration;
 
         const timeDist = countableExercises.reduce((acc, e) => {
             acc[e.type] = (acc[e.type] || 0) + e.durationMinutes;
@@ -245,7 +311,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             return acc;
         }, {} as Record<string, number>);
 
-        const hrActivities = monthData.filter(e => e.heartRateAvg && e.heartRateAvg > 0);
+        const warmupCountDist = warmups.reduce((acc, e) => {
+            acc[e.type] = (acc[e.type] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const hrActivities = completedMonthData.filter(e => e.heartRateAvg && e.heartRateAvg > 0);
         const avgHr = hrActivities.length > 0 
             ? Math.round(hrActivities.reduce((sum, e) => sum + e.heartRateAvg!, 0) / hrActivities.length) 
             : 0;
@@ -274,7 +345,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
             
             const isFutureDay = isCurrentMonth && day > today.getDate();
             if (!isFutureDay) {
-                const dayEx = monthData.filter(e => e.date === dateStr && !isWarmupOrCooldown(e));
+                const dayEx = completedMonthData.filter(e => e.date === dateStr && !isWarmupOrCooldown(e));
                 if (dayEx.length > 0) {
                     currentStreak++;
                     currentStreakPasses += dayEx.length;
@@ -324,11 +395,11 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                 };
             }
 
-            const isRun = (e.type || '').toLowerCase().includes('run') || (e.type || '').toLowerCase().includes('löp');
+            const isRunActivity = isRun(e);
             if (isQualitySession(e)) {
                 qualityCount++;
             }
-            if (isRun) {
+            if (isRunActivity) {
                 const dist = Number(e.distance) || 0;
                 if (dist >= longRunThreshold) {
                     longRunCount++;
@@ -370,13 +441,15 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
         return { 
             distance, duration, count, warmupCount, warmups, 
-            tonnage, timeDist, countDist, perWeek, freqPercent, 
+            tonnage, timeDist, countDist, warmupCountDist, perWeek, freqPercent, 
             timePerDay, distancePerWeek, sessionsPerActiveDay, avgHr, inactiveDays,
             timePerWeek, tonnagePerWeek, sickDays, sickFeelingDays, longestStreak, 
             longestStreakPasses, doubleDays, tripleDays, longestSession, biggestDay,
-            qualityCount, longRunCount, raceCount, avgRunPace, avgDist
+            qualityCount, longRunCount, raceCount, avgRunPace, avgDist,
+            plannedCount, plannedRaceCount, totalExtraDuration, 
+            plannedRaceDuration, plannedTrainingDuration, totalProjectedDuration
         };
-    }, [monthData, monthIndex, year, calendarDays.daysInMonth, getVitalsForDate]);
+    }, [monthData, monthIndex, year, calendarDays.daysInMonth, getVitalsForDate, plannedActivities]);
 
     if (monthIndex < 0) return null;
 
@@ -470,7 +543,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                 <button
                                     key={opt.id}
                                     onClick={() => setActiveFilter(activeFilter === opt.id ? null : opt.id)}
-                                    className={`px-3 py-1 text-[10px] sm:text-xs font-bold rounded-full transition-all whitespace-nowrap border shrink-0 ${
+                                    className={`px-3 py-1 text-[10px] sm:text-xs font-bold rounded-sm transition-all whitespace-nowrap border shrink-0 ${
                                         isActive
                                             ? 'bg-slate-700/50 text-white border-slate-500/50 shadow-sm'
                                             : 'bg-slate-900/50 text-slate-500 border-white/5 hover:bg-slate-800 hover:text-slate-300'
@@ -569,13 +642,31 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                     </span>
                                                     <div className="flex items-center gap-1 group/dayinfo relative hover:z-[110]">
                                                         {hasExercise && (() => {
-                                                            const sessions = date.exercises.filter(e => !isWarmupOrCooldown(e));
-                                                            const warmCount = date.exercises.filter(e => isWarmupOrCooldown(e)).length;
-                                                            const totMins = Math.round(date.exercises.reduce((sum, e) => sum + e.durationMinutes, 0));
-                                                            const timeStr = totMins >= 60 ? `${Math.floor(totMins / 60)}h${totMins % 60}m` : `${totMins}m`;
+                                                            const actualExercises = date.exercises.filter(e => !e.isPlanned);
+                                                            const plannedRaces = date.exercises.filter(e => e.isPlanned && isCompetition(e));
+
+                                                            const sessions = actualExercises.filter(e => !isWarmupOrCooldown(e));
+                                                            const warmCount = actualExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                            const plannedRaceCount = plannedRaces.length;
+
+                                                            const actualMins = Math.round(actualExercises.reduce((sum, e) => sum + e.durationMinutes, 0));
+                                                            const plannedMins = Math.round(plannedRaces.reduce((sum, e) => sum + e.durationMinutes, 0));
+                                                            const totalMins = actualMins + plannedMins;
+
+                                                            const bonusParts = [];
+                                                            if (warmCount > 0) bonusParts.push(`+${warmCount}`);
+                                                            if (plannedRaceCount > 0) bonusParts.push(`+${plannedRaceCount}`);
+                                                            const bonusStr = bonusParts.length > 0 ? ` (${bonusParts.join(', ')})` : '';
+                                                            const counterStr = `${sessions.length > 0 || bonusStr === '' ? sessions.length : ''}${bonusStr}`;
+
+                                                            const formatTime = (mins: number) => mins >= 60 ? `${Math.floor(mins / 60)}h${Math.round(mins % 60)}m` : `${mins}m`;
+                                                            const timeStr = actualMins > 0 
+                                                                ? formatTime(actualMins)
+                                                                : (plannedMins > 0 ? `(${formatTime(plannedMins)})` : '0m');
+
                                                             return (
-                                                                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold bg-white/5 px-1 py-0.5 rounded-sm cursor-help transition-colors hover:text-slate-200 hover:bg-white/10">
-                                                                    {sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''} pass • {timeStr}
+                                                                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold bg-white/5 px-1 py-0.5 rounded-sm cursor-help transition-colors hover:text-slate-200 hover:bg-white/10 whitespace-nowrap">
+                                                                    {counterStr} pass • {timeStr}
                                                                 </span>
                                                             );
                                                         })()}
@@ -592,9 +683,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 <div className="text-xs text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
                                                                     <span>{date.day} {monthName}</span>
                                                                     {(() => {
-                                                                        const sessions = date.exercises.filter(e => !isWarmupOrCooldown(e));
-                                                                        const warmCount = date.exercises.filter(e => isWarmupOrCooldown(e)).length;
-                                                                        return <span>{sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''} pass</span>;
+                                                                        const actualExercises = date.exercises.filter(e => !e.isPlanned);
+                                                                        const plannedRaces = date.exercises.filter(e => e.isPlanned && isCompetition(e));
+
+                                                                        const sessions = actualExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                        const warmCount = actualExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                        const plannedRaceCount = plannedRaces.length;
+
+                                                                        return <span>{sessions.length}{warmCount > 0 || plannedRaceCount > 0 ? ` (+${warmCount}${plannedRaceCount > 0 ? `, +${plannedRaceCount}` : ''})` : ''} pass</span>;
                                                                     })()}
                                                                 </div>
 
@@ -602,7 +698,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                     {date.exercises.map((e, idx) => (
                                                                         <div key={idx} className="flex justify-between items-start gap-2">
                                                                             <span className={`capitalize truncate ${isCompetition(e) ? 'text-amber-400 font-bold' : 'text-slate-200'}`} title={e.title || e.type}>
-                                                                                {isCompetition(e) ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                                {isCompetition(e) ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning').replace('cardio', 'Cardio').replace('CARDIO', 'Cardio')}
                                                                             </span>
                                                                             <span className="text-white font-mono font-bold shrink-0 text-[10px] mt-0.5">
                                                                                 {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
@@ -614,12 +710,33 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 <div className="flex flex-col gap-1 text-[10px]">
                                                                     {(() => {
                                                                         const d = date.exercises.reduce((acc, e) => acc + (e.distance || 0), 0);
-                                                                        const t = date.exercises.reduce((acc, e) => acc + e.durationMinutes, 0);
                                                                         const c = date.exercises.reduce((acc, e) => acc + (e.caloriesBurned || 0), 0);
                                                                         const v = date.exercises.reduce((acc, e) => acc + (e.tonnage || 0), 0);
                                                                         return (
                                                                             <>
-                                                                                <div className="flex justify-between"><span className="text-slate-500">Total Tid</span><span className="text-white font-mono">{Math.floor(t / 60) > 0 ? `${Math.floor(t / 60)}h ` : ''}{Math.round(t % 60)}m</span></div>
+                                                                                <div className="flex justify-between">
+                                                                                    <span className="text-slate-500">Total Tid</span>
+                                                                                    <span className="text-white font-mono">
+                                                                                        {(() => {
+                                                                                            const actualExercises = date.exercises.filter(e => !e.isPlanned);
+                                                                                            const plannedRaces = date.exercises.filter(e => e.isPlanned && isCompetition(e));
+                                                                                            
+                                                                                            const actualMins = actualExercises.reduce((acc, e) => acc + e.durationMinutes, 0);
+                                                                                            const plannedMins = plannedRaces.reduce((acc, e) => acc + e.durationMinutes, 0);
+                                                                                            const totalMins = actualMins + plannedMins;
+
+                                                                                            const formatTime = (mins: number) => {
+                                                                                                const h = Math.floor(mins / 60);
+                                                                                                const m = Math.round(mins % 60);
+                                                                                                return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                                                                                            };
+
+                                                                                            return plannedMins > 0 && actualMins === 0
+                                                                                                ? `(${formatTime(plannedMins)})`
+                                                                                                : formatTime(actualMins);
+                                                                                        })()}
+                                                                                    </span>
+                                                                                </div>
                                                                                 {d > 0 && <div className="flex justify-between"><span className="text-emerald-500/80">Tot. Distans</span><span className="text-emerald-400 font-mono">{d.toFixed(1)} km</span></div>}
                                                                                 {c > 0 && <div className="flex justify-between"><span className="text-rose-500/80">Tot. Energi</span><span className="text-rose-400 font-mono">{Math.round(c)} kcal</span></div>}
                                                                                 {v > 0 && <div className="flex justify-between"><span className="text-indigo-500/80">Tot. Volym</span><span className="text-indigo-400 font-mono">{(v / 1000).toFixed(1)} t</span></div>}
@@ -634,37 +751,59 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
 
                                                 <div className="flex flex-col w-full flex-1">
                                                     {date.exercises.map(ex => {
-                                                        const isRun = ex.type.includes('run') || ex.type.includes('löp');
-                                                        const isStrength = ex.type.includes('strength') || ex.type.includes('styrka');
+                                                        const isRunActivity = isRun(ex);
+                                                        const isStrengthActivity = isStrength(ex);
 
-                                                        let icon: React.ReactNode = '⚡';
+                                                        let icon: React.ReactNode = <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3]" />;
                                                         let typeName = 'Pass';
                                                         let colorClass = 'border-slate-500 text-slate-300 bg-slate-500/10 hover:bg-slate-500/20';
 
-                                                        if (isRun) {
-                                                            icon = <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3] text-emerald-500" />;
+                                                        if (isCompetition(ex)) {
+                                                            icon = <Trophy className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${ex.isPlanned ? 'text-amber-500/50' : 'text-amber-500'}`} />;
+                                                            typeName = 'Tävling';
+                                                            colorClass = ex.isPlanned 
+                                                                ? 'border-amber-500/30 border-dashed text-amber-200/50 bg-amber-500/5 hover:bg-amber-500/10'
+                                                                : 'border-amber-400/40 text-amber-100 bg-amber-500/20 hover:bg-amber-500/30';
+                                                        } else if (isRunActivity) {
+                                                            icon = <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3] text-emerald-500" />;
                                                             typeName = ex.subType === 'race' ? 'Tävling' : 'Löpning';
                                                             colorClass = 'border-emerald-500 text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20';
-                                                        } else if (isStrength) {
+                                                        } else if (isStrengthActivity) {
                                                             icon = <Dumbbell className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500" />;
                                                             typeName = 'Styrka';
                                                             colorClass = 'border-indigo-500 text-indigo-100 bg-indigo-500/10 hover:bg-indigo-500/20';
-                                                        } else if (ex.type.includes('cycl')) {
-                                                            icon = '🚴';
+                                                        } else if (['cycl', 'cykel', 'cykl', 'ride', 'bike'].some(k => ex.type.toLowerCase().includes(k))) {
+                                                            icon = <Bike className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-500" />;
                                                             typeName = 'Cykling';
                                                             colorClass = 'border-sky-500 text-sky-100 bg-sky-500/10 hover:bg-sky-500/20';
                                                         } else if (ex.type.includes('walk')) {
-                                                            icon = '🚶';
+                                                            icon = <Footprints className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500" />;
                                                             typeName = 'Promenad';
                                                             colorClass = 'border-amber-500 text-amber-100 bg-amber-500/10 hover:bg-amber-500/20';
-                                                        }
-
-                                                        if (ex.subType === 'race') {
-                                                            colorClass = 'border-amber-400/40 text-amber-100 bg-amber-500/20 hover:bg-amber-500/30';
+                                                        } else if (ex.type.toLowerCase().includes('cardio') || ['cross', 'elliptical', 'stair', 'row', 'skierg'].some(k => ex.type.toLowerCase().includes(k))) {
+                                                            const lowType = ex.type.toLowerCase();
+                                                            const sub = ex.subType?.toLowerCase() || '';
+                                                            
+                                                            if (sub === 'cross-trainer' || lowType.includes('cross') || lowType.includes('elliptical')) {
+                                                                icon = <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />;
+                                                                typeName = 'Cardio';
+                                                            } else if (sub === 'rowing' || lowType.includes('row')) {
+                                                                icon = <Waves className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />;
+                                                                typeName = 'Cardio';
+                                                            } else if (sub === 'stair-master' || lowType.includes('stair')) {
+                                                                icon = <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />;
+                                                                typeName = 'Cardio';
+                                                            } else if (sub === 'skierg' || lowType.includes('ski')) {
+                                                                icon = <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />;
+                                                                typeName = 'Cardio';
+                                                            } else {
+                                                                icon = <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />;
+                                                                typeName = 'Cardio';
+                                                            }
+                                                            colorClass = 'border-rose-500 text-rose-100 bg-rose-500/10 hover:bg-rose-500/30';
                                                         }
 
                                                         const displayName = ex.title || typeName;
-                                                        const isLongName = displayName.length > 20;
 
                                                         return (
                                                             <div key={ex.id}
@@ -675,27 +814,27 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                         search: `?activityId=${ex.id}${window.location.search ? '&' + window.location.search.replace('?', '') : ''}`
                                                                     }, { replace: true });
                                                                 }}
-                                                                className={`relative text-[9.5px] sm:text-[10px] leading-tight pl-0.5 sm:pl-1 pr-1 sm:pr-1.5 py-0.5 sm:py-1 rounded border ${colorClass} cursor-pointer flex flex-row flex-wrap items-center justify-between gap-y-0.5 group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md hover:z-[110] ${isLongName ? 'pb-1' : ''}`}>
-                                                                <span className={`font-bold flex items-center min-w-0 shrink z-10 ${isLongName ? 'w-full mb-0.5' : 'truncate'}`}>
+                                                                className={`relative text-[9px] sm:text-[9.5px] leading-tight px-1 py-0.5 rounded border ${colorClass} cursor-pointer flex flex-col group/ex min-w-0 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md hover:z-[110]`}>
+                                                                <span className="font-bold flex items-center min-w-0 shrink z-10 w-full">
                                                                     <div className="opacity-70 shrink-0 z-0 scale-[1.1]">{icon}</div>
-                                                                    <span className={`flex items-center gap-0.5 leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95 ${isLongName ? '' : 'truncate'}`}>
+                                                                    <span className="flex items-center gap-0.5 leading-none relative z-10 ml-0.5 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.8)] text-white/95 truncate">
                                                                         {(ex.subType === 'interval' || ex.subType === 'tempo' || ex.title?.toLowerCase().includes('intervall')) && <span className="text-amber-400 shrink-0">⚡</span>}
-                                                                        <span className={isLongName ? '' : 'truncate'}>{displayName}</span>
+                                                                        <span className="truncate">{displayName}</span>
                                                                     </span>
                                                                 </span>
-                                                                <div className={`flex items-center gap-1 text-[8.5px] font-mono text-slate-300 z-10 whitespace-nowrap mt-0.5 w-full justify-between`}>
+                                                                <div className={`flex items-center gap-1 text-[8px] font-mono text-slate-300 z-10 whitespace-nowrap mt-0.5 w-full justify-between`}>
                                                                     <div className="flex items-center">
                                                                         {ex.distance !== undefined && ex.distance > 0 && <span className="text-emerald-400/90 font-bold">{ex.distance.toFixed(1)}<span className="text-[7.5px] opacity-70">k</span></span>}
                                                                         {ex.distance !== undefined && ex.distance > 0 && <span className="text-slate-500 mx-1">•</span>}
 
-                                                                        {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
+                                                                        {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && !isStrengthActivity && (
                                                                             <>
                                                                                 <span className="text-red-400/90 font-bold">{Math.round(ex.heartRateAvg)}<Heart className="w-2 h-2 text-red-500/70 inline-block ml-0.5" /></span>
                                                                                 <span className="text-slate-500 mx-1">•</span>
                                                                             </>
                                                                         )}
 
-                                                                        {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && (isRun || isLongName) && (
+                                                                        {ex.distance !== undefined && ex.distance > 0 && ex.durationMinutes > 0 && isRunActivity && (
                                                                             <>
                                                                                 <span className="text-sky-400">
                                                                                     {(() => {
@@ -1165,14 +1304,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 const dObj = new Date(parseInt(dYear), parseInt(dMonth) - 1, 1);
                                                                 const dMonthName = dObj.toLocaleString('sv-SE', { month: 'long' }).toLowerCase();
 
-                                                                const isRun = e.type.includes('run') || e.type.includes('löp');
-                                                                const isStrength = e.type.includes('strength') || e.type.includes('styrka');
+                                                                const isRunActivity = isRun(e);
+                                                                const isStrengthActivity = isStrength(e);
                                                                 const isRace = e.subType === 'race';
 
                                                                 let colorName = 'text-slate-200';
                                                                 if (isRace) colorName = 'text-amber-400 font-bold';
-                                                                else if (isRun) colorName = 'text-emerald-100';
-                                                                else if (isStrength) colorName = 'text-indigo-100';
+                                                                else if (isRunActivity) colorName = 'text-emerald-100';
+                                                                else if (isStrengthActivity) colorName = 'text-indigo-100';
                                                                 else if (e.type.includes('cycl')) colorName = 'text-sky-100';
                                                                 else if (e.type.includes('walk')) colorName = 'text-amber-100';
 
@@ -1180,8 +1319,8 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                 if (e.distance && e.distance > 0) valueStr = e.distance.toFixed(1) + 'km';
 
                                                                 let valColor = 'text-slate-300';
-                                                                if (isRun) valColor = 'text-emerald-400';
-                                                                else if (isStrength) valColor = 'text-indigo-400';
+                                                                if (isRunActivity) valColor = 'text-emerald-400';
+                                                                else if (isStrengthActivity) valColor = 'text-indigo-400';
                                                                 else if (e.type.includes('cycl')) valColor = 'text-sky-400';
 
                                                                 return (
@@ -1193,7 +1332,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                                                             }, { replace: true });
                                                                         }}>
                                                                         <span className={`capitalize truncate text-[11px] ${colorName}`} title={e.title || e.type}>
-                                                                            {isRace ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                            {isRace ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning').replace('cardio', 'Allmän Cardio')}
                                                                         </span>
                                                                         <div className="text-right shrink-0 flex items-center gap-1.5 mt-0.5">
                                                                              <span className={`font-mono font-bold text-xs ${valColor}`}>
@@ -1231,8 +1370,10 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                     {/* Kolumn 1: Pass & Frekvens */}
-                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative overflow-hidden">
-                        <div className="absolute -right-8 -top-8 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl group-hover:bg-sky-500/10 transition-colors duration-500 pointer-events-none"></div>
+                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative">
+                        <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                            <div className="absolute -right-8 -top-8 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl group-hover:bg-sky-500/10 transition-colors duration-500"></div>
+                        </div>
                         <div className="relative z-10 flex justify-between items-start mb-2">
                             <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-tight">Pass & Frekvens</p>
                             <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full ring-1 ring-emerald-500/20">{stats.freqPercent}% aktiva | {stats.inactiveDays || 0} vilodgr</span>
@@ -1241,7 +1382,9 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             <div className="flex-1 flex flex-col border-r border-white/5 pr-4">
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Pass</p>
                                 <div className="flex items-end gap-1.5">
-                                    <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">{stats.count}</p>
+                                    <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">
+                                        {stats.count}{stats.warmupCount > 0 && <span className="text-xl sm:text-2xl opacity-40 ml-0.5">+{stats.warmupCount}</span>}
+                                    </p>
                                     <div className="flex flex-col items-start pb-0.5">
                                         {stats.warmupCount > 0 && (
                                             <div className="group/wu relative mb-0.5">
@@ -1266,11 +1409,14 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                             </div>
                             <div className="flex-1 flex flex-col">
                                 <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Tid</p>
-                                <div className="flex items-end gap-0.5">
-                                    <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">
-                                        {Math.floor(stats.duration / 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 mx-0.5">h</span>
-                                        {Math.round(stats.duration % 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 ml-0.5">m</span>
-                                    </p>
+                                <div className="flex flex-col items-start gap-0.5">
+                                    <div className="flex items-end gap-0.5">
+                                        <p className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 tracking-tighter leading-none">
+                                            {Math.floor(stats.duration / 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 mx-0.5">h</span>
+                                            {Math.round(stats.duration % 60)}<span className="text-xs sm:text-lg font-bold text-slate-500 ml-0.5">m</span>
+                                        </p>
+                                    </div>
+                                    {/* The planned/extra duration block has been removed to save space */}
                                 </div>
                             </div>
                         </div>
@@ -1278,7 +1424,10 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                         <div className="relative z-10 grid grid-cols-4 gap-1.5 mt-2 pt-2 border-t border-white/5">
                             <div className="bg-sky-900/10 rounded-lg py-0.5 px-1.5 text-center border border-sky-500/10">
                                 <p className="text-[8px] text-sky-500/70 uppercase font-black tracking-widest mb-0.5">Tävling</p>
-                                <p className="text-xs font-black text-sky-400">{stats.raceCount}</p>
+                                <p className="text-xs font-black text-sky-400">
+                                    {stats.raceCount}
+                                    {stats.plannedRaceCount > 0 && <span className="text-[10px] opacity-60 ml-0.5"> (+{stats.plannedRaceCount})</span>}
+                                </p>
                             </div>
                             <div className="group/qual relative bg-amber-900/10 rounded-lg py-0.5 px-1.5 text-center border border-amber-500/10 cursor-help transition-colors hover:bg-amber-900/20">
                                 <p className="text-[8px] text-amber-500/70 uppercase font-black tracking-widest mb-0.5">Kvalitet</p>
@@ -1342,17 +1491,43 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                     </div>
 
                     {/* Kolumn 2: Tid & Duration */}
-                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative overflow-hidden">
-                        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
+                    <div className="group bg-gradient-to-br from-slate-800/40 to-slate-900/60 hover:from-slate-800/60 hover:to-slate-900/80 p-3 sm:p-4 rounded-3xl border border-white/5 hover:border-white/10 shadow-lg transition-all duration-500 flex flex-col justify-between relative">
+                        <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                            <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors duration-500"></div>
+                        </div>
                         <div className="relative z-10 flex justify-between items-start mb-2">
                             <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-tight">Analys & Höjdpunkter</p>
                             <div className="flex items-center gap-1.5 bg-slate-950/50 px-2 py-0.5 rounded-full border border-white/5">
-                                {Object.entries(stats.countDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
-                                    <span className="text-[9px] font-black text-emerald-400 flex items-center gap-1"><Footprints className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0)}</span>}
-                                {Object.entries(stats.countDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
-                                    <span className="text-[9px] font-black text-sky-400 flex items-center gap-1"><Bike className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0)}</span>}
-                                {Object.entries(stats.countDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0) > 0 && 
-                                    <span className="text-[9px] font-black text-indigo-400 flex items-center gap-1"><Dumbbell className="w-2.5 h-2.5" /> {Object.entries(stats.countDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0)}</span>}
+                                {(() => {
+                                    const runCount = Object.entries(stats.countDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0);
+                                    const runWarmups = Object.entries(stats.warmupCountDist).filter(([k]) => k.includes('run') || k.includes('löp')).reduce((sum, [, v]) => sum + v, 0);
+                                    if (runCount === 0 && runWarmups === 0) return null;
+                                    return (
+                                        <span className="text-[9px] font-black text-emerald-400 flex items-center gap-1">
+                                            <Footprints className="w-2.5 h-2.5" /> {runCount}{runWarmups > 0 ? `+${runWarmups}` : ''}
+                                        </span>
+                                    );
+                                })()}
+                                {(() => {
+                                    const bikeCount = Object.entries(stats.countDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0);
+                                    const bikeWarmups = Object.entries(stats.warmupCountDist).filter(([k]) => k.includes('cycl') || k.includes('cyk')).reduce((sum, [, v]) => sum + v, 0);
+                                    if (bikeCount === 0 && bikeWarmups === 0) return null;
+                                    return (
+                                        <span className="text-[9px] font-black text-sky-400 flex items-center gap-1">
+                                            <Bike className="w-2.5 h-2.5" /> {bikeCount}{bikeWarmups > 0 ? `+${bikeWarmups}` : ''}
+                                        </span>
+                                    );
+                                })()}
+                                {(() => {
+                                    const strengthCount = Object.entries(stats.countDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0);
+                                    const strengthWarmups = Object.entries(stats.warmupCountDist).filter(([k]) => k.includes('strength') || k.includes('styrk')).reduce((sum, [, v]) => sum + v, 0);
+                                    if (strengthCount === 0 && strengthWarmups === 0) return null;
+                                    return (
+                                        <span className="text-[9px] font-black text-indigo-400 flex items-center gap-1">
+                                            <Dumbbell className="w-2.5 h-2.5" /> {strengthCount}{strengthWarmups > 0 ? `+${strengthWarmups}` : ''}
+                                        </span>
+                                    );
+                                })()}
                             </div>
                         </div>
                         <div className="relative z-10 flex flex-col gap-1.5 mt-1 mb-auto">
@@ -1425,82 +1600,132 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                     </div>
 
                     {/* Kolumn 3: Distans & Styrkevolym */}
-                    <div className="grid grid-rows-2 gap-4 lg:col-span-1">
-                        <div className="bg-emerald-950/20 p-4 rounded-2xl border border-emerald-500/10 shadow-inner flex flex-col justify-center">
-                            <div className="flex justify-between items-start mb-1">
-                                <p className="text-[10px] text-emerald-500/80 uppercase font-black tracking-widest">Löpdistans</p>
+                    <div className="flex flex-col gap-4 lg:col-span-1">
+                        <div className="flex-1 bg-emerald-950/20 p-4 rounded-2xl border border-emerald-500/10 shadow-inner flex flex-col">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-[10px] text-emerald-500/80 uppercase font-black tracking-widest flex items-center gap-1.5"><Activity className="w-3 h-3" /> Löpning</p>
+                                <div className="flex gap-1.5">
+                                    {stats.qualityCount > 0 && <span className="text-[8px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20" title="Kvalitetspass">Kvalitet: {stats.qualityCount}</span>}
+                                    {stats.raceCount > 0 && <span className="text-[8px] font-black text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20" title="Tävlingar">🏆 {stats.raceCount}</span>}
+                                </div>
                             </div>
-                            <div className="flex items-baseline justify-between">
-                                <p className="text-3xl font-black text-emerald-400 leading-none">{stats.distance.toFixed(1)} <span className="text-sm font-bold text-emerald-500/60">km</span></p>
+                            <div className="flex items-baseline justify-between mb-3">
+                                <div className="flex flex-col">
+                                    <p className="text-3xl font-black text-emerald-400 leading-none">{stats.distance.toFixed(1)} <span className="text-sm font-bold text-emerald-500/60">km</span></p>
+                                    <p className="text-[9px] font-bold text-emerald-500/40 uppercase mt-1">Totalt denna månad</p>
+                                </div>
                                 <div className="text-right">
                                     <p className="text-[9px] font-bold text-emerald-500/60 uppercase">Snitt / v</p>
                                     <p className="text-sm font-black text-emerald-400">{stats.distancePerWeek.toFixed(1)} km</p>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="bg-indigo-950/20 p-4 rounded-2xl border border-indigo-500/10 shadow-inner flex flex-col justify-center">
-                            <div className="flex justify-between items-start mb-1">
-                                <p className="text-[10px] text-indigo-500/80 uppercase font-black tracking-widest">Styrkevolym</p>
-                            </div>
-                            <div className="flex items-baseline justify-between">
-                                <p className="text-3xl font-black text-indigo-400 leading-none">{(stats.tonnage / 1000).toFixed(1)} <span className="text-sm font-bold text-indigo-500/60">ton</span></p>
-                                <div className="text-right">
-                                    <p className="text-[9px] font-bold text-indigo-500/60 uppercase">Snitt / v</p>
-                                    <p className="text-sm font-black text-indigo-400">{(stats.tonnagePerWeek / 1000).toFixed(1)} t</p>
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-500/5">
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] text-emerald-500/50 uppercase font-black">Långpass</span>
+                                    <span className="text-xs font-black text-emerald-200">{stats.longRunCount} st</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                    <span className="text-[8px] text-emerald-500/50 uppercase font-black">Snitt-tempo</span>
+                                    <span className="text-xs font-black text-emerald-200">{stats.avgRunPace > 0 ? `${Math.floor(stats.avgRunPace)}:${Math.round((stats.avgRunPace % 1)*60).toString().padStart(2,'0')}` : '-'} <span className="text-[9px] font-bold opacity-50">/k</span></span>
                                 </div>
                             </div>
                         </div>
+
+                        {stats.tonnage > 0 && (
+                            <div className="flex-1 bg-indigo-950/20 p-4 rounded-2xl border border-indigo-500/10 shadow-inner flex flex-col justify-center">
+                                <div className="flex justify-between items-start mb-2">
+                                    <p className="text-[10px] text-indigo-500/80 uppercase font-black tracking-widest flex items-center gap-1.5"><Dumbbell className="w-3 h-3" /> Styrka</p>
+                                    <span className="text-[8px] font-black text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">{stats.countDist['strength'] || 0} pass</span>
+                                </div>
+                                <div className="flex items-baseline justify-between">
+                                    <div className="flex flex-col">
+                                        <p className="text-3xl font-black text-indigo-400 leading-none">{(stats.tonnage / 1000).toFixed(1)} <span className="text-sm font-bold text-indigo-500/60">ton</span></p>
+                                        <p className="text-[9px] font-bold text-indigo-500/40 uppercase mt-1">Total volym</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-bold text-indigo-500/60 uppercase">Snitt / v</p>
+                                        <p className="text-sm font-black text-indigo-400">{(stats.tonnagePerWeek / 1000).toFixed(1)} t</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Kolumn 4: Tidsfördelning */}
-                    <div className="bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-white/5 shadow-inner flex flex-col">
-                        <div className="flex justify-between items-center mb-4">
-                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">
+                    <div className="bg-slate-900/60 p-4 sm:p-5 rounded-3xl border border-white/5 shadow-2xl flex flex-col relative group/dist-card overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
+                        <div className="flex justify-between items-center mb-5 relative z-10">
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-[0.2em]">
                                 {distMode === 'time' ? 'Tidsfördelning' : 'Passfördelning'}
                             </p>
-                            <button onClick={() => setDistMode(distMode === 'time' ? 'count' : 'time')} className="text-[9px] font-bold text-slate-400 hover:text-sky-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md transition-colors">
+                            <button 
+                                onClick={() => setDistMode(distMode === 'time' ? 'count' : 'time')} 
+                                className="text-[9px] font-black text-slate-400 hover:text-white bg-white/5 border border-white/10 px-2.5 py-1 rounded-full transition-all hover:bg-white/10 hover:border-white/20 uppercase tracking-wider"
+                            >
                                 {distMode === 'time' ? 'Visa Pass' : 'Visa Tid'}
                             </button>
                         </div>
-                        <div className="space-y-1.5 w-full my-auto">
+                        <div className="space-y-3.5 w-full my-auto relative z-10">
                             {Object.entries(distMode === 'time' ? stats.timeDist : stats.countDist).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([type, value]) => {
                                 const percent = Math.round(((value as number) / (distMode === 'time' ? stats.duration : stats.count)) * 100);
-                                const icon = type.includes('running') || type.includes('run') ? '🏃' :
-                                    type === 'strength' ? '🏋️' :
-                                        type === 'cycling' ? '🚴' :
-                                            type === 'walking' ? '🚶' : '⚡';
+                                
+                                let IconComp = Activity;
+                                let iconColor = 'text-slate-400';
+                                let barColor = 'bg-slate-400';
+
+                                if (type.includes('running') || type.includes('run')) {
+                                    IconComp = Zap;
+                                    iconColor = 'text-emerald-500';
+                                    barColor = 'bg-emerald-500';
+                                } else if (type === 'strength') {
+                                    IconComp = Dumbbell;
+                                    iconColor = 'text-indigo-500';
+                                    barColor = 'bg-indigo-500';
+                                } else if (type === 'cycling') {
+                                    IconComp = Bike;
+                                    iconColor = 'text-sky-500';
+                                    barColor = 'bg-sky-500';
+                                } else if (type === 'walking') {
+                                    IconComp = Footprints;
+                                    iconColor = 'text-amber-500';
+                                    barColor = 'bg-amber-500';
+                                } else if (type === 'cardio') {
+                                    IconComp = HeartPulse;
+                                    iconColor = 'text-rose-500';
+                                    barColor = 'bg-rose-500';
+                                }
+
                                 const label = type.includes('running') || type.includes('run') ? 'Löpning' :
                                     type === 'strength' ? 'Styrka' :
                                         type === 'cycling' ? 'Cykling' :
-                                            type === 'walking' ? 'Promenad' : type;
+                                            type === 'walking' ? 'Promenad' : 
+                                                type === 'cardio' ? 'Allmän Cardio' : type;
 
                                 return (
-                                    <div key={type} className="flex items-center gap-2 group/dist">
-                                        <span className="w-5 shrink-0 text-xs grayscale-[0.5] group-hover/dist:grayscale-0 transition-all text-center">
-                                            {icon}
-                                        </span>
+                                    <div key={type} className="flex items-center gap-3 group/dist-row">
+                                        <div className={`w-8 h-8 shrink-0 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center transition-all group-hover/dist-row:bg-white/10 group-hover/dist-row:border-white/10 ${iconColor}`}>
+                                            <IconComp className="w-4 h-4" />
+                                        </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between mb-0.5 items-center">
-                                                <span className="text-slate-400 capitalize text-[9px] font-black truncate leading-none uppercase tracking-tighter">
+                                            <div className="flex justify-between mb-1.5 items-end">
+                                                <span className="text-white text-[10px] font-black uppercase tracking-tight truncate leading-none">
                                                     {label}
                                                 </span>
-                                                <span className="font-mono font-bold text-white text-[9px] leading-none shrink-0 ml-1">
-                                                    {percent}% <span className="text-slate-500 font-normal">
+                                                <div className="flex items-baseline gap-1.5 leading-none shrink-0 ml-2">
+                                                    <span className="font-mono font-black text-white text-[10px]">
+                                                        {percent}%
+                                                    </span>
+                                                    <span className="text-slate-500 font-bold text-[9px] uppercase">
                                                         {distMode === 'time' ? (
-                                                            `(${value >= 60 ? `${Math.floor(value as number / 60)}h ${Math.round(value as number % 60)}m` : `${Math.round(value as number)}m`})`
+                                                            `${value >= 60 ? `${Math.floor(value as number / 60)}h ${Math.round(value as number % 60)}m` : `${Math.round(value as number)}m`}`
                                                         ) : (
-                                                            `(${value} pass)`
+                                                            `${value} pass`
                                                         )}
                                                     </span>
-                                                </span>
+                                                </div>
                                             </div>
-                                            <div className="h-1.5 bg-slate-900/50 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
+                                            <div className="h-1 bg-white/5 rounded-full overflow-hidden relative">
                                                 <div
-                                                    className={`h-full rounded-full transition-all duration-500 ${type.includes('running') ? 'bg-emerald-500' :
-                                                        type === 'strength' ? 'bg-indigo-500' :
-                                                            type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
-                                                        }`}
+                                                    className={`h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(0,0,0,0.5)] ${barColor}`}
                                                     style={{ width: `${percent}%` }}
                                                 />
                                             </div>
@@ -1509,7 +1734,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, in
                                 );
                             })}
                             {Object.keys(stats.timeDist).length === 0 && (
-                                <div className="text-center text-slate-500 italic text-xs py-4">Ingen data</div>
+                                <div className="text-center text-slate-500 italic text-xs py-8 bg-white/5 rounded-2xl border border-dashed border-white/10">Ingen data registrerad</div>
                             )}
                         </div>
                     </div>

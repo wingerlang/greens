@@ -117,7 +117,7 @@ function createAtomicProxy(atomic: Deno.AtomicOperation): Deno.AtomicOperation {
     return new Proxy(atomic, atomicHandler);
 }
 
-export const kv = new Proxy(baseKv, kvHandler);
+export const kv: Deno.Kv = new Proxy(baseKv, kvHandler) as unknown as Deno.Kv;
 
 export async function closeKv() {
     await baseKv.close();

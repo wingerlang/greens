@@ -105,14 +105,17 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
                     <div className="flex items-baseline gap-1">
                         <input
                             type="number"
-                            value={draftFoodQuantity || ''}
-                            onChange={(e) => setDraftFoodQuantity(parseFloat(e.target.value) || 0)}
+                            value={draftFoodQuantity ?? ''}
+                            onChange={(e) => {
+                                const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                                setDraftFoodQuantity(val === 0 ? 1 : val);
+                            }}
                             className="w-full text-2xl font-black bg-transparent border-b-2 border-slate-600 focus:border-emerald-500 outline-none text-white"
                             placeholder={String(lockedFood.usageStats?.frequentGrams || lockedFood.usageStats?.avgGrams || 100)}
                         />
                         <span className="text-sm font-bold text-slate-400">g</span>
                     </div>
-                    {lockedFood.defaultPortionGrams && (
+                    {!!lockedFood.defaultPortionGrams && (
                         <div className="text-[8px] text-emerald-500/60 mt-1 font-black uppercase tracking-tighter">
                             1 st = {lockedFood.defaultPortionGrams}g
                         </div>
@@ -180,7 +183,7 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
 
             {/* Calculated Nutrients Preview */}
             {(() => {
-                const qty = draftFoodQuantity || 100;
+                const qty = draftFoodQuantity ?? 100;
                 const { canCook, effectiveYieldFactor } = canLogAsCooked(lockedFood);
                 const isCooked = draftLogAsCooked && canCook;
                 const multiplier = isCooked ? 1 / effectiveYieldFactor : 1;

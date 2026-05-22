@@ -9,8 +9,7 @@
 // In-memory storage: Map<identifier, timestamps[]>
 const rateLimitStore = new Map<string, number[]>();
 
-// Cleanup old entries every 60 seconds to prevent memory leaks
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
     const maxAge = 120_000; // Clean entries older than 2 minutes
 
@@ -23,6 +22,10 @@ setInterval(() => {
         }
     }
 }, 60_000);
+
+if (globalThis.Deno && typeof (globalThis.Deno as any).unrefTimer === "function") {
+    (globalThis.Deno as any).unrefTimer(cleanupInterval);
+}
 
 /**
  * Checks if a given identifier (e.g., IP address) has exceeded the rate limit.

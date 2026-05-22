@@ -15,7 +15,9 @@ import {
     Calendar,
     Target,
     ChevronLeft,
-    RefreshCw
+    RefreshCw,
+    Brain,
+    Zap
 } from 'lucide-react';
 import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
@@ -36,6 +38,7 @@ import { WeeklyTimeline } from '../features/dashboard/components/WeeklyTimeline.
 import { DashboardSleepCard, DashboardWaterCard, DashboardAlcoholCard, DashboardCaffeineCard } from '../features/dashboard/components/QuickLogCards.tsx';
 import { WeeklyMetabolismAnalyticCard } from '../features/dashboard/components/WeeklyMetabolismAnalyticCard.tsx';
 import { ReadinessStreakCard } from '../features/dashboard/components/ReadinessStreakCard.tsx';
+import { DashboardProtocolCard } from '../features/dashboard/components/DashboardProtocolCard.tsx';
 
 // --- Helper Functions ---
 
@@ -81,7 +84,9 @@ export function DashboardPage() {
         refreshData,
         plannedActivities,
         unifiedActivities,
-        reconciliation
+        reconciliation,
+        foodItems,
+        recipes
     } = useData();
     const { token } = useAuth();
     const { logEvent } = useAnalytics();
@@ -459,6 +464,7 @@ export function DashboardPage() {
     const isWaterDone = completedCards.includes('water');
     const isCaffeineDone = completedCards.includes('caffeine');
     const isAlcoholDone = completedCards.includes('alcohol');
+    const isProtocolDone = completedCards.includes('protocol');
 
     const cardOrder = [
         { id: 'intake', isDone: isIntakeDone },
@@ -467,6 +473,7 @@ export function DashboardPage() {
         { id: 'water', isDone: isWaterDone },
         { id: 'alcohol', isDone: isAlcoholDone },
         { id: 'caffeine', isDone: isCaffeineDone },
+        { id: 'protocol', isDone: isProtocolDone },
     ].sort((a, b) => {
         if (a.isDone === b.isDone) return 0;
         return a.isDone ? 1 : -1;
@@ -491,6 +498,15 @@ export function DashboardPage() {
         } catch (err) {
             console.error('[DashboardPage] Failed to save estimate:', err);
         }
+    };
+
+    const handleToggleSupplement = (protocolId: string) => {
+        const currentTaken = vitals.supplementsTaken || [];
+        const isTaken = currentTaken.includes(protocolId);
+        const newTaken = isTaken ? currentTaken.filter(id => id !== protocolId) : [...currentTaken, protocolId];
+        
+        updateVitals(selectedDate, { supplementsTaken: newTaken });
+        setVitals(prev => ({ ...prev, supplementsTaken: newTaken }));
     };
 
     return (
@@ -598,6 +614,25 @@ export function DashboardPage() {
                         <WeeklyMetabolismAnalyticCard selectedDate={selectedDate} onDateSelect={setSelectedDate} />
                     </div>
                     <div className="md:col-span-4 flex flex-col gap-6">
+                        <div 
+                            onClick={() => navigate('/metodik')}
+                            className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 p-6 rounded-[2.5rem] cursor-pointer hover:scale-[1.02] transition-all group overflow-hidden relative"
+                        >
+                            <div className="absolute -top-4 -right-4 opacity-5 group-hover:scale-110 transition-transform">
+                                <Brain size={120} />
+                            </div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                    <Zap size={16} />
+                                </div>
+                                <span className="text-xs font-black text-indigo-500 uppercase tracking-widest">Optimering Lab</span>
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">Min Metodik</h3>
+                            <p className="text-xs text-slate-500 leading-relaxed">Analysera dina marginal gains och förfina din träningsfilosofi.</p>
+                            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-indigo-400 group-hover:gap-3 transition-all">
+                                Utforska Metodik <ChevronRight size={12} />
+                            </div>
+                        </div>
                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] flex flex-col gap-4">
                              <div className="flex flex-col">
                                  <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Metabolisk Status</span>
@@ -699,6 +734,24 @@ export function DashboardPage() {
 
                     {cardOrder.map((card) => {
                         if (card.id === 'intake' || card.id === 'training') return null;
+                        if (card.id === 'protocol') {
+                            const protocol = settings.supplementProtocol || [];
+                            return (
+                                <div key="protocol" className="col-span-1 md:col-span-12 xl:col-span-4 h-full">
+                                    <DashboardProtocolCard
+                                        density={density}
+                                        isDone={card.isDone}
+                                        onToggle={toggleCardCompletion}
+                                        protocol={protocol}
+                                        foodItems={foodItems}
+                                        recipes={recipes}
+                                        supplementsTaken={vitals.supplementsTaken || []}
+                                        onToggleSupplement={handleToggleSupplement}
+                                        onEditProtocol={() => navigate('/health/protocol')}
+                                    />
+                                </div>
+                            );
+                        }
                         if (card.id === 'sleep') {
                             return (
                                 <DashboardSleepCard

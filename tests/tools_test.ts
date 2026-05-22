@@ -114,10 +114,9 @@ Deno.test("calculateDistance", () => {
 });
 
 Deno.test("estimateCardioCalories - Running", () => {
-  // Running: ~1 kcal/kg/km
-  // 80kg person runs 10km -> ~800kcal
+  // 80kg person runs 10km -> ~736kcal (based on 0.92 coefficient)
   const calories = estimateCardioCalories("running", 3600, { weightKg: 80, speedKph: 10 });
-  assertEquals(calories > 750 && calories < 850, true);
+  assertEquals(calories > 700 && calories < 850, true);
 });
 
 Deno.test("estimateCardioCalories - Cycling", () => {

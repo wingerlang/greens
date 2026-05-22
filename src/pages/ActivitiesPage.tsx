@@ -456,14 +456,14 @@ export function ActivitiesPage() {
     }, [searchParams, allActivities, token]);
 
     // Update URL when opening/closing modal
-    const handleSetSelectedActivity = (activity: (ExerciseEntry & { source: string }) | null) => {
+    const handleSetSelectedActivity = useCallback((activity: (ExerciseEntry & { source: string }) | null) => {
         setSelectedActivity(activity);
         if (activity) {
             setSearchParams({ activityId: activity.id });
         } else {
             setSearchParams({});
         }
-    };
+    }, [setSearchParams]);
 
     // Derived Years for Dropdown
     const availableYears = useMemo(() => {
@@ -474,7 +474,14 @@ export function ActivitiesPage() {
 
     // 4. FILTER & SORT LOGIC
     const processedActivities = useMemo(() => {
-        // Pre-calculate IDs that should be hidden (components of merges)
+        // 1. Pre-calculate search filters once to avoid heavy regex parsing in the loop
+        const { filters: liveFilters } = debouncedSearchQuery
+            ? parseSmartQuery(debouncedSearchQuery)
+            : { filters: [] };
+
+        const allActiveFilters = [...activeSmartFilters, ...liveFilters];
+
+        // 2. Pre-calculate IDs that should be hidden (components of merges)
         const hiddenIds = new Set<string>();
         universalActivities.forEach(u => {
             if (u.mergedIntoId) hiddenIds.add(u.id);
@@ -483,8 +490,12 @@ export function ActivitiesPage() {
             }
         });
 
-        let result = applySmartFilters(allActivities, activeSmartFilters);
+        // 3. Apply Smart Filters (Distance, Pace, Tonnage, Date, Text)
+        let result = allActiveFilters.length > 0
+            ? applySmartFilters(allActivities, allActiveFilters)
+            : allActivities;
 
+        // 4. Apply manual filters and hidden logic
         result = result.filter(a => {
             // Hide activities that have been merged into another activity
             if (hiddenIds.has(a.id)) return false;
@@ -492,9 +503,7 @@ export function ActivitiesPage() {
             // Source Filter
             if (sourceFilter !== 'all' && a.source !== sourceFilter) return false;
 
-            // Date Preset & Year Filter overlap handling
-            // Priority: if datePreset is 'year', check current year. if specific year string (e.g. '2023'), check that.
-            // If datePreset is '7d', '30d', etc check ranges.
+            // Date Preset & Year Filter
             const date = new Date(a.date);
             const now = new Date();
 
@@ -513,19 +522,8 @@ export function ActivitiesPage() {
             } else if (datePreset === 'year') {
                 if (date.getFullYear() !== now.getFullYear()) return false;
             } else if (datePreset !== 'all') {
-                // Must be a specific year (string)
                 if (date.getFullYear() !== parseInt(datePreset)) return false;
             }
-
-            // Search (Combine active smart filters with live search text)
-            let currentFilters = activeSmartFilters;
-            if (debouncedSearchQuery) {
-                const { filters: liveFilters } = parseSmartQuery(debouncedSearchQuery);
-                currentFilters = [...currentFilters, ...liveFilters];
-            }
-
-            const matchesSmart = applySmartFilters([a], currentFilters).length > 0;
-            if (!matchesSmart) return false;
 
             // Advanced Ranges
             if (minDist && (a.distance || 0) < parseFloat(minDist)) return false;
@@ -536,12 +534,11 @@ export function ActivitiesPage() {
             return true;
         });
 
-        // Sorting
+        // 5. Sorting
         result.sort((a, b) => {
             let valA: any = (a as any)[sortConfig.key];
             let valB: any = (b as any)[sortConfig.key];
 
-            // Special cases
             if (sortConfig.key === 'tonnage') {
                 valA = a.tonnage || 0;
                 valB = b.tonnage || 0;
@@ -549,13 +546,8 @@ export function ActivitiesPage() {
                 valA = calculatePerformanceScore(a, allActivities);
                 valB = calculatePerformanceScore(b, allActivities);
             } else if (sortConfig.key === 'pace') {
-                // Pace = Duration / Distance (seconds per km)
                 valA = a.distance ? (a.durationMinutes * 60) / a.distance : 0;
                 valB = b.distance ? (b.durationMinutes * 60) / b.distance : 0;
-
-                // If sorting pace ASC, we want fastest first (lowest value)
-                // If sorting pace DESC, we want slowest first (highest value)
-                // The current comparison logic below handles this if we keep direction logic
             }
 
             if (valA === undefined) valA = 0;
@@ -567,7 +559,7 @@ export function ActivitiesPage() {
         });
 
         return result;
-    }, [allActivities, sortConfig, debouncedSearchQuery, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime]);
+    }, [allActivities, universalActivities, sortConfig, debouncedSearchQuery, activeSmartFilters, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime]);
 
     // Reset pagination when filters change
     useEffect(() => {
@@ -593,7 +585,7 @@ export function ActivitiesPage() {
         : undefined;
 
     // Merge selection handlers
-    const toggleMergeSelection = (activityId: string, index: number, event: React.MouseEvent) => {
+    const toggleMergeSelection = useCallback((activityId: string, index: number, event: React.MouseEvent) => {
         event.stopPropagation();
 
         setSelectedForMerge(prev => {
@@ -620,7 +612,7 @@ export function ActivitiesPage() {
         });
 
         setLastClickedIndex(index);
-    };
+    }, [lastClickedIndex, processedActivities]);
 
     const clearMergeSelection = () => {
         setSelectedForMerge(new Set());

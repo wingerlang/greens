@@ -160,6 +160,59 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
                     </div>
                 </div>
 
+                {/* Supplement Details */}
+                {item.category === 'supplements' && item.supplementDetails && (
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                        <div className="flex justify-between items-end">
+                            <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                                <span>💊</span> Kosttillskott
+                            </h3>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {item.supplementDetails.purpose && (
+                                <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4">
+                                    <span className="block text-[9px] font-black text-purple-400/80 uppercase tracking-widest mb-1">Syfte</span>
+                                    <span className="text-sm font-bold text-purple-100">{item.supplementDetails.purpose}</span>
+                                </div>
+                            )}
+                            {item.supplementDetails.effect && (
+                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                                    <span className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Effekt</span>
+                                    <span className="text-sm font-bold text-slate-200">{item.supplementDetails.effect}</span>
+                                </div>
+                            )}
+                            {item.supplementDetails.timing && (
+                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                                    <span className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">När</span>
+                                    <span className="text-sm font-bold text-slate-200">{item.supplementDetails.timing}</span>
+                                </div>
+                            )}
+                            {item.supplementDetails.recommendedDose && (
+                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                                    <span className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Dosering</span>
+                                    <span className="text-sm font-bold text-slate-200">{item.supplementDetails.recommendedDose}</span>
+                                </div>
+                            )}
+                        </div>
+                        {(item.supplementDetails.activeIngredients || item.supplementDetails.contraindications) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {item.supplementDetails.activeIngredients && (
+                                    <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-4">
+                                        <span className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Aktiva ämnen</span>
+                                        <span className="text-sm font-bold text-slate-200">{item.supplementDetails.activeIngredients}</span>
+                                    </div>
+                                )}
+                                {item.supplementDetails.contraindications && (
+                                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
+                                        <span className="block text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Varning / Kontraindikationer</span>
+                                        <span className="text-sm font-bold text-amber-400">{item.supplementDetails.contraindications}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Metadata Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/5">
                     <MetaItem

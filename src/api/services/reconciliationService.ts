@@ -248,9 +248,13 @@ export class ReconciliationService {
             const planTitleLower = (c.plan?.title || '').toLowerCase();
 
             // 1. TYPE MATCH (Strong signal)
+            const isCompetition = c.category === 'COMPETITION' || c.isRace;
             if (planType === stravaType) {
-                // Base score for correct type is now enough to trigger match if no other signals
-                score += 20; 
+                // Base score for correct type
+                score += 25; 
+            } else if (isCompetition) {
+                // COMPETITION MUST MATCH TYPE
+                score -= 30; 
             } else if (
                 (planType === 'running' && (stravaType === 'running' || stravaType === 'walking')) ||
                 (planType === 'cardio' && (stravaType === 'running' || stravaType === 'cycling' || stravaType === 'other')) ||
@@ -272,11 +276,10 @@ export class ReconciliationService {
                 const diffMin = Math.abs(c.plan.durationMinutes - stravaDurationMin);
                 const diffPercent = diffMin / c.plan.durationMinutes;
                 
-                // Be lenient with over-performing (extension)
-                if (diffPercent < 0.15) score += 15;
-                else if (diffPercent < 0.40) score += 8;
+                if (diffPercent < 0.15) score += 20;
+                else if (diffPercent < 0.40) score += 10;
+                else if (diffPercent > 0.60) score -= 20; // HEAVY PENALTY for huge duration diff
                 else if (stravaDurationMin > c.plan.durationMinutes && diffPercent < 0.60) {
-                    // User ran longer than planned - this is often a match
                     score += 5;
                 }
             }
@@ -286,10 +289,10 @@ export class ReconciliationService {
                 const diffKm = Math.abs(c.plan.distanceKm - stravaDistKm);
                 const diffPercent = diffKm / c.plan.distanceKm;
 
-                if (diffPercent < 0.15) score += 15;
-                else if (diffPercent < 0.40) score += 8;
+                if (diffPercent < 0.15) score += 20;
+                else if (diffPercent < 0.35) score += 10;
+                else if (diffPercent > 0.50) score -= 20; // HEAVY PENALTY for distance mismatch
                 else if (stravaDistKm > c.plan.distanceKm && diffPercent < 0.60) {
-                    // User ran further than planned (like 8km -> 10.9km)
                     score += 5;
                 }
             }
@@ -307,7 +310,13 @@ export class ReconciliationService {
         scored.sort((a, b) => b.score - a.score);
         
         // Threshold check
-        if (scored[0].score >= 18) return scored[0].candidate;
+        const topMatch = scored[0];
+        const isCompetitionMatch = topMatch.candidate.category === 'COMPETITION' || topMatch.candidate.isRace;
+        
+        // Higher threshold for competitions to avoid matching junk
+        const threshold = isCompetitionMatch ? 45 : 22;
+
+        if (topMatch.score >= threshold) return topMatch.candidate;
         return null;
     }
 

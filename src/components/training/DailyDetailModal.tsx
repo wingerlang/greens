@@ -50,6 +50,15 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
     // Key listeners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement;
+            if (activeEl && (
+                activeEl.tagName === 'INPUT' || 
+                activeEl.tagName === 'TEXTAREA' || 
+                activeEl.tagName === 'SELECT' || 
+                activeEl.getAttribute('contenteditable') === 'true'
+            )) {
+                return;
+            }
             if (document.getElementById('activity-detail-modal')) return;
             if (e.key === 'Escape') onClose();
             if (e.key === 'ArrowLeft' && prevDay && onDateChange) onDateChange(prevDay);
@@ -118,7 +127,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
         let totalElevation = 0;
 
         exercises.forEach(e => {
-            const isRun = e.type.includes('run') || e.type.includes('löp') || (e.title && /run|löp/i.test(e.title));
+            const lowType = e.type.toLowerCase();
+            const lowTitle = (e.title || '').toLowerCase();
+            const isCardio = lowType.includes('cardio') || lowType.includes('cross') || lowType.includes('elliptical') || lowType.includes('stair') || lowType.includes('row') || lowTitle.includes('cross') || lowTitle.includes('elliptical');
+            
+            const isRun = !isCardio && (e.type.includes('run') || e.type.includes('löp') || (e.title && /run|löp/i.test(e.title)));
             const isCycle = e.type.includes('cycle') || e.type.includes('cykel') || (e.title && /cycle|cykl/i.test(e.title));
             const isClimb = e.type === 'climbing' || e.type.includes('klätt') || (e.title && /klätt/i.test(e.title)) || (e.title && /climb/i.test(e.title) && !/stair/i.test(e.title));
             const isStrength = e.type.includes('strength') || e.type.includes('styrka') || (e.title && /strength|styrk|pull|push|legs|core/i.test(e.title));
@@ -170,7 +183,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                     else if (isCycle) distanceBreakdown.cycle += e.distance;
                     else if (isClimb) distanceBreakdown.climb += e.distance;
                     else if (e.type.includes('row') || /row|rodd/i.test(e.title || '')) distanceBreakdown.row += e.distance;
-                    else if (isStrength || e.type.includes('cardio') || /cardio|cross\s*trainer/i.test(e.title || '')) distanceBreakdown.gymCardio += e.distance;
+                    else if (isStrength || isCardio || e.type.includes('cardio') || /cardio|cross\s*trainer/i.test(e.title || '')) distanceBreakdown.gymCardio += e.distance;
                     else if (isWalk) distanceBreakdown.walk += e.distance;
                     else distanceBreakdown.other += e.distance;
                 }
@@ -449,7 +462,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                             </h3>
                             <div className="grid gap-4">
                                 {exercises.map((ex: ExerciseEntry, i: number) => {
-                                    const isRun = ex.type.includes('run') || ex.type.includes('löp') || (ex.title && /run|löp/i.test(ex.title));
+                                    const lowType = ex.type.toLowerCase();
+                                    const lowTitle = (ex.title || '').toLowerCase();
+                                    const isCardio = lowType.includes('cardio') || lowType.includes('cross') || lowType.includes('elliptical') || lowType.includes('stair') || lowType.includes('row') || lowTitle.includes('cross') || lowTitle.includes('elliptical');
+                                    
+                                    const isRun = !isCardio && (ex.type.includes('run') || ex.type.includes('löp') || (ex.title && /run|löp/i.test(ex.title)));
                                     const isStrength = ex.type.includes('strength') || ex.type.includes('styrka') || (ex.title && /strength|styrk|pull|push|legs|core/i.test(ex.title));
                                     const isCycle = ex.type.includes('cycle') || ex.type.includes('cykel') || (ex.type.includes('cykling')) || (ex.title && /cycle|cykl/i.test(ex.title));
 
@@ -473,6 +490,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                         iconColor = 'text-sky-400';
                                         bgColor = 'bg-sky-500/10';
                                         borderColor = 'border-sky-500/20';
+                                    } else if (isCardio) {
+                                        Icon = Activity;
+                                        iconColor = 'text-rose-400';
+                                        bgColor = 'bg-rose-500/10';
+                                        borderColor = 'border-rose-500/20';
                                     }
 
                                     if (ex.subType === 'race') {
@@ -495,7 +517,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                                     <h4 className="text-white font-bold text-lg capitalize flex items-center gap-2">
                                                         {ex.subType === 'race' && '🏆 '}
                                                         {ex.extractedFromId && <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/30 uppercase font-black mr-1">Utdrag</span>}
-                                                        {ex.title ? ex.title : ex.type.replace('strength', 'Styrketräning').replace('running', 'Löpning')}
+                                                        {ex.title ? ex.title : (isCardio ? 'Cardio' : ex.type.replace('strength', 'Styrketräning').replace('running', 'Löpning'))}
                                                     </h4>
                                                     <p className="text-slate-400 text-sm">
                                                         {ex.startTime && <span className="text-slate-500 mr-1">{ex.startTime}</span>}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { COMPETITION_PRESETS, calculateDailyPoints } from '../utils/competitionEngine.ts';
 import { Competition, CompetitionRule, CompetitionParticipant } from '../models/types.ts';

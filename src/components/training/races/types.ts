@@ -22,6 +22,7 @@ export interface DashboardStats {
     bronzeCount: number;
     podiumCount: number;
     top10Count: number;
+    top33Count: number;
     avgPercent: number;
 }
 

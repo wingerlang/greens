@@ -30,6 +30,7 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
     const markersLayer = useRef<any>(null);
     const [markers, setMarkers] = useState<MapMarker[]>([]);
     const [isGeocoding, setIsGeocoding] = useState(false);
+    const [geocodeProgress, setGeocodeProgress] = useState({ current: 0, total: 0 });
     const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
 
     // Collect all unique locations
@@ -37,8 +38,9 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
         const locs = new Map<string, { id: string, title: string, date: string, type: 'past' | 'upcoming', distance?: number, placement?: number }>();
         
         races.forEach(r => {
-            if (r.location) {
-                const key = r.location.toLowerCase().trim();
+            const loc = r.raceDetails?.logistics?.location || (r as any).location;
+            if (loc) {
+                const key = loc.toLowerCase().trim();
                 // Prefer placing more recent or important races if overlapping?
                 // For now, just keep them all or group by location
                 locs.set(`${key}_past_${r.id}`, { 
@@ -53,8 +55,9 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
         });
 
         upcomingRaces.forEach(r => {
-            if (r.location) {
-                const key = r.location.toLowerCase().trim();
+            const loc = r.raceDetails?.logistics?.location || (r as any).location;
+            if (loc) {
+                const key = loc.toLowerCase().trim();
                 locs.set(`${key}_upcoming_${r.id}`, { 
                     id: r.id, 
                     title: r.title || r.description || 'Planerad Tävling', 
@@ -69,18 +72,23 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
     }, [races, upcomingRaces]);
 
     useEffect(() => {
+        let isMounted = true;
         const performGeocoding = async () => {
             setIsGeocoding(true);
+            setGeocodeProgress({ current: 0, total: locationsToGeocode.size });
             const newMarkers: MapMarker[] = [];
             
+            let count = 0;
             for (const [key, info] of locationsToGeocode.entries()) {
+                if (!isMounted) return;
+                
                 // key is format: "city name_type_id"
                 const parts = key.split('_');
                 const rawLocation = parts[0].trim();
                 
                 const coords = await geocodeLocation(rawLocation);
 
-                if (coords) {
+                if (coords && isMounted) {
                     const normalizedName = normalizeLocation(rawLocation);
                     newMarkers.push({
                         id: info.id,
@@ -94,13 +102,18 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
                         placement: info.placement
                     });
                 }
+                count++;
+                setGeocodeProgress({ current: count, total: locationsToGeocode.size });
             }
 
-            setMarkers(newMarkers);
-            setIsGeocoding(false);
+            if (isMounted) {
+                setMarkers(newMarkers);
+                setIsGeocoding(false);
+            }
         };
 
         performGeocoding();
+        return () => { isMounted = false; };
     }, [locationsToGeocode]);
 
     useEffect(() => {
@@ -165,7 +178,10 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
         }
 
         return () => {
-            // Cleanup on unmount handled by refs
+            if (leafletMap.current) {
+                leafletMap.current.remove();
+                leafletMap.current = null;
+            }
         };
     }, [markers]);
 
@@ -173,6 +189,18 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
         <div className="relative w-full h-[600px] bg-slate-950 rounded-[32px] overflow-hidden border border-white/5 shadow-2xl">
             {/* Map Container */}
             <div ref={mapRef} className="w-full h-full z-0" />
+
+            {typeof L === 'undefined' && (
+                <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-12 text-center">
+                    <div className="max-w-md space-y-4">
+                        <div className="bg-red-500/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-red-500">
+                            <MapIcon size={32} />
+                        </div>
+                        <h4 className="text-lg font-black text-white uppercase tracking-wider">Kartan kunde inte laddas</h4>
+                        <p className="text-sm text-slate-400">Det verkar som att kart-biblioteket (Leaflet) inte kunde hämtas. Kontrollera din internetanslutning och ladda om sidan.</p>
+                    </div>
+                </div>
+            )}
 
             {/* Overlays */}
             <div className="absolute top-6 left-6 z-10 pointer-events-none">
@@ -274,7 +302,9 @@ export function RaceMapView({ races, upcomingRaces, onSelectActivity }: RaceMapV
                         <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
                         <div className="text-center">
                             <p className="text-sm font-black text-white uppercase tracking-widest">Hämtar kartdata</p>
-                            <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Geokodar tävlingsplatser...</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase">
+                                Geokodar platser... ({geocodeProgress.current} av {geocodeProgress.total})
+                            </p>
                         </div>
                     </div>
                 </div>

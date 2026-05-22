@@ -1,0 +1,44 @@
+# Premium & Anti-Regression Rules for Greens
+
+Welcome, AI Coding Assistant. This project is a premium training and health tracker application designed with high aesthetic quality and robust typing. 
+To ensure we maintain a stable, beautiful, and maintainable project, you MUST strictly adhere to the following rules:
+
+---
+
+## 1. Visual Design & Premium Aesthetics (CRITICAL)
+- **Do NOT Degrade UI**: The user should be wowed at first glance. We use a premium glassmorphism aesthetic with vibrant gradients, blurred backgrounds, dynamic micro-animations, and Outfit/Inter fonts.
+- **Use Curated Color Palettes**: Never use generic colors (e.g. plain `#ff0000`, `blue`, `red`). Utilize the predefined HSL color tokens and utility classes inside `src/index.css`.
+- **Micro-Animations**: All interactive elements (buttons, cards, links, tabs) should feature subtle hover and active state transitions, or micro-animations via `framer-motion` if appropriate.
+- **Responsive Layouts**: Design for mobile, tablet, and desktop viewports. Test your UI changes on small and large screens.
+
+---
+
+## 2. Code Modularity & Architecture
+- **No Monoliths**: Avoid adding large blocks of logic into giant files. Keep UI components focused on layout/rendering, and place business logic (math, calculations, data parsing) into specialized files under `src/utils/` or domain-specific folders (e.g. `src/features/beast/utils/`).
+- **Reuse Existing Utilities**: Before writing new calculation or formatting helper functions, check `src/utils/formatters.ts` and `src/utils/activityUtils.ts` to see if the functionality already exists.
+- **Deno KV Clean Architecture**: Database operations should be separated into Repository classes (e.g., `src/api/repositories/`). Do not query KV store directly from API handlers or controllers.
+- **Service Layer for Handlers**: Separate API routers/handlers from business logic. Move business logic (such as CRUD orchestration, image manipulation, and disk access) into dedicated Service classes (under `src/api/services/`). Service constructors should allow Dependency Injection (for repositories, filesystem interfaces, etc.) to enable completely isolated unit testing with mocks.
+
+---
+
+## 3. Strict Type Safety (No `any`)
+- **No Implicit/Explicit `any`**: Do not use `any`. Always use strong, strict TypeScript types.
+- **Types Origin**: Import shared domain types (like `UniversalActivity`, `StrengthWorkout`, etc.) from `src/models/types.ts`.
+- **Generic Database Calls**: When querying using our exported proxy KV wrapper, ensure you leverage the generic types (e.g., `kv.list<StrengthWorkout>`) which is fully supported by casting the exported singleton in `src/api/kv.ts` as `Deno.Kv`.
+
+---
+
+## 4. State & Cache Integrity
+- **No Memory Leaks**: When handling overlays, modals, and pending input fields, ensure that closing the view (via Cancel button, clicking outside, or pressing the `Escape` key) completely cleans up any temporary state/variables.
+- **Zod Schema Validation**: Always validate external input data (bulk uploads, CSV imports, API request bodies) using robust Zod schemas. Catch validation errors and return helpful, user-friendly messages.
+
+---
+
+## 5. Verification & Testing Requirements
+Before you submit any changes or declare a task complete, you MUST:
+1. **Run Unit Tests**: Execute `deno task test` and ensure all tests pass.
+2. **Check Code Coverage**: Execute `deno task test:cov` to see the code coverage report. Make sure coverage on new utils does not drop.
+3. **Verify Build**: Execute `deno task build` to ensure the Vite frontend bundles successfully without any TypeScript or bundling compiler errors.
+4. **No Dev-Server Regressions**: Verify that the backend server compiles and starts successfully.
+
+Follow these rules perfectly to keep Greens beautiful and rock-solid!

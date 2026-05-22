@@ -29,8 +29,8 @@ Deno.test("Race Planner - Weather Penalty", () => {
 
 Deno.test("Race Planner - Burn Rate", () => {
     // 70kg, 10kph
-    // 700 kcal/h -> 11.66 kcal/min
-    assertAlmostEquals(estimateKcalBurnRate(70, 10), 11.66, 0.1);
+    // 70 * 10 * 0.92 = 644 kcal/h -> 10.73 kcal/min
+    assertAlmostEquals(estimateKcalBurnRate(70, 10), 10.73, 0.1);
 });
 
 Deno.test("Race Planner - Carb Ratio", () => {

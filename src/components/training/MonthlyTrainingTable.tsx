@@ -6,6 +6,7 @@ import { isWarmupOrCooldown, isCompetition } from '../../utils/activityUtils.ts'
 
 interface MonthlyTrainingTableProps {
     exercises: ExerciseEntry[];
+    plannedActivities?: any[];
     year: number;
     initialCalendarMonth?: number;
     initialCalendarDay?: number;
@@ -28,7 +29,7 @@ interface MonthBucket {
     topActivities: ExerciseEntry[];
 }
 
-export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, initialCalendarDay, onExerciseClick }: MonthlyTrainingTableProps) {
+export function MonthlyTrainingTable({ exercises, plannedActivities, year, initialCalendarMonth, initialCalendarDay, onExerciseClick }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('all');
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
@@ -119,7 +120,7 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
 
         const sortedPeriods = Array.from(periodsFound).sort((a, b) => b.localeCompare(a)); // Descending (Dec -> Jan)
 
-        const buckets: Record<string, MonthBucket & { hasRace: boolean }> = {};
+        const buckets: Record<string, MonthBucket & { hasRace: boolean; plannedDuration: number; plannedCount: number; plannedRaceCount: number }> = {};
         sortedPeriods.forEach(p => {
             const [y, m] = p.split('-').map(Number);
             buckets[p] = {
@@ -127,6 +128,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 year: y,
                 monthIdx: m - 1,
                 hasRace: false,
+                plannedDuration: 0,
+                plannedCount: 0,
+                plannedRaceCount: 0,
                 selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
                 categories: {
                     cardio: { distance: 0, duration: 0, count: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
@@ -218,6 +222,26 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 bucket.selected.distance += e.distance || 0;
                 if (e.distance) bucket.selected.distDuration += e.durationMinutes;
                 bucket.selected.tonnage += e.tonnage || 0;
+            }
+        });
+
+        // Add planned race durations
+        (plannedActivities || []).forEach(a => {
+            const date = new Date(a.date);
+            const period = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            const bucket = buckets[period];
+            if (!bucket) return;
+            
+            if (a.status === 'PLANNED' || a.status === 'DRAFT') {
+                if (a.category === 'RACE') {
+                    bucket.plannedRaceCount++;
+                    bucket.plannedDuration += (a.durationMinutes || 0);
+                } else {
+                    bucket.plannedCount++;
+                    // Optional: add non-race planned duration to total too?
+                    // As per user request: "5h (8h) om man har ett 3h-lopp planerat"
+                    // We only add race duration for now to match the specific example.
+                }
             }
         });
 
@@ -313,6 +337,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 duration: acc.total.duration + curr.total.duration,
                 distance: acc.total.distance + curr.total.distance,
                 tonnage: acc.total.tonnage + curr.total.tonnage,
+                plannedDuration: acc.total.plannedDuration + curr.plannedDuration,
+                plannedCount: acc.total.plannedCount + curr.plannedCount,
+                plannedRaceCount: acc.total.plannedRaceCount + curr.plannedRaceCount
             }
         }), {
             selected: { distance: 0, duration: 0, count: 0, tonnage: 0, hrSum: 0, hrCount: 0, distDuration: 0 },
@@ -321,7 +348,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                 strength: { tonnage: 0, duration: 0, count: 0 },
                 other: { duration: 0, count: 0, breakdown: {} as Record<string, { duration: number, count: number }> }
             },
-            total: { count: 0, duration: 0, distance: 0, tonnage: 0 }
+            total: { 
+                count: 0, duration: 0, distance: 0, tonnage: 0,
+                plannedDuration: 0, plannedCount: 0, plannedRaceCount: 0
+            }
         });
     }, [data]);
 
@@ -385,9 +415,9 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-[140px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10">
-                <div className="p-2"></div> {/* Month col */}
-                <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
+            <div className="grid grid-cols-[130px_1fr] bg-slate-900/80 text-xs uppercase font-bold text-slate-500 border-b border-white/10 items-center">
+                <div className="py-1.5 px-2"></div> {/* Month col */}
+                <div className="grid grid-cols-[1fr_180px] divide-x divide-white/5">
                     <div className="text-center p-2 text-white/90">
                         {activeTab === 'all' ? 'Sammanställning' :
                             activeTab === 'running' ? 'Löpning' :
@@ -400,8 +430,8 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
             {/* Sub-Header */}
-            <div className="grid grid-cols-[140px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5">
-                <div className="p-2 flex items-center gap-2 text-slate-400">
+            <div className="grid grid-cols-[130px_1fr] text-[10px] uppercase font-bold text-slate-500 bg-slate-900/30 border-b border-white/5 items-center">
+                <div className="py-1.5 px-2 flex items-center gap-2 text-slate-400">
                     {selectionMode && (
                         <div
                             className="w-4 h-4 rounded border border-white/30 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
@@ -421,52 +451,50 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                     Månad
                     {activeTab !== 'all' && <span className="text-[8px] opacity-60 ml-1">(Filtrerat)</span>}
                 </div>
-                <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
+                <div className="grid grid-cols-[1fr_180px] divide-x divide-white/5">
                     {/* Specific Stats Columns */}
-                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'} text-center`}>
+                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_2fr_1fr_1.2fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'} items-center divide-x divide-white/5`}>
                         {activeTab === 'all' ? (
                             <>
-                                <div className="py-1 px-3 text-right border-r border-white/5">
-                                    <div className="font-bold mb-0.5 text-emerald-400 flex justify-end items-center gap-1"><span>🏃</span> Kondition</div>
-                                    <div className="text-emerald-500/70 text-[9px] truncate">Km <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> Tempo <span className="text-slate-600">•</span> HR <span className="text-slate-600">•</span> P</div>
-                                </div>
-                                <div className="py-1 px-3 text-right border-r border-white/5 overflow-hidden">
-                                    <div className="font-bold mb-0.5 text-indigo-400 flex justify-end items-center gap-1"><span>💪</span> Styrka</div>
-                                    <div className="text-indigo-500/70 text-[9px] truncate">Ton <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> P</div>
-                                </div>
-                                <div className="py-1 px-3 text-right border-r border-white/5">
-                                    <div className="font-bold mb-0.5 text-slate-300 flex justify-end items-center gap-1"><span>🧩</span> Övrigt</div>
-                                    <div className="text-slate-500/70 text-[9px] truncate">Tid <span className="text-slate-600">•</span> P</div>
+                                <div className="py-1 px-3 text-right">
+                                    <div className="font-bold text-emerald-400 flex justify-end items-center gap-1 leading-none mb-0.5"><span>🏃</span> Kondition</div>
+                                    <div className="text-emerald-500/50 text-[8px] truncate leading-none">Km • Tid • Tempo • HR • P</div>
                                 </div>
                                 <div className="py-1 px-3 text-right">
-                                    <div className="font-bold mb-0.5 text-sky-400 flex justify-end items-center gap-1"><span>📊</span> Totalt</div>
-                                    <div className="text-sky-500/70 text-[9px] truncate">Tid totalt</div>
+                                    <div className="font-bold text-indigo-400 flex justify-end items-center gap-1 leading-none mb-0.5"><span>🦾</span> Styrka</div>
+                                    <div className="text-indigo-500/50 text-[8px] truncate leading-none">Ton • Tid • P</div>
+                                </div>
+                                <div className="py-1 px-3 text-right">
+                                    <div className="font-bold text-slate-400 flex justify-end items-center gap-1 leading-none mb-0.5"><span>🧩</span> Övrigt</div>
+                                    <div className="text-slate-500/50 text-[8px] truncate leading-none">Tid • P</div>
+                                </div>
+                                <div className="py-1 px-3 text-right">
+                                    <div className="font-bold text-sky-400 flex justify-end items-center gap-1 leading-none mb-0.5"><span>📊</span> Totalt</div>
+                                    <div className="text-sky-500/50 text-[8px] truncate leading-none">Tid</div>
                                 </div>
                             </>
                         ) : activeTab === 'strength' ? (
                             <>
-                                <div className="p-2 text-right">Volym</div>
-                                <div className="p-2 text-right">Tid</div>
-                                <div className="p-2 text-right">Pass</div>
-                                <div className="p-2 text-right">Ton/Pass</div>
+                                <div className="py-1.5 px-2">Volym</div>
+                                <div className="py-1.5 px-2">Tid</div>
+                                <div className="py-1.5 px-2">Pass</div>
+                                <div className="py-1.5 px-2">Ton/Pass</div>
                             </>
                         ) : (
                             <>
-                                <div className="p-2 text-right">Distans</div>
-                                <div className="p-2 text-right">Tid</div>
-                                <div className="p-2 text-right">{activeTab === 'cycling' ? 'Snittfart' : 'Tempo'}</div>
-                                <div className="p-2 text-right">HR</div>
-                                <div className="p-2 text-right">Pass</div>
-                                <div className="p-2 text-right">Km/Pass</div>
+                                <div className="py-1.5 px-2">Distans</div>
+                                <div className="py-1.5 px-2">Tid</div>
+                                <div className="py-1.5 px-2">{activeTab === 'cycling' ? 'Snittfart' : 'Tempo'}</div>
+                                <div className="py-1.5 px-2">HR</div>
+                                <div className="py-1.5 px-2">Pass</div>
+                                <div className="py-1.5 px-2">Km/Pass</div>
                             </>
                         )}
                     </div>
                     {/* Total Stats Columns */}
-                    <div className="grid grid-cols-4 bg-slate-900/40 text-[9px]">
-                        <div className="p-2 text-right">Pass</div>
-                        <div className="p-2 text-right">Tid</div>
-                        <div className="p-2 text-right">Distans</div>
-                        <div className="p-2 text-right">Volym</div>
+                    <div className="grid grid-cols-2 divide-x divide-white/5 bg-slate-900/40 text-[9px] items-center h-full">
+                        <div className="py-1.5 px-2 text-right">VOLYM</div>
+                        <div className="py-1.5 px-2 text-right">TID</div>
                     </div>
                 </div>
             </div>
@@ -484,7 +512,6 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                         if (isEmpty && !selectionMode) {
                             if (emptyStart === null) emptyStart = i;
                         } else {
-                            // Flush any pending empty rows
                             if (emptyStart !== null) {
                                 const end = i - 1;
                                 const label = emptyStart === end
@@ -501,123 +528,99 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
 
                             // Render Data Row
                             rows.push(
-                                <div
-                                    key={row.period}
-                                    onClick={(e) => {
-                                        if (selectionMode) {
-                                            handleToggleMonthSelection(row.period, e);
-                                        } else {
-                                            navigate({
-                                                pathname: `/träning/${row.year}/${months[row.monthIdx].toLowerCase()}`,
-                                                search: window.location.search
-                                            }, { replace: true });
-                                            
-                                            // Scroll to top
-                                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        }
-                                    }}
-                                    className={`grid grid-cols-[140px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${row.hasRace ? 'bg-amber-500/5' : ''
-                                        } ${selectedMonths.has(row.period) ? 'bg-sky-500/10' : ''}`}
-                                >
-                                    <div className="p-0.5 px-2 text-slate-400 font-medium group-hover:text-white flex items-center gap-2 overflow-hidden shrink-0 border-r border-white/5 relative">
+                                <div key={row.period} className="grid grid-cols-[130px_1fr] border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors group items-stretch">
+                                    <div
+                                        className={`py-1.5 px-2 border-r border-white/5 flex gap-2 items-center relative cursor-pointer ${selectionMode && selectedMonths.has(row.period) ? 'bg-sky-500/10' : ''}`}
+                                        onClick={(e) => {
+                                            if (selectionMode) {
+                                                handleToggleMonthSelection(row.period, e);
+                                            } else {
+                                                navigate({
+                                                    pathname: `/träning/${row.year}/${months[row.monthIdx].toLowerCase()}`,
+                                                    search: window.location.search
+                                                }, { replace: true });
+                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            }
+                                        }}
+                                    >
                                         {selectionMode ? (
-                                            <div
-                                                onClick={(e) => handleToggleMonthSelection(row.period, e)}
-                                                className={`shrink-0 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${selectedMonths.has(row.period)
-                                                    ? 'bg-sky-500 border-sky-400 shadow-lg shadow-sky-500/20'
-                                                    : 'bg-slate-800 border-white/10'
-                                                    }`}
-                                            >
+                                            <div className={`shrink-0 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${selectedMonths.has(row.period) ? 'bg-sky-500 border-sky-400' : 'bg-slate-800 border-white/10'}`}>
                                                 {selectedMonths.has(row.period) && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                             </div>
-                                        ) : (
-                                            row.hasRace && <span className="text-amber-400 animate-pulse text-xs shrink-0">🏆</span>
-                                        )}
-                                        <div className="flex flex-col min-w-0 cursor-help border-b border-dashed border-slate-700/50">
-                                            <span className="truncate">{months[row.monthIdx]}</span>
-                                            {row.year !== year && <span className="text-[9px] text-slate-500 font-bold">{row.year}</span>}
-                                        </div>
-
-                                        {/* Month Summary Hover */}
-                                        <div className="absolute left-full top-0 ml-2 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 z-[110] text-left">
-                                            <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
-                                                <h4 className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">{months[row.monthIdx]} {row.year}</h4>
-                                                <span className="text-[10px] font-mono text-slate-500">{row.total.count} pass</span>
-                                            </div>
-                                            <div className="space-y-3">
-                                                {row.topActivities.length > 0 ? (
-                                                    row.topActivities.map((a) => (
-                                                        <div key={a.id} className="flex flex-col gap-0.5 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors" onClick={(e) => { e.stopPropagation(); onExerciseClick?.(a); }}>
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-[10px] font-bold text-white truncate max-w-[140px]">{a.title || a.type}</span>
-                                                                <span className="text-[9px] font-mono text-slate-400">{new Date(a.date).getDate()} {months[row.monthIdx].slice(0, 3)}</span>
-                                                            </div>
-                                                            <div className="flex gap-2 text-[9px] text-slate-500 font-mono">
-                                                                {a.distance && <span>{a.distance.toFixed(1)}k</span>}
-                                                                {a.durationMinutes && <span>{fmtDur(a.durationMinutes)}</span>}
-                                                                {a.tonnage && <span>{(a.tonnage / 1000).toFixed(1)}t</span>}
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-[10px] text-slate-500 italic">Inga pass loggade</p>
-                                                )}
+                                        ) : row.hasRace && <span className="text-amber-400 animate-pulse text-xs shrink-0">🏆</span>}
+                                        <div className="flex flex-col min-w-0 justify-center">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-sm font-black text-white italic tracking-tighter uppercase leading-none">{months[row.monthIdx]}</span>
+                                                <span className="text-[9px] font-bold text-slate-600 leading-none">{row.year !== year ? row.year : ''}</span>
                                             </div>
                                         </div>
-                                        {!selectionMode && <span className="opacity-0 group-hover:opacity-100 text-[10px] text-sky-400 transition-opacity whitespace-nowrap ml-auto px-1">↗</span>}
                                     </div>
-                                    <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
-                                        {/* Specific Data */}
-                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
+                                    <div className="grid grid-cols-[1fr_180px] divide-x divide-white/5 items-stretch">
+                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_2fr_1fr_1.2fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'} items-center`}>
                                             {activeTab === 'all' ? (
                                                 <>
-                                                    <div className="p-2 text-right font-mono text-[10px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center justify-end gap-1">
-                                                        <span className="text-emerald-400 font-bold">{row.categories.cardio.distance > 0 ? row.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'} km</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-slate-300">{row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-emerald-400/80">{fmtPace(row.categories.cardio.distance, row.categories.cardio.distDuration).replace(' min/km', '')}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-red-400">{row.categories.cardio.hrCount > 0 ? Math.round(row.categories.cardio.hrSum / row.categories.cardio.hrCount) : '-'} bpm</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} p</span>
-                                                        {row.categories.cardio.distance > 0 && (() => {
-                                                            const now = new Date();
-                                                            const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
-                                                            const weeksElapsed = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
-                                                            return (
-                                                                <>
-                                                                    <span className="text-slate-600 ml-1.5 opacity-30">|</span>
-                                                                    <span className="text-emerald-500/60 font-bold ml-1">{(row.categories.cardio.distance / weeksElapsed).toFixed(1)}/v</span>
-                                                                </>
-                                                            );
-                                                        })()}
+                                                    <div className="py-1 px-2 text-right font-mono text-[10px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex flex-col justify-center items-end leading-tight">
+                                                        {row.categories.cardio.distance > 0 ? (
+                                                            <div className="flex flex-col items-end">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <span className="text-emerald-400 font-bold">{fmtDist(row.categories.cardio.distance)}</span>
+                                                                    <span className="text-slate-600 opacity-30">•</span>
+                                                                    <span className="text-slate-300">{fmtDur(row.categories.cardio.duration)}</span>
+                                                                </div>
+                                                                <div className="flex items-center justify-end gap-1 text-[9px] mt-0.5">
+                                                                    <span className="text-emerald-500/60 font-medium">{fmtPace(row.categories.cardio.distance, row.categories.cardio.distDuration).replace(' min/km', '')}</span>
+                                                                    {row.categories.cardio.hrCount > 0 && (
+                                                                        <>
+                                                                            <span className="text-slate-600 opacity-20">•</span>
+                                                                            <span className="text-red-400/70">{Math.round(row.categories.cardio.hrSum / row.categories.cardio.hrCount)}</span>
+                                                                        </>
+                                                                    )}
+                                                                    <span className="text-slate-600 opacity-20">•</span>
+                                                                    <span className="text-slate-500 font-bold">{row.categories.cardio.count}p</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-700">-</span>
+                                                        )}
                                                     </div>
-                                                    <div className="p-2 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center justify-end gap-1.5">
-                                                        <span className="text-indigo-400 font-bold">{row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-slate-300">{row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} pass</span>
-                                                        {(() => {
-                                                            const now = new Date();
-                                                            const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
-                                                            const weeksElapsed = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
-                                                            return (
-                                                                <>
-                                                                    <span className="text-slate-600 ml-1.5 opacity-30">|</span>
-                                                                    <span className="text-indigo-500/60 font-bold ml-1">{(row.categories.strength.tonnage / (weeksElapsed * 1000)).toFixed(1)}t/v</span>
-                                                                </>
-                                                            );
-                                                        })()}
+                                                    <div className="py-1 px-2 text-right font-mono text-[10px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis flex flex-col justify-center items-end leading-tight">
+                                                        {row.categories.strength.duration > 0 || row.categories.strength.tonnage > 0 ? (
+                                                            <div className="flex flex-col items-end">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    {row.categories.strength.tonnage > 0 && <span className="text-indigo-400 font-bold">{fmtTon(row.categories.strength.tonnage)}</span>}
+                                                                    {row.categories.strength.tonnage > 0 && <span className="text-slate-600 opacity-30">•</span>}
+                                                                    <span className="text-slate-300">{fmtDur(row.categories.strength.duration)}</span>
+                                                                </div>
+                                                                <div className="flex items-center justify-end gap-1 text-[9px] mt-0.5">
+                                                                    {row.categories.strength.tonnage > 0 && (
+                                                                        <>
+                                                                            <span className="text-indigo-500/60 font-bold">
+                                                                                {(() => {
+                                                                                    const now = new Date();
+                                                                                    const isCurrentMonth = row.year === now.getFullYear() && row.monthIdx === now.getMonth();
+                                                                                    const weeksElapsed = isCurrentMonth ? Math.max(0.5, now.getDate() / 7) : 4.34;
+                                                                                    return (row.categories.strength.tonnage / (weeksElapsed * 1000)).toFixed(1);
+                                                                                })()}t/v
+                                                                            </span>
+                                                                            <span className="text-slate-600 opacity-20">•</span>
+                                                                        </>
+                                                                    )}
+                                                                    <span className="text-slate-500 font-bold">{row.categories.strength.count}p</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-700">-</span>
+                                                        )}
                                                     </div>
-                                                    <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other pointer-events-auto">
+                                                    <div className="py-1 px-2 text-right text-slate-400 font-mono text-[10px] border-r border-white/5 relative group/other pointer-events-auto flex flex-col justify-center items-end leading-tight">
                                                         {row.categories.other.duration > 0 ? (
-                                                            <>
-                                                                <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1.5 ml-auto w-fit">
-                                                                    {fmtDur(row.categories.other.duration)} <span className="text-slate-600 mx-0.5">•</span> <span className="text-slate-500">{row.categories.other.count} pass</span>
-                                                                    <Info className="w-3 h-3 text-slate-500 group-hover/other:text-sky-400 transition-colors" />
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-slate-300 border-b border-dashed border-slate-600 cursor-help flex items-center justify-end gap-1 ml-auto w-fit">
+                                                                    {fmtDur(row.categories.other.duration)}
                                                                 </span>
+                                                                <div className="flex items-center justify-end gap-1 text-[9px] mt-0.5">
+                                                                    <span className="text-slate-500 font-bold">{row.categories.other.count}p</span>
+                                                                </div>
 
                                                                 {/* Compact Hover Modal */}
                                                                 <div className="absolute bottom-full right-0 mb-1 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-2xl opacity-0 translate-y-1 pointer-events-none group-hover/other:opacity-100 group-hover/other:translate-y-0 group-hover/other:pointer-events-auto transition-all duration-200 z-[100] text-left">
@@ -633,13 +636,17 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                                             ))}
                                                                     </div>
                                                                 </div>
-                                                            </>
+                                                            </div>
                                                         ) : '-'}
                                                     </div>
-                                                    <div className="p-3 flex flex-col justify-center gap-1.5 relative group/dist cursor-help">
+                                                    <div className="py-1 px-2 flex flex-col justify-center items-end relative group/dist cursor-help">
                                                         {row.total.duration > 0 ? (
-                                                            <div className="text-emerald-400 font-black text-lg">
+                                                            <div className="text-sky-400 font-black text-sm">
                                                                 {fmtDur(row.total.duration)}
+                                                            </div>
+                                                        ) : row.plannedDuration > 0 ? (
+                                                            <div className="text-sky-400/40 font-bold text-xs italic">
+                                                                ({fmtDur(row.plannedDuration)})
                                                             </div>
                                                         ) : (
                                                             <div className="text-center text-slate-600 text-[10px]">-</div>
@@ -648,43 +655,48 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                 </>
                                             ) : activeTab === 'strength' ? (
                                                 <>
-                                                    <div className="p-2 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
-                                                    <div className="p-2 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-2 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
-                                                    <div className="p-2 text-right text-slate-400 font-mono">
+                                                    <div className="py-1 px-2 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
+                                                    <div className="py-1 px-2 text-right font-mono">{fmtDur(row.selected.duration)}</div>
+                                                    <div className="py-1 px-2 text-right font-mono">{row.selected.count || '-'} <span className="text-[8px] text-slate-600">pass</span></div>
+                                                    <div className="py-1 px-2 text-right text-slate-400 font-mono">
                                                         {row.selected.count > 0 ? ((row.selected.tonnage / 1000) / row.selected.count).toFixed(1) + ' t' : '-'}
                                                     </div>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="p-2 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
-                                                    <div className="p-2 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                                    <div className="p-2 text-right text-emerald-400 font-mono">
+                                                    <div className="py-1 px-2 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
+                                                    <div className="py-1 px-2 text-right font-mono">{fmtDur(row.selected.duration)}</div>
+                                                    <div className="py-1 px-2 text-right text-emerald-400 font-mono">
                                                         {activeTab === 'cycling' 
                                                             ? fmtSpeed(row.selected.distance, row.selected.duration).replace(' km/h', '')
                                                             : fmtPace(row.selected.distance, row.selected.distDuration).replace(' min/km', '')}
                                                     </div>
-                                                    <div className="p-2 text-right text-red-400 font-mono">{row.selected.hrCount > 0 ? Math.round(row.selected.hrSum / row.selected.hrCount) + ' bpm' : '-'}</div>
-                                                    <div className="p-2 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">pass</span></div>
-                                                    <div className="p-2 text-right text-slate-400 font-mono">{row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}</div>
+                                                    <div className="py-1 px-2 text-right text-red-400 font-mono">{row.selected.hrCount > 0 ? Math.round(row.selected.hrSum / row.selected.hrCount) + ' bpm' : '-'}</div>
+                                                    <div className="py-1 px-2 text-right font-mono">{row.selected.count || '-'} <span className="text-[8px] text-slate-600">pass</span></div>
+                                                    <div className="py-1 px-2 text-right text-slate-400 font-mono">{row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}</div>
                                                 </>
                                             )}
                                         </div>
                                         {/* Total Data */}
-                                        <div className="grid grid-cols-4 bg-slate-900/40 border-l border-white/5 relative overflow-hidden group-hover:bg-slate-900/60 transition-colors">
-                                            <div className="p-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
+                                        <div className="grid grid-cols-4 bg-slate-900/40 border-l border-white/5 relative overflow-hidden group-hover:bg-slate-900/60 transition-colors items-center h-full">
+                                            <div className="py-1 px-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
                                                 <span className="text-[10px] font-bold">{row.total.count || '-'}</span>
+                                                {(row.plannedCount > 0 || row.plannedRaceCount > 0) && (
+                                                    <span className="text-[9px] text-sky-400 font-bold">
+                                                        ({[row.plannedCount > 0 ? `+${row.plannedCount}` : null, row.plannedRaceCount > 0 ? `+${row.plannedRaceCount}` : null].filter(Boolean).join(', ')})
+                                                    </span>
+                                                )}
                                                 <span className="text-[7px] text-slate-600 uppercase font-black tracking-tighter">p</span>
                                             </div>
-                                            <div className="p-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
+                                            <div className="py-1 px-1 text-right font-mono text-slate-300 flex items-center justify-end gap-1">
                                                 <span className="text-[11px] font-black text-white">{fmtDur(row.total.duration)}</span>
                                                 <span className="text-[7px] text-slate-600 uppercase font-black tracking-tighter">t</span>
                                             </div>
-                                            <div className="p-1 text-right font-mono text-emerald-400/80 flex items-center justify-end gap-0.5">
+                                            <div className="py-1 px-1 text-right font-mono text-emerald-400/80 flex items-center justify-end gap-0.5">
                                                 <span className="text-[10px] font-bold">{row.total.distance > 0 ? Math.round(row.total.distance) : '-'}</span>
                                                 <span className="text-[7px] text-emerald-900 uppercase font-black tracking-tighter">km</span>
                                             </div>
-                                            <div className="p-1 text-right font-mono text-indigo-400/80 flex items-center justify-end gap-0.5">
+                                            <div className="py-1 px-1 text-right font-mono text-indigo-400/80 flex items-center justify-end gap-0.5">
                                                 <span className="text-[10px] font-bold">{row.total.tonnage > 0 ? Math.round(row.total.tonnage / 1000) : '-'}</span>
                                                 <span className="text-[7px] text-indigo-900 uppercase font-black tracking-tighter">t</span>
                                             </div>
@@ -714,34 +726,46 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
             </div>
 
                 {/* Footer Totals */}
-                <div className="grid grid-cols-[140px_1fr] text-sm font-bold bg-white/5 border-t border-white/10 italic">
-                    <div className="p-2 text-white">Totalt:</div>
-                    <div className="grid grid-cols-[1fr_250px] divide-x divide-white/5">
-                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1.5fr_1.5fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'}`}>
+                <div className="grid grid-cols-[130px_1fr] text-[10px] font-bold bg-white/5 border-t border-white/10 italic items-center">
+                    <div className="py-1 px-2 text-white">Totalt:</div>
+                    <div className="grid grid-cols-[1fr_180px] divide-x divide-white/5 items-center">
+                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_2fr_1fr_1.2fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-6'} items-center divide-x divide-white/5`}>
                             {activeTab === 'all' ? (
                                 <>
-                                    <div className="p-2 text-right font-mono text-xs border-r border-white/5">
-                                        <span className="text-emerald-400">{totals.categories.cardio.distance > 0 ? totals.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'} km</span>
-                                        <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-300">{totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}</span>
-                                        <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} pass</span>
-                                        {totalWeeks > 0 && (
-                                            <span className="text-emerald-500/60 font-bold ml-1.5 opacity-80 decoration-emerald-500/30 underline underline-offset-2">
-                                                • {(totals.categories.cardio.distance / totalWeeks).toFixed(1)}/v
-                                            </span>
+                                    <div className="py-1 px-2 text-right font-mono text-[9px] border-r border-white/5">
+                                        {totals.categories.cardio.distance > 0 ? (
+                                            <>
+                                                <span className="text-emerald-400">{fmtDist(totals.categories.cardio.distance)}</span>
+                                                <span className="text-slate-600 mx-1.5 opacity-30">•</span>
+                                                <span className="text-slate-300">{fmtDur(totals.categories.cardio.duration)}</span>
+                                                <span className="text-slate-600 mx-1.5 opacity-30">•</span>
+                                                <span className="text-slate-500">{totals.categories.cardio.count}p</span>
+                                                {totalWeeks > 0 && (
+                                                    <span className="text-emerald-500/60 font-bold ml-1.5 opacity-80 decoration-emerald-500/30 underline underline-offset-2">
+                                                        • {(totals.categories.cardio.distance / totalWeeks).toFixed(1)}/v
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-slate-700">-</span>
                                         )}
                                     </div>
-                                    <div className="p-2 text-right font-mono text-xs border-r border-white/5">
-                                        <span className="text-indigo-400">{totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
-                                        <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-300">{totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}</span>
-                                        <span className="text-slate-600 mx-1.5">•</span>
-                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} pass</span>
-                                        {totalWeeks > 0 && (
-                                            <span className="text-indigo-500/60 font-bold ml-1.5 opacity-80 decoration-indigo-500/30 underline underline-offset-2">
-                                                • {(totals.categories.strength.tonnage / (totalWeeks * 1000)).toFixed(1)}t/v
-                                            </span>
+                                    <div className="py-1 px-2 text-right font-mono text-[9px] border-r border-white/5">
+                                        {totals.categories.strength.tonnage > 0 ? (
+                                            <>
+                                                <span className="text-indigo-400">{fmtTon(totals.categories.strength.tonnage)}</span>
+                                                <span className="text-slate-600 mx-1.5 opacity-30">•</span>
+                                                <span className="text-slate-300">{fmtDur(totals.categories.strength.duration)}</span>
+                                                <span className="text-slate-600 mx-1.5 opacity-30">•</span>
+                                                <span className="text-slate-500">{totals.categories.strength.count}p</span>
+                                                {totalWeeks > 0 && (
+                                                    <span className="text-indigo-500/60 font-bold ml-1.5 opacity-80 decoration-indigo-500/30 underline underline-offset-2">
+                                                        • {(totals.categories.strength.tonnage / (totalWeeks * 1000)).toFixed(1)}t/v
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-slate-700">-</span>
                                         )}
                                     </div>
                                     <div className="p-2 text-right text-slate-400 font-mono text-[11px] border-r border-white/5 relative group/other-total">
@@ -772,12 +796,12 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                     <div className="p-3 flex flex-col justify-center gap-1.5 relative group/dist-total cursor-help">
                                         {totals.total.duration > 0 ? (
                                             <>
-                                                <div className="flex w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="flex w-24 ml-auto h-1 bg-slate-800 rounded-full overflow-hidden">
                                                     <div className="bg-emerald-500" style={{ width: `${(totals.categories.cardio.duration / totals.total.duration) * 100}%` }} />
                                                     <div className="bg-indigo-500" style={{ width: `${(totals.categories.strength.duration / totals.total.duration) * 100}%` }} />
                                                     <div className="bg-slate-500" style={{ width: `${(totals.categories.other.duration / totals.total.duration) * 100}%` }} />
                                                 </div>
-                                                <div className="flex justify-between text-[9px] font-mono font-bold">
+                                                <div className="flex justify-between w-24 ml-auto text-[7px] font-mono font-black mt-1">
                                                     <span className="text-emerald-500/70">{totals.categories.cardio.duration > 0 ? Math.round((totals.categories.cardio.duration / totals.total.duration) * 100) + '%' : ''}</span>
                                                     <span className="text-indigo-500/70">{totals.categories.strength.duration > 0 ? Math.round((totals.categories.strength.duration / totals.total.duration) * 100) + '%' : ''}</span>
                                                     <span className="text-slate-500/70">{totals.categories.other.duration > 0 ? Math.round((totals.categories.other.duration / totals.total.duration) * 100) + '%' : ''}</span>
@@ -788,13 +812,13 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                                                      <div className="text-[9px] font-black uppercase tracking-tighter text-slate-500 mb-1.5 pb-1 border-b border-white/10">Tidsfördelning ({year})</div>
                                                      <div className="space-y-1">
                                                          {[
-                                                             { label: 'Kondition', color: 'bg-emerald-500', val: totals.categories.cardio.duration, count: totals.categories.cardio.count },
-                                                             { label: 'Styrka', color: 'bg-indigo-500', val: totals.categories.strength.duration, count: totals.categories.strength.count },
-                                                             { label: 'Övrigt', color: 'bg-slate-500', val: totals.categories.other.duration, count: totals.categories.other.count }
+                                                             { label: 'Kondition', color: 'bg-emerald-500', val: totals.categories.cardio.duration, count: totals.categories.cardio.count, icon: '🏃' },
+                                                             { label: 'Styrka', color: 'bg-indigo-500', val: totals.categories.strength.duration, count: totals.categories.strength.count, icon: '🦾' },
+                                                             { label: 'Övrigt', color: 'bg-slate-500', val: totals.categories.other.duration, count: totals.categories.other.count, icon: '🧩' }
                                                          ].map(cat => (
                                                              <div key={cat.label} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/[0.03] last:border-0">
                                                                  <div className="flex items-center gap-1.5 min-w-0">
-                                                                     <div className={`w-1 h-1 rounded-full shrink-0 ${cat.color}`} />
+                                                                     <span className="text-[10px] shrink-0">{cat.icon}</span>
                                                                      <span className="text-slate-300 truncate">{cat.label}</span>
                                                                  </div>
                                                                  <span className="font-mono text-white whitespace-nowrap">{cat.count}p · {Math.round((cat.val / totals.total.duration) * 100)}%</span>
@@ -831,21 +855,34 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, in
                             )}
                         </div>
                         <div className="grid grid-cols-4 bg-slate-900/50">
-                            <div className="p-2 text-right text-white font-mono flex items-center justify-end gap-1">
-                                <span className="text-xs">{totals.total.count}</span>
-                                <span className="text-[7px] text-slate-600 uppercase tracking-tighter">pass</span>
+                            <div className="p-2 text-right text-white font-mono flex flex-col items-end justify-center">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs">{totals.total.count}</span>
+                                    <span className="text-[7px] text-slate-600 uppercase tracking-tighter">pass</span>
+                                </div>
+                                {(totals.total.plannedCount > 0 || totals.total.plannedRaceCount > 0) && (
+                                    <div className="text-[8px] font-bold text-sky-400 leading-none">
+                                        ({[totals.total.plannedCount > 0 ? `+${totals.total.plannedCount}` : null, totals.total.plannedRaceCount > 0 ? `+${totals.total.plannedRaceCount}` : null].filter(Boolean).join(', ')})
+                                    </div>
+                                )}
                             </div>
-                            <div className="p-2 text-right text-white font-mono flex items-center justify-end gap-1">
-                                <span className="text-xs">{fmtDur(totals.total.duration)}</span>
-                                <span className="text-[7px] text-slate-600 uppercase tracking-tighter">h:m</span>
+                            <div className="p-2 text-right text-white font-mono flex flex-col items-end justify-center leading-tight">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs">{totals.total.duration > 0 ? fmtDur(totals.total.duration) : '-'}</span>
+                                    <span className="text-[7px] text-slate-600 uppercase tracking-tighter">h:m</span>
+                                </div>
                             </div>
-                            <div className="p-2 text-right text-emerald-400 font-mono flex items-center justify-end gap-1">
-                                <span className="text-xs">{totals.total.distance.toFixed(0)}</span>
-                                <span className="text-[7px] text-emerald-900 uppercase tracking-tighter">km</span>
+                            <div className="p-2 text-right text-emerald-400 font-mono flex flex-col items-end justify-center leading-tight">
+                                <div className="flex items-center justify-end gap-1">
+                                    <span className="text-xs">{totals.total.distance.toFixed(0)}</span>
+                                    <span className="text-[7px] text-emerald-900 uppercase font-black tracking-tighter">km</span>
+                                </div>
                             </div>
-                            <div className="p-2 text-right text-indigo-400 font-mono flex items-center justify-end gap-1">
-                                <span className="text-xs">{(totals.total.tonnage / 1000).toFixed(0)}</span>
-                                <span className="text-[7px] text-indigo-900 uppercase tracking-tighter">ton</span>
+                            <div className="p-2 text-right text-indigo-400 font-mono flex flex-col items-end justify-center leading-tight">
+                                <div className="flex items-center justify-end gap-1">
+                                    <span className="text-xs">{(totals.total.tonnage / 1000).toFixed(0)}</span>
+                                    <span className="text-[7px] text-indigo-900 uppercase font-black tracking-tighter">ton</span>
+                                </div>
                             </div>
                         </div>
                     </div>

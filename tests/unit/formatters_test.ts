@@ -10,7 +10,6 @@ import {
     formatNumber,
     formatVolumeTons,
     formatDuration,
-    formatActivityDuration,
     calculateRollingAverage,
     calculateTrend
 } from "../../src/utils/formatters.ts";

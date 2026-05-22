@@ -19,7 +19,7 @@ import { IntervalSplitsCard } from './IntervalSplitsCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 import { segmentSplits } from '../../utils/splitsSegmenter.ts';
 import { parseHyroxText } from '../../utils/hyroxParser.ts';
-import { Wand2, Zap, ArrowRight, Trophy as TrophyIcon, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator, AlertTriangle } from 'lucide-react';
+import { Wand2, Zap, ArrowRight, Trophy as TrophyIcon, Activity, HeartPulse, Medal, Heart, Timer, History, Award, Mountain, Target, TrendingUp, BarChart3, Clock, Star, ChevronDown, Calendar, Dumbbell, Repeat, Search, Bike, Footprints, Calculator, AlertTriangle, Scissors } from 'lucide-react';
 import { isCompetition } from '../../utils/activityUtils.ts';
 import { normalizeRaceTitle } from '../training/races/utils.ts';
 import { usePrepAggregation, PrepEvent } from '../training/hooks/usePrepAggregation.ts';
@@ -113,6 +113,7 @@ export function ActivityDetailModal({
         distance: currentActivity.distance ? currentActivity.distance.toString() : '',
         location: currentActivity.location || '',
         excludeFromStats: currentActivity.excludeFromStats || false,
+        excludeFromRecords: currentActivity.excludeFromRecords || false,
         excludeHeartRate: currentActivity.excludeHeartRate || false,
         isHiddenInCalendar: perf?.isHiddenInCalendar || false,
         hyroxStats: currentActivity.hyroxStats || { runSplits: [], stations: {} },
@@ -853,16 +854,23 @@ export function ActivityDetailModal({
         // If it's a force sync, we ignore the isStrengthLike check (user knows what they are doing)
         const canSync = effectivelyStrava && (isForcingFetch || !isStrengthLike) && (externalId || source === 'strava');
 
-        if (canSync && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits && token) {
-            console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id });
+        if (canSync && (needsFetch || isForcingFetch) && fetchSplitsResult === 'idle' && !isFetchingSplits) {
+            console.log("🚀 ActivityDetailModal: Triggering Strava split fetch for", { externalId, source, id: activity.id, isForcingFetch });
             const fetchSplits = async () => {
                 setIsFetchingSplits(true);
                 try {
-                    // Sanitize externalId: strip 'strava_' prefix if present
+                    // Sanitize externalId: strip 'strava_' prefix if present. Safe null check.
+                    if (!externalId) {
+                        console.warn("Strava sync triggered but no externalId found.");
+                        setFetchSplitsResult('error');
+                        setIsFetchingSplits(false);
+                        setIsForcingFetch(false);
+                        return;
+                    }
                     const sanitizedId = typeof externalId === 'string' ? externalId.replace('strava_', '') : externalId.toString();
 
                     console.log("Fetching splits/laps from Strava API for external ID:", sanitizedId);
-                    const res = await fetch(`/api/strava/activities/${sanitizedId}/splits`, {
+                    const res = await fetch(`/api/strava/activities/${sanitizedId}/splits${isForcingFetch ? '?force=true' : ''}`, {
                         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                     });
 
@@ -897,8 +905,28 @@ export function ActivityDetailModal({
                                 split: l.split
                             }));
 
+                            // Map Best Efforts
+                            const mappedBestEfforts = (data.best_efforts || []).map((be: any) => ({
+                                name: be.name,
+                                distance: be.distance,
+                                elapsedTime: be.elapsed_time,
+                                movingTime: be.moving_time,
+                                startDate: be.start_date,
+                                prRank: be.pr_rank
+                            }));
+
                             // Prepare updates for local UI
-                            const updates: any = { splits: mappedSplits, laps: mappedLaps };
+                            const updates: any = { 
+                                splits: mappedSplits, 
+                                laps: mappedLaps,
+                                bestEfforts: mappedBestEfforts,
+                                averageHeartRate: data.average_heartrate,
+                                maxHeartRate: data.max_heartrate,
+                                averageWatts: data.average_watts,
+                                maxWatts: data.max_watts,
+                                elevationGain: data.total_elevation_gain,
+                                calories: data.calories || data.kilojoules || 0
+                            };
 
                             if (data.moving_time && (isForcingFetch || !activity.durationMinutes)) {
                                 updates.durationMinutes = Math.round(data.moving_time / 60);
@@ -944,13 +972,26 @@ export function ActivityDetailModal({
                                 body: JSON.stringify({
                                     title: updates.title,
                                     durationMinutes: updates.durationMinutes || activity.durationMinutes,
+                                    notes: updates.notes || activity.notes,
+                                    heartRateAvg: updates.averageHeartRate || activity.heartRateAvg,
+                                    heartRateMax: updates.maxHeartRate || activity.heartRateMax,
+                                    averageWatts: updates.averageWatts || activity.averageWatts,
+                                    maxWatts: updates.maxWatts || activity.maxWatts,
+                                    caloriesBurned: updates.calories || activity.caloriesBurned,
                                     performance: {
                                         ...(perf || {}),
                                         splits: mappedSplits,
                                         laps: mappedLaps,
+                                        bestEfforts: mappedBestEfforts,
                                         notes: updates.notes || perf?.notes || activity.notes,
                                         durationMinutes: updates.durationMinutes || activity.durationMinutes,
-                                        elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds
+                                        elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds,
+                                        averageHeartRate: updates.averageHeartRate || perf?.averageHeartRate,
+                                        maxHeartRate: updates.maxHeartRate || perf?.maxHeartRate,
+                                        averageWatts: updates.averageWatts || perf?.averageWatts,
+                                        maxWatts: updates.maxWatts || perf?.maxWatts,
+                                        elevationGain: updates.elevationGain || perf?.elevationGain,
+                                        calories: updates.calories || perf?.calories
                                     }
                                 })
                             }).then(async (pRes) => {
@@ -970,13 +1011,25 @@ export function ActivityDetailModal({
                                             date: activity.date,
                                             type: activity.type,
                                             title: updates.title || activity.title,
+                                            heartRateAvg: updates.averageHeartRate || activity.heartRateAvg,
+                                            heartRateMax: updates.maxHeartRate || activity.heartRateMax,
+                                            averageWatts: updates.averageWatts || activity.averageWatts,
+                                            maxWatts: updates.maxWatts || activity.maxWatts,
+                                            caloriesBurned: updates.calories || activity.caloriesBurned,
                                             performance: {
                                                 ...(perf || {}),
                                                 splits: mappedSplits,
                                                 laps: mappedLaps,
+                                                bestEfforts: mappedBestEfforts,
                                                 notes: updates.notes || perf?.notes || activity.notes,
                                                 durationMinutes: updates.durationMinutes || activity.durationMinutes,
-                                                elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds
+                                                elapsedTimeSeconds: updates.elapsedTimeSeconds || perf?.elapsedTimeSeconds,
+                                                averageHeartRate: updates.averageHeartRate || perf?.averageHeartRate,
+                                                maxHeartRate: updates.maxHeartRate || perf?.maxHeartRate,
+                                                averageWatts: updates.averageWatts || perf?.averageWatts,
+                                                maxWatts: updates.maxWatts || perf?.maxWatts,
+                                                elevationGain: updates.elevationGain || perf?.elevationGain,
+                                                calories: updates.calories || perf?.calories
                                             }
                                         })
                                     });
@@ -1146,6 +1199,7 @@ export function ActivityDetailModal({
                 originalCalories,
                 location: editForm.location,
                 excludeFromStats: editForm.excludeFromStats,
+                excludeFromRecords: editForm.excludeFromRecords,
                 excludeHeartRate: editForm.excludeHeartRate,
                 isHiddenInCalendar: editForm.isHiddenInCalendar,
                 hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined,
@@ -1967,12 +2021,29 @@ export function ActivityDetailModal({
                             <div className="flex items-center gap-3">
                                 <span className={`text-lg ${editForm.excludeFromStats ? 'opacity-100' : 'opacity-40'}`}>🚫</span>
                                 <div>
-                                    <p className={`text-xs font-bold ${editForm.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Statistik & Rekord</p>
-                                    <p className="text-[10px] text-slate-500">Aktiviteten räknas inte med i statistik och poäng</p>
+                                    <p className={`text-xs font-bold ${editForm.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från all statistik</p>
+                                    <p className="text-[10px] text-slate-500">Döljs helt från total distans och alla beräkningar</p>
                                 </div>
                             </div>
                             <div className={`w-10 h-6 rounded-full relative transition-all ${editForm.excludeFromStats ? 'bg-rose-500' : 'bg-slate-700'}`}>
                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editForm.excludeFromStats ? 'left-5' : 'left-1'}`} />
+                            </div>
+                        </div>
+
+                        {/* Records Exclusion Toggle */}
+                        <div
+                            onClick={() => setEditForm({ ...editForm, excludeFromRecords: !editForm.excludeFromRecords })}
+                            className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${editForm.excludeFromRecords ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-800 border-white/5 opacity-60 hover:opacity-100'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className={`text-lg ${editForm.excludeFromRecords ? 'opacity-100' : 'opacity-40'}`}>✂️</span>
+                                <div>
+                                    <p className={`text-xs font-bold ${editForm.excludeFromRecords ? 'text-orange-400' : 'text-white'}`}>Undanta från Rekord/Topplistor</p>
+                                    <p className="text-[10px] text-slate-500">Perfekt för intervallpass med ståvila (Visas ej i PB-stegar)</p>
+                                </div>
+                            </div>
+                            <div className={`w-10 h-6 rounded-full relative transition-all ${editForm.excludeFromRecords ? 'bg-orange-500' : 'bg-slate-700'}`}>
+                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editForm.excludeFromRecords ? 'left-5' : 'left-1'}`} />
                             </div>
                         </div>
 
@@ -2057,37 +2128,37 @@ export function ActivityDetailModal({
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
                             <div className="flex-1 min-w-0">
                                 {/* Type & Badges Row */}
-                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
                                     {(() => {
                                         const typeInfo = EXERCISE_TYPES.find(t => t.type === activity.type) || EXERCISE_TYPES.find(t => t.type === 'other');
                                         return (
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 text-slate-300 rounded-full border border-white/5 text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                                <span>{typeInfo?.icon === 'Activity' ? <Activity size={12} className="text-emerald-400" /> : typeInfo?.icon}</span>
+                                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-200 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest shadow-lg">
+                                                <span className="text-emerald-400">{typeInfo?.icon === 'Activity' ? <Activity size={14} /> : typeInfo?.icon}</span>
                                                 {typeInfo?.label}
                                             </div>
                                         );
                                     })()}
 
                                     {/* Date and Time Since Label */}
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/40 text-slate-400 rounded-full border border-white/5 text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                                        <span>📅</span> {formatSwedishDate(activity.date)}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 text-slate-300 rounded-xl border border-white/5 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                                        <Calendar size={12} className="text-slate-500" /> {formatSwedishDate(activity.date)}
                                     </div>
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                        <span>⏱️</span> {getRelativeTime(activity.date)}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                                        <Clock size={12} className="text-indigo-400/70" /> {getRelativeTime(activity.date)}
                                     </div>
 
                                     {/* Subtype Label for Intervals */}
                                     {activity.subType === 'interval' && (
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                            <span>📈</span> Intervaller
-                                            {(parsedWorkout as any).summary && <span className="opacity-70 ml-1">({(parsedWorkout as any).summary})</span>}
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                                            <Activity size={12} className="text-violet-400/70" /> Intervaller
+                                            {(parsedWorkout as any).summary && <span className="opacity-70 ml-1">{(parsedWorkout as any).summary}</span>}
                                         </div>
                                     )}
 
                                     {/* Parent Activity Link */}
                                     {parentActivity && (
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/50 rounded-full border border-white/5 text-[10px]">
-                                            <span className="text-slate-500 font-bold uppercase tracking-wider">Utdrag från:</span>
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/50 rounded-xl border border-white/5 text-[10px] shadow-sm">
+                                            <span className="text-slate-500 font-bold uppercase tracking-widest">Utdrag från:</span>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -2103,13 +2174,13 @@ export function ActivityDetailModal({
 
                                     {/* Badges */}
                                     {activity.extractedFromId && (
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm text-[10px] font-black uppercase tracking-wider">
-                                            <span>✂️</span> Utdrag
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm text-[10px] font-black uppercase tracking-widest">
+                                            <Scissors size={12} className="text-indigo-400/70" /> Utdrag
                                         </div>
                                     )}
                                     {isTrulyMerged && (
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm text-[10px] font-black uppercase tracking-wider">
-                                            <Zap size={10} className="fill-amber-500" />
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm text-[10px] font-black uppercase tracking-widest">
+                                            <Zap size={12} className="text-amber-500/70 fill-amber-500/70" />
                                             Sammanslagen
                                         </div>
                                     )}
@@ -2683,571 +2754,403 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
 
-                                {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
-                                {showStravaCard ? (
-                                    <div className="space-y-4">
-                                        <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-xl p-2 space-y-2 shadow-md shadow-[#FC4C02]/5 mb-2 overflow-hidden">
-                                            <div className="flex items-center justify-between flex-wrap gap-2">
-                                                <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
-                                                    <span>🔥</span> Strava-data
-                                                </h4>
+                                                                {/* Unified Coros-style Stats Display */}
+                                <div className="space-y-6">
+                                    {/* Warnings and Strava Actions */}
+                                    {showStravaCard && (
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-xl p-3 shadow-md shadow-[#FC4C02]/5 gap-3">
+                                            <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-1.5">
+                                                <Activity size={14} className="mb-0.5" /> Strava-data
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    disabled={isFetchingSplits}
+                                                    onClick={() => {
+                                                        setIsForcingFetch(true);
+                                                        setFetchSplitsResult('idle');
+                                                    }}
+                                                    className={`text-[9px] font-black uppercase border px-2 py-1.5 rounded-lg transition-all flex items-center gap-1 ${isFetchingSplits ? 'bg-white/10 border-white/10 text-slate-500 cursor-not-allowed' : fetchSplitsResult === 'success' ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : fetchSplitsResult === 'error' ? 'text-rose-500 border-rose-500/30 bg-rose-500/10' : 'text-[#FC4C02]/60 hover:text-[#FC4C02] border-[#FC4C02]/20 hover:bg-[#FC4C02]/10'}`}
+                                                    title="Hämta om data från Strava"
+                                                >
+                                                    {isFetchingSplits ? (
+                                                        <>
+                                                            <div className="w-3.5 h-3.5 border-2 border-[#FC4C02]/20 border-t-[#FC4C02] rounded-full animate-spin" />
+                                                            Synkar...
+                                                        </>
+                                                    ) : fetchSplitsResult === 'success' ? (
+                                                        <>✓ Synkad</>
+                                                    ) : fetchSplitsResult === 'error' ? (
+                                                        <>⚠ Fel</>
+                                                    ) : (
+                                                        <>↻ Synka om</>
+                                                    )}
+                                                </button>
+                                                {(() => {
+                                                    let stravaLink = null;
+                                                    if (activity.source === 'strava' && activity.externalId) {
+                                                        stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
+                                                    } else if (isTrulyMerged) {
+                                                        const stravaOriginals = originalActivities
+                                                            .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                                            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                                        if (stravaOriginals.length > 0) {
+                                                            const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                            stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                        }
+                                                    }
+                                                    return stravaLink ? (
+                                                        <a
+                                                            href={stravaLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[10px] font-black text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
+                                                        >
+                                                            Öppna ↗
+                                                        </a>
+                                                    ) : null;
+                                                })()}
                                             </div>
                                         </div>
+                                    )}
 
-                                        {/* Performance & Score Breakdown (Greens Index) */}
-                                        {perfBreakdown.totalScore > 0 && (
-                                            <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-white/5 rounded-2xl p-5 mb-4 shadow-xl shadow-indigo-500/5 overflow-hidden relative group">
-                                                {/* Background Accent */}
-                                                <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/10 blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700" />
-                                                
-                                                <div className="flex items-center justify-between mb-6 relative z-10">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="bg-indigo-500/20 p-2.5 rounded-xl text-indigo-400 shadow-inner">
-                                                            <TrendingUp size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Prestanda Analys</h4>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-2xl font-black text-white italic tracking-tight uppercase">Greens Index</span>
-                                                                {perfBreakdown.isPersonalBest && (
-                                                                    <div className="bg-amber-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase animate-bounce-subtle">PB</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="text-4xl font-black text-white italic tracking-tighter leading-none flex items-baseline gap-1">
-                                                            {Math.round(perfBreakdown.totalScore)}
-                                                            <span className="text-xs text-indigo-400 not-italic tracking-normal">pts</span>
-                                                        </div>
-                                                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Total Score</p>
-                                                    </div>
+                                    {/* Time Discrepancy Warning */}
+                                    {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500">
+                                                    <Timer size={16} />
                                                 </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
-                                                    {perfBreakdown.components.map((comp, idx) => (
-                                                        <div key={idx} className="bg-slate-900/40 border border-white/5 p-3 rounded-xl flex items-center justify-between group/comp hover:border-indigo-500/20 transition-all">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="text-xl">{comp.icon}</div>
-                                                                <div>
-                                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{comp.label}</p>
-                                                                    <p className={`text-sm font-black ${comp.color || 'text-white'} italic font-mono`}>{comp.value}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden self-end mb-1">
-                                                                <div 
-                                                                    className={`h-full ${comp.color?.replace('text-', 'bg-') || 'bg-indigo-500'} transition-all duration-1000`} 
-                                                                    style={{ width: `${Math.min(100, (comp.score / (comp.max || 100)) * 100)}%` }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                <div>
+                                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Tidsavvikelse identifierad</p>
+                                                    <p className="text-[11px] text-white font-bold">
+                                                        Rörelsetid ({formatDuration(activity.durationMinutes * 60)}) vs Totaltid ({formatDuration(perf.elapsedTimeSeconds)}).
+                                                    </p>
                                                 </div>
+                                            </div>
+                                            <div className="flex gap-2 shrink-0">
+                                                <button 
+                                                    onClick={() => handleSyncTimes('moving', perf.elapsedTimeSeconds)}
+                                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-lg transition-all border border-white/10 shadow-sm"
+                                                    title="Sätt passets längd till den totala tiden (inklusive pauser)"
+                                                >
+                                                    Använd Totaltid ⏱️
+                                                </button>
+                                                <button 
+                                                    onClick={() => {}}
+                                                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-900 text-[10px] font-black uppercase rounded-lg transition-all shadow-lg shadow-emerald-500/20"
+                                                    title="Behåll den kortare rörelsetiden (exkluderar pauser)"
+                                                >
+                                                    Behåll Rörelsetid ✅
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
-                                                <div className="mt-4 pt-4 border-t border-white/5 text-[11px] text-slate-400 italic leading-relaxed relative z-10">
-                                                    " {perfBreakdown.summary} "
+                                    {/* Primary Hero Stats Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        {/* Distance */}
+                                        {(displayDistance || 0) > 0 && activity.type !== 'strength' && (
+                                            <div className="bg-slate-800/40 rounded-2xl p-5 border border-white/5 flex flex-col justify-center transition-all hover:bg-slate-800/60 hover:scale-[1.02] hover:border-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/10 cursor-default group">
+                                                <span className="text-[10px] text-emerald-500 uppercase font-black tracking-widest mb-1">Distans</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-4xl sm:text-5xl font-black text-white">{(displayDistance || 0).toFixed(2)}</span>
+                                                    <span className="text-sm uppercase text-slate-500 font-bold">km</span>
                                                 </div>
                                             </div>
                                         )}
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        disabled={isFetchingSplits}
-                                                        onClick={() => {
-                                                            setIsForcingFetch(true);
-                                                            setFetchSplitsResult('idle');
-                                                        }}
-                                                        className={`text-[9px] font-black uppercase border px-2 py-1 rounded-lg transition-all flex items-center gap-1 ${isFetchingSplits ? 'bg-white/10 border-white/10 text-slate-500 cursor-not-allowed' : fetchSplitsResult === 'success' ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : fetchSplitsResult === 'error' ? 'text-rose-500 border-rose-500/30 bg-rose-500/10' : 'text-[#FC4C02]/60 hover:text-[#FC4C02] border-[#FC4C02]/20 hover:bg-[#FC4C02]/10'}`}
-                                                        title="Hämta om data från Strava"
-                                                    >
-                                                        {isFetchingSplits ? (
-                                                            <>
-                                                                <div className="w-3.5 h-3.5 border-2 border-[#FC4C02]/20 border-t-[#FC4C02] rounded-full animate-spin" />
-                                                                Synkar...
-                                                            </>
-                                                        ) : fetchSplitsResult === 'success' ? (
-                                                            <>✓ Synkad</>
-                                                        ) : fetchSplitsResult === 'error' ? (
-                                                            <>⚠ Fel</>
-                                                        ) : (
-                                                            <>↻ Synka om</>
-                                                        )}
-                                                    </button>
-                                                    {(() => {
-                                                        let stravaLink = null;
-                                                        if (activity.source === 'strava' && activity.externalId) {
-                                                            stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                                        } else if (isTrulyMerged) {
-                                                            const stravaOriginals = originalActivities
-                                                                .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
-                                                                .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
-                                                            if (stravaOriginals.length > 0) {
-                                                                const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
-                                                                stravaLink = `https://www.strava.com/activities/${extId}`;
-                                                            }
-                                                        }
-                                                        return stravaLink ? (
-                                                            <a
-                                                                href={stravaLink}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-[10px] font-black text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
-                                                            >
-                                                                Öppna ↗
-                                                            </a>
-                                                        ) : null;
-                                                    })()}
-                                                </div>
 
-                                            {/* Time Discrepancy Warning */}
-                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 && (
-                                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500">
-                                                            <Timer size={16} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Tidsavvikelse identifierad</p>
-                                                            <p className="text-[11px] text-white font-bold">
-                                                                Rörelsetid ({formatDuration(activity.durationMinutes * 60)}) vs Totaltid ({formatDuration(perf.elapsedTimeSeconds)}).
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2 shrink-0">
-                                                        <button 
-                                                            onClick={() => handleSyncTimes('moving', perf.elapsedTimeSeconds)}
-                                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-lg transition-all border border-white/10 shadow-sm"
-                                                            title="Sätt passets längd till den totala tiden (inklusive pauser)"
-                                                        >
-                                                            Använd Totaltid ⏱️
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => {
-                                                                // If we already have a smaller moving time in perf (rare but possible), use it
-                                                                // Otherwise, the button is for when we WANT to keep the shorter time
-                                                                // This is effectively "Ignore pauses"
-                                                            }}
-                                                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-900 text-[10px] font-black uppercase rounded-lg transition-all shadow-lg shadow-emerald-500/20"
-                                                            title="Behåll den kortare rörelsetiden (exkluderar pauser)"
-                                                        >
-                                                            Behåll Rörelsetid ✅
-                                                        </button>
-                                                    </div>
+                                        {/* Time */}
+                                        <div className="bg-slate-800/40 rounded-2xl p-5 border border-white/5 flex flex-col justify-center transition-all hover:bg-slate-800/60 hover:scale-[1.02] hover:border-amber-500/20 hover:shadow-xl hover:shadow-amber-500/10 cursor-default group">
+                                            <span className="text-[10px] text-amber-500 uppercase font-black tracking-widest mb-1">
+                                                {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 ? 'Rörelsetid' : 'Tid'}
+                                            </span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-3xl sm:text-4xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                            </div>
+                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 && (
+                                                <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                                                    Total: <span className="text-slate-400">{formatDuration(perf.elapsedTimeSeconds)}</span>
                                                 </div>
                                             )}
+                                        </div>
 
-
-                                            {/* Hero Stats */}
-                                            <div className="grid grid-cols-3 gap-2 border-b border-[#FC4C02]/10 pb-4">
-                                                {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">Distans</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-2xl font-black text-white">{(displayDistance || 0).toFixed(1)}</span>
-                                                            <span className="text-[10px] uppercase text-slate-500 font-bold">km</span>
-                                                        </div>
+                                        {/* Pace / Speed */}
+                                        {(displayDistance || 0) > 0 && activity.type !== 'strength' && (
+                                            <div className="bg-slate-800/40 rounded-2xl p-5 border border-white/5 flex flex-col justify-center col-span-2 md:col-span-1 transition-all hover:bg-slate-800/60 hover:scale-[1.02] hover:border-sky-500/20 hover:shadow-xl hover:shadow-sky-500/10 cursor-default group">
+                                                <span className="text-[10px] text-sky-500 uppercase font-black tracking-widest mb-1">
+                                                    {activity.type === 'cycling' ? 'Fart' : 'Tempo'}
+                                                </span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-3xl sm:text-4xl font-black text-white">
+                                                        {activity.type === 'cycling'
+                                                            ? formatSpeed((activity.durationMinutes * 60) / (displayDistance || 1))
+                                                            : formatPace((activity.durationMinutes * 60) / (displayDistance || 1)).replace('/km', '')
+                                                        }
+                                                    </span>
+                                                    <span className="text-sm uppercase text-slate-500 font-bold">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
+                                                </div>
+                                                {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 && (
+                                                    <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                                                        Total: <span className="text-slate-400">
+                                                            {activity.type === 'cycling'
+                                                                ? formatSpeed(perf.elapsedTimeSeconds / (displayDistance || 1))
+                                                                : formatPace(perf.elapsedTimeSeconds / (displayDistance || 1)).replace('/km', '')
+                                                            }
+                                                        </span>
                                                     </div>
                                                 )}
-
-                                                <div className="flex flex-col">
-                                                    <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">
-                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 ? 'Rörelsetid' : 'Tid'}
-                                                    </span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
-                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 && (
-                                                            <div className="flex items-center gap-2 ml-2 border-l border-white/10 pl-2">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] text-slate-500 uppercase font-black leading-none mb-0.5">Total</span>
-                                                                    <span className="text-[11px] text-slate-400 font-bold leading-none">{formatDuration(perf.elapsedTimeSeconds)}</span>
-                                                                </div>
-                                                                <button
-                                                                    onClick={handleFixWithTotalTime}
-                                                                    className="p-1 rounded-md bg-indigo-500/10 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/20 transition-all group"
-                                                                    title="Använd totaltid som huvudtid (fixar tempo)"
-                                                                >
-                                                                    <span className="text-[10px] group-hover:scale-110 block">⚡</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Tonnage for Strength */}
+                                        {(activity.tonnage && activity.tonnage > 0) && (
+                                            <div className="bg-slate-800/40 rounded-2xl p-5 border border-white/5 flex flex-col justify-center transition-all hover:bg-slate-800/60 hover:scale-[1.02] hover:border-purple-500/20 hover:shadow-xl hover:shadow-purple-500/10 cursor-default group">
+                                                <span className="text-[10px] text-purple-500 uppercase font-black tracking-widest mb-1">Volym</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-4xl sm:text-5xl font-black text-white">{(activity.tonnage / 1000).toFixed(1)}</span>
+                                                    <span className="text-sm uppercase text-slate-500 font-bold">ton</span>
                                                 </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                                {(activity.distance || 0) > 0 && activity.type !== 'strength' && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-0.5">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</span>
-                                                        <div className="flex items-baseline gap-1 min-w-0">
-                                                            <span className="text-2xl font-black text-white truncate">
-                                                                {activity.type === 'cycling'
-                                                                    ? formatSpeed((activity.durationMinutes * 60) / (displayDistance || 1))
-                                                                    : formatPace((activity.durationMinutes * 60) / (displayDistance || 1)).replace('/km', '')
-                                                                }
+                                    {/* Minigraph */}
+                                    {existingSplits && existingSplits.length > 2 && (
+                                        <div className="bg-slate-800/20 rounded-2xl p-4 border border-white/5">
+                                            <h4 className="font-black text-slate-500 uppercase text-[10px] tracking-widest mb-3 flex items-center gap-2">
+                                                <span>📈</span> Tempo & Puls över tid
+                                            </h4>
+                                            <SplitsSparkline 
+                                                splits={existingSplits} 
+                                                highlightRange={activeHighlightRange} 
+                                                excludeHeartRate={activity.excludeHeartRate}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Secondary Stats Grid */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                        {/* Heart Rate */}
+                                        {(!!perf?.avgHeartRate || !!activity.heartRateAvg) && (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-rose-500 uppercase font-black tracking-widest mb-1">Puls (Snitt)</span>
+                                                {activity.excludeHeartRate ? (
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <span className="text-xl font-black text-slate-600 flex items-center gap-1 italic" title="Pulsen har markerats som felaktig och exkluderats från statistik.">
+                                                            --
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const updates = { excludeHeartRate: false };
+                                                                setEditForm(prev => ({ ...prev, ...updates }));
+                                                                updateExercise(activity.id, updates);
+                                                            }}
+                                                            className="text-[8px] font-black text-emerald-500 uppercase hover:underline mt-1"
+                                                        >
+                                                            Aktivera igen
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1 group">
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span 
+                                                                className={`text-2xl font-black text-white ${perf?.originalAvgHeartRate ? 'cursor-help' : ''}`}
+                                                                title={perf?.originalAvgHeartRate ? `Manuellt korrigerad från sensorpuls: ${perf.originalAvgHeartRate} bpm` : undefined}
+                                                            >
+                                                                {Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
                                                             </span>
-                                                            <span className="text-[10px] uppercase text-slate-500 font-bold">{activity.type === 'cycling' ? 'km/h' : '/k'}</span>
-                                                            {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 0.1 && (
-                                                                <div className="flex flex-col ml-2 border-l border-white/10 pl-2">
-                                                                    <span className="text-[8px] text-slate-500 uppercase font-black leading-none mb-0.5">Total</span>
-                                                                    <span className="text-[11px] text-slate-400 font-bold leading-none">
-                                                                        {activity.type === 'cycling'
-                                                                            ? formatSpeed(perf.elapsedTimeSeconds / (displayDistance || 1))
-                                                                            : formatPace(perf.elapsedTimeSeconds / (displayDistance || 1)).replace('/km', '')
-                                                                        }
-                                                                    </span>
-                                                                </div>
+                                                            <span className="text-[10px] text-slate-500 font-bold uppercase">bpm</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {perf?.maxHeartRate && (
+                                                                <span className="text-[9px] text-slate-400 font-bold">Max: {Math.round(perf.maxHeartRate)}</span>
                                                             )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const updates = { excludeHeartRate: true };
+                                                                    setEditForm(prev => ({ ...prev, ...updates }));
+                                                                    updateExercise(activity.id, updates);
+                                                                }}
+                                                                className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase border border-rose-500/20 transition-all hover:bg-rose-500 hover:text-white ml-auto"
+                                                            >
+                                                                Dölj
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
+                                        )}
 
-                                            {/* Minigraph */}
-                                            {existingSplits && existingSplits.length > 2 && (
-                                                <SplitsSparkline 
-                                                    splits={existingSplits} 
-                                                    highlightRange={activeHighlightRange} 
-                                                    excludeHeartRate={activity.excludeHeartRate}
-                                                />
-                                            )}
-
-                                            {/* Secondary Stats Grid */}
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4 pt-2">
-                                                {/* Heart Rate */}
-                                                {(!!perf?.avgHeartRate || !!activity.heartRateAvg) && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
-                                                        {activity.excludeHeartRate ? (
-                                                            <div className="flex flex-col items-start gap-1">
-                                                                <span className="text-xl font-black text-slate-600 flex items-center gap-1 italic" title="Pulsen har markerats som felaktig och exkluderats från statistik.">
-                                                                    <HeartPulse size={16} className="text-rose-900" /> -- BPM
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        const updates = { excludeHeartRate: false };
-                                                                        setEditForm(prev => ({ ...prev, ...updates }));
-                                                                        updateExercise(activity.id, updates);
-                                                                    }}
-                                                                    className="text-[8px] font-black text-emerald-500 uppercase hover:underline"
-                                                                >
-                                                                    Aktivera igen
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-2 group">
-                                                                <span 
-                                                                    className={`text-xl font-black text-white flex items-center gap-1 ${perf?.originalAvgHeartRate ? 'cursor-help' : ''}`}
-                                                                    title={perf?.originalAvgHeartRate ? `Manuellt korrigerad från sensorpuls: ${perf.originalAvgHeartRate} bpm` : undefined}
-                                                                >
-                                                                    <HeartPulse size={16} className="text-rose-500" /> {Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        const updates = { excludeHeartRate: true };
-                                                                        setEditForm(prev => ({ ...prev, ...updates }));
-                                                                        updateExercise(activity.id, updates);
-                                                                    }}
-                                                                    className="opacity-0 group-hover:opacity-100 px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase border border-rose-500/20 transition-all hover:bg-rose-500 hover:text-white"
-                                                                >
-                                                                    Dölj ✕
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* Placement */}
-                                                {activity.raceDetails?.placement && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-[#FC4C02]/60 uppercase font-black tracking-widest mb-1">Placering</span>
-                                                        <div className={`inline-flex items-center gap-1.5 font-black px-2.5 py-1 rounded-xl w-fit ${activity.raceDetails.placement === 1 ? 'bg-yellow-400 text-black shadow-[0_0_12px_rgba(250,204,21,0.5)]' :
-                                                            activity.raceDetails.placement === 2 ? 'bg-slate-300 text-black' :
-                                                                activity.raceDetails.placement === 3 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'
-                                                            }`}>
-                                                            {activity.raceDetails.placement <= 3 && <Medal size={14} />}
-                                                            <span className="text-xl">#{activity.raceDetails.placement}</span>
-                                                            {activity.raceDetails.totalParticipants && (
-                                                                <span className="text-xs opacity-60 ml-0.5">
-                                                                    /{activity.raceDetails.totalParticipants}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Elevation Gain */}
-                                                {!!perf?.elevationGain && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Höjdmeter</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{Math.round(perf.elevationGain)}</span>
-                                                            <span className="text-[10px] uppercase text-slate-500">m</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* GAP */}
-                                                {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) && activity.type !== 'strength' && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effektivt Tempo (GAP)</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">
-                                                                {formatPace(calculateGAP((activity.durationMinutes * 60) / (displayDistance || 1), perf.elevationGain!, displayDistance || 0)).replace('/km', '')}
-                                                            </span>
-                                                            <span className="text-[10px] uppercase text-slate-500">/km</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Energy */}
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span
-                                                            className={`text-xl font-black text-white ${currentActivity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''} flex items-center gap-1`}
-                                                            title={currentActivity.calorieBreakdown || (currentActivity.isCalorieAdjusted ? `Justerat från ${currentActivity.originalCalories} kcal (Strava) pga låg puls/intensitet.` : undefined)}
-                                                        >
-                                                            {currentActivity.caloriesBurned || perf?.calories || '-'}
-                                                            {currentActivity.isCalorieAdjusted && (
-                                                                <span className="text-xs text-amber-500">✨</span>
-                                                            )}
-                                                        </span>
-                                                        <span className="text-[10px] uppercase text-slate-500">kcal</span>
-                                                    </div>
+                                        {/* Elevation Gain */}
+                                        {!!perf?.elevationGain && (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Höjdmeter</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-black text-white">{Math.round(perf.elevationGain)}</span>
+                                                    <span className="text-[10px] uppercase text-slate-500 font-bold">m</span>
                                                 </div>
+                                            </div>
+                                        )}
 
-                                                {/* Watts */}
-                                                {(!!perf?.averageWatts || !!parsedWorkout?.averagePower) && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">
-                                                                {Math.round(parsedWorkout?.averagePower || perf?.averageWatts || 0)}
-                                                            </span>
-                                                            <span className="text-[10px] uppercase text-slate-500">w</span>
-                                                            {parsedWorkout?.averagePower && perf?.averageWatts && Math.round(parsedWorkout.averagePower) !== Math.round(perf.averageWatts) ? (
-                                                                <span className="text-[8px] text-amber-500 font-bold ml-1 uppercase" title={`Identifierat ${Math.round(parsedWorkout.averagePower)}w i beskrivningen (Strava anger ${Math.round(perf.averageWatts)}w)`}>Justerad</span>
-                                                            ) : !perf?.averageWatts && parsedWorkout?.averagePower ? (
-                                                                <span className="text-[8px] text-amber-500 font-bold ml-1 uppercase" title="Identifierat i beskrivningen men ej sparat ännu">Identifierad</span>
-                                                            ) : null}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                        {/* Energy */}
+                                        <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                            <span className="text-[9px] text-orange-400 uppercase font-black tracking-widest mb-1">Energi</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span
+                                                    className={`text-2xl font-black text-white ${currentActivity.calorieBreakdown ? 'cursor-help border-b border-white/20' : ''}`}
+                                                    title={currentActivity.calorieBreakdown || (currentActivity.isCalorieAdjusted ? `Justerat från ${currentActivity.originalCalories} kcal (Strava) pga låg puls/intensitet.` : undefined)}
+                                                >
+                                                    {currentActivity.caloriesBurned || perf?.calories || '-'}
+                                                </span>
+                                                <span className="text-[10px] uppercase text-slate-500 font-bold">kcal</span>
+                                            </div>
+                                            {currentActivity.isCalorieAdjusted && (
+                                                <span className="text-[9px] text-amber-500 font-bold flex items-center gap-1 mt-1">✨ Justerad</span>
+                                            )}
+                                        </div>
 
-                                                {/* Achievements */}
-                                                {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) ? (
-                                                    <div className="flex flex-col col-span-2">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Prestationer</span>
-                                                        <div className="flex items-center gap-4">
-                                                            {(perf?.prCount || 0) > 0 && (
-                                                                <div className="flex items-center gap-1.5 sh-tooltip" title={`${perf.prCount} Personbästa`}>
-                                                                    <span className="text-orange-400">⚡</span>
-                                                                    <span className="text-lg font-black text-white">{perf.prCount}</span>
-                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
-                                                                </div>
-                                                            )}
-                                                            {(perf?.achievementCount || 0) > 0 && (
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-yellow-400">🏆</span>
-                                                                    <span className="text-lg font-black text-white">{perf.achievementCount}</span>
-                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
-                                                                </div>
-                                                            )}
-                                                            {(perf?.kudosCount || 0) > 0 && (
-                                                                <div
-                                                                    className="relative"
-                                                                    onMouseEnter={() => {
-                                                                        const targetId = perf?.source?.externalId || activity.externalId;
-                                                                        if (targetId && kudos.length === 0 && !loadingKudos) {
-                                                                            fetchKudos(targetId.toString());
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setShowKudos(!showKudos);
-                                                                        }}
-                                                                        className="flex items-center gap-1.5 hover:text-orange-400 transition-colors"
-                                                                    >
-                                                                        <span className="text-pink-400">❤️</span>
-                                                                        <span className="text-lg font-black text-white">{perf.kudosCount}</span>
-                                                                        <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
-                                                                    </button>
+                                        {/* GAP */}
+                                        {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) && activity.type !== 'strength' && (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-indigo-400 uppercase font-black tracking-widest mb-1">Effektivt Tempo</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-black text-white">
+                                                        {formatPace(calculateGAP((activity.durationMinutes * 60) / (displayDistance || 1), perf.elevationGain!, displayDistance || 0)).replace('/km', '')}
+                                                    </span>
+                                                    <span className="text-[10px] uppercase text-slate-500 font-bold">/km</span>
+                                                </div>
+                                            </div>
+                                        )}
 
-                                                                    {showKudos && (
-                                                                        <div className="absolute top-full left-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in zoom-in-95 duration-200">
-                                                                            <div className="flex justify-between items-center mb-2 px-1">
-                                                                                <span className="text-[10px] font-black uppercase text-slate-400">Kudos från</span>
-                                                                                <button onClick={() => setShowKudos(false)} className="text-slate-500 hover:text-white">✕</button>
-                                                                            </div>
-                                                                            <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar text-left">
-                                                                                {loadingKudos ? (
-                                                                                    <div className="py-4 flex justify-center">
-                                                                                        <div className="w-4 h-4 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
-                                                                                    </div>
-                                                                                ) : kudos.length > 0 ? (
-                                                                                    kudos.map((athlete, i) => (
-                                                                                        <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 transition-colors">
-                                                                                            <img src={athlete.profile} alt="" className="w-6 h-6 rounded-full border border-white/10" />
-                                                                                            <div className="flex-1 min-w-0">
-                                                                                                <p className="text-[10px] font-bold text-white truncate">{athlete.firstname} {athlete.lastname}</p>
-                                                                                                {(athlete.city || athlete.country) && (
-                                                                                                    <p className="text-[8px] text-slate-500 truncate">{athlete.city}{athlete.city && athlete.country ? ', ' : ''}{athlete.country}</p>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    ))
-                                                                                ) : (
-                                                                                    <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">Inga detaljer tillgängliga</p>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                        {/* Watts */}
+                                        {(!!perf?.averageWatts || !!parsedWorkout?.averagePower || !!activity.averageWatts) && (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-yellow-500 uppercase font-black tracking-widest mb-1">Effekt</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-black text-white">
+                                                        {Math.round(parsedWorkout?.averagePower || perf?.averageWatts || activity.averageWatts || 0)}
+                                                    </span>
+                                                    <span className="text-[10px] uppercase text-slate-500 font-bold">W</span>
+                                                </div>
+                                                {parsedWorkout?.averagePower && perf?.averageWatts && Math.round(parsedWorkout.averagePower) !== Math.round(perf.averageWatts) ? (
+                                                    <span className="text-[8px] text-amber-500 font-bold mt-1 uppercase" title={`Identifierat ${Math.round(parsedWorkout.averagePower)}w i beskrivningen (Strava anger ${Math.round(perf.averageWatts)}w)`}>Justerad</span>
+                                                ) : !perf?.averageWatts && parsedWorkout?.averagePower ? (
+                                                    <span className="text-[8px] text-amber-500 font-bold mt-1 uppercase" title="Identifierat i beskrivningen men ej sparat ännu">Identifierad</span>
                                                 ) : null}
                                             </div>
-                                            {/* Strava Description - Compact One-Row Style */}
-                                            {(perf?.notes || activity.notes) && (
-                                                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/5 mt-4 mx-2 mb-2">
-                                                    <span className="text-[8px] text-slate-500 uppercase font-black opacity-40 tracking-widest block mb-1">Beskrivning:</span>
-                                                    <p className="text-[10px] text-slate-400 italic whitespace-pre-wrap leading-relaxed">
-                                                        {perf?.notes || activity.notes}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                        {/* Interval Summary Block (Strava) */}
-                                        {activity.subType === 'interval' && segmentedSplits && (
-                                            <IntervalMiniSummary segmentedSplits={segmentedSplits} />
                                         )}
-                                    </div>
-                                ) : (
-                                    /* Generic Stats Grid (Non-Strava) */
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col justify-center items-center">
-                                                <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
-                                                <p className="text-xs text-slate-500 uppercase">
-                                                    Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 1 ? '(Rörelse)' : ''}
-                                                </p>
-                                                {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 1 && (
-                                                    <div className="mt-1 flex flex-col items-center gap-1">
-                                                        <p className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded">
-                                                            Totaltid: {formatDuration(perf.elapsedTimeSeconds)}
-                                                        </p>
-                                                        <button 
-                                                            onClick={() => handleSyncTimes('moving', perf.elapsedTimeSeconds)}
-                                                            className="text-[9px] font-black text-indigo-500 uppercase hover:text-white transition-colors"
-                                                        >
-                                                            Fixa med Totaltid ⚡
-                                                        </button>
-                                                    </div>
-                                                )}
+
+                                        {/* Placement */}
+                                        {activity.raceDetails?.placement && (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-amber-500 uppercase font-black tracking-widest mb-1">Placering</span>
+                                                <div className={`flex items-baseline gap-1.5 font-black ${activity.raceDetails.placement === 1 ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' : activity.raceDetails.placement === 2 ? 'text-slate-300' : activity.raceDetails.placement === 3 ? 'text-amber-700' : 'text-white'}`}>
+                                                    <span className="text-2xl">#{activity.raceDetails.placement}</span>
+                                                    {activity.raceDetails.totalParticipants && (
+                                                        <span className="text-[10px] opacity-60 font-bold">/{activity.raceDetails.totalParticipants}</span>
+                                                    )}
+                                                </div>
                                             </div>
+                                        )}
 
-                                            {/* Distance (Only if running/has value) */}
-                                            {(displayDistance || 0) > 0 ? (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                    <p className="text-2xl font-black text-emerald-400">
-                                                        {(displayDistance || 0).toFixed(1)}
-                                                        {activity.extractedFromId && parentUniversal?.performance?.distanceKm && (
-                                                            <span className="text-xs text-slate-500 font-bold ml-1">(av {parentUniversal.performance.distanceKm.toFixed(1)}km)</span>
-                                                        )}
-                                                    </p>
-                                                    <p className="text-xs text-slate-500 uppercase">Km</p>
-                                                </div>
-                                            ) : null}
-
-                                            {/* Tonnage (Only if strength/has value) */}
-                                            {(activity.tonnage && activity.tonnage > 0) ? (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                    <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
-                                                    <p className="text-xs text-slate-500 uppercase">Ton</p>
-                                                </div>
-                                            ) : null}
-
-                                            {/* Pace Card (Only if distance exists) */}
-                                            {(displayDistance || 0) > 0 ? (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                    <div className="flex flex-col items-center">
-                                                        <p className="text-2xl font-black text-emerald-400">
-                                                            {activity.type === 'cycling'
-                                                                ? formatSpeed((activity.durationMinutes * 60) / (displayDistance || 1))
-                                                                : formatPace((activity.durationMinutes * 60) / (displayDistance || 1)).replace('/km', '')
-                                                            }
-                                                        </p>
-                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 1 && (
-                                                            <p className="text-[10px] text-slate-400 font-bold">
-                                                                Total: {activity.type === 'cycling'
-                                                                    ? formatSpeed(perf.elapsedTimeSeconds / (displayDistance || 1))
-                                                                    : formatPace(perf.elapsedTimeSeconds / (displayDistance || 1)).replace('/km', '')
+                                        {/* Achievements */}
+                                        {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) ? (
+                                            <div className="bg-slate-800/30 rounded-xl p-3 border border-white/5 flex flex-col col-span-2 sm:col-span-1 hover:bg-slate-800/50 hover:border-white/10 transition-all group">
+                                                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-2">Prestationer</span>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {(perf?.prCount || 0) > 0 && (
+                                                        <div className="flex items-center gap-1.5" title={`${perf.prCount} Personbästa`}>
+                                                            <span className="text-orange-400 text-sm">⚡</span>
+                                                            <span className="text-lg font-black text-white">{perf.prCount}</span>
+                                                        </div>
+                                                    )}
+                                                    {(perf?.achievementCount || 0) > 0 && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-yellow-400 text-sm">🏆</span>
+                                                            <span className="text-lg font-black text-white">{perf.achievementCount}</span>
+                                                        </div>
+                                                    )}
+                                                    {(perf?.kudosCount || 0) > 0 && (
+                                                        <div
+                                                            className="relative"
+                                                            onMouseEnter={() => {
+                                                                const targetId = perf?.source?.externalId || activity.externalId;
+                                                                if (targetId && kudos.length === 0 && !loadingKudos) {
+                                                                    fetchKudos(targetId.toString());
                                                                 }
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
-                                                </div>
-                                            ) : null}
+                                                            }}
+                                                        >
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setShowKudos(!showKudos);
+                                                                }}
+                                                                className="flex items-center gap-1.5 hover:text-orange-400 transition-colors"
+                                                            >
+                                                                <span className="text-pink-400 text-sm">❤️</span>
+                                                                <span className="text-lg font-black text-white">{perf.kudosCount}</span>
+                                                            </button>
 
-                                            {/* Race Placement Card */}
-                                            {activity.raceDetails?.placement && (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col items-center justify-center border border-white/5">
-                                                    <div className={`flex items-baseline gap-1.5 font-black ${activity.raceDetails.placement === 1 ? 'text-yellow-400 font-black drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' :
-                                                        activity.raceDetails.placement === 2 ? 'text-slate-300' :
-                                                            activity.raceDetails.placement === 3 ? 'text-amber-700' : 'text-white'
-                                                        }`}>
-                                                        {activity.raceDetails.placement <= 3 ? <Medal size={16} /> : <Trophy size={16} />}
-                                                        <span className="text-2xl">#{activity.raceDetails.placement}</span>
-                                                        {activity.raceDetails.totalParticipants && (
-                                                            <span className="text-xs opacity-50 font-bold">/{activity.raceDetails.totalParticipants}</span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">Placering</p>
+                                                            {showKudos && (
+                                                                <div className="absolute top-full left-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in zoom-in-95 duration-200">
+                                                                    <div className="flex justify-between items-center mb-2 px-1">
+                                                                        <span className="text-[10px] font-black uppercase text-slate-400">Kudos från</span>
+                                                                        <button onClick={() => setShowKudos(false)} className="text-slate-500 hover:text-white">✕</button>
+                                                                    </div>
+                                                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar text-left">
+                                                                        {loadingKudos ? (
+                                                                            <div className="py-4 flex justify-center">
+                                                                                <div className="w-4 h-4 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
+                                                                            </div>
+                                                                        ) : kudos.length > 0 ? (
+                                                                            kudos.map((athlete, i) => (
+                                                                                <div key={i} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                                                                                    <img src={athlete.profile} alt="" className="w-6 h-6 rounded-full border border-white/10" />
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <p className="text-[10px] font-bold text-white truncate">{athlete.firstname} {athlete.lastname}</p>
+                                                                                        {(athlete.city || athlete.country) && (
+                                                                                            <p className="text-[8px] text-slate-500 truncate">{athlete.city}{athlete.city && athlete.country ? ', ' : ''}{athlete.country}</p>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))
+                                                                        ) : (
+                                                                            <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">Inga detaljer tillgängliga</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-
-                                            {/* Watts (Generic Fallback for Extracts) */}
-                                            {activity.extractedFromId && parentUniversal?.performance?.averageWatts && (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                    <p className="text-2xl font-black text-white">{Math.round(parentUniversal.performance.averageWatts)}</p>
-                                                    <p className="text-xs text-slate-500 uppercase">Effekt (W)</p>
-                                                </div>
-                                            )}
-
-                                            {/* Achievements (Generic Fallback for Extracts) */}
-                                            {activity.extractedFromId && parentUniversal?.performance && (parentUniversal.performance.achievementCount || parentUniversal.performance.prCount || parentUniversal.performance.kudosCount) && (
-                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center flex flex-col items-center justify-center">
-                                                    <div className="flex items-center gap-2">
-                                                        {(parentUniversal.performance.prCount || 0) > 0 && <span className="text-orange-400 font-bold">⚡ {parentUniversal.performance.prCount}</span>}
-                                                        {(parentUniversal.performance.achievementCount || 0) > 0 && <span className="text-yellow-400 font-bold">🏆 {parentUniversal.performance.achievementCount}</span>}
-                                                        {(parentUniversal.performance.kudosCount || 0) > 0 && <span className="text-pink-400 font-bold flex items-center gap-1"><Heart className="w-3.5 h-3.5 fill-pink-500/10" /> {parentUniversal.performance.kudosCount}</span>}
-                                                    </div>
-                                                    <p className="text-xs text-slate-500 uppercase mt-1">Prestationer</p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Minigraph for Generic/Extracted */}
-                                        {existingSplits && existingSplits.length > 2 && (
-                                            <div className="bg-slate-800/30 rounded-2xl p-4 border border-white/5">
-                                                <h4 className="font-black text-slate-500 uppercase text-[10px] tracking-widest mb-3 flex items-center gap-2">
-                                                    <span>📈</span> Tempo & Puls över tid
-                                                </h4>
-                                                <SplitsSparkline splits={existingSplits} highlightRange={activeHighlightRange} />
                                             </div>
-                                        )}
-
-
-                                        {/* Interval Summary (Generic) */}
-                                        {activity.subType === 'interval' && segmentedSplits && (
-                                            <IntervalMiniSummary segmentedSplits={segmentedSplits} />
-                                        )}
+                                        ) : null}
                                     </div>
-                                )}
 
+                                    {/* Strava Description */}
+                                    {(() => {
+                                        const notes = activity.notes || perf?.notes;
+                                        const shouldShowNotes = notes && (notes.length >= 50 || notes.includes('\n'));
+                                        if (shouldShowNotes) {
+                                            return (
+                                                <div className="bg-slate-800/30 rounded-2xl p-4 border border-white/5">
+                                                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-2 block">📝 Beskrivning</span>
+                                                    <p className="text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                                        {notes}
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
+                                    {/* Interval Summary Block */}
+                                    {activity.subType === 'interval' && segmentedSplits && (
+                                        <IntervalMiniSummary segmentedSplits={segmentedSplits} />
+                                    )}
+                                </div>
                                 {/* Sub-performances (extracted metrics) */}
                                 {subPerformances.length > 0 && activeTab === 'stats' && (
                                     <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 space-y-3">
@@ -3391,6 +3294,62 @@ export function ActivityDetailModal({
                                 {/* Greens Score Tile HIDDEN */}
                             </>
                         )}
+
+{/* Performance & Score Breakdown (Greens Index) */}
+                                        {perfBreakdown.totalScore > 0 && (
+                                            <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-white/5 rounded-2xl p-5 mb-4 shadow-xl shadow-indigo-500/5 overflow-hidden relative group">
+                                                {/* Background Accent */}
+                                                <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/10 blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700" />
+                                                
+                                                <div className="flex items-center justify-between mb-6 relative z-10">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-indigo-500/20 p-2.5 rounded-xl text-indigo-400 shadow-inner">
+                                                            <TrendingUp size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Prestanda Analys</h4>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-2xl font-black text-white italic tracking-tight uppercase">Greens Index</span>
+                                                                {perfBreakdown.isPersonalBest && (
+                                                                    <div className="bg-amber-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase animate-bounce-subtle">PB</div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-4xl font-black text-white italic tracking-tighter leading-none flex items-baseline gap-1">
+                                                            {Math.round(perfBreakdown.totalScore)}
+                                                            <span className="text-xs text-indigo-400 not-italic tracking-normal">pts</span>
+                                                        </div>
+                                                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Total Score</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
+                                                    {perfBreakdown.components.map((comp, idx) => (
+                                                        <div key={idx} className="bg-slate-900/40 border border-white/5 p-3 rounded-xl flex items-center justify-between group/comp hover:border-indigo-500/20 transition-all">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="text-xl">{comp.icon}</div>
+                                                                <div>
+                                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{comp.label}</p>
+                                                                    <p className={`text-sm font-black ${comp.color || 'text-white'} italic font-mono`}>{comp.value}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden self-end mb-1">
+                                                                <div 
+                                                                    className={`h-full ${comp.color?.replace('text-', 'bg-') || 'bg-indigo-500'} transition-all duration-1000`} 
+                                                                    style={{ width: `${Math.min(100, (comp.score / (comp.max || 100)) * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="mt-4 pt-4 border-t border-white/5 text-[11px] text-slate-400 italic leading-relaxed relative z-10">
+                                                    " {perfBreakdown.summary} "
+                                                </div>
+                                            </div>
+                                        )}
 
                         {/* ANALYSIS TAB */}
                         {activeTab === 'analysis' && (

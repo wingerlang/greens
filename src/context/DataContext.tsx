@@ -105,7 +105,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setCurrentUserPublic, addUser, updateCurrentUser,
         updateVitals, getVitalsForDate, toggleIncompleteDay, toggleCompleteDay,
         emitFeedEvent
-    } = useUserContext();
+    } = useUserContext({ skipAutoSave });
 
     // Helper: Log a database action
     const logAction = React.useCallback((

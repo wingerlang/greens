@@ -251,8 +251,36 @@ export function parseSmartQuery(query: string): { filters: SmartFilter[], remain
 }
 
 export function applySmartFilters<T extends ExerciseEntry>(activities: T[], filters: SmartFilter[]): T[] {
+    if (filters.length === 0) return activities;
+
+    // 1. Pre-calculate lowercased search values for text filters
+    const preparedFilters = filters.map(f => {
+        if (f.type === 'text' && typeof f.value === 'string') {
+            return { ...f, _lowered: f.value.toLowerCase() };
+        }
+        return f;
+    }) as (SmartFilter & { _lowered?: string })[];
+
+    const hasTextFilter = preparedFilters.some(f => f.type === 'text');
+
     return activities.filter(activity => {
-        return filters.every(f => {
+        // 2. Pre-construct searchable text once per activity if needed
+        let searchableText = '';
+        if (hasTextFilter) {
+            const a = activity as any;
+            searchableText = (
+                (a.type || '') + ' ' +
+                (a.name || '') + ' ' +
+                (a.title || '') + ' ' +
+                (a.notes || '') + ' ' +
+                (a.category || '') + ' ' +
+                (a.source || '') + ' ' +
+                (a.subType || '') + ' ' +
+                ((a.isTrack || a.performance?.isTrack) ? 'bana track' : '')
+            ).toLowerCase();
+        }
+
+        return preparedFilters.every(f => {
             switch (f.type) {
                 case 'distance':
                     if (!activity.distance) return false;
@@ -293,25 +321,15 @@ export function applySmartFilters<T extends ExerciseEntry>(activities: T[], filt
                         return activity.date.startsWith(f.value);
                     }
 
-                    const year = new Date(activity.date).getFullYear();
+                    // Use substring for year extraction if possible (faster than new Date)
+                    const yearStr = activity.date.substring(0, 4);
+                    const year = parseInt(yearStr);
                     if (f.operator === 'greater') return year > f.value;
                     if (f.operator === 'less') return year < f.value;
                     return year === f.value;
 
                 case 'text':
-                    const searchStr = f.value.toLowerCase();
-                    const a = activity as any;
-                    const combinedText = `
-                        ${a.type || ''} 
-                        ${a.name || ''} 
-                        ${a.title || ''}
-                        ${a.notes || ''} 
-                        ${a.category || ''} 
-                        ${a.source || ''} 
-                        ${a.subType || ''}
-                        ${(a.isTrack || a.performance?.isTrack) ? 'bana track' : ''}
-                    `.toLowerCase();
-                    return combinedText.includes(searchStr);
+                    return searchableText.includes(f._lowered!);
 
                 default:
                     return true;

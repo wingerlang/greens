@@ -22,8 +22,9 @@ Follow these steps to ensure code improvements are agent-optimized, cheap, quick
 - **Maintain Types**: Ensure TypeScript types are correctly preserved or improved.
 
 ## 4. Verification (VERIFICATION mode)
-- **Unit Tests**: Write unit tests for new/refactored logic.
-- **Manual Check**: If a UI change, use the browser tool to verify rendering.
+- **Unit Tests**: Write unit tests for new/refactored logic. Ensure tests are placed under `tests/unit/` or next to the code files.
+- **Coverage Check**: Run `deno task test:cov` to check code coverage and ensure no regressions.
+- **Manual Check**: If a UI change, use the browser tool to verify rendering. Ensure modals close correctly on Escape and clean up their state.
 - **Check Logs**: Ensure no new warnings or errors in the console.
 
 ## 5. Polish
@@ -34,5 +35,10 @@ Follow these steps to ensure code improvements are agent-optimized, cheap, quick
 ## Commands
 To verify the build:
 1. `deno task build`
-To run tests:
-2. `deno test -A`
+To run all tests:
+2. `deno task test`
+To run tests with code coverage report:
+3. `deno task test:cov`
+To generate LCOV coverage report:
+4. `deno task test:lcov`
+

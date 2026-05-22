@@ -86,24 +86,106 @@ export function CaloriesPage() {
 
     const [isFormOpen, setIsFormOpen] = useState(false);
 
-    // Smart meal type default based on time of day and selected date
-    const getDefaultMealType = (date: string): MealType => {
+    const getSmarterMealType = (type: 'recipe' | 'foodItem', id: string, currentMealType: MealType): MealType => {
         const today = getISODate();
-        // If logging for a past date, default to snack (mellanmål)
-        if (date !== today) {
-            return 'snack';
-        }
-        // For today, use time-based logic
         const hour = new Date().getHours();
-        if (hour >= 5 && hour < 10) return 'breakfast';
-        if (hour >= 10 && hour < 14) return 'lunch';
-        if (hour >= 14 && hour < 17) return 'snack';
-        if (hour >= 17 && hour < 21) return 'dinner';
-        if (hour >= 21 || hour < 5) return 'evening_meal';
-        return 'snack';
+
+        // 1. Contextual override: If it's today, and we're at 'breakfast' but already logged one and it's getting late -> suggest Lunch
+        if (selectedDate === today && currentMealType === 'breakfast') {
+            const hasLoggedBreakfast = dailyEntries.some(e => e.mealType === 'breakfast' && !e.isPlanned);
+            if (hasLoggedBreakfast && hour >= 9) return 'lunch';
+        }
+
+        // 2. Training Nutrition Check: Items like Gel, Sportdryck, etc.
+        const itemName = type === 'recipe' ? recipes.find(r => r.id === id)?.name : foodItems.find(f => f.id === id)?.name;
+        if (itemName) {
+            const lowerName = itemName.toLowerCase();
+            const isPerformanceFood = lowerName.includes('gel') || lowerName.includes('sportdryck') || lowerName.includes('maurten') || lowerName.includes('elektrolyt');
+            if (isPerformanceFood) {
+                // If we have an exercise today, default to training_nutrition
+                if (dailyExercises.length > 0) return 'training_nutrition';
+            }
+        }
+
+        // 3. Historical analysis: If this item is almost always logged as a specific type
+        const frequencies: Record<string, number> = {};
+        let totalLogs = 0;
+        mealEntries.forEach(entry => {
+            const hasItem = entry.items.some(i => i.type === type && i.referenceId === id);
+            if (hasItem) {
+                frequencies[entry.mealType] = (frequencies[entry.mealType] || 0) + 1;
+                totalLogs++;
+            }
+        });
+
+        if (totalLogs >= 2) { // Lowered from 3 to 2 for faster learning
+            const sorted = Object.entries(frequencies).sort((a, b) => b[1] - a[1]);
+            const [bestType, count] = sorted[0];
+            const confidence = count / totalLogs;
+
+            if (confidence > 0.6) { // Lowered from 0.7 for faster learning
+                const targetType = bestType as MealType;
+                
+                // If it's a "lunch item" (like Tofu) and it's mid-day, don't let it be breakfast
+                if (targetType === 'lunch' && hour >= 9 && hour < 16) return 'lunch';
+                if (targetType === 'dinner' && hour >= 16 && hour < 23) return 'dinner';
+                if (targetType === 'breakfast' && hour >= 4 && hour < 11) return 'breakfast';
+
+                // Rule for items that are "never" a certain type (e.g. Never breakfast)
+                if (confidence > 0.8 && currentMealType === 'breakfast' && targetType !== 'breakfast' && hour >= 9) {
+                    return targetType;
+                }
+            }
+        }
+
+        return currentMealType;
     };
 
+
+    // Smart meal type default based on time of day and selected date
+    const getDefaultMealType = useCallback((date: string): MealType => {
+        const today = getISODate();
+        const entries = getMealEntriesForDate(date);
+        const loggedTypes = entries.filter(e => !e.isPlanned).map(e => e.mealType);
+
+        // If logging for a past date, look for missing meals in reverse order (likely filling in from the end of the day)
+        if (date < today) {
+            if (!loggedTypes.includes('evening_meal')) return 'evening_meal';
+            if (!loggedTypes.includes('dinner')) return 'dinner';
+            if (!loggedTypes.includes('lunch')) return 'lunch';
+            if (!loggedTypes.includes('breakfast')) return 'breakfast';
+            return 'snack';
+        }
+
+        // For today, use time-based logic but avoid already logged meals
+        const hour = new Date().getHours();
+        let suggested: MealType = 'snack';
+        if (hour >= 5 && hour < 10) suggested = 'breakfast';
+        else if (hour >= 10 && hour < 14) suggested = 'lunch';
+        else if (hour >= 14 && hour < 17) suggested = 'snack';
+        else if (hour >= 17 && hour < 21) suggested = 'dinner';
+        else suggested = 'evening_meal';
+
+        // If the suggested meal is already logged, try to find the next logical one
+        if (loggedTypes.includes(suggested)) {
+            const sequence: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner', 'evening_meal'];
+            const currentIndex = sequence.indexOf(suggested);
+            
+            // Look ahead for the first missing meal in the sequence
+            for (let i = currentIndex + 1; i < sequence.length; i++) {
+                if (!loggedTypes.includes(sequence[i])) return sequence[i];
+            }
+        }
+
+        return suggested;
+    }, [getMealEntriesForDate]);
+
     const [mealType, setMealType] = useState<MealType>(getDefaultMealType(urlDate || getISODate()));
+
+    // Sync meal type when date changes
+    useEffect(() => {
+        setMealType(getDefaultMealType(selectedDate));
+    }, [selectedDate, getDefaultMealType]);
     const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => (localStorage.getItem('calories_view_mode') as 'normal' | 'compact') || 'normal');
 
     // Quick-add state
@@ -210,6 +292,7 @@ export function CaloriesPage() {
             beverage: [],
             estimate: [],
             evening_meal: [],
+            training_nutrition: [],
         };
         dailyEntries.forEach((entry: MealEntry) => {
             // Integration: Move 'estimate' entries into 'lunch' for display
@@ -370,9 +453,14 @@ export function CaloriesPage() {
             durationMs
         });
 
+        const targetMealType = getSmarterMealType(type, id, mealType);
+        if (targetMealType !== mealType) {
+            setMealType(targetMealType);
+        }
+
         addMealEntry({
             date: selectedDate,
-            mealType,
+            mealType: targetMealType,
             items: [{
                 type,
                 referenceId: id,
@@ -387,6 +475,7 @@ export function CaloriesPage() {
         setQuickAddServings(1);
         setLastAddedId({ type, id });
     };
+
 
     const handleDeleteEntry = (id: string) => {
         deleteMealEntry(id);
@@ -802,6 +891,7 @@ export function CaloriesPage() {
                                             />
                                         ) : (
                                             <>
+
                                                 <span className="text-sm">💧</span>
                                                 <span className="text-sm font-bold text-slate-700 dark:text-white">{currentVitals.water || 0}</span>
                                             </>

@@ -165,29 +165,31 @@ try {
 }
 
 // Watcher
-(async () => {
-    try {
-        const watcher = Deno.watchFs(CONFIG_FILE);
-        for await (const event of watcher) {
-            if (event.kind === "modify") {
-                // Debounce slightly?
-                setTimeout(async () => {
-                    try {
-                        const text = await Deno.readTextFile(CONFIG_FILE);
-                        const json = JSON.parse(text);
-                        currentConfig = { ...DEFAULT_CONFIG, ...json };
-                        applyOverrides();
-                        console.log("[CONFIG] Hot-reloaded configuration.");
-                    } catch (e) {
-                        console.error("[CONFIG] Reload failed:", e);
-                    }
-                }, 100);
+if (!Deno.env.has("DENO_CURRENT_TEST")) {
+    (async () => {
+        try {
+            const watcher = Deno.watchFs(CONFIG_FILE);
+            for await (const event of watcher) {
+                if (event.kind === "modify") {
+                    // Debounce slightly?
+                    setTimeout(async () => {
+                        try {
+                            const text = await Deno.readTextFile(CONFIG_FILE);
+                            const json = JSON.parse(text);
+                            currentConfig = { ...DEFAULT_CONFIG, ...json };
+                            applyOverrides();
+                            console.log("[CONFIG] Hot-reloaded configuration.");
+                        } catch (e) {
+                            console.error("[CONFIG] Reload failed:", e);
+                        }
+                    }, 100);
+                }
             }
+        } catch (e) {
+            // Ignored
         }
-    } catch (e) {
-        // Ignored
-    }
-})();
+    })();
+}
 
 // CLI Overrides
 function applyOverrides() {

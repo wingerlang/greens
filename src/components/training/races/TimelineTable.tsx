@@ -100,76 +100,107 @@ export function TimelineTable({
                 })}
 
                 {/* HISTORY */}
-                {races.map((race: any) => {
-                    const getRaceTitle = (r: ExerciseEntry) => {
-                        if (r.title && !r.title.startsWith('Merged')) return r.title;
-                        const ua = universalActivities.find((u: UniversalActivity) => u.id === r.id);
-                        if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
-                            const components = universalActivities.filter((u: UniversalActivity) => ua.mergeInfo!.originalActivityIds!.includes(u.id));
-                            const stravaComp = components.find((c: UniversalActivity) => (c as any).performance?.source?.source === 'strava');
-                            if (stravaComp?.plan?.title) return stravaComp.plan.title;
-                        }
-                        return r.notes || r.type;
-                    };
-
-                    const title = getRaceTitle(race);
-                    const isTrail = isTrailRace(title);
-                    const isUltra = isUltraRace(title, race.distance);
-                    const distStyle = getDistanceStyle(race.distance);
+                {(() => {
+                    let lastYear = '';
+                    let yearCount = 0;
                     
-                    const placement = race.raceDetails?.placement;
-                    const isPodium = placement && placement <= 3;
-                    const isWin = placement === 1;
+                    return races.map((race: any) => {
+                        const getRaceTitle = (r: ExerciseEntry) => {
+                            if (r.title && !r.title.startsWith('Merged')) return r.title;
+                            const ua = universalActivities.find((u: UniversalActivity) => u.id === r.id);
+                            if (ua?.mergeInfo?.isMerged && ua.mergeInfo.originalActivityIds?.length) {
+                                const components = universalActivities.filter((u: UniversalActivity) => ua.mergeInfo!.originalActivityIds!.includes(u.id));
+                                const stravaComp = components.find((c: UniversalActivity) => (c as any).performance?.source?.source === 'strava');
+                                if (stravaComp?.plan?.title) return stravaComp.plan.title;
+                            }
+                            return r.notes || r.type;
+                        };
 
-                    return (
-                        <tr
-                            key={race.id}
-                            className={`hover:bg-white/5 transition-colors cursor-pointer group ${isWin ? 'bg-amber-500/5' : ''}`}
-                            onClick={() => setSelectedActivity(race)}
-                        >
-                            <td className={`px-3 py-1.5 border-l-2 transition-colors whitespace-nowrap ${isWin ? 'border-l-amber-500' : 'border-l-transparent group-hover:border-l-amber-500'}`}>
-                                <div className="flex items-center gap-1.5">
-                                    <span className={`font-mono text-xs font-bold ${isWin ? 'text-amber-400' : 'text-slate-300'}`}>{formatRaceDateCompact(race.date)}</span>
-                                    <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
-                                </div>
-                            </td>
-                            <td className="px-3 py-1.5">
-                                <div className={`font-bold transition-colors flex items-center gap-1.5 flex-wrap text-xs ${isWin ? 'text-amber-400 group-hover:text-amber-300' : 'text-white group-hover:text-amber-500'}`}>
-                                    <span className="truncate max-w-[200px]">{title}</span>
-                                    {isWin && <TrophyIcon size={16} className="text-amber-500" />}
-                                    {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest">Ultra</span>}
-                                    {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
-                                </div>
-                            </td>
-                            <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[150px]">
-                                {race.location || race.raceDetails?.logistics?.location || '-'}
-                            </td>
-                            <td className="px-3 py-1.5 text-right">
-                                {race.distance > 0 ? (
-                                    <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
-                                        {race.distance.toFixed(1)} km
-                                    </span>
-                                ) : '-'}
-                            </td>
-                            <td className="px-3 py-1.5 text-right text-slate-300 font-mono text-[10px]">
-                                {(race.elevationGain || race.raceDetails?.elevationGain) ? `${race.elevationGain || race.raceDetails.elevationGain}m` : '-'}
-                            </td>
-                            <td className="px-3 py-1.5 text-right text-slate-500 font-mono text-[10px]">
-                                {calcStifa(race.distance, race.elevationGain || race.raceDetails?.elevationGain)}
-                            </td>
-                            <td className="px-3 py-1.5 text-right font-mono text-emerald-500 font-bold whitespace-nowrap">{formatActivityDuration(race.durationMinutes)}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-slate-500 text-[10px] whitespace-nowrap">{calcPace(race.distance, race.durationMinutes)}</td>
-                            <td className="px-3 py-1.5 text-right">
-                                {placement ? (
-                                    <div className={`flex items-center justify-end gap-1 font-black ${isPodium ? 'text-amber-400' : 'text-slate-400'}`}>
-                                        {isPodium && <Medal size={12} className={placement === 1 ? 'text-amber-400' : placement === 2 ? 'text-slate-300' : 'text-amber-700'} />}
-                                        {placement}{race.raceDetails?.totalParticipants ? ` / ${race.raceDetails.totalParticipants}` : ''}
-                                    </div>
-                                ) : '-'}
-                            </td>
-                        </tr>
-                    );
-                })}
+                        const title = getRaceTitle(race);
+                        const isTrail = isTrailRace(title);
+                        const isUltra = isUltraRace(title, race.distance);
+                        const distStyle = getDistanceStyle(race.distance);
+                        
+                        const placement = race.raceDetails?.placement;
+                        const isPodium = placement && placement <= 3;
+                        const isWin = placement === 1;
+                        
+                        const currentYear = race.date.substring(0, 4);
+                        const isYearChange = sortConfig.key === 'date' && currentYear !== lastYear;
+                        
+                        if (isYearChange) {
+                            lastYear = currentYear;
+                            yearCount++;
+                        }
+                        
+                        const yearBg = sortConfig.key === 'date' 
+                            ? (yearCount % 2 === 0 ? 'bg-white/[0.02]' : 'bg-transparent')
+                            : '';
+
+                        return (
+                            <React.Fragment key={race.id}>
+                                {isYearChange && (
+                                    <tr className="bg-slate-950/80 border-y border-white/5">
+                                        <td colSpan={9} className="px-3 py-2">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-base font-black text-white italic tracking-tighter">{currentYear}</span>
+                                                <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent"></div>
+                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                    {races.filter(r => r.date.startsWith(currentYear)).length} Lopp
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr
+                                    className={`hover:bg-amber-500/5 transition-colors cursor-pointer group ${isWin ? 'bg-amber-500/10' : yearBg}`}
+                                    onClick={() => setSelectedActivity(race)}
+                                >
+                                    <td className={`px-3 py-2 border-l-2 transition-colors whitespace-nowrap ${isWin ? 'border-l-amber-500' : 'border-l-transparent group-hover:border-l-amber-500'}`}>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`font-mono text-xs font-bold ${isWin ? 'text-amber-400' : 'text-slate-300'}`}>{formatRaceDateCompact(race.date)}</span>
+                                            <span className="text-[9px] text-slate-500 uppercase font-black">{race.date.substring(2, 4)}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div className={`font-bold transition-colors flex items-center gap-1.5 flex-wrap text-xs ${isWin ? 'text-amber-400 group-hover:text-amber-300' : 'text-white group-hover:text-amber-500'}`}>
+                                            <span className="truncate max-w-[200px]">{title}</span>
+                                            {isWin && <TrophyIcon size={14} className="text-amber-500" />}
+                                            {isUltra && <span className="text-[8px] bg-fuchsia-500/20 text-fuchsia-400 px-1 py-0 rounded border border-fuchsia-500/30 uppercase font-black tracking-widest shadow-[0_0_10px_rgba(217,70,239,0.1)]">Ultra</span>}
+                                            {isTrail && !isUltra && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0 rounded border border-emerald-500/30 uppercase font-black tracking-widest">Trail</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-400 text-xs truncate max-w-[150px]">
+                                        {race.location || race.raceDetails?.logistics?.location || '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {race.distance > 0 ? (
+                                            <span className={`px-2 py-1 rounded-md text-xs font-bold border ${distStyle} whitespace-nowrap`}>
+                                                {race.distance.toFixed(1)} km
+                                            </span>
+                                        ) : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-slate-300 font-mono text-[10px]">
+                                        {(race.elevationGain || race.raceDetails?.elevationGain) ? `${race.elevationGain || race.raceDetails.elevationGain}m` : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-slate-500 font-mono text-[10px]">
+                                        {calcStifa(race.distance, race.elevationGain || race.raceDetails?.elevationGain)}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-mono text-emerald-500 font-bold whitespace-nowrap">{formatActivityDuration(race.durationMinutes)}</td>
+                                    <td className="px-3 py-2 text-right font-mono text-slate-500 text-[10px] whitespace-nowrap">{calcPace(race.distance, race.durationMinutes)}</td>
+                                    <td className="px-3 py-2 text-right">
+                                        {placement ? (
+                                            <div className={`flex items-center justify-end gap-1 font-black ${isPodium ? 'text-amber-400' : 'text-slate-400'}`}>
+                                                {isPodium && <Medal size={12} className={placement === 1 ? 'text-amber-400' : placement === 2 ? 'text-slate-300' : 'text-amber-700'} />}
+                                                {placement}{race.raceDetails?.totalParticipants ? ` / ${race.raceDetails.totalParticipants}` : ''}
+                                            </div>
+                                        ) : '-'}
+                                    </td>
+                                </tr>
+                            </React.Fragment>
+                        );
+                    });
+                })()}
             </tbody>
         </table>
     );

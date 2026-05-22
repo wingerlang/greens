@@ -4,6 +4,7 @@ import { UniversalActivity } from '../../../models/types.ts';
 import { getBestEffortsForActivity, getFastestSince } from '../../../utils/performanceEngine.ts';
 import { formatPace, formatSecondsToTime, getRelativeTime, formatDuration } from '../../../utils/dateUtils.ts';
 import { snapToTrack } from '../../../utils/trackUtils.ts';
+import { isTempoInterval } from '../../../utils/activityUtils.ts';
 
 export const BestEffortPerformanceCard = React.memo(({
     activity,
@@ -73,16 +74,16 @@ export const BestEffortPerformanceCard = React.memo(({
             <div className="grid grid-cols-1 gap-2">
                 {relevantEfforts.map((effort, idx) => {
                     const result = getFastestSince(activity, effort.distance, effort.movingTime, allActivities);
-                    const isInterval = (activity.subType === 'interval' || (activity.title || '').toLowerCase().includes('intervall'));
+                    const isInterval = isTempoInterval(activity);
                     const isPB = !isInterval && result === 'PB';
 
                     return (
                         <div 
                             key={idx} 
                             onClick={() => setExpandedId(expandedId === effort.name ? null : effort.name)}
-                            className={`bg-slate-800/40 rounded-xl p-3 border transition-all cursor-pointer group hover:bg-slate-800/60 ${expandedId === effort.name ? 'border-indigo-500/30' : 'border-white/5'}`}
+                            className={`bg-slate-800/40 rounded-xl p-2 sm:p-2.5 border transition-all cursor-pointer group hover:bg-slate-800/60 ${expandedId === effort.name ? 'border-indigo-500/30' : 'border-white/5'}`}
                         >
-                            <div className={`flex flex-col ${expandedId === effort.name ? 'lg:flex-row' : ''} gap-6`}>
+                            <div className={`flex flex-col ${expandedId === effort.name ? 'lg:flex-row' : ''} gap-3 sm:gap-4`}>
                                 {expandedId === effort.name && (
                                     <div className="flex-1 min-w-0 order-2 lg:order-1 border-t lg:border-t-0 lg:border-r border-white/10 pt-4 lg:pt-0 lg:pr-6 animate-in fade-in slide-in-from-left-4 duration-300">
                                         <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2 px-1">
@@ -192,13 +193,13 @@ export const BestEffortPerformanceCard = React.memo(({
                                     </div>
                                 )}
 
-                                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 order-1 lg:order-2 ${expandedId === effort.name ? 'lg:w-[350px] lg:shrink-0' : 'w-full'}`}>
-                                    <div className="flex items-center gap-4 min-w-[120px]">
+                                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 order-1 lg:order-2 ${expandedId === effort.name ? 'lg:w-[350px] lg:shrink-0' : 'w-full'}`}>
+                                    <div className="flex items-center gap-3 min-w-[100px]">
                                         <div className="flex flex-col">
-                                            <span className="text-sm font-black text-white italic tracking-tight uppercase">
+                                            <span className="text-xs sm:text-sm font-black text-white italic tracking-tight uppercase leading-none">
                                                 {effort.name.toUpperCase()}
                                             </span>
-                                            <span className="text-[10px] text-slate-400 font-mono font-bold">
+                                            <span className="text-[9px] text-slate-400 font-mono font-bold leading-none mt-1">
                                                 {effort.startKm !== undefined && effort.endKm !== undefined ? (
                                                     isTrackMode && effort.isSnapped ? (
                                                         `Km ${effort.startKm.toFixed(1)}-${(effort.startKm + effort.distance / 1000).toFixed(1)}`
@@ -227,40 +228,40 @@ export const BestEffortPerformanceCard = React.memo(({
                                     </div>
 
                                     {/* Center: Time, Pace, HR */}
-                                    <div className={`flex flex-wrap items-center gap-x-8 gap-y-4 ${expandedId === effort.name ? 'flex-col sm:flex-row' : ''}`}>
-                                        <div className="flex flex-col min-w-[80px]">
-                                            <div className="text-xl font-black text-indigo-300 font-mono leading-none">
+                                    <div className={`flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2 ${expandedId === effort.name ? 'flex-col sm:flex-row' : ''}`}>
+                                        <div className="flex flex-col min-w-[60px]">
+                                            <div className="text-lg font-black text-indigo-300 font-mono leading-none">
                                                 {formatSecondsToTime(effort.movingTime)}
                                             </div>
-                                            <div className="text-[9px] text-slate-500 font-black tracking-widest mt-1 uppercase opacity-60">TOTALTID</div>
+                                            <div className="text-[8px] text-slate-500 font-black tracking-widest mt-0.5 uppercase opacity-60">TOTALTID</div>
                                         </div>
 
-                                        <div className="flex flex-col border-l border-white/10 pl-5 min-w-[80px]">
-                                            <div className="text-[16px] font-black text-slate-200 font-mono leading-none">
+                                        <div className="flex flex-col border-l border-white/10 pl-3 sm:pl-4 min-w-[60px]">
+                                            <div className="text-sm font-black text-slate-200 font-mono leading-none">
                                                 {formatPace(effort.movingTime / (Math.max(effort.distance, 1) / 1000)).replace('/km', '')}
                                             </div>
-                                            <div className="text-[9px] text-slate-500 font-black tracking-widest mt-1 uppercase opacity-60">SNITT-TEMPO</div>
+                                            <div className="text-[8px] text-slate-500 font-black tracking-widest mt-0.5 uppercase opacity-60">SNITT-TEMPO</div>
                                         </div>
 
                                         {effort.avgHeartRate && (
-                                            <div className="flex flex-col border-l border-white/10 pl-5 min-w-[80px]">
-                                                <div className="text-[16px] font-black text-rose-400 font-mono leading-none flex items-center gap-1.5">
-                                                    <HeartPulse size={14} className="opacity-80" /> {effort.avgHeartRate}
+                                            <div className="flex flex-col border-l border-white/10 pl-3 sm:pl-4 min-w-[60px]">
+                                                <div className="text-sm font-black text-rose-400 font-mono leading-none flex items-center gap-1">
+                                                    <HeartPulse size={12} className="opacity-80" /> {effort.avgHeartRate}
                                                 </div>
-                                                <div className="text-[9px] text-slate-500 font-black tracking-widest mt-1 uppercase opacity-60">SNITTPULS</div>
+                                                <div className="text-[8px] text-slate-500 font-black tracking-widest mt-0.5 uppercase opacity-60">SNITTPULS</div>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Right: Comparison & Extraction */}
-                                    <div className="flex-1 sm:text-right border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 sm:pl-4 min-w-0 flex flex-col justify-center">
+                                    <div className="flex-1 sm:text-right border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 sm:pl-3 min-w-0 flex flex-col justify-center">
                                         {!isPB && result && typeof result === 'object' && (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     onSelectActivity?.(result.id);
                                                 }}
-                                                className="flex flex-col items-start sm:items-end group/link hover:opacity-80 transition-all text-left w-full mb-2"
+                                                className="flex flex-col items-start sm:items-end group/link hover:opacity-80 transition-all text-left w-full sm:mb-0"
                                             >
                                                 <div className="flex flex-col items-start sm:items-end flex-1 min-w-0">
                                                     <span className="text-[10px] font-black text-indigo-400 group-hover/link:underline truncate w-full sm:text-right">
@@ -275,15 +276,15 @@ export const BestEffortPerformanceCard = React.memo(({
                                             </button>
                                         )}
                                         {!isPB && !result && (
-                                            <div className="flex flex-col items-start sm:items-end mb-2">
+                                            <div className="flex flex-col items-start sm:items-end">
                                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Historik</span>
-                                                <span className="text-[10px] font-bold text-slate-600 italic uppercase">Längesedan sist</span>
+                                                <span className="text-[9px] font-bold text-slate-600 italic uppercase">Längesedan sist</span>
                                             </div>
                                         )}
                                         {isPB && (
-                                            <div className="flex flex-col items-start sm:items-end mb-2">
+                                            <div className="flex flex-col items-start sm:items-end">
                                                 <span className="text-[9px] font-black text-amber-500/80 uppercase tracking-widest mb-0.5">NYTT PERSONBÄSTA!</span>
-                                                <span className="text-[10px] font-bold text-slate-400 italic">Grymt jobbat idag!</span>
+                                                <span className="text-[9px] font-bold text-slate-400 italic">Grymt jobbat idag!</span>
                                             </div>
                                         )}
 

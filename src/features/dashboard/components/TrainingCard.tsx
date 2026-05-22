@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity, Bike, FastForward, Waves, Footprints, Flower2, Calendar as CalendarIcon } from 'lucide-react';
+import { Dumbbell, X, ChevronRight, Zap, HeartPulse, Activity, Bike, FastForward, Waves, Footprints, Flower2, Trophy, Calendar as CalendarIcon } from 'lucide-react';
+import { isCompetition, isWarmupOrCooldown } from '../../../utils/activityUtils.ts';
 import { DashboardCardWrapper } from '../../../components/dashboard/DashboardCardWrapper.tsx';
 import { EXERCISE_TYPES } from '../../../components/training/ExerciseModal.tsx';
 import { ExerciseEntry, PlannedActivity, ExerciseType, UserSettings } from '../../../models/types.ts';
@@ -141,10 +142,19 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
         return { zone: 'Z1', color: 'text-slate-500 bg-slate-50 dark:bg-slate-900/20' };
     };
 
-    const getExerciseIcon = (type: ExerciseType) => {
+    const getExerciseIcon = (act: any) => {
+        const isRace = isCompetition(act);
+        const isWarmup = isWarmupOrCooldown(act);
         const size = density === 'compact' ? 14 : 18;
+        
+        if (isRace) return <Trophy size={size} className="text-amber-500 animate-bounce-slow" />;
+        if (isWarmup) return <div className="flex items-center justify-center" style={{ width: size, height: size }}><div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" /></div>;
+
+        const type = act.type?.toLowerCase();
         switch (type) {
+            case 'run':
             case 'running': return <FastForward size={size} className="text-blue-500" />;
+            case 'bike':
             case 'cycling': return <Bike size={size} className="text-amber-500" />;
             case 'strength': return <Dumbbell size={size} className="text-emerald-500" />;
             case 'walking': return <Footprints size={size} className="text-slate-500" />;
@@ -180,20 +190,36 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                 )}
                 
                 {/* Completed Activities */}
-                {completedTraining.map((act) => {
-                    const typeDef = EXERCISE_TYPES.find(t => t.type === act.type);
-                    const hrZone = act.heartRateAvg ? getHrZone(act.heartRateAvg) : null;
-                    const matchedPlan = allPlans.find(plan => plan.externalId === act.id);
-                    
-                    return (
-                        <div
-                            key={act.id}
-                            onClick={(e) => { e.stopPropagation(); navigate(`/logg?activityId=${act.id}`); }}
-                            className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5' : 'border-transparent bg-slate-50 dark:bg-slate-800/40'} hover:border-slate-200 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-800 cursor-pointer group/item`}
-                        >
-                            <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 shrink-0">
-                                {getExerciseIcon(act.type)}
-                            </div>
+                {(() => {
+                    const hasRace = completedTraining.some(a => isCompetition(a));
+                    return completedTraining.map((act, idx) => {
+                        const typeDef = EXERCISE_TYPES.find(t => t.type === act.type);
+                        const hrZone = act.heartRateAvg ? getHrZone(act.heartRateAvg) : null;
+                        const matchedPlan = allPlans.find(plan => plan.externalId === act.id);
+                        
+                        const isRace = isCompetition(act);
+                        const isWarmup = isWarmupOrCooldown(act);
+                        
+                        // Find position relative to race
+                        const raceIdx = completedTraining.findIndex(a => isCompetition(a));
+                        const isPreRace = isWarmup && raceIdx !== -1 && idx < raceIdx;
+                        const isPostRace = isWarmup && raceIdx !== -1 && idx > raceIdx;
+                        const isConnected = isPreRace || isPostRace;
+
+                        return (
+                            <div
+                                key={act.id}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/logg?activityId=${act.id}`); }}
+                                className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all 
+                                    ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5' : 'border-transparent bg-slate-50 dark:bg-slate-800/40'} 
+                                    ${isRace ? 'border-amber-300 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10 z-10' : ''}
+                                    ${isPreRace ? 'mb-[-12px] rounded-b-none border-b-0 border-l-2 border-l-amber-400/50 z-0' : ''}
+                                    ${isPostRace ? 'mt-[-12px] rounded-t-none border-t-0 border-l-2 border-l-amber-400/50 z-0' : ''}
+                                    hover:border-slate-200 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-800 cursor-pointer group/item relative`}
+                            >
+                                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 shrink-0">
+                                    {getExerciseIcon(act)}
+                                </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{typeDef?.label || act.type}</span>
@@ -246,11 +272,12 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                         </>
                                     )}
                                 </div>
+                                <ChevronRight size={14} className="text-slate-300 group-hover/item:text-slate-500 transition-colors" />
                             </div>
-                            <ChevronRight size={14} className="text-slate-300 group-hover/item:text-slate-500 transition-colors" />
-                        </div>
-                    );
-                })}
+                            </div>
+                        );
+                    });
+                })()}
 
                 {/* Planned Activities */}
                 {filteredPlans.length > 0 && (
@@ -259,68 +286,85 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                             <div className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">Planerat</div>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                            {filteredPlans.map(plan => {
-                                const pace = plan.targetPace || (plan.estimatedDistance && plan.durationMinutes ? formatPace((plan.durationMinutes / plan.estimatedDistance) * 60) : null);
-                                
-                                // Find un-matched completed activities for the dashboard category
-                                const unmatchedActivities = completedTraining.filter(act => 
-                                    !allPlans.some(p => p.externalId === act.id)
-                                );
+                            {(() => {
+                                const hasRace = filteredPlans.some(p => isCompetition(p));
+                                return filteredPlans.map((plan, idx) => {
+                                    const pace = plan.targetPace || (plan.estimatedDistance && plan.durationMinutes ? formatPace((plan.durationMinutes / plan.estimatedDistance) * 60) : null);
+                                    
+                                    const isRace = isCompetition(plan);
+                                    const isWarmup = isWarmupOrCooldown(plan);
+                                    
+                                    // Find position relative to race
+                                    const raceIdx = filteredPlans.findIndex(p => isCompetition(p));
+                                    const isPreRace = isWarmup && raceIdx !== -1 && idx < raceIdx;
+                                    const isPostRace = isWarmup && raceIdx !== -1 && idx > raceIdx;
 
-                                const bestCandidateId = plan.reconciliation?.bestCandidateId;
-                                const bestCandidate = bestCandidateId ? unmatchedActivities.find(a => a.id === bestCandidateId) : null;
+                                    // Find un-matched completed activities for the dashboard category
+                                    const unmatchedActivities = completedTraining.filter(act => 
+                                        !allPlans.some(p => p.externalId === act.id)
+                                    );
 
-                                return (
-                                    <div key={plan.id} className="flex flex-col gap-2 p-2.5 rounded-xl border border-dashed border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all group/plan cursor-pointer">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg shrink-0 text-indigo-500">
-                                                <CalendarIcon size={14} />
-                                            </div>
-                                            <div className="flex-1 min-w-0 text-left" onClick={() => navigate('/planera')}>
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                    <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{plan.title || plan.category || 'Pass'}</span>
-                                                    {plan.startTime && <span className="text-[8px] font-black bg-white dark:bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded">{plan.startTime}</span>}
+                                    const bestCandidateId = plan.reconciliation?.bestCandidateId;
+
+                                    return (
+                                        <div 
+                                            key={plan.id} 
+                                            className={`flex flex-col gap-2 p-2.5 rounded-xl border transition-all group/plan cursor-pointer relative
+                                                ${isRace ? 'border-amber-300 dark:border-amber-900/40 bg-amber-500/5 dark:bg-amber-900/10 z-10' : 'border-dashed border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10'}
+                                                ${isPreRace ? 'mb-[-12px] rounded-b-none border-b-0 border-l-2 border-l-amber-400/50 z-0' : ''}
+                                                ${isPostRace ? 'mt-[-12px] rounded-t-none border-t-0 border-l-2 border-l-amber-400/50 z-0' : ''}
+                                            `}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg shrink-0 ${isRace ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-500' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-500'}`}>
+                                                    {isRace ? <Trophy size={14} /> : isWarmup ? <div className="w-3.5 h-3.5 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500" /></div> : <CalendarIcon size={14} />}
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 font-bold flex items-center gap-2">
-                                                    {plan.durationMinutes && <span>{Math.round(plan.durationMinutes)} min</span>}
-                                                    {plan.estimatedDistance && (
-                                                        <>
-                                                            <span className="opacity-20">•</span>
-                                                            <span className="text-indigo-400">{plan.estimatedDistance} km</span>
-                                                        </>
-                                                    )}
-                                                    <span className="opacity-20">•</span>
-                                                    <span className="text-rose-400/80 font-black">-{estimatePlannedCalories(plan)} kcal</span>
+                                                <div className="flex-1 min-w-0 text-left" onClick={() => navigate('/planera')}>
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <span className={`font-bold text-xs truncate ${isRace ? 'text-amber-700 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>{plan.title || plan.category || 'Pass'}</span>
+                                                        {plan.startTime && <span className="text-[8px] font-black bg-white dark:bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded">{plan.startTime}</span>}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 font-bold flex items-center gap-2">
+                                                        {plan.durationMinutes && <span>{Math.round(plan.durationMinutes)} min</span>}
+                                                        {plan.estimatedDistance && (
+                                                            <>
+                                                                <span className="opacity-20">•</span>
+                                                                <span className="text-indigo-400">{plan.estimatedDistance} km</span>
+                                                            </>
+                                                        )}
+                                                        <span className="opacity-20">•</span>
+                                                        <span className="text-rose-400/80 font-black">-{estimatePlannedCalories(plan)} kcal</span>
+                                                    </div>
                                                 </div>
+                                                <ChevronRight size={14} className={`${isRace ? 'text-amber-400' : 'text-indigo-300'} opacity-0 group-hover/plan:opacity-100 transition-all`} />
                                             </div>
-                                            <ChevronRight size={14} className="text-indigo-300 opacity-0 group-hover/plan:opacity-100 transition-all" />
+
+                                            {unmatchedActivities.length > 0 && (
+                                                <div className="pt-2 border-t border-indigo-500/10 flex flex-col gap-1.5 ">
+                                                    <div className="text-[8px] font-black uppercase text-indigo-400/60 tracking-wider">Pass genomfört? Matcha för att dölja:</div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {unmatchedActivities.map(act => {
+                                                            const isBest = act.id === bestCandidateId;
+                                                            return (
+                                                                <button 
+                                                                    key={act.id}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        reconciliation.reconcileActivity(plan.id, act.id);
+                                                                    }}
+                                                                    className={`px-2 py-1 rounded text-[9px] font-bold transition-all border ${isBest ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:text-indigo-500'}`}
+                                                                >
+                                                                    {isBest ? '✨ Matcha förslag: ' : ''}{act.title || act.type} ({Math.round(act.durationMinutes)} min)
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-
-                                        {unmatchedActivities.length > 0 && (
-                                            <div className="pt-2 border-t border-indigo-500/10 flex flex-col gap-1.5 ">
-                                                <div className="text-[8px] font-black uppercase text-indigo-400/60 tracking-wider">Pass genomfört? Matcha för att dölja:</div>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {unmatchedActivities.map(act => {
-                                                        const isBest = act.id === bestCandidateId;
-                                                        return (
-                                                            <button 
-                                                                key={act.id}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    reconciliation.reconcileActivity(plan.id, act.id);
-                                                                }}
-                                                                className={`px-2 py-1 rounded text-[9px] font-bold transition-all border ${isBest ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:text-indigo-500'}`}
-                                                            >
-                                                                {isBest ? '✨ Matcha förslag: ' : ''}{act.title || act.type} ({Math.round(act.durationMinutes)} min)
-                                                            </button>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
                 )}

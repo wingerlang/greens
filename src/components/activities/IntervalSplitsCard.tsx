@@ -101,7 +101,10 @@ function SplitRows({ splits, fastestPace, slowestPace, highlightRange, fastestIn
 
                         {split.averageHeartrate ? (
                             <div className="flex items-center gap-0.5 w-7 justify-end shrink-0">
-                                <span className="text-[11px] font-black text-rose-400 font-mono leading-none">{Math.round(split.averageHeartrate)}</span>
+                                {isHighlighted && <Heart size={8} className="text-rose-500 fill-rose-500" />}
+                                <span className={`text-[11px] font-black font-mono leading-none transition-all ${isHighlighted ? 'text-rose-500 scale-110' : 'text-rose-400'}`}>
+                                    {Math.round(split.averageHeartrate)}
+                                </span>
                             </div>
                         ) : (
                             <span className="text-[10px] text-slate-600 font-mono w-7 text-right shrink-0">-</span>

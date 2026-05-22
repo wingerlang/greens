@@ -66,6 +66,7 @@ export function RunningStatsView({
     const [selectedBuckets, setSelectedBuckets] = useState<string[]>(RUNNING_BUCKETS.map(b => b.key));
     const [activeUltraTab, setActiveUltraTab] = useState<string>('ultra50k');
     const [showOnlyLatestPB, setShowOnlyLatestPB] = useState(false);
+    const [listViewMode, setListViewMode] = useState<'pb-ladder' | 'period-ladder' | 'table'>('period-ladder');
 
     // Derived selectedActivity driven from URL
     const selectedActivity = useMemo(() => {
@@ -170,7 +171,7 @@ export function RunningStatsView({
             const paceSec = durationSec / dist;
 
             // 1. Basic Stats (Full Activity)
-            if (dist > maxDistance) {
+            if (!run.excludeFromRecords && dist > maxDistance) {
                 maxDistance = dist;
                 longestRun = run;
             }
@@ -178,11 +179,14 @@ export function RunningStatsView({
             if (run.durationMinutes > 5) {
                 totalPaceSum += paceSec;
                 paceCount++;
-                if (paceSec < fastestPaceSecPerKm) {
+                if (!run.excludeFromRecords && paceSec < fastestPaceSecPerKm) {
                     fastestPaceSecPerKm = paceSec;
                     fastestPaceRun = run;
                 }
             }
+
+            // Skip all records/top-lists processing if marked as excluded
+            if (run.excludeFromRecords) return;
 
             // 2. Performance Engine Analysis (Sub-segments)
             // We need to find the UniversalActivity corresponding to this ExerciseEntry
@@ -380,6 +384,75 @@ export function RunningStatsView({
         return items;
     }, [pbTimeline, selectedBuckets, showOnlyLatestPB]);
 
+    const pbLadders = useMemo(() => {
+        const ladders: Record<string, PBEvent[]> = {};
+        RUNNING_BUCKETS.forEach(b => ladders[b.key] = []);
+        
+        pbTimeline.forEach(pb => {
+            const bucket = RUNNING_BUCKETS.find(b => b.label === pb.bucketLabel);
+            if (bucket) {
+                ladders[bucket.key].push(pb);
+            }
+        });
+
+        return ladders;
+    }, [pbTimeline]);
+
+    const periodLadders = useMemo(() => {
+        const ladders: Record<string, PBEvent[]> = {};
+        RUNNING_BUCKETS.forEach(b => ladders[b.key] = []);
+
+        const { lists } = pbTimelineData;
+
+        RUNNING_BUCKETS.forEach(bucket => {
+            let periodList = lists[bucket.key] || [];
+
+            // Filter by period and type
+            periodList = periodList.filter(run => {
+                if (filter !== 'all') {
+                    const isComp = isCompetition(run);
+                    if (filter === 'race' && !isComp) return false;
+                    if (filter === 'training' && isComp) return false;
+                }
+                if (filterStartDate && run.date < filterStartDate) return false;
+                if (filterEndDate && run.date > filterEndDate) return false;
+                return true;
+            });
+
+            // Sort chronologically (oldest first)
+            periodList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            // Build progression ladder
+            let currentBest = Infinity;
+            const ladder: PBEvent[] = [];
+
+            periodList.forEach(run => {
+                const durationSec = run.durationMinutes * 60;
+                if (durationSec < currentBest) {
+                    ladder.push({
+                        id: run.id,
+                        date: run.date,
+                        distance: run.distance || 0,
+                        durationSeconds: durationSec,
+                        durationFormatted: formatTime(durationSec),
+                        bucketLabel: bucket.label,
+                        isRace: isCompetition(run),
+                        activity: run,
+                        previousDurationSeconds: currentBest !== Infinity ? currentBest : undefined,
+                        improvementSeconds: currentBest !== Infinity ? currentBest - durationSec : undefined
+                    });
+                    currentBest = durationSec;
+                }
+            });
+
+            // Sort ladder newest/fastest first for display
+            ladder.sort((a, b) => a.durationSeconds - b.durationSeconds);
+            ladders[bucket.key] = ladder;
+        });
+
+        return ladders;
+    }, [pbTimelineData, filter, filterStartDate, filterEndDate]);
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
             {/* Header / Filters */}
@@ -423,14 +496,130 @@ export function RunningStatsView({
 
             {/* Main Content Layout */}
             <div className="space-y-12">
-                {/* Top 10 Lists */}
+                {/* Unified Lists Section */}
                 <div className="space-y-6">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Trophy className="text-amber-500" size={24} />
-                        Topp 10 Tider
-                    </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-white/5 pb-4">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Trophy className="text-amber-500" size={24} />
+                            Listor & Topptider
+                        </h3>
+                        <div className="flex bg-slate-900/80 rounded-xl border border-white/5 p-1 w-full sm:w-auto">
+                            {[
+                                { id: 'period-ladder', label: 'Period-stege' },
+                                { id: 'pb-ladder', label: 'PB-stege' },
+                                { id: 'table', label: 'Tabellvy (Topp 10)' }
+                            ].map(m => (
+                                <button
+                                    key={m.id}
+                                    onClick={() => setListViewMode(m.id as any)}
+                                    className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all ${listViewMode === m.id
+                                        ? 'bg-slate-800 text-white shadow-lg'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Render according to listViewMode */}
+                    {listViewMode === 'pb-ladder' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in">
+                            {RUNNING_BUCKETS.map(bucket => {
+                                const ladder = pbLadders[bucket.key];
+                                if (!ladder || ladder.length === 0) return null;
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                return (
+                                    <div key={`pb-ladder-${bucket.key}`} className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
+                                        <h4 className="font-black text-white italic text-lg mb-4 flex items-center gap-2">
+                                            {bucket.label} <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded not-italic font-sans font-bold">{ladder.length} PB</span>
+                                        </h4>
+                                        <div className="space-y-3 relative">
+                                            {ladder.length > 1 && <div className="absolute top-3 bottom-3 left-[15px] w-0.5 bg-slate-800 rounded-full" />}
+                                            {ladder.map((pb, idx) => {
+                                                const isBest = idx === 0;
+                                                const prevPB = ladder[idx + 1];
+                                                const daysBetween = prevPB ? Math.floor(Math.abs(new Date(pb.date).getTime() - new Date(prevPB.date).getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+                                                return (
+                                                    <div key={pb.id} className="relative flex items-center gap-4 group cursor-pointer" onClick={() => setSelectedActivity(pb.activity)}>
+                                                        <div className={`w-8 h-8 rounded-full border-2 ${isBest ? 'border-emerald-500 bg-emerald-500/20 text-emerald-500' : 'border-slate-700 bg-slate-900 text-slate-500'} flex items-center justify-center font-black text-xs z-10 shrink-0 group-hover:scale-110 transition-transform`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className={`flex-1 bg-slate-800/50 border border-white/5 rounded-xl p-3 flex justify-between items-center transition-colors ${isBest ? 'border-emerald-500/30 bg-emerald-500/5' : 'group-hover:bg-white/5'}`}>
+                                                            <div>
+                                                                <div className={`font-mono font-black text-lg leading-none ${isBest ? 'text-emerald-400' : 'text-white'}`}>{pb.durationFormatted}</div>
+                                                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                                                    {pb.date.substring(0, 10)}
+                                                                    {daysBetween !== null && <span className="opacity-60 ml-1">({daysBetween} dgr)</span>}
+                                                                </div>
+                                                            </div>
+                                                            {pb.improvementSeconds && pb.improvementSeconds > 0 ? (
+                                                                <div className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                                                                    -{formatTime(pb.improvementSeconds)}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {listViewMode === 'period-ladder' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in">
+                            {RUNNING_BUCKETS.map(bucket => {
+                                const ladder = periodLadders[bucket.key];
+                                if (!ladder || ladder.length === 0) return null;
+
+                                return (
+                                    <div key={`period-ladder-${bucket.key}`} className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
+                                        <h4 className="font-black text-white italic text-lg mb-4 flex items-center gap-2">
+                                            {bucket.label} <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded not-italic font-sans font-bold">{ladder.length} steg</span>
+                                        </h4>
+                                        <div className="space-y-3 relative">
+                                            {ladder.length > 1 && <div className="absolute top-3 bottom-3 left-[15px] w-0.5 bg-slate-800 rounded-full" />}
+                                            {ladder.map((pb, idx) => {
+                                                const isBest = idx === 0;
+                                                const prevPB = ladder[idx + 1];
+                                                const daysBetween = prevPB ? Math.floor(Math.abs(new Date(pb.date).getTime() - new Date(prevPB.date).getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+                                                return (
+                                                    <div key={pb.id} className="relative flex items-center gap-4 group cursor-pointer" onClick={() => setSelectedActivity(pb.activity)}>
+                                                        <div className={`w-8 h-8 rounded-full border-2 ${isBest ? 'border-blue-500 bg-blue-500/20 text-blue-500' : 'border-slate-700 bg-slate-900 text-slate-500'} flex items-center justify-center font-black text-xs z-10 shrink-0 group-hover:scale-110 transition-transform`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className={`flex-1 bg-slate-800/50 border border-white/5 rounded-xl p-3 flex justify-between items-center transition-colors ${isBest ? 'border-blue-500/30 bg-blue-500/5' : 'group-hover:bg-white/5'}`}>
+                                                            <div>
+                                                                <div className={`font-mono font-black text-lg leading-none ${isBest ? 'text-blue-400' : 'text-white'}`}>{pb.durationFormatted}</div>
+                                                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                                                    {pb.date.substring(0, 10)}
+                                                                    {daysBetween !== null && <span className="opacity-60 ml-1">({daysBetween} dgr)</span>}
+                                                                </div>
+                                                            </div>
+                                                            {pb.improvementSeconds && pb.improvementSeconds > 0 ? (
+                                                                <div className="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2 py-1 rounded" title="Förbättring mot förra årsbästat">
+                                                                    -{formatTime(pb.improvementSeconds)}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {listViewMode === 'table' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
                         {RUNNING_BUCKETS.filter(b => !ULTRA_KEYS.includes(b.key)).map(bucket => {
                             const list = topLists[bucket.key];
                             if (list.length === 0) return null;
@@ -592,6 +781,7 @@ export function RunningStatsView({
                             </div>
                         )}
                     </div>
+                    )}
                 </div>
 
                 {/* Bottom Row: Chronological PB Timeline */}

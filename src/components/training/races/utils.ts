@@ -21,6 +21,12 @@ export const getDistanceStyle = (distance: number = 0) => {
 export const normalizeRaceTitle = (title: string) => {
     if (!title) return '';
     let normalized = title.toLowerCase();
+
+    // Special handling for common multi-named races or variations
+    if (normalized.includes('wings for life')) {
+        return 'wings for life';
+    }
+
     // 1. Remove years (YYYY)
     normalized = normalized.replace(/\b(19|20)\d{2}\b/g, '');
     // 2. Remove distances (e.g., 34k, 21km, 1000m, 50 miles)
@@ -149,7 +155,7 @@ export const parseRaceGoal = (goalStr: string | undefined, distance?: number): n
 export const getPlannedRaceTime = (race: PlannedActivity): number | undefined => {
     // For races, explicit goals should always take priority over the generic durationMinutes
     // which might just be a default value (like 5:30 min/km fallback)
-    const dist = race.distanceKm || race.estimatedDistance || 0;
+    const dist = (race as any).distanceKm || race.estimatedDistance || 0;
     const goalA = parseRaceGoal(race.raceDetails?.goals?.a, dist);
     if (goalA) return goalA;
     const goalB = parseRaceGoal(race.raceDetails?.goals?.b, dist);

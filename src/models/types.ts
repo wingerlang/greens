@@ -9,7 +9,7 @@ export type { StrengthWorkout, StrengthSet, ExerciseDefinition };
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';
 
 /** Meal type for calorie tracking entries */
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage' | 'estimate' | 'evening_meal';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage' | 'estimate' | 'evening_meal' | 'training_nutrition';
 
 /** Food category for organizing the database (vegan only) */
 export type FoodCategory =
@@ -109,6 +109,16 @@ export interface UserSettings {
     lastActiveRaceTab?: 'timeline' | 'series' | 'tours';
     runningCalorieFactor?: number; // Multiple of kg * km (e.g. 0.92 or 1.0)
     restingHeartRate?: number; // bpm
+    
+    // Supplement Protocol
+    supplementProtocol?: {
+        foodItemId: string;
+        isRecipe?: boolean; // If true, foodItemId refers to a Recipe, otherwise a FoodItem
+        timing: string; // e.g. "Morgon", "Innan träning", "Kväll"
+        dose: string;
+        isActive: boolean;
+        notes?: string;
+    }[];
 }
 
 /** Weekly Stats Interface */
@@ -266,7 +276,7 @@ export const DEFAULT_PRIVACY: UserPrivacy = {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
     theme: 'dark',
-    visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal'],
+    visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack', 'evening_meal', 'training_nutrition'],
     dailyCalorieGoal: 2000,
     dailyProteinGoal: 150,
     dailyCarbsGoal: 50,
@@ -300,7 +310,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     },
     longRunThreshold: 20,
     pinnedPaths: [],
-    runningCalorieFactor: 0.92
+    runningCalorieFactor: 0.92,
+    supplementProtocol: []
 };
 
 // ============================================
@@ -345,6 +356,9 @@ export interface FoodItem {
     vitaminA?: number;          // µg (RAE)
     // Extended Details (Full Macro/Micro Breakdown)
     extendedDetails?: ExtendedFoodDetails;
+    
+    // Supplement Details
+    supplementDetails?: SupplementDetails;
 
     // Variants (Flavors/Types)
     variants?: FoodVariant[];
@@ -379,6 +393,16 @@ export interface PurchaseLog {
     store?: string;
     userId?: string;
     note?: string;
+}
+
+export interface SupplementDetails {
+    purpose?: string;           // e.g., "Återhämtning", "Ledhälsa", "Prestation"
+    effect?: string;            // e.g., "Minskar inflammation", "Ökar explosivitet"
+    timing?: string;            // e.g., "Innan träning", "Till frukost", "Innan sänggående"
+    form?: 'pill' | 'powder' | 'liquid' | 'capsule' | 'gummy'; 
+    recommendedDose?: string;   // e.g. "2 kapslar" or "1 skopa (30g)"
+    activeIngredients?: string; // e.g. "5g Kreatin Monohydrat"
+    contraindications?: string; // e.g. "Ta inte med koffein", "Ej för gravida"
 }
 
 export interface ExtendedFoodDetails {
@@ -480,6 +504,14 @@ export interface MealItem {
 }
 
 /**
+ * Details for training-specific nutrition
+ */
+export interface TrainingNutritionDetails {
+    activityId?: string;
+    timing: 'before' | 'during' | 'after';
+}
+
+/**
  * MealEntry - Daily meal tracking entry
  */
 export interface MealEntry {
@@ -491,6 +523,7 @@ export interface MealEntry {
     snabbvalId?: string; // ID of the quick meal used to create this entry
     pieces?: number; // How many of this snabbval were consumed (default 1)
     isPlanned?: boolean; // If true, this entry is planned but not yet consumed
+    trainingNutrition?: TrainingNutritionDetails;
     createdAt: string;
 }
 
@@ -565,6 +598,7 @@ export interface DailyVitals {
     completed?: boolean; // If true, this day is explicitly marked as complete/closed
     notes?: string;      // Daily observations, illness, recovery status etc.
     illnessStatus?: 'none' | 'mild' | 'moderate' | 'severe'; // Tracking illness severity
+    supplementsTaken?: string[]; // IDs of supplement protocol entries taken today (e.g. "foodItemId_timing")
     updatedAt: string;
 }
 
@@ -1419,6 +1453,7 @@ export interface UniversalActivity {
     updatedAt: string;
     raceDetails?: RaceDetails;
     excludeFromStats?: boolean;
+    excludeFromRecords?: boolean;
     excludeHeartRate?: boolean;
 }
 
@@ -1798,6 +1833,7 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
     evening_meal: '🍵 Kvällsmål',
     beverage: '🥤 Dryck',
     estimate: '🤷 Estimering',
+    training_nutrition: '🔋 Träningsnutrition',
 };
 
 /** Meal type colors for UI */
@@ -1809,6 +1845,7 @@ export const MEAL_TYPE_COLORS: Record<MealType, string> = {
     evening_meal: 'text-indigo-400 bg-indigo-500/10',
     beverage: 'text-cyan-400 bg-cyan-500/10',
     estimate: 'text-orange-400 bg-orange-500/10',
+    training_nutrition: 'text-fuchsia-400 bg-fuchsia-500/10',
 };
 
 /** Weekday display labels (Swedish) */
