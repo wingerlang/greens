@@ -3498,7 +3498,7 @@ export function ActivityDetailModal({
                                 {isCompetition(activity) && (
                                     <div className="space-y-4 pt-4 border-t border-white/5">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Trophy className="text-amber-400 w-4 h-4" />
+                                            <TrophyIcon className="text-amber-400 w-4 h-4" />
                                             <h3 className="text-sm font-black text-white uppercase tracking-widest">Historik för {normalizeRaceTitle(displayTitle)}</h3>
                                         </div>
                                         <RaceHistoryCard

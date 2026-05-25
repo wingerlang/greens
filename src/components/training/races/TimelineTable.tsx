@@ -3,6 +3,7 @@ import { Target, Medal, Trophy as TrophyIcon } from 'lucide-react';
 import { ExerciseEntry, UniversalActivity, PlannedActivity } from '../../../models/types.ts';
 import { formatRaceDateCompact, isTrailRace, isUltraRace, getDistanceStyle, calcPace, calcStifa, getAvgElevation } from './utils.ts';
 import { formatActivityDuration } from '../../../utils/durationFormatter.ts';
+import { useData } from '../../../context/DataContext.tsx';
 
 interface TimelineTableProps {
     races: ExerciseEntry[];
@@ -23,9 +24,52 @@ export function TimelineTable({
     sortConfig,
     handleSort
 }: TimelineTableProps) {
+    const { updateExercise } = useData();
+    const [editingId, setEditingId] = React.useState<string | null>(null);
+    const [editValue, setEditValue] = React.useState<string>('');
+
     const SortIcon = ({ colKey }: { colKey: string }) => {
         if (sortConfig.key !== colKey) return <span className="opacity-20 ml-1">⇅</span>;
         return <span className="text-emerald-400 ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    const handleSave = (race: ExerciseEntry) => {
+        setEditingId(null);
+        const trimmed = editValue.trim();
+        if (!trimmed) {
+            const updatedDetails = {
+                ...race.raceDetails,
+                placement: undefined,
+                totalParticipants: undefined
+            };
+            updateExercise(race.id, { raceDetails: updatedDetails });
+            return;
+        }
+
+        const matchDouble = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (matchDouble) {
+            const placement = parseInt(matchDouble[1], 10);
+            const totalParticipants = parseInt(matchDouble[2], 10);
+            const updatedDetails = {
+                ...race.raceDetails,
+                placement,
+                totalParticipants
+            };
+            updateExercise(race.id, { raceDetails: updatedDetails });
+            return;
+        }
+
+        const matchSingle = trimmed.match(/^(\d+)$/);
+        if (matchSingle) {
+            const placement = parseInt(matchSingle[1], 10);
+            const updatedDetails = {
+                ...race.raceDetails,
+                placement,
+                totalParticipants: undefined
+            };
+            updateExercise(race.id, { raceDetails: updatedDetails });
+            return;
+        }
     };
 
     return (
@@ -188,13 +232,45 @@ export function TimelineTable({
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-emerald-500 font-bold whitespace-nowrap">{formatActivityDuration(race.durationMinutes)}</td>
                                     <td className="px-3 py-2 text-right font-mono text-slate-500 text-[10px] whitespace-nowrap">{calcPace(race.distance, race.durationMinutes)}</td>
-                                    <td className="px-3 py-2 text-right">
-                                        {placement ? (
+                                    <td 
+                                        className="px-3 py-2 text-right cursor-pointer hover:bg-white/5 transition-all"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingId(race.id);
+                                            const p = race.raceDetails?.placement;
+                                            const t = race.raceDetails?.totalParticipants;
+                                            if (p) {
+                                                setEditValue(t ? `${p}/${t}` : `${p}`);
+                                            } else {
+                                                setEditValue('');
+                                            }
+                                        }}
+                                    >
+                                        {editingId === race.id ? (
+                                            <input
+                                                type="text"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onBlur={() => handleSave(race)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        handleSave(race);
+                                                    } else if (e.key === 'Escape') {
+                                                        setEditingId(null);
+                                                    }
+                                                }}
+                                                className="w-20 bg-slate-950/90 border border-amber-500/50 rounded-lg px-2 py-0.5 text-right font-mono text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500/80 font-black shadow-[0_0_10px_rgba(245,158,11,0.15)] animate-in fade-in zoom-in-95 duration-150"
+                                                autoFocus
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        ) : placement ? (
                                             <div className={`flex items-center justify-end gap-1 font-black ${isPodium ? 'text-amber-400' : 'text-slate-400'}`}>
                                                 {isPodium && <Medal size={12} className={placement === 1 ? 'text-amber-400' : placement === 2 ? 'text-slate-300' : 'text-amber-700'} />}
                                                 {placement}{race.raceDetails?.totalParticipants ? ` / ${race.raceDetails.totalParticipants}` : ''}
                                             </div>
-                                        ) : '-'}
+                                        ) : (
+                                            <span className="text-slate-600 hover:text-slate-400 transition-colors font-bold">-</span>
+                                        )}
                                     </td>
                                 </tr>
                             </React.Fragment>
