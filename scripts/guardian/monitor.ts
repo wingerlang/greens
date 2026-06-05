@@ -1,4 +1,4 @@
-import { manager } from "./services.ts";
+import { manager, Service } from "./services.ts";
 import { recordUptime } from "./logger.ts";
 
 let persistenceCounter = 0;

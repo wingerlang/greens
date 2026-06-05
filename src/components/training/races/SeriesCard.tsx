@@ -1,19 +1,10 @@
 import React from 'react';
-import { Trophy, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, Clock } from 'lucide-react';
 import { ExerciseEntry } from '../../../models/types.ts';
-import { formatRaceDateCompact } from './utils.ts';
+import { RaceSeries } from './types.ts';
 
 interface SeriesCardProps {
-    series: {
-        name: string;
-        races: ExerciseEntry[];
-        stats: {
-            count: number;
-            pb: ExerciseEntry;
-            avgDuration: number;
-            years: string[];
-        };
-    };
+    series: RaceSeries;
     onSelect: () => void;
     setSelectedActivity: (activity: ExerciseEntry) => void;
     formatActivityDuration: (mins: number) => string;
@@ -49,21 +40,48 @@ export function SeriesCard({
                 </div>
             </div>
 
-            <div className="space-y-3">
-                <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Trophy size={14} className="text-amber-500" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase">Personal Best</span>
-                    </div>
-                    <span className="text-sm font-black text-emerald-400 font-mono">{formatActivityDuration(series.stats.pb.durationMinutes)}</span>
-                </div>
-                <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Clock size={14} className="text-slate-500" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase">Avg Time</span>
-                    </div>
-                    <span className="text-sm font-black text-slate-300 font-mono">{formatActivityDuration(series.stats.avgDuration)}</span>
-                </div>
+            <div className="space-y-4">
+                {series.stats.byDistance && series.stats.byDistance.length > 0 ? (
+                    series.stats.byDistance.map(distStats => (
+                        <div key={distStats.distance} className="space-y-1.5 p-3.5 bg-slate-950/40 rounded-2xl border border-white/5">
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1.5">
+                                <span className="text-xs font-black text-amber-500 font-mono">{distStats.distance} km</span>
+                                <span className="text-[9px] font-black text-slate-500 uppercase">{distStats.count}x start{distStats.count > 1 ? 'er' : ''}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    <Trophy size={11} className="text-amber-500/80" />
+                                    <span className="text-[9px] font-black text-slate-500 uppercase">Best</span>
+                                </div>
+                                <span className="text-xs font-black text-emerald-400 font-mono">{formatActivityDuration(distStats.pb.durationMinutes)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    <Clock size={11} className="text-slate-500" />
+                                    <span className="text-[9px] font-black text-slate-500 uppercase">Avg</span>
+                                </div>
+                                <span className="text-xs font-black text-slate-300 font-mono">{formatActivityDuration(distStats.avgDuration)}</span>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <>
+                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Trophy size={14} className="text-amber-500" />
+                                <span className="text-[10px] font-black text-slate-500 uppercase">Personal Best</span>
+                            </div>
+                            <span className="text-sm font-black text-emerald-400 font-mono">{formatActivityDuration(series.stats.pb.durationMinutes)}</span>
+                        </div>
+                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Clock size={14} className="text-slate-500" />
+                                <span className="text-[10px] font-black text-slate-500 uppercase">Avg Time</span>
+                            </div>
+                            <span className="text-sm font-black text-slate-300 font-mono">{formatActivityDuration(series.stats.avgDuration)}</span>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

@@ -76,6 +76,9 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     const [targetDistance, setTargetDistance] = useState('');
     const [targetTimeMinutes, setTargetTimeMinutes] = useState('');
     const [targetTimeSeconds, setTargetTimeSeconds] = useState('');
+    const [speedTargets, setSpeedTargets] = useState<{ distanceKm: string; minutes: string; seconds: string }[]>([
+        { distanceKm: '5', minutes: '25', seconds: '00' }
+    ]);
 
     // Weight goal specifics
     const [weightDirection, setWeightDirection] = useState<WeightDirection>('down');
@@ -221,9 +224,19 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                 setDurationPreset('ongoing');
             }
             setCustomStartDate(editingGoal.startDate || new Date().toISOString().split('T')[0]);
-            if (editingGoal.type === 'frequency') {
-                setFrequencyTargets(editingGoal.targets);
-            } else if (editingGoal.type === 'speed') {
+            if (editingGoal.type === 'speed') {
+                const targets = (editingGoal.targets || []).map(t => {
+                    const totalSec = t.timeSeconds || 0;
+                    const min = Math.floor(totalSec / 60);
+                    const sec = totalSec % 60;
+                    return {
+                        distanceKm: t.distanceKm?.toString() || '',
+                        minutes: min.toString(),
+                        seconds: sec.toString().padStart(2, '0')
+                    };
+                });
+                setSpeedTargets(targets.length > 0 ? targets : [{ distanceKm: '5', minutes: '25', seconds: '00' }]);
+                
                 const t = editingGoal.targets[0];
                 if (t) {
                     setTargetDistance(t.distanceKm?.toString() || '');
@@ -282,6 +295,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             setTargetDistance('');
             setTargetTimeMinutes('');
             setTargetTimeSeconds('');
+            setSpeedTargets([{ distanceKm: '5', minutes: '25', seconds: '00' }]);
             setSmartInput('');
             setWeightDirection('down');
             setTargetWeight('');
@@ -430,19 +444,21 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                 break;
 
             case 'speed':
-                // Calculate total seconds
-                const totalSeconds = (parseInt(targetTimeMinutes) || 0) * 60 + (parseInt(targetTimeSeconds) || 0);
-                targets = [{
-                    distanceKm: parseFloat(targetDistance),
-                    timeSeconds: totalSeconds,
-                    unit: 's'
-                }];
+                targets = speedTargets.map(t => {
+                    const totalSeconds = (parseInt(t.minutes) || 0) * 60 + (parseInt(t.seconds) || 0);
+                    return {
+                        distanceKm: parseFloat(t.distanceKm) || 0,
+                        timeSeconds: totalSeconds,
+                        unit: 's'
+                    };
+                });
                 if (!goalName) {
-                    const min = Math.floor(totalSeconds / 60);
-                    const sec = totalSeconds % 60;
-                    const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
-                    const distStr = targetDistance;
-                    goalName = `${distStr}km på ${timeStr}`;
+                    goalName = targets.map(t => {
+                        const min = Math.floor(t.timeSeconds! / 60);
+                        const sec = t.timeSeconds! % 60;
+                        const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
+                        return `${t.distanceKm}km på ${timeStr}`;
+                    }).join(' + ');
                 }
                 break;
 
@@ -1273,44 +1289,73 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                             {/* Speed Config */}
                             {type === 'speed' && (
                                 <div className="p-4 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-xl border border-blue-500/10 space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500">Mål</label>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1 space-y-1">
-                                                <label className="text-[9px] uppercase text-slate-400">Distans (km)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={targetDistance}
-                                                    onChange={e => setTargetDistance(e.target.value)}
-                                                    placeholder="5.0"
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                                />
-                                            </div>
-                                            <div className="flex-1 space-y-1">
-                                                <label className="text-[9px] uppercase text-slate-400">Tid (mm:ss)</label>
-                                                <div className="flex gap-2">
+                                    <div className="space-y-3">
+                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                                            <span>Mål (Tider / Distanser)</span>
+                                        </div>
+
+                                        {speedTargets.map((target, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 p-3 bg-slate-950/40 rounded-xl border border-white/5 animate-in slide-in-from-bottom-2">
+                                                <div className="flex-1 space-y-1">
+                                                    <label className="text-[8px] uppercase text-slate-500 font-bold">Distans (km)</label>
                                                     <input
                                                         type="number"
-                                                        value={targetTimeMinutes}
-                                                        onChange={e => setTargetTimeMinutes(e.target.value)}
-                                                        placeholder="25"
-                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                                    />
-                                                    <span className="self-center font-bold text-slate-500">:</span>
-                                                    <input
-                                                        type="number"
-                                                        value={targetTimeSeconds}
-                                                        onChange={e => setTargetTimeSeconds(e.target.value)}
-                                                        placeholder="00"
-                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                        step="0.1"
+                                                        value={target.distanceKm}
+                                                        onChange={e => {
+                                                            const newTargets = [...speedTargets];
+                                                            newTargets[idx] = { ...target, distanceKm: e.target.value };
+                                                            setSpeedTargets(newTargets);
+                                                        }}
+                                                        placeholder="5.0"
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-white text-center font-bold"
                                                     />
                                                 </div>
+                                                <div className="flex-1 space-y-1">
+                                                    <label className="text-[8px] uppercase text-slate-500 font-bold">Tid (mm:ss)</label>
+                                                    <div className="flex gap-1">
+                                                        <input
+                                                            type="number"
+                                                            value={target.minutes}
+                                                            onChange={e => {
+                                                                const newTargets = [...speedTargets];
+                                                                newTargets[idx] = { ...target, minutes: e.target.value };
+                                                                setSpeedTargets(newTargets);
+                                                            }}
+                                                            placeholder="25"
+                                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-white text-center font-bold"
+                                                        />
+                                                        <span className="self-center font-bold text-slate-500">:</span>
+                                                        <input
+                                                            type="number"
+                                                            value={target.seconds}
+                                                            onChange={e => {
+                                                                const newTargets = [...speedTargets];
+                                                                newTargets[idx] = { ...target, seconds: e.target.value };
+                                                                setSpeedTargets(newTargets);
+                                                            }}
+                                                            placeholder="00"
+                                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-white text-center font-bold"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {speedTargets.length > 1 && (
+                                                    <button
+                                                        onClick={() => setSpeedTargets(speedTargets.filter((_, i) => i !== idx))}
+                                                        className="self-end mb-1 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20 text-xs"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
                                             </div>
-                                        </div>
-                                        <div className="text-xs text-center text-slate-500">
-                                            Löphastighet: <strong>{targetDistance && targetTimeMinutes ? ((parseFloat(targetTimeMinutes) + (parseFloat(targetTimeSeconds) || 0) / 60) / parseFloat(targetDistance)).toFixed(2) : '-'}</strong> min/km
-                                        </div>
+                                        ))}
+
+                                        <button
+                                            onClick={() => setSpeedTargets([...speedTargets, { distanceKm: '10', minutes: '50', seconds: '00' }])}
+                                            className="w-full p-2.5 rounded-xl border border-dashed border-white/10 text-slate-500 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all text-xs font-bold"
+                                        >
+                                            + Lägg till distans (t.ex. 10km på 45:00)
+                                        </button>
                                     </div>
                                 </div>
                             )}

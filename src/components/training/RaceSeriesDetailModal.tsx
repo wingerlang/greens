@@ -23,26 +23,43 @@ interface RaceSeriesDetailModalProps {
 export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace }: RaceSeriesDetailModalProps) {
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
-    // Distance Grouping
+    // Distance Grouping using 8% relative distance clustering
     const distanceGroups = useMemo(() => {
-        const groups: Record<string, number> = {};
-        races.forEach(r => {
-            if (!r.distance) return;
-            const key = Math.round(r.distance).toString(); // Group by nearest km
-            groups[key] = (groups[key] || 0) + 1;
+        const clusters: { representative: number; races: ExerciseEntry[] }[] = [];
+        
+        const racesWithDistance = races
+            .filter(r => r.distance !== undefined && r.distance !== null)
+            .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+        racesWithDistance.forEach(r => {
+            const dist = r.distance!;
+            const match = clusters.find(c => {
+                const avg = c.races.reduce((sum, rx) => sum + rx.distance!, 0) / c.races.length;
+                return Math.abs(dist - avg) / avg <= 0.08;
+            });
+
+            if (match) {
+                match.races.push(r);
+            } else {
+                clusters.push({
+                    representative: dist,
+                    races: [r]
+                });
+            }
         });
 
-        // Convert to array and sort by count DESC
-        return Object.entries(groups)
-            .map(([dist, count]) => ({ distance: Number(dist), count }))
-            .sort((a, b) => b.count - a.count);
+        return clusters.map(c => {
+            const roundedAvg = Math.round(c.races.reduce((sum, rx) => sum + rx.distance!, 0) / c.races.length);
+            return {
+                distance: roundedAvg,
+                count: c.races.length,
+                races: c.races
+            };
+        }).sort((a, b) => b.count - a.count);
     }, [races]);
 
     // Default to the most common distance, or 'all' if only one or none
     const [selectedDistance, setSelectedDistance] = useState<number | 'all'>(() => {
-        // If we have distinct groups with significant counts, default to the top one.
-        // If everything is same-ish, "all" might be fine but the user asked to distinguish.
-        // If we have multiple groups, pick the largest.
         if (distanceGroups.length > 1) return distanceGroups[0].distance;
         return 'all';
     });
@@ -50,8 +67,9 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
     // Filter races
     const filteredRacesByDistance = useMemo(() => {
         if (selectedDistance === 'all') return races;
-        return races.filter(r => r.distance && Math.round(r.distance) === selectedDistance);
-    }, [races, selectedDistance]);
+        const match = distanceGroups.find(g => g.distance === selectedDistance);
+        return match ? match.races : [];
+    }, [races, distanceGroups, selectedDistance]);
 
     const sortedRaces = useMemo(() => {
         let items = [...filteredRacesByDistance];

@@ -13,12 +13,13 @@ interface TrainingOverviewProps {
     periodLabel?: string;
     isFiltered?: boolean;
     onExerciseClick?: (exercise: ExerciseEntry) => void;
+    onPlanActivity?: (date: string, editingActivity?: any) => void;
     initialCalendarMonth?: number;
     initialCalendarDay?: number;
     hideStats?: boolean;
 }
 
-export function TrainingOverview({ exercises, plannedActivities, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
+export function TrainingOverview({ exercises, plannedActivities, year, periodLabel, isFiltered, onExerciseClick, onPlanActivity, initialCalendarMonth, initialCalendarDay, hideStats = false }: TrainingOverviewProps) {
     const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
     const [distRange, setDistRange] = useState<[number, number]>([0, 999]);
     const [showYearlyStats, setShowYearlyStats] = useState(false);
@@ -202,6 +203,7 @@ export function TrainingOverview({ exercises, plannedActivities, year, periodLab
                     monthIndex={initialCalendarMonth ?? new Date().getMonth()}
                     initialDay={initialCalendarDay}
                     onExerciseClick={onExerciseClick}
+                    onPlanActivity={onPlanActivity}
                 />
             </div>
 

@@ -1,3 +1,4 @@
+import React from 'react';
 import { useGarmin } from '../hooks/useGarmin.ts';
 import { StravaConnectionCard } from '../components/integrations/StravaConnectionCard.tsx';
 

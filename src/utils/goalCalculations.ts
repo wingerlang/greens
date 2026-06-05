@@ -35,6 +35,13 @@ export interface GoalProgress {
     linkedActivityId?: string; // ID of the activity that achieved the goal (e.g. for PBs/Speed)
     successfulPeriods?: number; // Count of previous periods where goal was met
     totalPeriodsChecked?: number; // Total number of previous periods analyzed
+    speedTargetsProgress?: {
+        distanceKm: number;
+        targetTimeSeconds: number;
+        bestTimeSeconds: number;
+        percentage: number;
+        linkedActivityId?: string;
+    }[];
 }
 
 export interface StreakInfo {
@@ -180,7 +187,8 @@ export type SpeedProgressResult = { value: number; activityId?: string };
 
 export function calculateSpeedProgress(
     goal: PerformanceGoal,
-    exerciseEntries: ExerciseEntry[]
+    exerciseEntries: ExerciseEntry[],
+    specificTarget?: GoalTarget
 ): SpeedProgressResult {
     const { start, end } = getGoalPeriodDates(goal);
     // Speed goals: target is X distance. We find the run during the period
@@ -189,13 +197,14 @@ export function calculateSpeedProgress(
     // For simplicity MVP: we take any run >= target distance, calculate its average pace, and project time for target distance.
 
     // Filter runs during period with enough distance
-    const target = goal.targets[0];
+    const target = specificTarget || goal.targets[0];
     if (!target?.distanceKm) return { value: 0 };
 
     const validEntries = exerciseEntries.filter(e => {
         const activityDate = e.date.split('T')[0];
         if (activityDate < start || activityDate > end) return false;
-        if (target.exerciseType === 'running' && e.type !== 'running') return false;
+        const targetType = target.exerciseType || 'running';
+        if (e.type !== targetType) return false;
         return (e.distance || 0) >= target.distanceKm!;
     });
 
@@ -781,6 +790,13 @@ export function calculateGoalProgress(
         1;
 
     let linkedActivityId: string | undefined;
+    let speedTargetsProgress: {
+        distanceKm: number;
+        targetTimeSeconds: number;
+        bestTimeSeconds: number;
+        percentage: number;
+        linkedActivityId?: string;
+    }[] | undefined = undefined;
 
     let latestWeightVal = 0;
     let latestMVal: number | undefined;
@@ -803,15 +819,34 @@ export function calculateGoalProgress(
             targetValue = goal.targets[0]?.value || 0;
             break;
         case 'speed':
-            const speedResult = calculateSpeedProgress(goal, exerciseEntries);
-            // Handling return object or number for backward compat if needed, but we changed signature
-            if (typeof speedResult === 'object') {
-                current = speedResult.value;
-                linkedActivityId = speedResult.activityId;
+            speedTargetsProgress = (goal.targets || []).map(t => {
+                const res = calculateSpeedProgress(goal, exerciseEntries, t);
+                const bestTime = res.value;
+                const tgtTime = t.timeSeconds || 0;
+                const pct = (bestTime > 0 && tgtTime > 0) ? Math.min(100, (tgtTime / bestTime) * 100) : 0;
+                return {
+                    distanceKm: t.distanceKm || 0,
+                    targetTimeSeconds: tgtTime,
+                    bestTimeSeconds: bestTime,
+                    percentage: pct,
+                    linkedActivityId: res.activityId
+                };
+            });
+
+            if (speedTargetsProgress.length > 1) {
+                const totalPct = speedTargetsProgress.reduce((sum, p) => sum + p.percentage, 0);
+                const avgPct = speedTargetsProgress.length > 0 ? totalPct / speedTargetsProgress.length : 0;
+                current = avgPct;
+                targetValue = 100;
+            } else if (speedTargetsProgress.length === 1) {
+                const single = speedTargetsProgress[0];
+                current = single.bestTimeSeconds;
+                targetValue = single.targetTimeSeconds;
+                linkedActivityId = single.linkedActivityId;
             } else {
-                current = speedResult;
+                current = 0;
+                targetValue = 0;
             }
-            targetValue = goal.targets[0]?.timeSeconds || 0; // Target for speed is usually a time to beat
             break;
         case 'streak':
             const streakInfo = calculateStreak(
@@ -897,7 +932,10 @@ export function calculateGoalProgress(
             current = 0;
     }
 
-    const percentage = (targetValue > 0 && !isNaN(targetValue) && !isNaN(current)) ? Math.min(100, (current / targetValue) * 100) : 0;
+    let percentage = (targetValue > 0 && !isNaN(targetValue) && !isNaN(current)) ? Math.min(100, (current / targetValue) * 100) : 0;
+    if (goal.type === 'speed' && (!goal.targets || goal.targets.length <= 1)) {
+        percentage = (current > 0 && targetValue > 0) ? Math.min(100, (targetValue / current) * 100) : 0;
+    }
     const isComplete = percentage >= 100;
     const daysRemaining = getDaysRemaining(goal);
 
@@ -996,7 +1034,8 @@ export function calculateGoalProgress(
                 current,
         linkedActivityId,
         successfulPeriods,
-        totalPeriodsChecked
+        totalPeriodsChecked,
+        speedTargetsProgress
     };
 }
 

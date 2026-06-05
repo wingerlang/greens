@@ -6,6 +6,8 @@ import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
+import { ActivityModal } from '../components/planning/ActivityModal.tsx';
+import { notificationService } from '../services/notificationService.ts';
 import {
     WEEKDAY_LABELS
 } from '../models/types.ts';
@@ -31,7 +33,10 @@ export function TrainingPage() {
         calculateBMR,
         universalActivities = [],
         unifiedActivities = [],
-        plannedActivities = []
+        plannedActivities = [],
+        savePlannedActivities,
+        updatePlannedActivity,
+        deletePlannedActivity
     } = useData();
 
     const navigate = useNavigate();
@@ -263,9 +268,50 @@ export function TrainingPage() {
 
     const tdee = dailyTdee + goalAdjustment;
 
+    // State variables for planned activity modal
+    const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+    const [planSelectedDate, setPlanSelectedDate] = useState<string | null>(null);
+    const [editingPlannedActivity, setEditingPlannedActivity] = useState<any | null>(null);
+
+    const handlePlanActivity = (date: string, editingActivity?: any) => {
+        setPlanSelectedDate(date);
+        setEditingPlannedActivity(editingActivity || null);
+        setIsPlanModalOpen(true);
+    };
+
+    const handleSavePlannedActivity = (activity: any) => {
+        if (editingPlannedActivity) {
+            updatePlannedActivity(editingPlannedActivity.id, activity);
+            notificationService.notify('success', 'Aktiviteten uppdaterad!');
+        } else {
+            savePlannedActivities([activity]);
+            notificationService.notify('success', 'Ny aktivitet sparad!');
+        }
+        setIsPlanModalOpen(false);
+        setEditingPlannedActivity(null);
+    };
+
+    const handleDeletePlannedActivity = (id: string) => {
+        deletePlannedActivity(id);
+        notificationService.notify('success', 'Planerat pass borttaget');
+        setIsPlanModalOpen(false);
+        setEditingPlannedActivity(null);
+    };
+
     const handleEditExercise = (ex: any) => {
         setSelectedActivityId(ex.id);
     };
+
+    // Intercept clicks on planned activities in the URL to open the plan modal
+    useEffect(() => {
+        if (selectedActivityId && plannedActivities.length > 0) {
+            const planned = plannedActivities.find(p => p.id === selectedActivityId);
+            if (planned) {
+                handlePlanActivity(planned.date, planned);
+                setSelectedActivityId(null);
+            }
+        }
+    }, [selectedActivityId, plannedActivities]);
     return (
         <div className="training-page">
             {/* Tab Navigation */}
@@ -316,6 +362,7 @@ export function TrainingPage() {
                             year={tab && /^\d{4}$/.test(tab) ? parseInt(tab, 10) : (filterStartDate ? new Date(filterStartDate).getFullYear() : new Date().getFullYear())}
                             isFiltered={true}
                             onExerciseClick={handleEditExercise}
+                            onPlanActivity={handlePlanActivity}
                             periodLabel={
                                 activePreset === 'all' ? 'Total Volym' :
                                     activePreset === 'ytd' ? `Årsvolym ${new Date().getFullYear()}` :
@@ -502,8 +549,21 @@ export function TrainingPage() {
                 </>
             )}
 
+            <ActivityModal
+                isOpen={isPlanModalOpen}
+                onClose={() => {
+                    setIsPlanModalOpen(false);
+                    setEditingPlannedActivity(null);
+                }}
+                selectedDate={planSelectedDate}
+                editingActivity={editingPlannedActivity}
+                onSave={handleSavePlannedActivity}
+                onDelete={handleDeletePlannedActivity}
+                weeklyStats={undefined}
+                goalProgress={undefined}
+            />
 
-        </div >
+        </div>
     );
 }
 

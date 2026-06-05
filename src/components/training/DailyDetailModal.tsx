@@ -5,6 +5,8 @@ import { Activity, Flame, Clock, CalendarHeart, Dumbbell, Route, Zap, TrendingUp
 import { formatActivityDuration } from '../../utils/durationFormatter.ts';
 import { formatSpeed } from '../../utils/dateUtils.ts';
 import { useData } from '../../context/DataShared.ts';
+import { getSwedishHolidays } from '../../utils/swedishHolidays.ts';
+import { isWarmupOrCooldown, isCompetition } from '../../utils/activityUtils.ts';
 
 interface DailyDetailModalProps {
     date: string;
@@ -12,15 +14,54 @@ interface DailyDetailModalProps {
     onClose: () => void;
     onDateChange?: (newDate: string) => void;
     onExerciseClick?: (ex: ExerciseEntry) => void;
+    onPlanActivity?: (date: string, editingActivity?: any) => void;
 }
 
-export function DailyDetailModal({ date, allExercises, onClose, onDateChange, onExerciseClick }: DailyDetailModalProps) {
-    // Current day's exercises - filtering out hidden ones (e.g. sub-performances)
+export function DailyDetailModal({ date, allExercises, onClose, onDateChange, onExerciseClick, onPlanActivity }: DailyDetailModalProps) {
+    // Current day's exercises - filtering out hidden ones (e.g. sub-performances) and sorting them
     const exercises = useMemo(() => {
-        return allExercises.filter(e => {
+        const filtered = allExercises.filter(e => {
             if (e.date !== date) return false;
             const perf = (e as any)._mergeData?.universalActivity?.performance;
             return !(e.isHiddenInCalendar || perf?.isHiddenInCalendar);
+        });
+
+        const getExercisePriority = (e: any) => {
+            const title = (e.title || '').toLowerCase();
+            const subType = (e.subType || '').toLowerCase();
+            const category = (e.category || '').toLowerCase();
+            
+            const isWarmup = subType === 'warmup' || category === 'warmup' || title.includes('uppjogg') || title.includes('uppvärmning') || title.includes('warmup');
+            if (isWarmup) return 1;
+
+            const isCooldown = subType === 'cooldown' || category === 'cooldown' || title.includes('nerjogg') || title.includes('nedjogg') || title.includes('nedvärmning') || title.includes('cooldown') || title.includes('nedvarvning');
+            if (isCooldown) return 4;
+
+            if (isCompetition(e) || e.subType === 'race' || e.category === 'RACE') return 2;
+            return 3;
+        };
+
+        return [...filtered].sort((a, b) => {
+            // 1. Sort by type priority (Uppjogg -> Race -> Main -> Nedjogg)
+            const pA = getExercisePriority(a);
+            const pB = getExercisePriority(b);
+            if (pA !== pB) return pA - pB;
+
+            // 2. Sort by explicit startTime
+            const timeA = a.startTime || (a.date && a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : '');
+            const timeB = b.startTime || (b.date && b.date.includes('T') ? b.date.split('T')[1].substring(0, 5) : '');
+            
+            if (timeA && !timeB) return -1;
+            if (!timeA && timeB) return 1;
+            if (timeA && timeB) {
+                const cmp = timeA.localeCompare(timeB);
+                if (cmp !== 0) return cmp;
+            }
+
+            // 3. Sort by order
+            const orderA = a.order ?? 999;
+            const orderB = b.order ?? 999;
+            return orderA - orderB;
         });
     }, [allExercises, date]);
 
@@ -77,6 +118,11 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
 
     const { getVitalsForDate, updateVitals } = useData();
     const vitals = getVitalsForDate(date);
+    const holiday = useMemo(() => {
+        const yr = new Date(date).getFullYear();
+        const yrHolidays = getSwedishHolidays(yr);
+        return yrHolidays[date];
+    }, [date]);
     const [localNote, setLocalNote] = useState(vitals.notes || '');
     const [localIllness, setLocalIllness] = useState<'none' | 'mild' | 'moderate' | 'severe'>(vitals.illnessStatus || 'none');
     const [localIllnessDuration, setLocalIllnessDuration] = useState(1);
@@ -227,7 +273,7 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                     >
                         ✕
                     </button>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                         {onDateChange && prevDay && (
                             <button
                                 onClick={() => onDateChange(prevDay)}
@@ -241,6 +287,15 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                             <CalendarHeart className="w-8 h-8 text-sky-400" />
                             {dateFormatted}
                         </h2>
+                        {holiday && (
+                            <span className={`text-xs font-extrabold px-2.5 py-1 rounded-xl border select-none whitespace-nowrap ${
+                                holiday.isRedDay 
+                                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
+                                    : 'bg-slate-800 text-slate-400 border-white/10'
+                            }`}>
+                                {holiday.name}
+                            </span>
+                        )}
                         {onDateChange && nextDay && (
                             <button
                                 onClick={() => onDateChange(nextDay)}
@@ -264,17 +319,21 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <button
                             onClick={() => {
-                                const params = new URLSearchParams(window.location.search);
-                                params.set('registerDate', date);
-                                window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
-                                // We don't need navigate here since Layout.tsx listens to registerDate
-                                // but we might need to trigger a re-render or pushState if not using URL change.
-                                // Actually navigate is cleaner if we have it.
+                                const todayStr = new Date().toISOString().split('T')[0];
+                                const isFuture = date > todayStr;
+                                if (isFuture && onPlanActivity) {
+                                    onPlanActivity(date);
+                                    onClose();
+                                } else {
+                                    const params = new URLSearchParams(window.location.search);
+                                    params.set('registerDate', date);
+                                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+                                }
                             }}
                             className="bg-sky-500 hover:bg-sky-400 text-black font-bold py-3 px-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-500/10 active:scale-95"
                         >
                             <Plus size={18} strokeWidth={3} />
-                            Skapa pass
+                            {date > new Date().toISOString().split('T')[0] ? 'Planera pass' : 'Skapa pass'}
                         </button>
                         <button
                             onClick={() => {
@@ -506,7 +565,13 @@ export function DailyDetailModal({ date, allExercises, onClose, onDateChange, on
                                     return (
                                         <div
                                             key={ex.id || i}
-                                            onClick={() => onExerciseClick?.(ex)}
+                                            onClick={() => {
+                                                if (ex.isPlanned) {
+                                                    onPlanActivity?.(date, ex as any);
+                                                } else {
+                                                    onExerciseClick?.(ex);
+                                                }
+                                            }}
                                             className={`p-5 rounded-2xl border ${borderColor} ${bgColor} flex flex-col md:flex-row gap-6 md:items-center cursor-pointer hover:brightness-110 transition-all`}
                                         >
                                             <div className="flex items-center gap-4 min-w-[200px]">

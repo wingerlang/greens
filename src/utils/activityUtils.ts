@@ -85,6 +85,11 @@ export function isWarmupOrCooldown(activity: any): boolean {
     const subType = (activity.subType || activity.performance?.subType || '').toLowerCase();
     const category = (activity.category || activity.plan?.category || '').toLowerCase();
     
+    // Cooldowns/warmups containing "distans" (e.g. "Nerjogg distans") should be counted as regular distance runs
+    if (title.includes('distans')) {
+        return false;
+    }
+    
     return subType === 'warmup' || 
            subType === 'cooldown' || 
            category === 'warmup' ||

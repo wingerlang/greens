@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart, Footprints, Bike, Route, Trophy, Zap } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight, ChevronDown as LucideChevronDown, ChevronUp as LucideChevronUp, Flame, Scale, HeartPulse, Heart, Footprints, Bike, Route, Trophy, Zap, Sigma, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DailyDetailModal } from './DailyDetailModal.tsx';
 import { useData } from '../../context/DataContext.tsx';
@@ -25,6 +25,13 @@ const getTooltipPositionClasses = (weekIdx: number, dayIdx: number): string => {
     else classes += "left-1/2 -translate-x-1/2 ";
 
     return classes;
+};
+
+const formatHhMm = (mins: number) => {
+    const rounded = Math.round(mins);
+    const h = Math.floor(rounded / 60);
+    const m = rounded % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
 const MONTHS = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'];
@@ -184,24 +191,56 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
             return `${y}-${m}-${d}`;
         };
 
+        const getExercisePriority = (e: any) => {
+            const title = (e.title || '').toLowerCase();
+            const subType = (e.subType || '').toLowerCase();
+            const category = (e.category || '').toLowerCase();
+            
+            const isWarmup = subType === 'warmup' || category === 'warmup' || title.includes('uppjogg') || title.includes('uppvärmning') || title.includes('warmup');
+            if (isWarmup) return 1;
+
+            const isCooldown = subType === 'cooldown' || category === 'cooldown' || title.includes('nerjogg') || title.includes('nedjogg') || title.includes('nedvärmning') || title.includes('cooldown') || title.includes('nedvarvning');
+            if (isCooldown) return 4;
+
+            if (isCompetition(e) || e.subType === 'race' || e.category === 'RACE') return 2;
+            return 3;
+        };
+
+        const sortExercises = (exs: any[]) => {
+            return [...exs].sort((a, b) => {
+                // 1. Sort by type priority (Warmup -> Race -> Main -> Cooldown)
+                const pA = getExercisePriority(a);
+                const pB = getExercisePriority(b);
+                if (pA !== pB) return pA - pB;
+
+                // 2. Sort by explicit startTime
+                const timeA = a.startTime || (a.date && a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : '');
+                const timeB = b.startTime || (b.date && b.date.includes('T') ? b.date.split('T')[1].substring(0, 5) : '');
+                
+                if (timeA && !timeB) return -1;
+                if (!timeA && timeB) return 1;
+                if (timeA && timeB) {
+                    const cmp = timeA.localeCompare(timeB);
+                    if (cmp !== 0) return cmp;
+                }
+
+                // 3. Sort by order
+                const orderA = a.order ?? 999;
+                const orderB = b.order ?? 999;
+                return orderA - orderB;
+            });
+        };
+
         for (let i = startDayOffset; i > 0; i--) {
             const date = new Date(year, monthIndex, 1 - i, 12);
             const dateStr = formatLocalDate(date);
-            days.push({ day: date.getDate(), exercises: exercises.filter(e => e.date === dateStr), dateStr, isCurrentMonth: false });
+            days.push({ day: date.getDate(), exercises: sortExercises(exercises.filter(e => e.date === dateStr)), dateStr, isCurrentMonth: false });
         }
 
         for (let i = 1; i <= daysInMonth; i++) {
             const date = new Date(year, monthIndex, i, 12);
             const dateStr = formatLocalDate(date);
-            const dayExercises = monthData.filter(e => e.date === dateStr).sort((a, b) => {
-                const orderA = a.order ?? 999;
-                const orderB = b.order ?? 999;
-                if (orderA !== orderB) return orderA - orderB;
-                
-                const timeA = a.startTime || (a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : '23:59');
-                const timeB = b.startTime || (b.date.includes('T') ? b.date.split('T')[1].substring(0, 5) : '23:59');
-                return timeA.localeCompare(timeB);
-            });
+            const dayExercises = sortExercises(monthData.filter(e => e.date === dateStr));
             days.push({ day: i, exercises: dayExercises, dateStr, isCurrentMonth: true });
         }
 
@@ -209,7 +248,7 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
         while (days.length % 7 !== 0) {
             const date = new Date(year, monthIndex + 1, nextDayCounter, 12);
             const dateStr = formatLocalDate(date);
-            days.push({ day: date.getDate(), exercises: exercises.filter(e => e.date === dateStr), dateStr, isCurrentMonth: false });
+            days.push({ day: date.getDate(), exercises: sortExercises(exercises.filter(e => e.date === dateStr)), dateStr, isCurrentMonth: false });
             nextDayCounter++;
         }
 
@@ -574,19 +613,45 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
 
                         return (isReversed ? [...calendarDays.weeks].reverse() : calendarDays.weeks).map((week, weekIdx) => {
                             const weekExercises = week.flatMap(d => d ? d.exercises : []);
+                            
+                            // Running variables (Completed vs Planned)
                             const runExercises = weekExercises.filter(e => e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp'));
+                            const completedRunExercises = runExercises.filter(e => !e.isPlanned && e.date <= todayStr);
+                            const completedRunDist = completedRunExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
+                            const completedRunTime = completedRunExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const totalRunDist = runExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
+                            const totalRunTime = runExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const hasPlannedRuns = runExercises.some(e => e.isPlanned);
+
+                            // Strength variables (Completed vs Planned)
                             const strengthExercises = weekExercises.filter(e => e.type.toLowerCase().includes('strength') || e.type.toLowerCase().includes('styrka'));
-                            const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
-                            const weekRunDist = runExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
-                            const weekStrengthMin = strengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
-                            const weekTonnage = strengthExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
-                            const weekCalories = weekExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
+                            const completedStrengthExercises = strengthExercises.filter(e => !e.isPlanned && e.date <= todayStr);
+                            const completedStrengthMin = completedStrengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const completedTonnage = completedStrengthExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
+                            const totalStrengthMin = strengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const totalTonnage = strengthExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
+                            const hasPlannedStrength = strengthExercises.some(e => e.isPlanned);
+
+                            // Other cardio variables (Completed vs Planned)
                             const otherCardioExercises = weekExercises.filter(e => {
                                 const type = e.type.toLowerCase();
                                 return !type.includes('run') && !type.includes('löp') && !type.includes('strength') && !type.includes('styrka');
                             });
-                            const weekOtherCardioMin = otherCardioExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
-                            const weekOtherCardioCount = otherCardioExercises.length;
+                            const completedOtherCardioExercises = otherCardioExercises.filter(e => !e.isPlanned && e.date <= todayStr);
+                            const completedOtherCardioMin = completedOtherCardioExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const completedOtherCardioCount = completedOtherCardioExercises.length;
+                            const totalOtherCardioMin = otherCardioExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const totalOtherCardioCount = otherCardioExercises.length;
+                            const hasPlannedOther = otherCardioExercises.some(e => e.isPlanned);
+
+                            // Weekly totals (Completed vs Planned)
+                            const completedTotalExercises = weekExercises.filter(e => !e.isPlanned && e.date <= todayStr);
+                            const completedTotalMin = completedTotalExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const completedCalories = completedTotalExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
+                            
+                            const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const weekCalories = weekExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
+                            const hasPlannedInWeek = weekExercises.some(e => e.isPlanned);
 
                             const firstValidDay = week[0];
                             let weekNumberStr = '';
@@ -1000,67 +1065,92 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                             </div>
                                         )}
 
-                                        <div className="flex flex-col items-center gap-0 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-2 sm:mt-2.5">
-                                            <div className="flex flex-col gap-0.5 w-full">
-                                                {weekRunDist > 0 && (
+                                        <div className="flex flex-col items-center gap-0 text-[9px] sm:text-[10px] font-mono font-bold w-full mt-1.5 sm:mt-2">
+                                            <div className="flex flex-col gap-[1px] w-full">
+                                                {runExercises.length > 0 && (
                                                     <div
-                                                        className="flex items-center justify-between bg-emerald-500/10 text-emerald-400 px-1.5 py-1 rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10 mb-0.5 calendar-tooltip-container"
+                                                        className="flex flex-col bg-emerald-500/10 text-emerald-400 px-1 py-[2px] rounded cursor-help relative group/weekrun hover:bg-emerald-500/20 transition-colors w-full border border-emerald-500/10 mb-0.5 calendar-tooltip-container"
                                                         onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `run-${weekIdx}` ? null : `run-${weekIdx}`) }}
                                                     >
-                                                        <Activity className="w-3.5 h-3.5 stroke-[3]" />
-                                                        <div className="flex items-baseline gap-1">
-                                                            <div className="flex flex-col items-end">
-                                                                <span>{Math.round(weekRunDist)}<span className="text-[8px] ml-0.5 font-bold uppercase">km</span></span>
-                                                                {(() => {
-                                                                    const now = new Date();
-                                                                    const isCurrentWeek = week.some(d => d.dateStr === todayStr);
-                                                                    if (isCurrentWeek) {
-                                                                        const dayOfWeek = now.getDay() || 7; // 1-7 (Mon-Sun)
-                                                                        const projected = (weekRunDist / dayOfWeek) * 7;
-                                                                        return <span className="text-[7.5px] text-emerald-500/60 leading-none">Proj: {Math.round(projected)}k</span>;
-                                                                    }
-                                                                    return null;
-                                                                })()}
+                                                        {/* Line 1: Distance and Pass count */}
+                                                        <div className="flex items-center justify-between w-full">
+                                                            {/* Left side: Icon + Distance */}
+                                                            <div className="flex items-center gap-0.5">
+                                                                <Activity className="w-3 h-3 stroke-[3] shrink-0" />
+                                                                <div className="flex flex-col items-start leading-none">
+                                                                    <span className="text-[9px] sm:text-[10px] font-bold">
+                                                                        {hasPlannedRuns ? `${Math.round(completedRunDist)}/${Math.round(totalRunDist)}` : `${Math.round(completedRunDist)}`}
+                                                                        <span className="text-[7px] sm:text-[7.5px] ml-0.5 font-bold uppercase text-emerald-500/70">km</span>
+                                                                    </span>
+                                                                    {(() => {
+                                                                        const now = new Date();
+                                                                        const isCurrentWeek = week.some(d => d && d.dateStr === todayStr);
+                                                                        if (isCurrentWeek) {
+                                                                            const dayOfWeek = now.getDay() || 7; // 1-7 (Mon-Sun)
+                                                                            const projected = (completedRunDist / dayOfWeek) * 7;
+                                                                            return <span className="text-[6.5px] sm:text-[7px] text-emerald-500/60 leading-none">Proj: {Math.round(projected)}k</span>;
+                                                                        }
+                                                                        return null;
+                                                                    })()}
+                                                                </div>
                                                             </div>
-                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-[10px]">{runExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">p</span></span>
+
+                                                            {/* Right side: Pass count */}
+                                                            <div className="flex flex-col items-end leading-none">
+                                                                <span className="text-[9px] sm:text-[10px] font-bold">
+                                                                    {hasPlannedRuns ? `${completedRunExercises.length}/${runExercises.length}` : `${completedRunExercises.length}`}
+                                                                    <span className="text-[7px] sm:text-[7.5px] ml-0.5 opacity-60 font-normal">p</span>
+                                                                </span>
                                                                 {(() => {
                                                                     const now = new Date();
-                                                                    const isCurrentWeek = week.some(d => d.dateStr === todayStr);
+                                                                    const isCurrentWeek = week.some(d => d && d.dateStr === todayStr);
                                                                     if (isCurrentWeek) {
                                                                         const dayOfWeek = now.getDay() || 7;
                                                                         const projectedFreq = (runExercises.length / dayOfWeek) * 7;
-                                                                        return <span className="text-[7.5px] text-slate-500 leading-none">{projectedFreq.toFixed(1)}/v</span>;
+                                                                        return <span className="text-[6.5px] sm:text-[7px] text-slate-500 leading-none">{projectedFreq.toFixed(1)}/v</span>;
                                                                     }
                                                                     return null;
                                                                 })()}
                                                             </div>
-                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <span className="text-[10px]">
+                                                        </div>
+
+                                                        {/* Line 2: Duration and Pace/HR */}
+                                                        <div className="flex items-center justify-between w-full mt-[2px] pt-[2px] border-t border-emerald-500/10">
+                                                            {/* Left side: Duration */}
+                                                            <div className="text-[8px] sm:text-[9px] font-medium leading-none text-emerald-300">
                                                                 {(() => {
-                                                                    const mins = runExercises.reduce((acc, e) => acc + e.durationMinutes, 0);
-                                                                    return Math.floor(mins / 60) > 0 ? `${Math.floor(mins / 60)}h${Math.round(mins % 60)}m` : `${Math.round(mins)}m`;
+                                                                    const fmt = (mins: number) => {
+                                                                        const rounded = Math.round(mins);
+                                                                        const h = Math.floor(rounded / 60);
+                                                                        const m = rounded % 60;
+                                                                        return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                    };
+                                                                    return hasPlannedRuns ? `${fmt(completedRunTime)}/${fmt(totalRunTime)}` : fmt(completedRunTime);
                                                                 })()}
-                                                            </span>
-                                                            <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <div className="flex flex-col items-start opacity-90">
-                                                                <span className="text-[9px] text-sky-400 font-black">
+                                                            </div>
+
+                                                            {/* Right side: Pace and optional HR */}
+                                                            <div className="flex items-center gap-1 leading-none shrink-0">
+                                                                <span className="text-[8px] sm:text-[9px] text-sky-400 font-bold">
                                                                     {(() => {
-                                                                        const mins = runExercises.reduce((acc, e) => acc + e.durationMinutes, 0);
-                                                                        const paceDecimal = mins / weekRunDist;
-                                                                        const m = Math.floor(paceDecimal);
-                                                                        const s = Math.round((paceDecimal - m) * 60);
-                                                                        const finalS = s === 60 ? 0 : s;
-                                                                        const finalM = s === 60 ? m + 1 : m;
-                                                                        return `${finalM}:${finalS.toString().padStart(2, '0')}`;
+                                                                        const distToUse = completedRunDist > 0 ? completedRunDist : totalRunDist;
+                                                                        const timeToUse = completedRunDist > 0 ? completedRunTime : totalRunTime;
+                                                                        if (distToUse > 0) {
+                                                                            const paceDecimal = timeToUse / distToUse;
+                                                                            const m = Math.floor(paceDecimal);
+                                                                            const s = Math.round((paceDecimal - m) * 60);
+                                                                            const finalS = s === 60 ? 0 : s;
+                                                                            const finalM = s === 60 ? m + 1 : m;
+                                                                            return `${finalM}:${finalS.toString().padStart(2, '0')}`;
+                                                                        }
+                                                                        return '-';
                                                                     })()}
                                                                 </span>
                                                                 {(() => {
-                                                                    const hrExs = runExercises.filter(e => e.heartRateAvg && e.heartRateAvg > 0 && !e.excludeHeartRate);
+                                                                    const hrExs = completedRunExercises.filter(e => e.heartRateAvg && e.heartRateAvg > 0 && !e.excludeHeartRate);
                                                                     if (hrExs.length > 0) {
                                                                         const avgHr = Math.round(hrExs.reduce((sum, e) => sum + e.heartRateAvg!, 0) / hrExs.length);
-                                                                        return <span className="text-[8.5px] text-red-400 font-bold">{avgHr}<span className="text-[7px] opacity-70 ml-0.5">bpm</span></span>;
+                                                                        return <span className="text-[7.5px] sm:text-[8px] text-red-400 font-bold">{avgHr}</span>;
                                                                     }
                                                                     return null;
                                                                 })()}
@@ -1104,26 +1194,42 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                                             <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs font-black items-end">
                                                                 <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
                                                                 <div className="text-right">
-                                                                    <div className="text-emerald-400 font-mono">{weekRunDist.toFixed(1)} km</div>
-                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">{runExercises.reduce((acc, e) => acc + e.durationMinutes, 0)}m</div>
+                                                                    <div className="text-emerald-400 font-mono">
+                                                                        {completedRunDist > 0 && <span>{completedRunDist.toFixed(1)}k / </span>}
+                                                                        {totalRunDist.toFixed(1)} km
+                                                                    </div>
+                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">
+                                                                        {completedRunTime > 0 && <span>{Math.round(completedRunTime)}m / </span>}
+                                                                        {Math.round(totalRunTime)}m
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
-                                                {weekStrengthMin > 0 && (
+                                                {totalStrengthMin > 0 && (
                                                     <div
-                                                        className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10 mb-0.5 calendar-tooltip-container"
+                                                        className="flex items-center justify-between bg-indigo-500/10 text-indigo-400 px-1 py-[2px] rounded cursor-help relative group/weekstr hover:bg-indigo-500/20 transition-colors w-full border border-indigo-500/10 mb-0.5 calendar-tooltip-container"
                                                         onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `str-${weekIdx}` ? null : `str-${weekIdx}`) }}
                                                     >
-                                                        <Dumbbell className="w-3.5 h-3.5" />
-                                                        <div className="flex items-baseline gap-1">
+                                                        <Dumbbell className="w-3 h-3 shrink-0" />
+                                                        <div className="flex items-baseline gap-1 font-mono text-[9px] font-bold">
                                                             <span>
-                                                                {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
-                                                                {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
+                                                                {(() => {
+                                                                    const fmt = (mins: number) => {
+                                                                        const rounded = Math.round(mins);
+                                                                        const h = Math.floor(rounded / 60);
+                                                                        const m = rounded % 60;
+                                                                        return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                    };
+                                                                    return hasPlannedStrength ? `${fmt(completedStrengthMin)}/${fmt(totalStrengthMin)}` : fmt(completedStrengthMin);
+                                                                })()}
                                                             </span>
                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
-                                                            <span className="text-[10px]">{strengthExercises.length}<span className="text-[8px] ml-0.5 opacity-50 font-normal group-hover:opacity-80 transition-opacity">pass</span></span>
+                                                            <span>
+                                                                {hasPlannedStrength ? `${completedStrengthExercises.length}/${strengthExercises.length}` : `${completedStrengthExercises.length}`}
+                                                                <span className="text-[7.5px] ml-0.5 opacity-60 font-normal">p</span>
+                                                            </span>
                                                         </div>
                                                         {/* Rich Tooltip */}
                                                         <div
@@ -1163,26 +1269,41 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                                                 <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
                                                                 <div className="text-right">
                                                                     <div className="text-indigo-400 font-mono">
-                                                                        {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h ` : ''}{Math.round(weekStrengthMin % 60)}m
+                                                                        {completedStrengthMin > 0 && <span>{Math.round(completedStrengthMin)}m / </span>}
+                                                                        {Math.round(totalStrengthMin)}m
                                                                     </div>
-                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">{(weekTonnage / 1000).toFixed(1)}t</div>
+                                                                    <div className="text-slate-400 font-mono text-[9px] font-normal">
+                                                                        {completedTonnage > 0 && <span>{(completedTonnage / 1000).toFixed(1)}t / </span>}
+                                                                        {(totalTonnage / 1000).toFixed(1)}t
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
-                                                {weekOtherCardioMin > 0 && (
+                                                {totalOtherCardioMin > 0 && (
                                                     <div
-                                                         className="flex items-center justify-between bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded cursor-help relative group/weekother hover:bg-sky-500/20 transition-colors w-full border border-sky-500/10 mb-0.5 calendar-tooltip-container"
+                                                         className="flex items-center justify-between bg-sky-500/10 text-sky-400 px-1 py-[1px] rounded cursor-help relative group/weekother hover:bg-sky-500/20 transition-colors w-full border border-sky-500/10 mb-0.5 calendar-tooltip-container"
                                                          onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `other-${weekIdx}` ? null : `other-${weekIdx}`) }}
-                                                     >
-                                                         <HeartPulse className="w-3.5 h-3.5" />
-                                                         <div className="flex items-baseline gap-1">
+                                                    >
+                                                         <HeartPulse className="w-3 h-3 shrink-0" />
+                                                         <div className="flex items-baseline gap-1 font-mono text-[9px] font-bold">
                                                              <span>
-                                                                 {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h` : ''}
-                                                                 {Math.floor(weekOtherCardioMin / 60) > 0 && Math.round(weekOtherCardioMin % 60) === 0 ? '' : `${Math.round(weekOtherCardioMin % 60)}m`}
+                                                                 {(() => {
+                                                                     const fmt = (mins: number) => {
+                                                                         const rounded = Math.round(mins);
+                                                                         const h = Math.floor(rounded / 60);
+                                                                         const m = rounded % 60;
+                                                                         return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                     };
+                                                                     return hasPlannedOther ? `${fmt(completedOtherCardioMin)}/${fmt(totalOtherCardioMin)}` : fmt(completedOtherCardioMin);
+                                                                 })()}
                                                              </span>
-                                                             <span className="text-[10px] ml-0.5 opacity-50 font-normal">{weekOtherCardioCount}p</span>
+                                                             <span className="text-[8px] opacity-40 mx-0.5">•</span>
+                                                             <span>
+                                                                 {hasPlannedOther ? `${completedOtherCardioCount}/${totalOtherCardioCount}` : `${completedOtherCardioCount}`}
+                                                                 <span className="text-[7.5px] ml-0.5 opacity-60 font-normal">p</span>
+                                                             </span>
                                                          </div>
 
                                                          {/* Rich Tooltip */}
@@ -1212,12 +1333,12 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                                                              }}>
                                                                              <span className="capitalize text-sky-100 font-medium truncate" title={e.title || e.type}>{e.title || typeStr}</span>
                                                                              <div className="text-right shrink-0 flex items-center gap-1 font-mono text-[10px] font-bold">
-                                                                                 <span className="text-sky-400">{valueStr}</span>
-                                                                                 {e.heartRateAvg && <span className="text-slate-500">•</span>}
-                                                                                 {e.heartRateAvg && <span className="text-amber-400/90 flex items-center gap-0.5">{Math.round(e.heartRateAvg)}<Heart className="w-2 h-2 text-amber-500/50" /></span>}
-                                                                                 <span className="text-slate-500">•</span>
-                                                                                 <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
-                                                                             </div>
+                                                                                  <span className="text-sky-400">{valueStr}</span>
+                                                                                  {e.heartRateAvg && <span className="text-slate-500">•</span>}
+                                                                                  {e.heartRateAvg && <span className="text-amber-400/90 flex items-center gap-0.5">{Math.round(e.heartRateAvg)}<Heart className="w-2 h-2 text-amber-500/50" /></span>}
+                                                                                  <span className="text-slate-500">•</span>
+                                                                                  <span className="text-rose-400/90">{Math.round(e.caloriesBurned || 0)}c</span>
+                                                                              </div>
                                                                          </div>
                                                                      );
                                                                  })}
@@ -1226,65 +1347,158 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                                                  <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
                                                                  <div className="text-right">
                                                                      <div className="text-sky-400 font-mono">
-                                                                         {Math.floor(weekOtherCardioMin / 60) > 0 ? `${Math.floor(weekOtherCardioMin / 60)}h ` : ''}{Math.round(weekOtherCardioMin % 60)}m
+                                                                         {completedOtherCardioMin > 0 && <span>{Math.round(completedOtherCardioMin)}m / </span>}
+                                                                         {Math.round(totalOtherCardioMin)}m
                                                                      </div>
-                                                                     <div className="text-slate-400 font-mono text-[9px] font-normal">{otherCardioExercises.reduce((acc, e) => acc + (e.caloriesBurned || 0), 0)} kcal</div>
+                                                                     <div className="text-slate-400 font-mono text-[9px] font-normal">
+                                                                         {otherCardioExercises.reduce((acc, e) => acc + (e.caloriesBurned || 0), 0)} kcal
+                                                                     </div>
                                                                  </div>
                                                              </div>
                                                          </div>
                                                      </div>
                                                 )}
-                                                {weekTonnage > 0 && (
-                                                    <div className="flex items-center justify-between bg-slate-800/50 text-indigo-400 px-1.5 py-1 rounded cursor-help relative group/weektng hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
-                                                        <Scale className="w-3.5 h-3.5" />
-                                                        <span>{(weekTonnage / 1000).toFixed(1)}<span className="text-[8px] ml-0.5">t</span></span>
+                                                {totalTonnage > 0 && (
+                                                    <div className="flex items-center justify-between bg-slate-800/50 text-indigo-400 px-1 py-[1px] rounded cursor-help relative group/weektng hover:bg-slate-700/50 transition-colors w-full border border-white/5 mb-0.5">
+                                                        <Scale className="w-3 h-3 shrink-0" />
+                                                        <span className="font-mono text-[9px] font-bold">
+                                                            {hasPlannedStrength ? `${(completedTonnage / 1000).toFixed(1)}/${(totalTonnage / 1000).toFixed(1)}` : `${(completedTonnage / 1000).toFixed(1)}`}
+                                                            <span className="text-[7.5px] ml-0.5 opacity-60 font-normal">t</span>
+                                                        </span>
                                                         <div className="absolute right-full mr-2 top-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 xl:group-hover/weektng:opacity-100 transition-all duration-300 -translate-x-2 xl:group-hover/weektng:translate-x-0 z-[9999] hidden xl:block pointer-events-none cursor-default scale-95 xl:group-hover/weektng:scale-100 shadow-indigo-500/10">
                                                             <div className="text-xs text-slate-400 font-bold mb-3 pb-2 border-b border-white/10">Veckans Styrkevolym</div>
                                                             <div className="space-y-1 text-xs">
                                                                 <div className="flex justify-between">
-                                                                    <span className="text-slate-500">Totalt</span>
-                                                                    <span className="text-indigo-400 font-mono font-bold">{weekTonnage.toLocaleString('sv-SE')} kg</span>
+                                                                    <span className="text-slate-500">Avklarat</span>
+                                                                    <span className="text-indigo-400 font-mono font-bold">{completedTonnage.toLocaleString('sv-SE')} kg</span>
                                                                 </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-slate-500">I ton</span>
-                                                                    <span className="text-indigo-400 font-mono font-bold">{(weekTonnage / 1000).toFixed(2)} t</span>
-                                                                </div>
+                                                                {hasPlannedStrength && (
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-slate-500">Totalt (inkl planerat)</span>
+                                                                        <span className="text-indigo-400 font-mono font-bold">{totalTonnage.toLocaleString('sv-SE')} kg</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
 
                                                 {weekTotalMin === 0 && (
-                                                    <div className="text-slate-600 italic text-[10px] text-center w-full py-2">Vila</div>
+                                                    <div className="text-slate-600 italic text-[9px] text-center w-full py-2">Vila</div>
                                                 )}
                                             </div>
 
                                             {weekTotalMin > 0 && (
                                                 <div
-                                                    className="flex flex-col border-t border-white/5 pt-1 w-full relative group/weektot cursor-help calendar-tooltip-container"
+                                                    className="flex flex-col border-t border-white/5 pt-1 w-full relative group/weektot cursor-help calendar-tooltip-container mt-1"
                                                     onClick={(e) => { e.stopPropagation(); setPinnedTooltip(pinnedTooltip === `tot-${weekIdx}` ? null : `tot-${weekIdx}`) }}
                                                 >
-                                                    <div className="flex items-center justify-between w-full px-1 bg-white/5 rounded py-0.5 hover:bg-white/10 transition-colors text-[9px] font-bold">
-                                                        <span className="text-slate-500 uppercase font-black tracking-widest leading-none">TOT</span>
-                                                        <div className="flex items-center gap-1 text-[9px] font-bold leading-none">
-                                                            {(() => {
-                                                                const sessions = weekExercises.filter(e => !isWarmupOrCooldown(e));
-                                                                const warmCount = weekExercises.filter(e => isWarmupOrCooldown(e)).length;
-                                                                return <span className="text-slate-400">{sessions.length}{warmCount > 0 ? ` (+${warmCount})` : ''}p</span>;
-                                                            })()}
-                                                            <span className="text-slate-500 opacity-60">•</span>
-                                                            <span className="text-slate-300 font-mono">
-                                                                {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h` : ''}
-                                                                {Math.floor(weekTotalMin / 60) > 0 && Math.round(weekTotalMin % 60) === 0 ? '' : `${Math.round(weekTotalMin % 60)}m`}
-                                                            </span>
-                                                            {weekCalories > 0 && (
-                                                                <>
+                                                    {hasPlannedInWeek ? (
+                                                        <div className="flex flex-col gap-[1px] w-full">
+                                                            {/* Row 1: FAKT */}
+                                                            <div className="flex items-center justify-between w-full px-1 bg-white/5 rounded py-[1px] hover:bg-white/10 transition-colors text-[9px] font-bold">
+                                                                <span className="flex items-center text-slate-500" title="Faktiskt avklarat">
+                                                                    <Sigma className="w-3 h-3 text-slate-400 shrink-0" />
+                                                                </span>
+                                                                <div className="flex items-center gap-0.5 text-[9px] font-bold leading-none font-mono">
+                                                                    {completedRunDist > 0 && (
+                                                                        <>
+                                                                            <span className="text-emerald-400">{Math.round(completedRunDist)}k</span>
+                                                                            <span className="text-slate-500 opacity-60">•</span>
+                                                                        </>
+                                                                    )}
+                                                                    {(() => {
+                                                                        const sessions = completedTotalExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                        const warmCount = completedTotalExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                        return <span className="text-slate-400">{sessions.length}{warmCount > 0 ? `(+${warmCount})` : ''}p</span>;
+                                                                    })()}
                                                                     <span className="text-slate-500 opacity-60">•</span>
-                                                                    <span className="text-rose-400/90 font-mono">{Math.round(weekCalories)}<span className="text-[7.5px] ml-0.25 opacity-70">c</span></span>
-                                                                </>
-                                                            )}
+                                                                    <span className="text-slate-300">
+                                                                        {(() => {
+                                                                            const rounded = Math.round(completedTotalMin);
+                                                                            const h = Math.floor(rounded / 60);
+                                                                            const m = rounded % 60;
+                                                                            return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                        })()}
+                                                                    </span>
+                                                                    {completedCalories > 0 && (
+                                                                        <>
+                                                                            <span className="text-slate-500 opacity-60">•</span>
+                                                                            <span className="text-rose-400/90">{Math.round(completedCalories)}<span className="text-[7.5px] ml-0.25 opacity-70">c</span></span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {/* Row 2: INKL */}
+                                                            <div className="flex items-center justify-between w-full px-1 bg-emerald-500/5 border border-emerald-500/10 rounded py-[1px] hover:bg-emerald-500/10 transition-colors text-[9px] font-bold">
+                                                                <span className="flex items-center text-emerald-500/85" title="Inklusive planerat (prognos)">
+                                                                    <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />
+                                                                </span>
+                                                                <div className="flex items-center gap-0.5 text-[9px] font-bold leading-none font-mono">
+                                                                    {totalRunDist > 0 && (
+                                                                        <>
+                                                                            <span className="text-emerald-400">{Math.round(totalRunDist)}k</span>
+                                                                            <span className="text-slate-500 opacity-60">•</span>
+                                                                        </>
+                                                                    )}
+                                                                    {(() => {
+                                                                        const sessions = weekExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                        const warmCount = weekExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                        return <span className="text-slate-400">{sessions.length}{warmCount > 0 ? `(+${warmCount})` : ''}p</span>;
+                                                                    })()}
+                                                                    <span className="text-slate-500 opacity-60">•</span>
+                                                                    <span className="text-slate-300">
+                                                                        {(() => {
+                                                                            const rounded = Math.round(weekTotalMin);
+                                                                            const h = Math.floor(rounded / 60);
+                                                                            const m = rounded % 60;
+                                                                            return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                        })()}
+                                                                    </span>
+                                                                    {weekCalories > 0 && (
+                                                                        <>
+                                                                            <span className="text-slate-500 opacity-60">•</span>
+                                                                            <span className="text-rose-400/90">{Math.round(weekCalories)}<span className="text-[7.5px] ml-0.25 opacity-70">c</span></span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    ) : (
+                                                        /* Single Row: TOT */
+                                                        <div className="flex items-center justify-between w-full px-1 bg-white/5 rounded py-[1px] hover:bg-white/10 transition-colors text-[9px] font-bold">
+                                                            <span className="text-slate-500 uppercase font-black tracking-widest leading-none">TOT</span>
+                                                            <div className="flex items-center gap-0.5 text-[9px] font-bold leading-none font-mono">
+                                                                {completedRunDist > 0 && (
+                                                                    <>
+                                                                        <span className="text-emerald-400">{Math.round(completedRunDist)}k</span>
+                                                                        <span className="text-slate-500 opacity-60">•</span>
+                                                                    </>
+                                                                )}
+                                                                {(() => {
+                                                                    const sessions = completedTotalExercises.filter(e => !isWarmupOrCooldown(e));
+                                                                    const warmCount = completedTotalExercises.filter(e => isWarmupOrCooldown(e)).length;
+                                                                    return <span className="text-slate-400">{sessions.length}{warmCount > 0 ? `(+${warmCount})` : ''}p</span>;
+                                                                })()}
+                                                                <span className="text-slate-500 opacity-60">•</span>
+                                                                <span className="text-slate-300">
+                                                                    {(() => {
+                                                                        const rounded = Math.round(completedTotalMin);
+                                                                        const h = Math.floor(rounded / 60);
+                                                                        const m = rounded % 60;
+                                                                        return h > 0 ? `${h}h${m === 0 ? '' : `${m}m`}` : `${m}m`;
+                                                                    })()}
+                                                                </span>
+                                                                {completedCalories > 0 && (
+                                                                    <>
+                                                                        <span className="text-slate-500 opacity-60">•</span>
+                                                                        <span className="text-rose-400/90">{Math.round(completedCalories)}<span className="text-[7.5px] ml-0.25 opacity-70">c</span></span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {/* Rich Tooltip */}
                                                     <div
                                                         className={`absolute right-full mr-2 bottom-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl transition-all duration-300 z-[9999] hidden xl:block scale-95 shadow-sky-500/10 ${pinnedTooltip === `tot-${weekIdx}` ? 'opacity-100 translate-x-0 scale-100 pointer-events-auto' : 'opacity-0 xl:group-hover/weektot:opacity-100 -translate-x-2 xl:group-hover/weektot:translate-x-0 pointer-events-none xl:group-hover/weektot:scale-100 cursor-default'}`}
@@ -1348,9 +1562,13 @@ export function TrainingCalendar({ monthIndex, year, exercises: allExercises, pl
                                                             <span className="text-slate-500 uppercase tracking-widest">Totalt</span>
                                                             <div className="text-right">
                                                                 <div className="text-sky-400 font-mono">
-                                                                    {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}{Math.round(weekTotalMin % 60)}m
+                                                                    {completedTotalMin > 0 && <span>{formatHhMm(completedTotalMin)} / </span>}
+                                                                    {formatHhMm(weekTotalMin)}
                                                                 </div>
-                                                                <div className="text-slate-500 font-mono text-[9px] font-normal">{Math.round(weekCalories)} kcal</div>
+                                                                <div className="text-slate-500 font-mono text-[9px] font-normal">
+                                                                    {completedCalories > 0 && <span>{Math.round(completedCalories)} kcal / </span>}
+                                                                    {Math.round(weekCalories)} kcal
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>

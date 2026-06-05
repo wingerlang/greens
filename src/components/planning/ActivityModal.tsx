@@ -6,6 +6,7 @@ import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { useSettings } from '../../context/SettingsContext.tsx';
+import { useHRZones } from '../profile/hooks/useHRZones.ts';
 
 interface ActivityModalProps {
     isOpen: boolean;
@@ -48,6 +49,7 @@ export function ActivityModal({
     const [formGoalB, setFormGoalB] = useState('');
     const [formGoalC, setFormGoalC] = useState('');
     const [formPace, setFormPace] = useState('05:30'); // Tempo in mm:ss per km
+    const [formTitle, setFormTitle] = useState('');
 
     // Ref to track which field was last changed by the user to prevent circular calculation loops
     const lastChanged = useRef<'pace' | 'duration' | 'distance' | 'preset' | null>(null);
@@ -72,6 +74,7 @@ export function ActivityModal({
         reconciliation
     } = useData();
     const { settings } = useSettings();
+    const { savedZones, detectedZones } = useHRZones();
 
     const hasExistingActivity = React.useMemo(() => {
         if (!selectedDate) return false;
@@ -173,7 +176,8 @@ export function ActivityModal({
                 date: new Date(e.date),
                 distance: e.distance || 0,
                 durationMinutes: (e as any).durationMinutes || 0,
-                category: (e as any).category || 'EASY'
+                category: (e as any).category || 'EASY',
+                avgHeartRate: (e as any).heartRateAvg || (e as any).performance?.avgHeartRate || 0
             }));
 
         // From universalActivities (Strava)
@@ -191,11 +195,12 @@ export function ActivityModal({
                 date: new Date(ua.date),
                 distance: ua.performance?.distanceKm || 0,
                 durationMinutes: (ua.performance as any).durationMinutes || 0,
-                category: (ua as any).category || 'EASY'
+                category: (ua as any).category || 'EASY',
+                avgHeartRate: ua.performance?.avgHeartRate || (ua as any).heartRateAvg || 0
             }));
 
         // Combine and deduplicate
-        const allRunsMap = new Map<string, { date: Date, distance: number, durationMinutes: number, category: string }>();
+        const allRunsMap = new Map<string, { date: Date, distance: number, durationMinutes: number, category: string, avgHeartRate: number }>();
         [...exerciseRuns, ...stravaRuns].forEach(run => {
             const key = run.date.toISOString().split('T')[0];
             const existing = allRunsMap.get(key);
@@ -281,6 +286,100 @@ export function ActivityModal({
 
         return { allRuns, avgDistance, frequentPresets, avgEasyPace, avgIntervalPace, avgTempoPace };
     }, [exerciseEntries, universalActivities]);
+
+    // Calculate zone paces based on heart rate zones from running history
+    const zonePaces = useMemo(() => {
+        const zones = (savedZones || detectedZones)?.zones;
+        const defaultPaces = {
+            1: 6.5, // 6:30 min/km
+            2: 5.75, // 5:45 min/km
+            3: 5.25, // 5:15 min/km
+            4: 4.75, // 4:45 min/km
+            5: 4.25  // 4:15 min/km
+        };
+
+        const paceSums: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        const paceCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+        const getZoneOfHeartRate = (hr: number) => {
+            if (!hr) return 0;
+            if (zones) {
+                if (zones.z1 && hr >= zones.z1.min && hr <= zones.z1.max) return 1;
+                if (zones.z2 && hr >= zones.z2.min && hr <= zones.z2.max) return 2;
+                if (zones.z3 && hr >= zones.z3.min && hr <= zones.z3.max) return 3;
+                if (zones.z4 && hr >= zones.z4.min && hr <= zones.z4.max) return 4;
+                if (zones.z5 && hr >= zones.z5.min && hr <= zones.z5.max) return 5;
+                if (zones.z1 && hr < zones.z1.min) return 1;
+                if (zones.z5 && hr > zones.z5.max) return 5;
+                if (zones.z1 && zones.z2 && hr > zones.z1.max && hr < zones.z2.min) return 1;
+                if (zones.z2 && zones.z3 && hr > zones.z2.max && hr < zones.z3.min) return 2;
+                if (zones.z3 && zones.z4 && hr > zones.z3.max && hr < zones.z4.min) return 3;
+                if (zones.z4 && zones.z5 && hr > zones.z4.max && hr < zones.z5.min) return 4;
+            } else {
+                const max = 190;
+                const rest = 60;
+                const reserve = max - rest;
+                const getHRVal = (intensity: number) => Math.round(reserve * intensity + rest);
+                if (hr < getHRVal(0.60)) return 1;
+                if (hr < getHRVal(0.70)) return 2;
+                if (hr < getHRVal(0.80)) return 3;
+                if (hr < getHRVal(0.90)) return 4;
+                return 5;
+            }
+            return 0;
+        };
+
+        runStats.allRuns.forEach(run => {
+            const hr = (run as any).avgHeartRate;
+            if (hr && hr > 0 && run.durationMinutes && run.distance) {
+                const zone = getZoneOfHeartRate(hr);
+                if (zone >= 1 && zone <= 5) {
+                    const pace = run.durationMinutes / run.distance;
+                    if (pace >= 3 && pace <= 12) {
+                        paceSums[zone] += pace;
+                        paceCounts[zone] += 1;
+                    }
+                }
+            }
+        });
+
+        const result: Record<number, { pace: number; display: string; count: number; rangeStr: string }> = {};
+        for (let z = 1; z <= 5; z++) {
+            const avgPace = paceCounts[z] > 0 ? (paceSums[z] / paceCounts[z]) : defaultPaces[z as 1|2|3|4|5];
+            const mins = Math.floor(avgPace);
+            const secs = Math.round((avgPace - mins) * 60);
+            
+            let rangeStr = '';
+            if (zones) {
+                const zoneKey = `z${z}`;
+                const zData = (zones as any)[zoneKey];
+                if (zData) {
+                    rangeStr = `${zData.min}-${zData.max} bpm`;
+                }
+            } else {
+                const max = 190;
+                const rest = 60;
+                const reserve = max - rest;
+                const getHRVal = (intensity: number) => Math.round(reserve * intensity + rest);
+                const bounds = [
+                    { min: rest, max: getHRVal(0.60) },
+                    { min: getHRVal(0.60), max: getHRVal(0.70) },
+                    { min: getHRVal(0.70), max: getHRVal(0.80) },
+                    { min: getHRVal(0.80), max: getHRVal(0.90) },
+                    { min: getHRVal(0.90), max: max }
+                ];
+                rangeStr = `${bounds[z-1].min}-${bounds[z-1].max} bpm`;
+            }
+
+            result[z] = {
+                pace: avgPace,
+                display: `${mins}:${secs.toString().padStart(2, '0')}`,
+                count: paceCounts[z],
+                rangeStr
+            };
+        }
+        return result;
+    }, [runStats.allRuns, savedZones, detectedZones]);
 
     // Smart Note Logic: Update "X km" in notes when distance changes
     useEffect(() => {
@@ -399,6 +498,7 @@ export function ActivityModal({
                 setFormCalculationMode(editingActivity.calculationMode as any || 'original');
                 setFormTargetSpeedKmh(editingActivity.targetSpeedKmh?.toString() || '');
                 setFormTargetWattsRange(editingActivity.targetWattsRange || '');
+                setFormTitle(editingActivity.title || '');
             } else {
                 setFormType('RUN');
                 setRunSubCategory('EASY');
@@ -420,6 +520,7 @@ export function ActivityModal({
                 setFormCalculationMode('original');
                 setFormTargetSpeedKmh('');
                 setFormTargetWattsRange('');
+                setFormTitle('');
             }
         }
     }, [isOpen, selectedDate, editingActivity]);
@@ -492,50 +593,37 @@ export function ActivityModal({
             }
 
             // Determine Title
-            let title = 'Pass';
+            let autoTitle = 'Pass';
             if (formType === 'RUN') {
-                if (isRace) title = 'TÄVLING 🏆';
-                else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
-                else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
-                else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
-                else title = 'Löpning';
+                if (isRace) autoTitle = 'TÄVLING 🏆';
+                else if (runSubCategory === 'LONG_RUN') autoTitle = 'Långpass';
+                else if (runSubCategory === 'INTERVALS') autoTitle = 'Intervaller';
+                else if (runSubCategory === 'RECOVERY') autoTitle = 'Återhämtning';
+                else autoTitle = 'Löpning';
             } else if (formType === 'STRENGTH') {
-                title = 'Styrka';
+                autoTitle = 'Styrka';
                 const isPush = ['chest', 'shoulders', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 4;
                 const isPull = ['back', 'arms'].every(m => formMuscleGroups.includes(m)) && formMuscleGroups.length <= 3;
                 const isLegs = formMuscleGroups.includes('legs') && formMuscleGroups.length <= 2;
-                if (isPush) title = 'Styrka: Push';
-                else if (isPull) title = 'Styrka: Pull';
-                else if (isLegs) title = 'Styrka: Ben';
+                if (isPush) autoTitle = 'Styrka: Push';
+                else if (isPull) autoTitle = 'Styrka: Pull';
+                else if (isLegs) autoTitle = 'Styrka: Ben';
             } else if (formType === 'HYROX') {
-                title = 'Hyrox';
+                autoTitle = 'Hyrox';
             } else if (formType === 'REST') {
-                title = 'Vilodag';
+                autoTitle = 'Vilodag';
             } else if (formType === 'CARDIO') {
-                if (formSubType === 'cross-trainer') title = 'Cross trainer';
-                else if (formSubType === 'rowing') title = 'Rodd';
-                else if (formSubType === 'stair-master') title = 'Trappmaskin';
-                else if (formSubType === 'skierg') title = 'Skierg';
-                else title = 'Allmän Cardio';
+                if (formSubType === 'cross-trainer') autoTitle = 'Cross trainer';
+                else if (formSubType === 'rowing') autoTitle = 'Rodd';
+                else if (formSubType === 'stair-master') autoTitle = 'Trappmaskin';
+                else if (formSubType === 'skierg') autoTitle = 'Skierg';
+                else autoTitle = 'Allmän Cardio';
             } else if (formType === 'BIKE') {
                 const totalMins = (hours * 60) + minutes;
-                title = `Cykel ${totalMins} min`;
+                autoTitle = `Cykel ${totalMins} min`;
             }
 
-            // Preserve custom title when editing an existing activity
-            // Only use auto-generated title for NEW activities or if the existing title
-            // matches a known auto-generated default (meaning the user never renamed it).
-            const AUTO_GENERATED_TITLES = [
-                'TÄVLING 🏆', 'TÄVLING', 'Pass', 'Löpning', 'Långpass', 'Intervaller',
-                'Återhämtning', 'Styrka', 'Styrka: Push', 'Styrka: Pull', 'Styrka: Ben',
-                'Hyrox', 'Vilodag', 'Cross trainer', 'Rodd', 'Trappmaskin', 'Skierg',
-                'Allmän Cardio'
-            ];
-            const existingTitle = editingActivity?.title;
-            const isAutoGenerated = !existingTitle || AUTO_GENERATED_TITLES.some(
-                auto => existingTitle === auto || existingTitle.startsWith('Cykel ')
-            );
-            const finalTitle = isAutoGenerated ? title : existingTitle;
+            const finalTitle = formTitle.trim() || autoTitle;
 
             const activityData: PlannedActivity = {
                 id: editingActivity?.id || generateId(),
@@ -544,7 +632,7 @@ export function ActivityModal({
                 category: finalCategory as PlannedActivity['category'],
                 subType: (formType === 'CARDIO' || formType === 'BIKE') ? (formType === 'BIKE' ? 'cycling' : formSubType) : undefined,
                 title: finalTitle,
-                description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
+                description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : finalTitle + ' pass'} (${formDuration})`,
                 estimatedDistance: formDistance ? parseFloat(formDistance.replace(',', '.')) : 0,
                 durationMinutes: totalMinutes || undefined,
 
@@ -795,201 +883,147 @@ export function ActivityModal({
                         );
                     })()}
 
-                    {/* Smart Distance Presets - Always visible */}
-                    {formType === 'RUN' && (
-                        <div className="space-y-3">
-                            {/* Average Distance Card - Only show if we have data */}
-                            {runStats.avgDistance && !editingActivity && (
-                                <div
-                                    onClick={() => {
-                                        lastChanged.current = 'distance';
-                                        setFormDistance(runStats.avgDistance!.toFixed(1));
-                                    }}
-                                    className="group cursor-pointer p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <div className="flex items-center gap-2">
-                                            <Trophy size={14} className="text-blue-500" />
-                                            <span className="text-xs font-black uppercase text-blue-600 dark:text-blue-400">Din snittdistans</span>
-                                        </div>
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm group-hover:scale-110 transition-transform">
-                                            {runStats.avgDistance.toFixed(1)} km
-                                        </span>
-                                    </div>
-                                    <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 font-medium">
-                                        Baserat på senaste 5 veckor. <span className="italic underline decoration-blue-300">Sträva efter att slå detta!</span> 🚀
-                                    </p>
-                                </div>
-                            )}
-
-                            {/* Quick Distance Presets - Always visible */}
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Zap size={12} className="text-amber-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                        {runStats.frequentPresets[0]?.isDefault ? 'Populära distanser' : 'Dina vanliga distanser'}
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {runStats.frequentPresets.map((preset: any) => (
+                    {/* Form */}
+                    <div className="space-y-4">
+                        {/* Status Selector - Only visible when editing an existing activity */}
+                        {editingActivity && (
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 space-y-2">
+                                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-1">Status</label>
+                                <div className="flex gap-1.5">
+                                    {[
+                                        { id: 'PLANNED', label: 'Planerat', color: 'blue' },
+                                        { id: 'COMPLETED', label: 'Klart', color: 'emerald' },
+                                        { id: 'SKIPPED', label: 'Överhoppat', color: 'slate' },
+                                        { id: 'CHANGED', label: 'Bytt', color: 'amber' },
+                                    ].map((s) => (
                                         <button
-                                            key={preset.distance}
-                                            onClick={() => {
-                                                lastChanged.current = 'preset';
-                                                setFormDistance(preset.distance.toFixed(1));
-                                                // Convert avgPace (min/km as decimal) to mm:ss format
-                                                const paceMinutes = Math.floor(preset.avgPace);
-                                                const paceSeconds = Math.round((preset.avgPace - paceMinutes) * 60);
-                                                setFormPace(`${paceMinutes.toString().padStart(2, '0')}:${paceSeconds.toString().padStart(2, '0')}`);
-
-                                                // Calculate duration and round UP to nearest 5 minutes
-                                                const totalMinutes = preset.distance * preset.avgPace;
-                                                const roundedUp = Math.ceil(totalMinutes / 5) * 5;
-                                                const hours = Math.floor(roundedUp / 60);
-                                                const mins = roundedUp % 60;
-                                                setFormDuration(`${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`);
-                                            }}
-                                            className={`px-2.5 py-1.5 rounded-xl border text-sm font-bold transition-all hover:scale-105 ${formDistance === preset.distance.toFixed(1)
-                                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-md'
-                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400'
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => setFormStatus(s.id as any)}
+                                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${formStatus === s.id
+                                                ? `bg-${s.color}-500 text-white border-${s.color}-500 shadow-md`
+                                                : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-${s.color}-300`
                                                 }`}
                                         >
-                                            {preset.label}
-                                            {preset.count > 0 && (
-                                                <span className="ml-1.5 text-[10px] opacity-60">({preset.count}x)</span>
-                                            )}
+                                            {s.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Form */}
-                    <div className="space-y-4">
-                        {/* Status Selector */}
-                        <div>
-                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-1">Status</label>
-                            <div className="flex gap-1.5">
-                                {[
-                                    { id: 'PLANNED', label: 'Planerat', color: 'blue' },
-                                    { id: 'COMPLETED', label: 'Klart', color: 'emerald' },
-                                    { id: 'SKIPPED', label: 'Överhoppat', color: 'slate' },
-                                    { id: 'CHANGED', label: 'Bytt', color: 'amber' },
-                                ].map((s) => (
-                                    <button
-                                        key={s.id}
-                                        type="button"
-                                        onClick={() => setFormStatus(s.id as any)}
-                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${formStatus === s.id
-                                            ? `bg-${s.color}-500 text-white border-${s.color}-500 shadow-md`
-                                            : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-${s.color}-300`
-                                            }`}
-                                    >
-                                        {s.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Type Selector */}
-                        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                            <button
-                                onClick={() => setFormType('RUN')}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Löpning
-                            </button>
-                            {(settings.trainingInterests?.strength ?? true) && (
-                                <button
-                                    onClick={() => setFormType('STRENGTH')}
-                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    Styrka
-                                </button>
-                            )}
-                            {settings.trainingInterests?.hyrox && (
-                                <button
-                                    onClick={() => setFormType('HYROX')}
-                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    Hyrox
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setFormType('CARDIO')}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'CARDIO' || formType === 'BIKE' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Cardio
-                            </button>
-                            <button
-                                onClick={() => setFormType('REST')}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Vila
-                            </button>
-                        </div>
-
-                        {/* Cardio Sub-Type Selector */}
-                        {(formType === 'CARDIO' || formType === 'BIKE') && (
-                            <div className="flex flex-wrap gap-1.5 pb-2">
-                                {[
-                                    { id: 'cycling', label: 'Cykling', icon: <Bike size={14} />, color: 'emerald' },
-                                    { id: 'cross-trainer', label: 'Cross trainer', icon: <Disc size={14} />, color: 'teal' },
-                                    { id: 'rowing', label: 'Rodd', icon: <Waves size={14} />, color: 'blue' },
-                                    { id: 'stair-master', label: 'Trappmaskin', icon: <TrendingUp size={14} />, color: 'indigo' },
-                                    { id: 'skierg', label: 'Skierg', icon: <Wind size={14} />, color: 'sky' },
-                                    { id: 'cardio', label: 'Allmän Cardio', icon: <Activity size={14} />, color: 'slate' },
-                                ].map((sub) => (
-                                    <button
-                                        key={sub.id}
-                                        onClick={() => {
-                                            if (sub.id === 'cycling') setFormType('BIKE');
-                                            else {
-                                                setFormType('CARDIO');
-                                                setFormSubType(sub.id as any);
-                                            }
-                                        }}
-                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${(formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id)
-                                            ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md`
-                                            : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300'
-                                            }`}
-                                    >
-                                        {sub.icon}
-                                        {sub.label}
-                                    </button>
-                                ))}
-                            </div>
                         )}
 
-                        {/* Run Sub-Category Selector */}
-                        {formType === 'RUN' && (
-                            <div className="flex gap-1.5 pb-1">
-                                {[
-                                    { id: 'EASY', label: 'Distans', color: 'blue' },
-                                    { id: 'LONG_RUN', label: 'Långpass', color: 'indigo' },
-                                    { id: 'INTERVALS', label: 'Intervall/Tempo', color: 'rose' },
-                                    { id: 'RECOVERY', label: 'Återhämtning', color: 'emerald' },
-                                ].map((sub) => (
+                        {/* Steg 1: Aktivitetstyp & Kategori */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 space-y-3">
+                            <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Steg 1: Typ & Kategori</div>
+                            {/* Type Selector */}
+                            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+                                <button
+                                    onClick={() => setFormType('RUN')}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Löpning
+                                </button>
+                                {(settings.trainingInterests?.strength ?? true) && (
                                     <button
-                                        key={sub.id}
-                                        onClick={() => handleRunSubCategoryClick(sub.id as any)}
-                                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${runSubCategory === sub.id
-                                            ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md transform scale-105`
-                                            : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-${sub.color}-300`
-                                            }`}
+                                        onClick={() => setFormType('STRENGTH')}
+                                        className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600 dark:text-purple-400' : 'text-slate-400 hover:text-slate-600'}`}
                                     >
-                                        {sub.label}
+                                        Styrka
                                     </button>
-                                ))}
+                                )}
+                                {settings.trainingInterests?.hyrox && (
+                                    <button
+                                        onClick={() => setFormType('HYROX')}
+                                        className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Hyrox
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setFormType('CARDIO')}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'CARDIO' || formType === 'BIKE' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Cardio
+                                </button>
+                                <button
+                                    onClick={() => setFormType('REST')}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600 dark:text-slate-400' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Vila
+                                </button>
                             </div>
-                        )}
 
-                        {/* Race Toggle */}
-                        {formType === 'RUN' && (
-                            <div className="flex justify-between items-center mb-2">
+                            {/* Cardio Sub-Type Selector */}
+                            {(formType === 'CARDIO' || formType === 'BIKE') && (
+                                <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
+                                    {[
+                                        { id: 'cycling', label: 'Cykling', icon: <Bike size={14} />, activeClass: 'bg-emerald-500 text-white border-emerald-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300' },
+                                        { id: 'cross-trainer', label: 'Cross trainer', icon: <Disc size={14} />, activeClass: 'bg-teal-500 text-white border-teal-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-teal-300' },
+                                        { id: 'rowing', label: 'Rodd', icon: <Waves size={14} />, activeClass: 'bg-blue-500 text-white border-blue-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-blue-300' },
+                                        { id: 'stair-master', label: 'Trappmaskin', icon: <TrendingUp size={14} />, activeClass: 'bg-indigo-500 text-white border-indigo-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-indigo-300' },
+                                        { id: 'skierg', label: 'Skierg', icon: <Wind size={14} />, activeClass: 'bg-sky-500 text-white border-sky-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-sky-300' },
+                                        { id: 'cardio', label: 'Allmän Cardio', icon: <Activity size={14} />, activeClass: 'bg-slate-500 text-white border-slate-500 shadow-md', inactiveClass: 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300' },
+                                    ].map((sub) => {
+                                        const isActive = (formType === 'BIKE' && sub.id === 'cycling') || (formType === 'CARDIO' && formSubType === sub.id);
+                                        return (
+                                            <button
+                                                key={sub.id}
+                                                onClick={() => {
+                                                    if (sub.id === 'cycling') setFormType('BIKE');
+                                                    else {
+                                                        setFormType('CARDIO');
+                                                        setFormSubType(sub.id as any);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all border ${isActive ? sub.activeClass : sub.inactiveClass}`}
+                                            >
+                                                {sub.icon}
+                                                {sub.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Run Sub-Category Selector */}
+                            {formType === 'RUN' && (
+                                <div className="flex gap-1.5 pt-1 pb-1 overflow-x-auto no-scrollbar">
+                                    {[
+                                        { id: 'EASY', label: 'Distans', activeClass: 'bg-blue-500 text-white border-blue-500 shadow-md transform scale-105', inactiveClass: 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-blue-300' },
+                                        { id: 'LONG_RUN', label: 'Långpass', activeClass: 'bg-indigo-500 text-white border-indigo-500 shadow-md transform scale-105', inactiveClass: 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-indigo-300' },
+                                        { id: 'INTERVALS', label: 'Intervall/Tempo', activeClass: 'bg-rose-500 text-white border-rose-500 shadow-md transform scale-105', inactiveClass: 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-rose-300' },
+                                        { id: 'RECOVERY', label: 'Återhämtning', activeClass: 'bg-emerald-500 text-white border-emerald-500 shadow-md transform scale-105', inactiveClass: 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-300' },
+                                    ].map((sub) => {
+                                        const isActive = runSubCategory === sub.id;
+                                        return (
+                                            <button
+                                                key={sub.id}
+                                                onClick={() => handleRunSubCategoryClick(sub.id as any)}
+                                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${isActive ? sub.activeClass : sub.inactiveClass}`}
+                                            >
+                                                {sub.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Title Field */}
+                            <div className="pt-1">
+                                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Titel / Namn på passet</label>
+                                <input
+                                    type="text"
+                                    value={formTitle}
+                                    onChange={(e) => setFormTitle(e.target.value)}
+                                    placeholder="T.ex. Vanlig dag, Långpass (lämna tom för standardnamn)"
+                                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                                />
+                            </div>
+
+                            {/* Race & Move Date Toggle */}
+                            <div className="flex flex-wrap justify-between items-center gap-2 pt-1">
                                 {editingActivity && (
-                                    <div className="flex-1 mr-4">
+                                    <div className="flex-1 min-w-[150px]">
                                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Flytta pass</label>
                                         <input
                                             type="date"
@@ -999,152 +1033,142 @@ export function ActivityModal({
                                         />
                                     </div>
                                 )}
-                                <button
-                                    onClick={() => setIsRace(!isRace)}
-                                    className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
-                                >
-                                    <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
-                                    <span className="text-xs font-black uppercase">Tävling</span>
-                                </button>
+                                {formType === 'RUN' && (
+                                    <button
+                                        onClick={() => setIsRace(!isRace)}
+                                        className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                                    >
+                                        <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
+                                        <span className="text-xs font-black uppercase">Tävling</span>
+                                    </button>
+                                )}
                             </div>
-                        )}
 
-                        {/* Race Goals & Previous Results */}
-                        {formType === 'RUN' && isRace && (
-                            <div className="mb-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 space-y-4">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Trophy size={14} className="text-amber-500 fill-amber-500" />
-                                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Målsättningar</span>
-                                </div>
+                            {/* Race Goals & Previous Results */}
+                            {formType === 'RUN' && isRace && (
+                                <div className="mt-2 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 space-y-4">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Trophy size={14} className="text-amber-500 fill-amber-500" />
+                                        <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Målsättningar</span>
+                                    </div>
 
-                                {/* Previous Race Results */}
-                                {previousRaceResults.length > 0 && (
-                                    <div className="space-y-2">
-                                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                            📊 Tidigare resultat
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            {previousRaceResults.slice(0, 3).map(r => (
-                                                <div key={r.date} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
-                                                    <div>
-                                                        <div className="text-xs font-black text-slate-800 dark:text-slate-200">{r.title}</div>
-                                                        <div className="text-[10px] text-slate-500 font-medium">{r.date}</div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        {r.timeFormatted && (
-                                                            <div className="text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">{r.timeFormatted}</div>
-                                                        )}
-                                                        <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2 justify-end">
-                                                            {r.distance > 0 && <span>{r.distance.toFixed(1)} km</span>}
-                                                            {r.pace && <span>({r.pace} /km)</span>}
+                                    {/* Previous Race Results */}
+                                    {previousRaceResults.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                                📊 Tidigare resultat
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                {previousRaceResults.slice(0, 3).map(r => (
+                                                    <div key={r.date} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                                                        <div>
+                                                            <div className="text-xs font-black text-slate-800 dark:text-slate-200">{r.title}</div>
+                                                            <div className="text-[10px] text-slate-500 font-medium">{r.date}</div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            {r.timeFormatted && (
+                                                                <div className="text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">{r.timeFormatted}</div>
+                                                            )}
+                                                            <div className="text-[10px] text-slate-500 font-medium flex items-center gap-2 justify-end">
+                                                                {r.distance > 0 && <span>{r.distance.toFixed(1)} km</span>}
+                                                                {r.pace && <span>({r.pace} /km)</span>}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Goal Inputs: A / B / C */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className="block text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 mb-1 ml-0.5 tracking-wider">🥇 Mål A</label>
+                                            <input
+                                                type="text"
+                                                value={formGoalA}
+                                                onChange={(e) => setFormGoalA(e.target.value)}
+                                                placeholder="Drömtid"
+                                                className="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/40 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-amber-400 outline-none transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥈 Mål B</label>
+                                            <input
+                                                type="text"
+                                                value={formGoalB}
+                                                onChange={(e) => setFormGoalB(e.target.value)}
+                                                placeholder="Realistiskt"
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥉 Mål C</label>
+                                            <input
+                                                type="text"
+                                                value={formGoalC}
+                                                onChange={(e) => setFormGoalC(e.target.value)}
+                                                placeholder="Säkert"
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
+                                            />
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Goal Inputs: A / B / C */}
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div>
-                                        <label className="block text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 mb-1 ml-0.5 tracking-wider">🥇 Mål A</label>
-                                        <input
-                                            type="text"
-                                            value={formGoalA}
-                                            onChange={(e) => setFormGoalA(e.target.value)}
-                                            placeholder="Drömtid"
-                                            className="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/40 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-amber-400 outline-none transition-all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥈 Mål B</label>
-                                        <input
-                                            type="text"
-                                            value={formGoalB}
-                                            onChange={(e) => setFormGoalB(e.target.value)}
-                                            placeholder="Realistiskt"
-                                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1 ml-0.5 tracking-wider">🥉 Mål C</label>
-                                        <input
-                                            type="text"
-                                            value={formGoalC}
-                                            onChange={(e) => setFormGoalC(e.target.value)}
-                                            placeholder="Säkert"
-                                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-slate-400 outline-none transition-all"
-                                        />
+                                    {/* Smarta Förslag för Tävling (Warmup/Cooldown) */}
+                                    <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/30">
+                                        <div className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                                            <Zap size={10} className="fill-amber-500" /> Smarta förslag för tävlingsdagen
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const warmup: PlannedActivity = {
+                                                        id: generateId(),
+                                                        date: formDate,
+                                                        type: 'RUN',
+                                                        category: 'EASY',
+                                                        title: 'Uppjogg',
+                                                        description: '20 min lätt löpning inför tävling',
+                                                        durationMinutes: 20,
+                                                        estimatedDistance: 3,
+                                                        status: 'PLANNED',
+                                                        order: -1 // Before race
+                                                    };
+                                                    const cooldown: PlannedActivity = {
+                                                        id: generateId(),
+                                                        date: formDate,
+                                                        type: 'RUN',
+                                                        category: 'RECOVERY',
+                                                        title: 'Nerjogg',
+                                                        description: '20 min lätt löpning efter tävling',
+                                                        durationMinutes: 20,
+                                                        estimatedDistance: 3,
+                                                        status: 'PLANNED',
+                                                        order: 1 // After race
+                                                    };
+                                                    if (window.confirm('Vill du lägga till både uppjogg och nerjogg inför denna tävling?')) {
+                                                        (window as any)._pendingRacesActivities = [warmup, cooldown];
+                                                        notificationService.notify('info', 'Uppjogg och Nerjogg kommer att sparas tillsammans med tävlingen.');
+                                                    }
+                                                }}
+                                                className="flex-1 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 p-2 rounded-xl text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                                            >
+                                                Lägg till Uppjogg & Nerjogg
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
+                            )}
+                        </div>
 
-                                {/* Smarta Förslag för Tävling (Warmup/Cooldown) */}
-                                <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/30">
-                                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                                        <Zap size={10} className="fill-amber-500" /> Smarta förslag för tävlingsdagen
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => {
-                                                const warmup: PlannedActivity = {
-                                                    id: generateId(),
-                                                    date: formDate,
-                                                    type: 'RUN',
-                                                    category: 'EASY',
-                                                    title: 'Uppjogg',
-                                                    description: '20 min lätt löpning inför tävling',
-                                                    durationMinutes: 20,
-                                                    estimatedDistance: 3,
-                                                    status: 'PLANNED',
-                                                    order: -1 // Before race
-                                                };
-                                                const cooldown: PlannedActivity = {
-                                                    id: generateId(),
-                                                    date: formDate,
-                                                    type: 'RUN',
-                                                    category: 'RECOVERY',
-                                                    title: 'Nerjogg',
-                                                    description: '20 min lätt löpning efter tävling',
-                                                    durationMinutes: 20,
-                                                    estimatedDistance: 3,
-                                                    status: 'PLANNED',
-                                                    order: 1 // After race
-                                                };
-                                                // We need to handle this via a special multi-save path or just state
-                                                if (window.confirm('Vill du lägga till både uppjogg och nerjogg inför denna tävling?')) {
-                                                    // This is a bit hacky but works for now as we don't have multi-save in the modal props yet
-                                                    // We'll rely on the parent logic if we can update it, or just use a state to track them
-                                                    (window as any)._pendingRacesActivities = [warmup, cooldown];
-                                                    notificationService.notify('info', 'Uppjogg och Nerjogg kommer att sparas tillsammans med tävlingen.');
-                                                }
-                                            }}
-                                            className="flex-1 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 p-2 rounded-xl text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
-                                        >
-                                            Lägg till Uppjogg & Nerjogg
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {formType !== 'RUN' && editingActivity && (
-                            <div className="mb-2">
-                                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Flytta pass</label>
-                                <input
-                                    type="date"
-                                    value={formDate}
-                                    onChange={(e) => setFormDate(e.target.value)}
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
-                        )}
-
+                        {/* Steg 2: Mål & Planering */}
                         {formType !== 'REST' && (
-                            <>
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 space-y-4">
+                                <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Steg 2: Mål & Upplägg</div>
+
                                 <div className="grid grid-cols-2 gap-3">
-                                    {/* Conditional Inputs based on Type */}
-                                    {/* DISTANS + TEMPO for RUN/BIKE */}
+                                    {/* DISTANS for RUN/BIKE */}
                                     {formType === 'RUN' || formType === 'BIKE' ? (
                                         <div>
                                             <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
@@ -1174,6 +1198,63 @@ export function ActivityModal({
                                                     placeholder="0.0"
                                                 />
                                             </div>
+
+                                            {formType === 'RUN' && (
+                                                <div className="mt-2 space-y-1 animate-in fade-in duration-200">
+                                                    <div className="flex justify-between items-center ml-0.5">
+                                                        <span className="text-[9px] font-black uppercase text-slate-400">Distanser (snitt/vanliga):</span>
+                                                        {runStats.avgDistance && !editingActivity && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    lastChanged.current = 'distance';
+                                                                    setFormDistance(runStats.avgDistance!.toFixed(1));
+                                                                }}
+                                                                className="text-[8px] font-black uppercase text-blue-500 hover:text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-150 dark:border-blue-800/40 px-1.5 py-0.5 rounded-md hover:scale-105 transition-transform"
+                                                                title={`Din snittdistans senaste 5 veckor: ${runStats.avgDistance.toFixed(1)} km. Klicka för att välja.`}
+                                                            >
+                                                                Snitt: {runStats.avgDistance.toFixed(1)}k
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-5 gap-1">
+                                                        {runStats.frequentPresets.map((preset: any) => {
+                                                            const isActive = formDistance === preset.distance.toFixed(1);
+                                                            const label = preset.distance === 21.1 || preset.distance === 21.0975 ? 'HM' : 
+                                                                          preset.distance === 42.195 ? 'M' : 
+                                                                          `${preset.distance.toFixed(0)}k`;
+                                                            return (
+                                                                <button
+                                                                    key={preset.distance}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        lastChanged.current = 'preset';
+                                                                        setFormDistance(preset.distance.toFixed(1));
+                                                                        const paceMinutes = Math.floor(preset.avgPace);
+                                                                        const paceSeconds = Math.round((preset.avgPace - paceMinutes) * 60);
+                                                                        setFormPace(`${paceMinutes.toString().padStart(2, '0')}:${paceSeconds.toString().padStart(2, '0')}`);
+
+                                                                        const totalMinutes = preset.distance * preset.avgPace;
+                                                                        const roundedUp = Math.ceil(totalMinutes / 5) * 5;
+                                                                        const hours = Math.floor(roundedUp / 60);
+                                                                        const mins = roundedUp % 60;
+                                                                        setFormDuration(`${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`);
+                                                                    }}
+                                                                    className={`flex flex-col items-center justify-center py-1 rounded-lg border text-[9px] font-bold transition-all hover:scale-102 ${isActive ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'border-emerald-100 dark:border-emerald-900/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/20 hover:bg-emerald-50/50'}`}
+                                                                    title={`${preset.label} (Snittempo: ${Math.floor(preset.avgPace)}:${Math.round((preset.avgPace - Math.floor(preset.avgPace)) * 60).toString().padStart(2, '0')} /km)`}
+                                                                >
+                                                                    <span className="font-black text-[9px]">{label}</span>
+                                                                    {preset.count > 0 ? (
+                                                                        <span className="opacity-50 text-[6.5px] leading-none mt-0.5">({preset.count}x)</span>
+                                                                    ) : (
+                                                                        <span className="opacity-35 text-[6.5px] leading-none mt-0.5">Def</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : formType === 'STRENGTH' ? (
                                         <div>
@@ -1204,7 +1285,6 @@ export function ActivityModal({
                                                         setFormPace(e.target.value);
                                                     }}
                                                     onKeyDown={(e) => {
-                                                        // Parse mm:ss into total seconds
                                                         const parts = formPace.split(':');
                                                         const pm = parseInt(parts[0]);
                                                         const ps = parts.length === 2 ? parseInt(parts[1]) : 0;
@@ -1241,6 +1321,55 @@ export function ActivityModal({
                                                     </span>
                                                 )}
                                             </div>
+
+                                            {formType === 'RUN' && (
+                                                <div className="mt-2 space-y-1 animate-in fade-in duration-200">
+                                                    <span className="text-[9px] font-black uppercase text-slate-400 block ml-0.5">Pulszoner (historiskt tempo):</span>
+                                                    <div className="grid grid-cols-5 gap-1">
+                                                        {[1, 2, 3, 4, 5].map((z) => {
+                                                            const zoneInfo = zonePaces[z];
+                                                            const isActive = formPace === zoneInfo.display;
+                                                            const zoneColors = [
+                                                                'border-blue-100 dark:border-blue-900/40 text-blue-600 dark:text-blue-400 bg-blue-50/20 hover:bg-blue-50/50',
+                                                                'border-emerald-100 dark:border-emerald-900/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/20 hover:bg-emerald-50/50',
+                                                                'border-amber-100 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 bg-amber-50/20 hover:bg-amber-50/50',
+                                                                'border-orange-100 dark:border-orange-900/40 text-orange-600 dark:text-orange-400 bg-orange-50/20 hover:bg-orange-50/50',
+                                                                'border-rose-100 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 bg-rose-50/20 hover:bg-rose-50/50'
+                                                            ][z - 1];
+                                                            const activeColors = [
+                                                                'bg-blue-500 text-white border-blue-500 shadow-sm',
+                                                                'bg-emerald-500 text-white border-emerald-500 shadow-sm',
+                                                                'bg-amber-500 text-white border-amber-500 shadow-sm',
+                                                                'bg-orange-500 text-white border-orange-500 shadow-sm',
+                                                                'bg-rose-500 text-white border-rose-500 shadow-sm'
+                                                            ][z - 1];
+
+                                                            return (
+                                                                <button
+                                                                    key={z}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        lastChanged.current = 'pace';
+                                                                        setFormPace(zoneInfo.display);
+                                                                        setFormIntensity(z <= 2 ? 'low' : z === 3 ? 'moderate' : 'high');
+                                                                    }}
+                                                                    className={`flex flex-col items-center justify-center py-1 rounded-lg border text-[9px] font-bold transition-all hover:scale-102 ${isActive ? activeColors : zoneColors}`}
+                                                                    title={`${zoneInfo.rangeStr || ''}`}
+                                                                >
+                                                                    <span className="font-black text-[9px]">Z{z}</span>
+                                                                    <span className="opacity-95 font-black text-[8px] leading-tight tracking-tighter mt-0.5">{zoneInfo.display}</span>
+                                                                    {zoneInfo.rangeStr && (
+                                                                        <span className="opacity-60 text-[6.5px] font-semibold leading-none mt-0.5 tracking-tighter">{zoneInfo.rangeStr.replace(' bpm', '')}</span>
+                                                                    )}
+                                                                    {zoneInfo.count > 0 && (
+                                                                        <span className="opacity-40 text-[6.5px] font-medium leading-none tracking-tighter">({zoneInfo.count}x)</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div>
@@ -1257,6 +1386,8 @@ export function ActivityModal({
                                         </div>
                                     )}
                                 </div>
+
+
 
                                 {/* Cycling Specific: Tempo (km/h) and Watts */}
                                 {formType === 'BIKE' && (
@@ -1291,7 +1422,7 @@ export function ActivityModal({
                                     </div>
                                 )}
 
-                                {/* Intensity Selector for RUN/BIKE - moved to separate row */}
+                                {/* Intensity Selector for RUN/BIKE */}
                                 {(formType === 'RUN' || formType === 'BIKE') && (
                                     <div>
                                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Intensitet</label>
@@ -1313,12 +1444,14 @@ export function ActivityModal({
                                         <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Kalkylmodell (Kcal)</label>
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
+                                                type="button"
                                                 onClick={() => setFormCalculationMode('original')}
                                                 className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formCalculationMode === 'original' ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-sm' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-slate-300'}`}
                                             >
                                                 MET (Standard)
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={() => setFormCalculationMode('distance')}
                                                 className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formCalculationMode === 'distance' ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-emerald-300'}`}
                                             >
@@ -1331,7 +1464,6 @@ export function ActivityModal({
                                 {/* Strength Specific Inputs */}
                                 {formType === 'STRENGTH' && (
                                     <div className="space-y-4 animate-in slide-in-from-top-2">
-
                                         {/* Presets */}
                                         <div className="flex gap-2">
                                             {[
@@ -1342,12 +1474,8 @@ export function ActivityModal({
                                             ].map(preset => (
                                                 <button
                                                     key={preset.label}
-                                                    onClick={() => {
-                                                        setFormMuscleGroups(preset.muscles);
-                                                        // Automatically set a good title if the current title is "Styrka"
-                                                        // In the modal, we don't have a specific title field always visible, 
-                                                        // but handleSave will use this logic.
-                                                    }}
+                                                    type="button"
+                                                    onClick={() => setFormMuscleGroups(preset.muscles)}
                                                     className="flex-1 py-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg text-[10px] font-black text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
                                                 >
                                                     {preset.label}
@@ -1369,6 +1497,7 @@ export function ActivityModal({
                                                 ].map((group) => (
                                                     <button
                                                         key={group.id}
+                                                        type="button"
                                                         onClick={() => toggleMuscleGroup(group.id)}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${formMuscleGroups.includes(group.id)
                                                             ? 'bg-purple-500 text-white border-purple-500 shadow-sm'
@@ -1383,41 +1512,28 @@ export function ActivityModal({
                                     </div>
                                 )}
 
-                                {/* Start Time - Available for all non-REST activity types */}
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Starttid (frivilligt)</label>
-                                    <div className="relative">
-                                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                        <input
-                                            type="time"
-                                            value={formStartTime}
-                                            onChange={e => setFormStartTime(e.target.value)}
-                                            placeholder="08:00"
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        />
-                                    </div>
-                                </div>
-
                                 {/* Hyrox Specific Inputs */}
                                 {formType === 'HYROX' && (
                                     <div className="space-y-4 animate-in slide-in-from-top-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
-                                        {/* Hyrox Focus Toggle */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Hyrox-fokus</label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 <button
+                                                    type="button"
                                                     onClick={() => setFormHyroxFocus('hybrid')}
                                                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'hybrid' ? 'bg-amber-500 text-white border-amber-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-amber-300'}`}
                                                 >
                                                     Hybrid
                                                 </button>
                                                 <button
+                                                    type="button"
                                                     onClick={() => setFormHyroxFocus('strength')}
                                                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'strength' ? 'bg-purple-500 text-white border-purple-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-purple-300'}`}
                                                 >
                                                     💪 Styrka
                                                 </button>
                                                 <button
+                                                    type="button"
                                                     onClick={() => setFormHyroxFocus('cardio')}
                                                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'cardio' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-blue-300'}`}
                                                 >
@@ -1431,10 +1547,10 @@ export function ActivityModal({
                                             </p>
                                         </div>
 
-                                        {/* Running Toggle */}
                                         <div className="flex items-center justify-between">
                                             <span className="text-sm font-bold text-slate-900 dark:text-slate-200">Inkluderar löpning?</span>
                                             <button
+                                                type="button"
                                                 onClick={() => setFormIncludesRunning(!formIncludesRunning)}
                                                 className={`w-12 h-6 rounded-full transition-colors relative ${formIncludesRunning ? 'bg-amber-500' : 'bg-slate-700'}`}
                                             >
@@ -1442,7 +1558,6 @@ export function ActivityModal({
                                             </button>
                                         </div>
 
-                                        {/* Distance - Only shows when running is included */}
                                         {formIncludesRunning && (
                                             <div className="space-y-1 animate-in slide-in-from-top-1">
                                                 <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Distans (km)</label>
@@ -1463,7 +1578,6 @@ export function ActivityModal({
                                             </div>
                                         )}
 
-                                        {/* Tonnage - Inside Hyrox section */}
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (kg)</label>
                                             <div className="relative">
@@ -1480,7 +1594,7 @@ export function ActivityModal({
                                     </div>
                                 )}
 
-                                {/* Tonnage - Only for STRENGTH (Hyrox has its own inside the Hyrox section) */}
+                                {/* Tonnage - Only for STRENGTH */}
                                 {formType === 'STRENGTH' && (
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (kg)</label>
@@ -1510,17 +1624,41 @@ export function ActivityModal({
                                         />
                                     </div>
                                 </div>
-                            </>
+                            </div>
                         )}
 
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Anteckningar</label>
-                            <textarea
-                                value={formNotes}
-                                onChange={e => setFormNotes(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium h-24 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-                                placeholder="Beskriv passet..."
-                            />
+                        {/* Steg 3: Detaljer */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 space-y-3">
+                            <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                                {formType === 'REST' ? 'Steg 2: Detaljer' : 'Steg 3: Detaljer & Anteckningar'}
+                            </div>
+
+                            {/* Start Time - Available for all non-REST activity types */}
+                            {formType !== 'REST' && (
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Starttid (frivilligt)</label>
+                                    <div className="relative">
+                                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                        <input
+                                            type="time"
+                                            value={formStartTime}
+                                            onChange={e => setFormStartTime(e.target.value)}
+                                            placeholder="08:00"
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Anteckningar</label>
+                                <textarea
+                                    value={formNotes}
+                                    onChange={e => setFormNotes(e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium h-24 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                                    placeholder="Beskriv passet..."
+                                />
+                            </div>
                         </div>
 
                         {/* Manual Match UI */}

@@ -68,6 +68,11 @@ export const MeasurementModule: React.FC<MeasurementModuleProps> = ({
                         step="0.1"
                         value={draftMeasurementValue || intent.data.value || ''}
                         onChange={(e) => { setDraftMeasurementValue(parseFloat(e.target.value)); setIsManual(true); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleMeasurementAction();
+                            }
+                        }}
                         className="w-full text-5xl font-black bg-transparent border-b-2 border-slate-600 focus:border-fuchsia-500 outline-none text-white"
                         placeholder="0.0"
                     />

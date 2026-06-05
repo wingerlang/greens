@@ -43,6 +43,10 @@ Deno.test("isWarmupOrCooldown - checks warmup and cooldown categories/titles", (
     assertEquals(isWarmupOrCooldown({ title: "Nerjogg inför tävling" }), true);
     assertEquals(isWarmupOrCooldown({ notes: "Nedjogg" }), true);
     assertEquals(isWarmupOrCooldown({ title: "Snabbt pass" }), false);
+    
+    // Cooldown containing "distans" should not be classified as warmup or cooldown
+    assertEquals(isWarmupOrCooldown({ title: "Nerjogg distans" }), false);
+    assertEquals(isWarmupOrCooldown({ name: "Distanspass / nerjogg" }), false);
 });
 
 Deno.test("isCompetition - checks race category rules", () => {

@@ -65,6 +65,11 @@ export const ExerciseModule: React.FC<ExerciseModuleProps> = ({
                         type="number"
                         value={draftDuration || intent.data.duration || ''}
                         onChange={(e) => { setDraftDuration(parseFloat(e.target.value)); setIsManual(true); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleExerciseAction();
+                            }
+                        }}
                         className="w-full text-3xl font-black bg-transparent border-b-2 border-slate-600 focus:border-orange-500 outline-none text-white"
                         placeholder="30"
                     />

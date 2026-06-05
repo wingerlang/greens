@@ -1,10 +1,18 @@
 import { ExerciseEntry, PlannedActivity } from '../../../models/types.ts';
 
+export interface RaceDistanceStats {
+    distance: number;
+    count: number;
+    pb: ExerciseEntry;
+    avgDuration: number;
+}
+
 export interface RaceSeriesStats {
     count: number;
     pb: ExerciseEntry;
     avgDuration: number;
     years: string[];
+    byDistance?: RaceDistanceStats[];
 }
 
 export interface RaceSeries {

@@ -199,13 +199,51 @@ export function useRaceDashboard({
 
         return Object.entries(groups).map(([name, groupRaces]) => {
             const pb = groupRaces.reduce((best, curr) => curr.durationMinutes < best.durationMinutes ? curr : best, groupRaces[0]);
+            
+            // Calculate distance-specific statistics using 8% relative distance clustering
+            const distClusters: { representative: number; races: ExerciseEntry[] }[] = [];
+            
+            const racesWithDistance = groupRaces
+                .filter(r => r.distance !== undefined && r.distance !== null)
+                .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+            racesWithDistance.forEach(r => {
+                const dist = r.distance!;
+                const match = distClusters.find(c => {
+                    const avg = c.races.reduce((sum, rx) => sum + rx.distance!, 0) / c.races.length;
+                    return Math.abs(dist - avg) / avg <= 0.08;
+                });
+
+                if (match) {
+                    match.races.push(r);
+                } else {
+                    distClusters.push({
+                        representative: dist,
+                        races: [r]
+                    });
+                }
+            });
+
+            const byDistance = distClusters.map(c => {
+                const roundedAvg = Math.round(c.races.reduce((sum, rx) => sum + rx.distance!, 0) / c.races.length);
+                const pbForDist = c.races.reduce((best, curr) => curr.durationMinutes < best.durationMinutes ? curr : best, c.races[0]);
+                const avgDurationForDist = c.races.reduce((sum, r) => sum + r.durationMinutes, 0) / c.races.length;
+                return {
+                    distance: roundedAvg,
+                    count: c.races.length,
+                    pb: pbForDist,
+                    avgDuration: avgDurationForDist
+                };
+            }).sort((a, b) => b.count - a.count);
+
             return {
                 name, races: groupRaces,
                 stats: { 
                     count: groupRaces.length, 
                     pb, 
                     avgDuration: groupRaces.reduce((sum, r) => sum + r.durationMinutes, 0) / groupRaces.length, 
-                    years: Array.from(new Set(groupRaces.map(r => r.date.substring(0, 4)))).sort()
+                    years: Array.from(new Set(groupRaces.map(r => r.date.substring(0, 4)))).sort(),
+                    byDistance
                 }
             };
         }).sort((a, b) => {

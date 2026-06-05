@@ -110,6 +110,11 @@ export const LockedFoodModule: React.FC<LockedFoodModuleProps> = ({
                                 const val = e.target.value === '' ? null : parseFloat(e.target.value);
                                 setDraftFoodQuantity(val === 0 ? 1 : val);
                             }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleLockedFoodAction();
+                                }
+                            }}
                             className="w-full text-2xl font-black bg-transparent border-b-2 border-slate-600 focus:border-emerald-500 outline-none text-white"
                             placeholder={String(lockedFood.usageStats?.frequentGrams || lockedFood.usageStats?.avgGrams || 100)}
                         />

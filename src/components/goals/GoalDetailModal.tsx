@@ -816,6 +816,121 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                                 <div className="text-[9px] text-slate-600 mt-1 italic">Mot slutmålet</div>
                             </div>
                         </div>
+                    ) : goal.type === 'speed' && progress.speedTargetsProgress && progress.speedTargetsProgress.length > 1 ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* Overall Progress */}
+                                <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-xl border border-indigo-500/20 text-center">
+                                    <div className="text-3xl font-black text-white">
+                                        {(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%
+                                    </div>
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                        <span>📊</span> Snittframsteg
+                                    </div>
+                                    <div className="text-[9px] text-slate-600 mt-1 italic">Mellan alla distanser</div>
+                                </div>
+                                {/* Targets count */}
+                                <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl border border-emerald-500/20 text-center">
+                                    <div className="text-3xl font-black text-white">
+                                        {progress.speedTargetsProgress.length}
+                                    </div>
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                        <span>🎯</span> Delmål inställda
+                                    </div>
+                                    <div className="text-[9px] text-slate-600 mt-1 italic">Tidsmål per distans</div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 pt-2">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Distansmål och Tider</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {progress.speedTargetsProgress.map((tp, index) => {
+                                        const targetObj = goal.targets[index] || {};
+                                        const bestTimeFormatted = tp.bestTimeSeconds > 0 ? formatDuration(tp.bestTimeSeconds) : '—';
+                                        const targetTimeFormatted = formatDuration(tp.targetTimeSeconds);
+                                        
+                                        // Find top activities specifically for this distance
+                                        const targetType = targetObj.exerciseType || 'running';
+                                        const targetTopActivities = universalActivities
+                                            .filter(a => {
+                                                const dist = a.performance?.distanceKm || 0;
+                                                const typeMatch = targetType ? a.performance?.activityType === targetType : true;
+                                                return typeMatch && dist >= tp.distanceKm && a.performance?.durationMinutes;
+                                            })
+                                            .map(a => ({
+                                                ...a,
+                                                projectedTime: ((a.performance?.durationMinutes || 0) * 60) / (a.performance?.distanceKm || 1) * tp.distanceKm
+                                            }))
+                                            .sort((a, b) => a.projectedTime - b.projectedTime)
+                                            .slice(0, 3); // Top 3
+
+                                        return (
+                                            <div key={index} className="p-4 bg-slate-900/40 rounded-xl border border-white/5 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">⏱️</span>
+                                                        <div>
+                                                            <div className="text-sm font-black text-white">{tp.distanceKm} km</div>
+                                                            <div className="text-[10px] text-slate-500 capitalize">{targetType === 'running' ? 'Löpning' : targetType === 'cycling' ? 'Cykling' : targetType === 'swimming' ? 'Simning' : targetType}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-sm font-black text-emerald-400">{Math.round(tp.percentage)}%</div>
+                                                        <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Framsteg</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Progress bar */}
+                                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                    <div 
+                                                        className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
+                                                        style={{ width: `${tp.percentage}%` }}
+                                                    />
+                                                </div>
+
+                                                {/* Target vs Best */}
+                                                <div className="grid grid-cols-2 gap-2 text-center pt-1">
+                                                    <div className="p-2 bg-slate-950/40 rounded-lg border border-white/5">
+                                                        <div className="text-xs font-bold text-slate-400">Mål</div>
+                                                        <div className="text-sm font-black text-white">{targetTimeFormatted}</div>
+                                                    </div>
+                                                    <div className="p-2 bg-slate-950/40 rounded-lg border border-white/5">
+                                                        <div className="text-xs font-bold text-slate-400">Bästa Tid</div>
+                                                        <div className="text-sm font-black text-white">{bestTimeFormatted}</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Specific Top Activities list */}
+                                                {targetTopActivities.length > 0 ? (
+                                                    <div className="space-y-1.5 pt-2">
+                                                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Snabbaste lopp ({tp.distanceKm}km)</div>
+                                                        <div className="space-y-1">
+                                                            {targetTopActivities.map((activity, idx) => (
+                                                                <a
+                                                                    key={activity.id}
+                                                                    href={`/activity/${activity.id}`}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="flex items-center justify-between p-2 bg-slate-950/50 rounded-lg hover:bg-slate-950/80 transition-colors group"
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`text-[10px] font-bold ${idx === 0 ? 'text-yellow-400' : 'text-slate-500'}`}>#{idx + 1}</span>
+                                                                        <span className="text-xs font-black text-white group-hover:text-emerald-400 transition-colors">{formatDuration(activity.projectedTime)}</span>
+                                                                        <span className="text-[8px] text-slate-500">• {formatDate(activity.date)}</span>
+                                                                    </div>
+                                                                    <span className="text-[10px] text-slate-600 group-hover:text-white">→</span>
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[10px] text-slate-600 text-center italic pt-2">Inga registrerade lopp för denna distans än</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </>
                     ) : (
                         <div className="grid grid-cols-3 gap-4">
                             {/* Progress % */}
@@ -880,8 +995,8 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }:
                         </div>
                     )}
 
-                    {/* Top Activities List for Speed Goals */}
-                    {goal.type === 'speed' && topSpeedActivities.length > 0 && (
+                    {/* Top Activities List for Speed Goals (only when NOT multi-target) */}
+                    {goal.type === 'speed' && (!(progress.speedTargetsProgress && progress.speedTargetsProgress.length > 1)) && topSpeedActivities.length > 0 && (
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Topplistan ({goal.targets[0]?.distanceKm}km)</h3>
                             <div className="space-y-1">

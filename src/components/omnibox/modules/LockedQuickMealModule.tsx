@@ -75,6 +75,11 @@ export const LockedQuickMealModule: React.FC<LockedQuickMealModuleProps> = ({
                                 if (isNaN(val) || val <= 0) val = 1;
                                 setDraftQuickMealPieces(val);
                             }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleLockedQuickMealAction();
+                                }
+                            }}
                             className="w-full text-lg font-bold bg-transparent text-white outline-none"
                         />
                         <span className="text-sm font-bold text-slate-500 ml-1">st</span>

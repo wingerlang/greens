@@ -37,6 +37,11 @@ export const VitalsModule: React.FC<VitalsModuleProps> = ({
                             type="number"
                             value={draftVitalAmount || intent.data.amount || ''}
                             onChange={(e) => { setDraftVitalAmount(parseFloat(e.target.value)); setIsManual(true); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleVitalsAction();
+                                }
+                            }}
                             className="w-24 text-3xl font-black bg-transparent border-b-2 border-slate-600 focus:border-indigo-500 outline-none text-white text-center"
                             placeholder="0"
                         />

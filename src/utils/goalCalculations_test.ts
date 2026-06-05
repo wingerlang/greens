@@ -524,3 +524,45 @@ Deno.test("goalCalculations - calculateChainStats - weight journey", () => {
     assertEquals(stats!.totalValueChange, 8); // Lost 8 kg overall (90 to 82)
     assertEquals(stats!.progressPercentage, 80); // 8 kg lost out of 10 kg target (90 to 80)
 });
+
+Deno.test("goalCalculations - calculateGoalProgress - multi-target speed goals and correct percentages", () => {
+    const multiGoal = createMockGoal({
+        id: "goal-multi",
+        type: "speed",
+        period: "once",
+        startDate: "2026-05-01",
+        endDate: "2026-05-30",
+        targets: [
+            { exerciseType: "running", distanceKm: 5, timeSeconds: 1200 },  // 5km in 20:00 (1200s)
+            { exerciseType: "running", distanceKm: 10, timeSeconds: 2700 } // 10km in 45:00 (2700s)
+        ]
+    });
+
+    const exerciseEntries: ExerciseEntry[] = [
+        // 5km in 25:00 (1500s). Progress: 1200 / 1500 = 80%
+        { id: "e1", date: "2026-05-10T08:00:00Z", type: "running", distance: 5.0, durationMinutes: 25, intensity: "moderate", caloriesBurned: 400, createdAt: "" },
+        // 10km in 50:00 (3000s). Progress: 2700 / 3000 = 90%
+        { id: "e2", date: "2026-05-15T08:00:00Z", type: "running", distance: 10.0, durationMinutes: 50, intensity: "moderate", caloriesBurned: 800, createdAt: "" }
+    ];
+
+    const progress = calculateGoalProgress(multiGoal, exerciseEntries);
+    
+    // Average of 80% and 90% = 85%
+    assertEquals(progress.percentage, 85);
+    
+    // Verify the speedTargetsProgress breakdown
+    assert(progress.speedTargetsProgress !== undefined);
+    assertEquals(progress.speedTargetsProgress.length, 2);
+    
+    // 5km target details
+    assertEquals(progress.speedTargetsProgress[0].distanceKm, 5);
+    assertEquals(progress.speedTargetsProgress[0].targetTimeSeconds, 1200);
+    assertEquals(progress.speedTargetsProgress[0].bestTimeSeconds, 1500);
+    assertEquals(progress.speedTargetsProgress[0].percentage, 80);
+    
+    // 10km target details
+    assertEquals(progress.speedTargetsProgress[1].distanceKm, 10);
+    assertEquals(progress.speedTargetsProgress[1].targetTimeSeconds, 2700);
+    assertEquals(progress.speedTargetsProgress[1].bestTimeSeconds, 3000);
+    assertEquals(progress.speedTargetsProgress[1].percentage, 90);
+});

@@ -120,6 +120,11 @@ export const LockedRecipeModule: React.FC<LockedRecipeModuleProps> = ({
                             type="number"
                             value={displayValue || (displayValue === 0 ? '0' : '')}
                             onChange={handleValueChange}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleLockedRecipeAction();
+                                }
+                            }}
                             className="w-full text-2xl font-black bg-transparent border-b-2 border-indigo-500/30 focus:border-indigo-400 outline-none text-white transition-colors"
                         />
                         <span className="text-sm font-bold text-slate-400">
